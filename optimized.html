@@ -1,0 +1,1940 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1.0">
+<title>Voxel-Editor – Verbesserter Export & Rendering</title>
+<style>
+body{margin:0;overflow:hidden;font-family:sans-serif;display:flex;flex-direction:column;height:100vh;background:#282c34;color:#e0e0e0}
+#controls{padding:14px;background:#3a3f47;border-bottom:1px solid #4a4f57;display:flex;flex-wrap:wrap;gap:12px;justify-content:center;align-items:center}
+#controls button,#controls label{padding:8px 18px;border:none;border-radius:5px;font-size:1em;background:#555c66;color:#e0e0e0;cursor:pointer}
+#controls button:hover{background:#6a727f}
+#grid-size-display{font-weight:700;color:#90caf9}
+#current-mode, #current-control-mode{
+    font-weight:700;
+    min-width: 160px; /* Fixed width */
+    max-width: 160px; /* Fixed width */
+    text-align: center; /* Center the text */
+}
+#current-mode{ color:#81c784; } /* Green for Add */
+#current-control-mode { color: #ffe082; } /* Amber for control mode */
+
+#container{
+    flex:1;
+    position:relative;
+    border: 2px solid transparent; /* Default border for the container */
+    box-sizing: border-box; /* Ensure border doesn't push content out */
+    overflow: hidden; /* Prevent canvas border from overflowing if issues persist */
+}
+canvas{
+    width:100%;
+    height:100%;
+    display: block; /* Ensure canvas behaves as a block element */
+    box-sizing: border-box; /* Ensure border (if added back) doesn't push content out */
+}
+.info-box{
+    position:absolute;
+    bottom:18px;
+    left:18px;
+    padding:12px;
+    border-radius:8px;
+    font-size:.85em;
+    background:rgba(0,0,0,.6);
+    pointer-events:none;
+    /* Default to hidden, will be controlled by JS based on local storage */
+    display: none;
+}
+.info-box strong{color:#90caf9}
+#fileInput{display:none}
+
+/* Slider-Stil */
+input[type="range"] {
+    -webkit-appearance: none;
+    width: 150px;
+    height: 8px;
+    background: #4a4f57;
+    border-radius: 5px;
+    outline: none;
+    opacity: 0.8;
+    transition: opacity .2s;
+    margin-left: 10px;
+    margin-right: 10px;
+}
+input[type="range"]:hover {
+    opacity: 1;
+}
+input[type="range"]::-webkit-slider-thumb {
+    -webkit-appearance: none;
+    appearance: none;
+    width: 20px;
+    height: 20px;
+    border-radius: 50%;
+    background: #90caf9;
+    cursor: pointer;
+}
+input[type="range"]::-moz-range-thumb {
+    width: 20px;
+    height: 20px;
+    border-radius: 50%;
+    background: #90caf9;
+    cursor: pointer;
+}
+/* Color Picker Styling - MADE ROUND */
+input[type="color"] {
+    -webkit-appearance: none;
+    -moz-appearance: none;
+    appearance: none;
+    width: 38px;
+    height: 38px;
+    border: none;
+    border-radius: 50%; /* Made round */
+    background-color: transparent;
+    cursor: pointer;
+    padding: 0;
+    vertical-align: middle;
+}
+input[type="color"]::-webkit-color-swatch-wrapper {
+    padding: 0;
+}
+input[type="color"]::-webkit-color-swatch {
+    border: 1px solid #555c66;
+    border-radius: 50%; /* Made round */
+}
+input[type="color"]::-moz-color-swatch-wrapper {
+    padding: 0;
+}
+input[type="color"]::-moz-color-swatch {
+    border: 1px solid #555c66;
+    border-radius: 50%; /* Made round */
+}
+
+/* Modal Styles */
+.modal {
+    display: none;
+    position: fixed;
+    z-index: 1000;
+    left: 0;
+    top: 0;
+    width: 100%;
+    height: 100%;
+    background-color: rgba(0, 0, 0, 0.7);
+    align-items: center;
+    justify-content: center;
+}
+
+.modal-content {
+    background-color: #3a3f47;
+    margin: auto;
+    padding: 30px;
+    border-radius: 8px;
+    text-align: center;
+    box-shadow: 0 4px 8px rgba(0, 0, 0, 0.2);
+    max-width: 400px;
+    color: #e0e0e0;
+}
+
+.modal-content h3 {
+    margin-top: 0;
+    color: #90caf9;
+}
+
+.modal-buttons {
+    margin-top: 25px;
+    display: flex;
+    justify-content: space-around;
+    gap: 10px;
+}
+
+.modal-buttons button {
+    padding: 10px 20px;
+    border: none;
+    border-radius: 5px;
+    cursor: pointer;
+    font-size: 1em;
+    flex-grow: 1;
+}
+
+.modal-buttons button.confirm-save {
+    background-color: #4CAF50; /* Green */
+    color: white;
+}
+
+.modal-buttons button.confirm-no-save {
+    background-color: #f44336; /* Red */
+    color: white;
+}
+
+.modal-buttons button.cancel {
+    background-color: #555c66; /* Grey */
+    color: #e0e0e0;
+}
+
+.modal-buttons button:hover {
+    opacity: 0.9;
+}
+
+/* Style for the preset color boxes - KEPT RECTANGULAR */
+.color-preset-box {
+    width: 38px;
+    height: 38px;
+    border-radius: 5px; /* Kept rectangular */
+    border: 2px solid #555c66;
+    cursor: pointer;
+    display: inline-block;
+    vertical-align: middle;
+    box-sizing: border-box;
+    transition: transform 0.1s ease-in-out, border-color 0.2s ease-in-out, box-shadow 0.2s ease-in-out;
+}
+.color-preset-box:hover {
+    transform: scale(1.1);
+}
+.color-preset-box.active {
+    border-color: #90caf9;
+    box-shadow: 0 0 8px rgba(144, 202, 249, 0.7);
+}
+
+/* Style for the new terrain controls panel */
+#terrainControlsPanel {
+    background: #3a3f47;
+    padding: 14px;
+    margin-top: 10px;
+    border-radius: 8px;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 12px;
+    justify-content: center;
+    align-items: center;
+    border: 1px solid #4a4f57;
+    transition: all 0.3s ease-in-out;
+}
+
+/* Mobile Controls CSS */
+#mobile-controls {
+    position: absolute;
+    bottom: 0;
+    left: 0;
+    width: 100%;
+    display: flex;
+    justify-content: space-between;
+    padding: 15px;
+    box-sizing: border-box;
+    pointer-events: none; /* Allow canvas interaction through controls */
+    z-index: 50; /* Above info-box but below modals */
+}
+
+#mobile-controls .d-pad, #mobile-controls .action-buttons {
+    display: grid;
+    gap: 8px;
+    pointer-events: auto; /* Re-enable pointer events for buttons */
+}
+
+#mobile-controls .d-pad {
+    grid-template-columns: repeat(3, 60px);
+    grid-template-rows: repeat(3, 60px);
+    width: 188px; /* 3*60 + 2*4 (gap) */
+    height: 188px; /* 3*60 + 2*4 (gap) */
+}
+
+#mobile-controls .action-buttons {
+    grid-template-columns: repeat(2, 70px);
+    grid-template-rows: repeat(3, 60px);
+    width: 148px; /* 2*70 + 1*8 */
+    height: 188px; /* 3*60 + 2*4 */
+}
+
+#mobile-controls button {
+    background-color: rgba(85, 92, 102, 0.8); /* Semi-transparent */
+    color: #e0e0e0;
+    border: 1px solid #4a4f57;
+    border-radius: 8px;
+    font-size: 1.1em;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    user-select: none; /* Prevent text selection on tap */
+    -webkit-tap-highlight-color: transparent; /* Remove tap highlight on iOS */
+}
+
+#mobile-controls button:active {
+    background-color: rgba(106, 114, 127, 0.9); /* Darker on active */
+    transform: scale(0.98);
+}
+
+/* D-pad grid positioning */
+#move-forward { grid-area: 1 / 2 / 2 / 3; }
+#move-left    { grid-area: 2 / 1 / 3 / 2; }
+#move-backward{ grid-area: 2 / 2 / 3 / 3; }
+#move-right   { grid-area: 2 / 3 / 3 / 4; }
+#move-up      { grid-area: 1 / 3 / 2 / 4; /* Top Right */ }
+#move-down    { grid-area: 3 / 3 / 4 / 4; /* Bottom Right */ }
+
+/* Voxel action buttons */
+#add-voxel { grid-area: 1 / 1 / 2 / 2; }
+#delete-voxel { grid-area: 2 / 1 / 3 / 2; }
+#draw-voxel { grid-area: 3 / 1 / 4 / 2; }
+
+/* Camera rotation area - a hidden div that covers the right side of the screen */
+#mobile-camera-area {
+    position: absolute;
+    top: 0;
+    right: 0;
+    width: 50%; /* Right half of the screen */
+    height: 100%;
+    pointer-events: auto; /* Enable touch events */
+    z-index: 1; /* Below other mobile controls but above canvas */
+    /* background-color: rgba(255,0,0,0.1); /* For debugging touch area */ */
+}
+
+/* Control mode toggle button specific styling for mobile */
+#toggleControlModeBtn {
+    position: absolute;
+    top: 15px;
+    right: 15px;
+    z-index: 100;
+    padding: 10px 15px;
+    font-size: 0.9em;
+    background-color: rgba(68, 72, 79, 0.8);
+    border-radius: 5px;
+    cursor: pointer;
+    border: 1px solid #4a4f57;
+    color: #e0e0e0;
+}
+#toggleControlModeBtn:hover {
+    background-color: rgba(85, 92, 102, 0.9);
+}
+
+
+</style>
+</head>
+<body>
+<div id="controls">
+    <label for="grid-size-slider">Gittergröße:</label>
+    <input type="range" id="grid-size-slider" min="5" max="90" value="10">
+    <span id="grid-size-display">10×10×10</span>
+    <label for="color-picker">Farbe:</label>
+    <input type="color" id="color-picker" value="#ffffff">
+    <div id="color-preset-1" class="color-preset-box"></div>
+    <div id="color-preset-2" class="color-preset-box"></div>
+    <div id="color-preset-3" class="color-preset-box"></div>
+
+    <button id="modeToggle">Modus wechseln</button><span id="current-mode">Modus: Hinzufügen</span>
+    <button id="clearBtn">Alles löschen</button>
+    <button id="fillLevelBtn">Ebene füllen</button>
+    <button id="saveBtn">Projekt speichern</button>
+    <button id="loadBtn">Projekt laden</button>
+    <button id="exportStlBtn">STL Export</button>
+
+    <label for="fly-speed-slider">Fluggeschwindigkeit:</label>
+    <input type="range" id="fly-speed-slider" min="0.01" max="2.0" step="0.01" value="0.1">
+    <span id="fly-speed-display">0.10</span>
+    
+    <button id="toggleTerrainControlsBtn">Gelände-Optionen</button>
+    <button id="helpToggleBtn">Hilfe</button>
+    <button id="toggleControlModeBtn">Desktop / Mobil</button><span id="current-control-mode">Steuerung: Desktop</span>
+</div>
+
+<div id="terrainControlsPanel" style="display:none;">
+    <button id="generateTerrainBtn">Gelände generieren</button>
+    <label for="terrain-height-scale">Höhe:</label>
+    <input type="number" id="terrain-height-scale" value="10" min="1" step="1">
+    <label for="terrain-frequency">Frequenz:</label>
+    <input type="number" id="terrain-frequency" value="0.05" min="0.001" max="0.5" step="0.001">
+    <label for="terrain-octaves">Oktaven:</label>
+    <input type="number" id="terrain-octaves" value="4" min="1" max="10" step="1">
+    <label for="terrain-lacunarity">Lacunarity:</label>
+    <input type="number" id="terrain-lacunarity" value="2.0" min="1.0" max="4.0" step="0.1">
+    <label for="terrain-gain">Gain:</label>
+    <input type="number" id="terrain-gain" value="0.5" min="0.1" max="1.0" step="0.01">
+    <label for="terrain-seed">Seed:</label>
+    <input type="text" id="terrain-seed" placeholder="Zahl oder Text">
+</div>
+
+<div id="container">
+    <canvas id="voxelCanvas"></canvas>
+    <div class="info-box" id="infoBox"> <strong>Steuerung</strong><br>
+    </div>
+    <input type="file" id="fileInput" accept=".json">
+
+    <div id="mobile-controls" style="display: none;">
+        <div class="d-pad">
+            <button id="move-up-btn">⬆︎</button>
+            <button id="move-left-btn">⬅︎</button>
+            <button id="move-backward-btn">⬇︎</button>
+            <button id="move-right-btn">⮕</button>
+            <button id="move-forward-btn">⬆︎⬆︎</button>
+            <button id="move-down-btn">⬇︎⬇︎</button>
+        </div>
+        <div class="action-buttons">
+            <button id="add-voxel-btn">Hinzufügen</button>
+            <button id="delete-voxel-btn">Löschen</button>
+            <button id="draw-voxel-btn">Zeichnen</button>
+        </div>
+        <div id="mobile-camera-area"></div>
+    </div>
+</div>
+
+<div id="clearConfirmationModal" class="modal">
+    <div class="modal-content">
+        <h3>Projekt löschen</h3>
+        <p>Möchten Sie das aktuelle Projekt speichern, bevor Sie alle Voxel löschen?</p>
+        <div class="modal-buttons">
+            <button id="saveAndClearBtn" class="confirm-save">Speichern & Löschen</button>
+            <button id="clearWithoutSaveBtn" class="confirm-no-save">Ohne Speichern löschen</button>
+            <button id="cancelClearBtn" class="cancel">Abbrechen</button>
+        </div>
+    </div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/three@0.128.0/build/three.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/utils/BufferGeometryUtils.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/exporters/STLExporter.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/seedrandom/3.0.5/seedrandom.min.js"></script>
+
+<script>
+/* ---------- Konstanten ---------- */
+const VS = 1, HALF = VS * 0.5;
+
+/* ---------- globale Variablen ---------- */
+let scene, cam, ren, gridHelper, boxHelper;
+let euler; // Declare euler globally
+const voxels = new Map(); // Stores { color: hex_color } for each voxel, not the mesh
+let cvs;
+let containerDiv; // Reference to the container div
+let activeDrawingLevel = { x: 0, y: 0, z: 0 }; // Objekt für aktive Ebenen
+let currentDrawingAxis = 'y'; // Aktuelle Achse für Alt+Mausrad
+let currentShiftDragLevel = null; // Speichert die Ebene für den aktuellen Shift-Drag-Vorgang
+// Lade die Farbe aus dem Local Storage oder nutze Weiß als Standard
+let currentColor = localStorage.getItem('voxelEditorColor') || '#ffffff';
+let moveSpeed = localStorage.getItem('moveSpeed') || 0.1;
+// Lade die Gittergröße aus dem Local Storage oder nutze 10 als Standard
+let GRID = parseInt(localStorage.getItem('voxelEditorGridSize')) || 10;
+
+// Preset colors - NEW, more natural colors
+const presetColors = [
+    localStorage.getItem('voxelPresetColor1') || '#8B4513', // Erdton (SaddleBrown)
+    localStorage.getItem('voxelPresetColor2') || '#708237', // Grasgrün (OliveDrab)
+    localStorage.getItem('voxelPresetColor3') || '#6495ED'  // Wasserblau (CornflowerBlue)
+];
+let activePresetIndex = -1; // -1 means no preset is "active" initially, 0 for the first preset, etc.
+let presetBoxes = []; // Global array to store references to preset color boxes
+
+// Referenzen für Lichter, die Schatten werfen, um sie später anpassen zu können
+let mainDirectionalLight;
+
+// Globale Variablen für Dragging-Status
+let isShiftDragging = false;
+let isControlDragging = false;
+let rotate = false; // Moved to global as it's used across handlers
+
+// Performance optimization: Single mesh for all voxels
+let voxelGeometry;
+let voxelMesh;
+let meshMaterial; // Material for the combined mesh
+
+// Modus-Enum
+const Modes = {
+    ADD: 'Hinzufügen',
+    DELETE: 'Löschen',
+    DRAW: 'Zeichnen'
+};
+let currentMode = Modes.ADD; // Standardmodus
+
+// Undo/Redo History
+const history = [];
+let historyPointer = -1;
+const MAX_HISTORY_SIZE = 100; // Limit history to prevent excessive memory usage
+
+// Global terrain parameters (can be adjusted by UI)
+let terrainHeightScale = 10;
+let terrainFrequency = 0.05;
+let terrainOctaves = 4;
+let terrainLacunarity = 2.0;
+let terrainGain = 0.5;
+let terrainSeed = ''; // Empty string means random seed
+let hasUserTypedSeed = false; // Flag to track if user has manually set the seed
+// Global instance of the noise generator
+let noise2D;
+
+/* --- Control Mode Variables --- */
+const ControlModes = {
+    DESKTOP: 'Desktop',
+    MOBILE: 'Mobil'
+};
+let currentControlMode;
+let keys = {}; // Global keys object for movement
+let rotSpeed = 0.002; // Rotation speed for desktop
+let mobileTouchStartX = 0;
+let mobileTouchStartY = 0;
+let mobileIsDraggingCamera = false;
+
+/* ---------- Initialisierung ---------- */
+window.onload = () => {
+    containerDiv = document.getElementById('container'); // Get reference to the container div
+    cvs = document.getElementById('voxelCanvas');
+    
+    // Make sure THREE is defined here before using it
+    if (typeof THREE === 'undefined') {
+        console.error("THREE ist nicht definiert. Es gab ein Problem beim Laden der Three.js-Bibliothek. Überprüfen Sie die CDN-Links oder Ihre Internetverbindung.");
+        alert("Fehler: Die Kern-3D-Bibliothek konnte nicht geladen werden. Bitte versuchen Sie es erneut oder überprüfen Sie Ihre Internetverbindung.");
+        return; // Stop execution if THREE is not available
+    }
+    // Also check for BufferGeometryUtils and STLExporter
+    if (typeof THREE.BufferGeometryUtils === 'undefined') {
+        console.warn("WARNUNG: THREE.BufferGeometryUtils ist nicht definiert. Der STL Export könnte fehlschlagen, wenn diese Utility benötigt wird.");
+    }
+    if (typeof THREE.STLExporter === 'undefined') {
+        console.warn("WARNUNG: THREE.STLExporter ist nicht definiert. Der STL Export wird fehlschlagen.");
+    }
+    scene = new THREE.Scene();
+    scene.background = new THREE.Color(0x282c34);
+    cam = new THREE.PerspectiveCamera(75, containerDiv.clientWidth / containerDiv.clientHeight, 0.1, 1000);
+    // Kameraposition an die Gittergröße anpassen
+    cam.position.set(GRID * 1.0, GRID * 1.2, GRID * 1.5);
+    cam.lookAt(GRID / 2, GRID / 2, GRID / 2);
+    ren = new THREE.WebGLRenderer({ canvas: cvs, antialias: true });
+    ren.setSize(containerDiv.clientWidth, containerDiv.clientHeight);
+    ren.setPixelRatio(window.devicePixelRatio);
+    ren.shadowMap.enabled = true;
+    ren.shadowMap.type = THREE.PCFSoftShadowMap; // Weichere Schatten
+    /* Licht */
+    // Verbesserte Beleuchtung, Intensität reduziert
+    scene.add(new THREE.HemisphereLight(0xaaaaaa, 0x444444, 0.3)); // Himmel- und Bodenlicht, Intensität 0.3
+    mainDirectionalLight = new THREE.DirectionalLight(0xffffff, 0.7); // Intensität reduziert auf 0.7
+    mainDirectionalLight.position.set(5, 10, 7).normalize().multiplyScalar(50);
+    mainDirectionalLight.castShadow = true;
+    mainDirectionalLight.shadow.mapSize.width = 1024;
+    mainDirectionalLight.shadow.mapSize.height = 1024;
+    mainDirectionalLight.shadow.camera.near = 0.5;
+    mainDirectionalLight.shadow.camera.far = 50;
+    const d = GRID * VS * 0.7;
+    mainDirectionalLight.shadow.camera.left = -d;
+    mainDirectionalLight.shadow.camera.right = d;
+    mainDirectionalLight.shadow.camera.top = d;
+    mainDirectionalLight.shadow.camera.bottom = -d;
+    mainDirectionalLight.shadow.camera.updateProjectionMatrix();
+    scene.add(mainDirectionalLight);
+    const d2 = new THREE.DirectionalLight(0xffffff, 0.15);
+    d2.position.set(-5, -5, -7).normalize();
+    scene.add(d2); // Intensität reduziert auf 0.15
+
+    // Initialize voxel rendering components
+    meshMaterial = new THREE.MeshStandardMaterial({
+        vertexColors: true, // Enable vertex colors to render different voxel colors
+        roughness: 0.9,
+        metalness: 0.0
+    });
+    voxelGeometry = new THREE.BufferGeometry(); // Start with an empty geometry
+    voxelMesh = new THREE.Mesh(voxelGeometry, meshMaterial);
+    voxelMesh.castShadow = true;
+    voxelMesh.receiveShadow = true;
+    scene.add(voxelMesh);
+    updateVoxelGeometry(); // Initial empty geometry
+
+    rebuildHelpers(); // Erstellt Grid und Box initial
+    window.addEventListener('resize', onResize);
+    onResize(); // Initial call to set size
+    updateGridHelperPosition();
+    /* Steuerung */
+    euler = new THREE.Euler().setFromQuaternion(cam.quaternion, 'YXZ'); // Initialize euler here
+
+    const setModeDisplay = () => {
+        const m = document.getElementById('current-mode');
+        m.textContent = `Modus: ${currentMode}`;
+        let borderColor;
+        switch (currentMode) {
+            case Modes.ADD:
+                m.style.color = '#81c784'; // Green
+                borderColor = '#81c784';
+                break;
+            case Modes.DELETE:
+                m.style.color = '#ef5350'; // Red
+                borderColor = '#ef5350';
+                break;
+            case Modes.DRAW:
+                m.style.color = '#ffa726'; // Orange
+                borderColor = '#ffa726';
+                break;
+        }
+        // Apply the border color to the container div
+        if (containerDiv) { // Ensure containerDiv is defined
+            containerDiv.style.border = `2px solid ${borderColor}`; // 2px solid border with dynamic color
+        }
+    };
+    setModeDisplay();
+    document.getElementById('modeToggle').onclick = () => {
+        cycleMode();
+        setModeDisplay();
+    };
+
+    // MODAL-HANDLING FÜR "ALLES LÖSCHEN"
+    const clearConfirmationModal = document.getElementById('clearConfirmationModal');
+    document.getElementById('clearBtn').onclick = () => {
+        clearConfirmationModal.style.display = 'flex'; // Show modal
+    };
+
+    document.getElementById('saveAndClearBtn').onclick = () => {
+        saveJSON(); // Save first
+        clearAll(); // Then clear
+        clearConfirmationModal.style.display = 'none'; // Hide modal
+    };
+
+    document.getElementById('clearWithoutSaveBtn').onclick = () => {
+        clearAll(); // Clear directly
+        clearConfirmationModal.style.display = 'none'; // Hide modal
+    };
+
+    document.getElementById('cancelClearBtn').onclick = () => {
+        clearConfirmationModal.style.display = 'none'; // Hide modal
+    };
+    // ENDE MODAL-HANDLING
+
+    document.getElementById('fillLevelBtn').onclick = fillActiveLevel;
+    document.getElementById('saveBtn').onclick = saveJSON;
+    document.getElementById('loadBtn').onclick = () => document.getElementById('fileInput').click();
+    document.getElementById('fileInput').onchange = loadJSON;
+    document.getElementById('exportStlBtn').onclick = exportSTL;
+
+    // Terrain Generation Button Logic
+    document.getElementById('generateTerrainBtn').onclick = () => {
+        // Warning if scene is not empty
+        if (voxels.size > 0) {
+            const confirmGenerate = confirm("Das Generieren von Gelände wird alle vorhandenen Würfel löschen. Möchten Sie fortfahren?");
+            if (!confirmGenerate) {
+                return; // User cancelled
+            }
+        }
+
+        const seedInput = document.getElementById('terrain-seed');
+
+        // If the user hasn't manually typed a seed OR if they typed and then cleared it
+        if (!hasUserTypedSeed || seedInput.value === '') {
+            terrainSeed = Date.now().toString() + Math.random().toString(36).substring(2, 15);
+            seedInput.value = terrainSeed; // Display the new random seed
+            hasUserTypedSeed = false; // Reset the flag, as this is now an auto-generated seed
+        } else {
+            // User has manually typed and the field is not empty, so use their custom seed.
+            // terrainSeed is already updated by the oninput handler.
+        }
+        generateTerrain();
+    };
+
+    // Gittergröße Slider Event Listener
+    const gridSizeSlider = document.getElementById('grid-size-slider');
+    const gridSizeDisplay = document.getElementById('grid-size-display');
+    gridSizeSlider.value = GRID;
+    gridSizeDisplay.textContent = `${GRID}×${GRID}×${GRID}`;
+    gridSizeSlider.oninput = (e) => {
+        let newGridSize = parseInt(e.target.value, 10);
+
+        // Calculate max coordinate among existing voxels
+        let maxCoord = 0;
+        voxels.forEach((data, k) => {
+            const [x, y, z] = k.split(',').map(Number);
+            maxCoord = Math.max(maxCoord, x, y, z);
+        });
+
+        const minPossibleGridSize = Math.max(5, maxCoord + 1); // Grid must be at least 5
+
+        if (newGridSize < minPossibleGridSize) {
+            newGridSize = minPossibleGridSize;
+            // Update the slider value to clamp it visually
+            gridSizeSlider.value = newGridSize;
+        }
+
+        if (newGridSize !== GRID) {
+            const oldGrid = GRID;
+            const oldVoxelsState = [...voxels.entries()].map(([id, data]) => {
+                const parts = id.split(',').map(Number);
+                return { gx: parts[0], gy: parts[1], gz: parts[2], color: data.color };
+            });
+
+            GRID = newGridSize;
+            gridSizeDisplay.textContent = `${GRID}×${GRID}×${GRID}`;
+            localStorage.setItem('voxelEditorGridSize', GRID);
+
+            // No need to remove voxels explicitly as newGridSize is clamped to contain all existing ones.
+
+            // Add to history
+            const newVoxelsState = [...voxels.entries()].map(([id, data]) => {
+                const parts = id.split(',').map(Number);
+                return { gx: parts[0], gy: parts[1], gz: parts[2], color: data.color };
+            });
+            addCommand('resizeGrid', null, null, null, null, null, oldVoxelsState, newVoxelsState, { oldGrid: oldGrid, newGrid: GRID });
+
+            // Update rendering and camera
+            updateVoxelGeometry();
+            rebuildHelpers();
+            updateGridHelperPosition();
+
+            // Adjust camera position and lookAt relative to the new grid size
+            cam.position.set(GRID * 1.0, GRID * 1.2, GRID * 1.5);
+            cam.lookAt(GRID / 2, GRID / 2, GRID / 2);
+            const d_shadow = GRID * VS * 0.7;
+            mainDirectionalLight.shadow.camera.left = -d_shadow;
+            mainDirectionalLight.shadow.camera.right = d_shadow;
+            mainDirectionalLight.shadow.camera.top = d_shadow;
+            mainDirectionalLight.shadow.camera.bottom = -d_shadow;
+            mainDirectionalLight.shadow.camera.updateProjectionMatrix();
+        }
+    };
+
+    // Farbauswahl Event Listener
+    const colorPicker = document.getElementById('color-picker');
+    colorPicker.value = currentColor;
+    colorPicker.oninput = (e) => {
+        currentColor = e.target.value;
+        localStorage.setItem('voxelEditorColor', currentColor);
+        // Update the active preset color if one is active
+        if (activePresetIndex !== -1) {
+            presetColors[activePresetIndex] = currentColor;
+            document.getElementById(`color-preset-${activePresetIndex + 1}`).style.backgroundColor = currentColor;
+            localStorage.setItem(`voxelPresetColor${activePresetIndex + 1}`, currentColor);
+        }
+    };
+
+    // Initialize preset color boxes and set initial active preset
+    for (let i = 1; i <= 3; i++) {
+        const presetBox = document.getElementById(`color-preset-${i}`);
+        presetBox.style.backgroundColor = presetColors[i - 1]; // Set initial color
+        presetBox.onclick = () => {
+            setActivePreset(i - 1); // Set this preset as active
+        };
+        // Allow changing preset colors with the color picker context menu or double click
+        presetBox.oncontextmenu = (e) => {
+            e.preventDefault(); // Prevent default right-click menu
+            // Temporarily set the color picker to the preset color's value for editing
+            colorPicker.value = presetColors[i - 1];
+            colorPicker.click(); // Open the color picker
+            // When the color picker changes, its oninput handler will save the new color.
+            // We need to specifically update the preset color too.
+            const tempInputHandler = (event) => {
+                presetColors[i - 1] = event.target.value;
+                presetBox.style.backgroundColor = presetColors[i - 1];
+                localStorage.setItem(`voxelPresetColor${i}`, presetColors[i - 1]);
+                colorPicker.removeEventListener('input', tempInputHandler); // Clean up
+                // After changing a preset, make sure the global currentColor and picker reflect it
+                currentColor = presetColors[i - 1];
+                colorPicker.value = currentColor;
+                localStorage.setItem('voxelEditorColor', currentColor);
+            };
+            colorPicker.addEventListener('input', tempInputHandler);
+        };
+        presetBoxes.push(presetBox);
+    }
+
+    // Set the initial current color based on local storage, and then activate the corresponding preset if it matches.
+    // This ensures the correct color is active if the user previously selected a preset and it was saved.
+    const savedColor = localStorage.getItem('voxelEditorColor') || '#ffffff';
+    let matchedPreset = false;
+    for(let i = 0; i < presetColors.length; i++) {
+        // Compare hex codes (normalize to uppercase if needed for consistency)
+        if (presetColors[i].toUpperCase() === savedColor.toUpperCase()) {
+            setActivePreset(i);
+            matchedPreset = true;
+            break;
+        }
+    }
+    if (!matchedPreset) {
+        // If the saved color doesn't match any preset, ensure no preset is marked active.
+        presetBoxes.forEach(box => box.classList.remove('active'));
+        activePresetIndex = -1;
+    }
+    colorPicker.value = savedColor;
+    currentColor = savedColor;
+
+
+    // Help Toggle Button and Local Storage
+    const infoBox = document.getElementById('infoBox');
+    const helpToggleBtn = document.getElementById('helpToggleBtn');
+
+    // Load initial visibility state from Local Storage
+    // Default to 'false' (hidden) if not found in Local Storage
+    const helpVisible = localStorage.getItem('voxelEditorHelpVisible');
+    if (helpVisible === 'true') {
+        infoBox.style.display = 'block';
+    } else {
+        infoBox.style.display = 'none';
+    }
+
+    helpToggleBtn.onclick = () => {
+        if (infoBox.style.display === 'none') {
+            infoBox.style.display = 'block';
+            localStorage.setItem('voxelEditorHelpVisible', 'true');
+        } else {
+            infoBox.style.display = 'none';
+            localStorage.setItem('voxelEditorHelpVisible', 'false');
+        }
+    };
+
+    // Fly Speed Slider
+    const flySpeedSlider = document.getElementById('fly-speed-slider');
+    const flySpeedDisplay = document.getElementById('fly-speed-display');
+    // Load initial fly speed from local storage
+    moveSpeed = parseFloat(localStorage.getItem('voxelEditorFlySpeed')) || 0.1;
+    flySpeedSlider.value = moveSpeed;
+    flySpeedDisplay.textContent = moveSpeed.toFixed(2);
+    flySpeedSlider.oninput = (e) => {
+        moveSpeed = parseFloat(e.target.value);
+        flySpeedDisplay.textContent = moveSpeed.toFixed(2);
+        localStorage.setItem('voxelEditorFlySpeed', moveSpeed.toString()); // Save to local storage
+    };
+
+    // Terrain Parameters Inputs
+    // These consts are local to window.onload. The generateTerrain function will use the global variables directly.
+    const terrainHeightScaleInput = document.getElementById('terrain-height-scale');
+    const terrainFrequencyInput = document.getElementById('terrain-frequency');
+    const terrainOctavesInput = document.getElementById('terrain-octaves');
+    const terrainLacunarityInput = document.getElementById('terrain-lacunarity');
+    const terrainGainInput = document.getElementById('terrain-gain');
+    const terrainSeedInput = document.getElementById('terrain-seed'); // Still need this to get value initially
+
+    terrainHeightScaleInput.value = terrainHeightScale;
+    terrainFrequencyInput.value = terrainFrequency;
+    terrainOctavesInput.value = terrainOctaves;
+    terrainLacunarityInput.value = terrainLacunarity;
+    terrainGainInput.value = terrainGain;
+    terrainSeedInput.value = terrainSeed;
+
+    // Add oninput listeners for terrain parameters to update global variables
+    terrainHeightScaleInput.oninput = (e) => terrainHeightScale = parseFloat(e.target.value);
+    terrainFrequencyInput.oninput = (e) => terrainFrequency = parseFloat(e.target.value);
+    terrainOctavesInput.oninput = (e) => terrainOctaves = parseInt(e.target.value, 10);
+    terrainLacunarityInput.oninput = (e) => terrainLacunarity = parseFloat(e.target.value);
+    terrainGainInput.oninput = (e) => terrainGain = parseFloat(e.target.value);
+    terrainSeedInput.oninput = (e) => {
+        terrainSeed = e.target.value;
+        hasUserTypedSeed = (e.target.value !== ''); // Set flag if user types anything
+    };
+
+    // Initialize noise2D globally
+    // Check if seedrandom is defined before trying to use it for ValueNoise2D
+    if (typeof seedrandom === 'undefined') {
+        console.error("Error: seedrandom library is not loaded. Terrain generation may not work as expected.");
+        alert("Error: seedrandom library could not be loaded. Please check your internet connection or try refreshing the page. Terrain generation feature might not work.");
+        // If seedrandom is crucial and failing, you might want to disable the terrain generation button.
+        // document.getElementById('generateTerrainBtn').disabled = true;
+        // Or provide a non-seeded fallback:
+        noise2D = new (class { // Anonymous class for a basic Math.random-based noise
+            constructor() { this.p = Array.from({length: 256}, (_, i) => i); for(let i=0; i<256; i++) this.p[i+256] = this.p[i]; }
+            fade(t) { return t * t * t * (t * (t * 6 - 15) + 10); }
+            lerp(t, a, b) { return a + t * (b - a); }
+            grad(hash, x, y) { return (this.p[hash & 0xFF] / 255.0) * 2 - 1; }
+            noise(x, y) {
+                let X = Math.floor(x) & 255, Y = Math.floor(y) & 255;
+                x -= Math.floor(x); y -= Math.floor(y);
+                let u = this.fade(x), v = this.fade(y);
+                let A = this.p[X] + Y, AA = this.p[A], AB = this.p[A + 1];
+                const val00 = this.grad(AA, x, y);
+                const val10 = this.grad(this.p[X + 1] + Y, x - 1, y);
+                const val01 = this.grad(AB, x, y - 1);
+                const val11 = this.grad(this.p[X + 1] + Y + 1, x - 1, y - 1);
+                let x1 = this.lerp(u, val00, val10);
+                let x2 = this.lerp(u, val01, val11);
+                return this.lerp(v, x1, x2);
+            }
+            octaveNoise(x, y, octaves, frequency, lacunarity, gain) {
+                let total = 0, maxVal = 0, amplitude = 1;
+                for (let i = 0; i < octaves; i++) {
+                    total += this.noise(x * frequency, y * frequency) * amplitude;
+                    maxVal += amplitude;
+                    amplitude *= gain;
+                    frequency *= lacunarity;
+                }
+                return total / maxVal;
+            }
+        })();
+    } else {
+        noise2D = new ValueNoise2D(terrainSeed); // Initialized with default (random) seed if terrainSeed is empty
+    }
+
+
+    // Toggle Terrain Controls Panel
+    const toggleTerrainControlsBtn = document.getElementById('toggleTerrainControlsBtn');
+    const terrainControlsPanel = document.getElementById('terrainControlsPanel');
+
+    toggleTerrainControlsBtn.onclick = () => {
+        if (terrainControlsPanel.style.display === 'none') {
+            terrainControlsPanel.style.display = 'flex';
+        } else {
+            terrainControlsPanel.style.display = 'none';
+        }
+    };
+
+
+    cvs.oncontextmenu = e => e.preventDefault();
+
+    /* --- Control Mode Implementation --- */
+    const isMobileDevice = () => {
+        return /Mobi|Android|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent) || (window.innerWidth <= 768 && window.innerHeight <= 1024);
+    };
+
+    const infoBoxContent = {
+        [ControlModes.DESKTOP]: `
+            <strong>Steuerung (Desktop)</strong><br>
+            Rechte MT gehalten + Maus → Kamera drehen (Fly Mode)<br>
+            WASD / E / Q → bewegen<br>
+            Linke MT → Voxel hinzuf./löschen/zeichnen<br>
+            **Alt + Mausrad → Zeichenebene Y hoch/runter (Gitter folgt)**<br>
+            **Alt + Shift + Mausrad → Zeichenebene Z hoch/runter (Gitter folgt)**<br>
+            **Alt + Control + Mausrad → Zeichenebene X hoch/runter (Gitter folgt)**<br>
+            **Shift + Linke MT gedrückt + Maus ziehen → Voxel Aktion auf aktiver Ebene (Hinzufügen / Löschen / Zeichnen)**<br>
+            **Control + Linke MT gedrückt + Maus ziehen → Voxel ziehen zum Hinzufügen (Stapeln, nur im Hinzufügen-Modus)**<br>
+            Mausrad → Kamera Geschwindigkeit anpassen<br>
+            **Tab → Modus wechseln (Hinzufügen / Löschen / Zeichnen)**<br>
+            **1, 2, 3 → Voreingestellte Farbe wählen**<br>
+            **Strg + Z → Rückgängig (Undo)**<br>
+            **Strg + Y oder Strg + Shift + Z → Wiederholen (Redo)**
+        `,
+        [ControlModes.MOBILE]: `
+            <strong>Steuerung (Mobil)</strong><br>
+            Rechten Bildschirmbereich ziehen → Kamera drehen<br>
+            D-Pad / Pfeile → Bewegen<br>
+            'Hinzufügen' Button → Voxel hinzufügen<br>
+            'Löschen' Button → Voxel löschen<br>
+            'Zeichnen' Button → Voxel zeichnen<br>
+            'Modus wechseln' Button → Modus wechseln<br>
+            (Mobile Steuerung unterstützt keine Alt/Shift/Control-Modifikatoren, Mausrad-Zoom, oder Undo/Redo über Gesten. Bitte Desktop-Modus verwenden.)
+        `
+    };
+
+    const updateInfoBox = () => {
+        infoBox.innerHTML = infoBoxContent[currentControlMode];
+        // Re-check help visibility setting from localStorage, in case it was toggled while hidden
+        const helpVisible = localStorage.getItem('voxelEditorHelpVisible');
+        if (helpVisible === 'true' && currentControlMode === ControlModes.DESKTOP) {
+            infoBox.style.display = 'block';
+        } else {
+            infoBox.style.display = 'none'; // Always hide help for mobile, as it's not well-suited for touch
+        }
+    };
+
+    const mobileActionButtons = {
+        add: document.getElementById('add-voxel-btn'),
+        delete: document.getElementById('delete-voxel-btn'),
+        draw: document.getElementById('draw-voxel-btn')
+    };
+
+    const mobileMoveButtons = {
+        forward: document.getElementById('move-forward-btn'),
+        backward: document.getElementById('move-backward-btn'),
+        left: document.getElementById('move-left-btn'),
+        right: document.getElementById('move-right-btn'),
+        up: document.getElementById('move-up-btn'),
+        down: document.getElementById('move-down-btn')
+    };
+
+    // Assign data-key attribute for easier management
+    mobileMoveButtons.forward.dataset.key = 'KeyW';
+    mobileMoveButtons.backward.dataset.key = 'KeyS';
+    mobileMoveButtons.left.dataset.key = 'KeyA';
+    mobileMoveButtons.right.dataset.key = 'KeyD';
+    mobileMoveButtons.up.dataset.key = 'KeyE';
+    mobileMoveButtons.down.dataset.key = 'KeyQ';
+
+
+    const enableDesktopControls = () => {
+        currentControlMode = ControlModes.DESKTOP;
+        localStorage.setItem('voxelEditorControlMode', ControlModes.DESKTOP);
+        document.getElementById('current-control-mode').textContent = `Steuerung: ${ControlModes.DESKTOP}`;
+        document.getElementById('mobile-controls').style.display = 'none';
+        document.getElementById('toggleControlModeBtn').textContent = 'Mobil-Steuerung';
+
+        // Enable Desktop Listeners
+        cvs.addEventListener('pointerdown', handleDesktopPointerDown);
+        cvs.addEventListener('pointermove', handleDesktopPointerMove);
+        cvs.addEventListener('pointerup', handleDesktopPointerUp);
+        cvs.addEventListener('wheel', handleDesktopWheel, { passive: false });
+        window.addEventListener('keydown', handleDesktopKeyDown);
+        window.addEventListener('keyup', handleDesktopKeyUp);
+
+        // Disable Mobile Listeners
+        document.getElementById('mobile-camera-area').removeEventListener('touchstart', handleMobileTouchStart);
+        document.getElementById('mobile-camera-area').removeEventListener('touchmove', handleMobileTouchMove);
+        document.getElementById('mobile-camera-area').removeEventListener('touchend', handleMobileTouchEnd);
+
+        // Remove handlers for mobile move buttons
+        Object.values(mobileMoveButtons).forEach(btn => {
+            btn.removeEventListener('touchstart', () => keys[btn.dataset.key] = true);
+            btn.removeEventListener('touchend', () => keys[btn.dataset.key] = false);
+        });
+
+        // Clear onclick handlers for mobile action buttons
+        Object.values(mobileActionButtons).forEach(btn => {
+            btn.onclick = null; // Set onclick to null to remove the handler
+        });
+
+        // Ensure no active keys from mobile controls
+        keys = {};
+        updateInfoBox();
+    };
+
+    const enableMobileControls = () => {
+        currentControlMode = ControlModes.MOBILE;
+        localStorage.setItem('voxelEditorControlMode', ControlModes.MOBILE);
+        document.getElementById('current-control-mode').textContent = `Steuerung: ${ControlModes.MOBILE}`;
+        document.getElementById('mobile-controls').style.display = 'flex';
+        document.getElementById('toggleControlModeBtn').textContent = 'Desktop-Steuerung';
+
+
+        // Disable Desktop Listeners
+        cvs.removeEventListener('pointerdown', handleDesktopPointerDown);
+        cvs.removeEventListener('pointermove', handleDesktopPointerMove);
+        cvs.removeEventListener('pointerup', handleDesktopPointerUp);
+        cvs.removeEventListener('wheel', handleDesktopWheel);
+        window.removeEventListener('keydown', handleDesktopKeyDown);
+        window.removeEventListener('keyup', handleDesktopKeyUp);
+        document.exitPointerLock(); // Exit pointer lock if active
+
+        // Enable Mobile Listeners
+        const mobileCameraArea = document.getElementById('mobile-camera-area');
+        mobileCameraArea.addEventListener('touchstart', handleMobileTouchStart);
+        mobileCameraArea.addEventListener('touchmove', handleMobileTouchMove);
+        mobileCameraArea.addEventListener('touchend', handleMobileTouchEnd);
+
+        // Attach mobile move button event listeners
+        Object.values(mobileMoveButtons).forEach(btn => {
+            btn.addEventListener('touchstart', () => keys[btn.dataset.key] = true);
+            btn.addEventListener('touchend', () => keys[btn.dataset.key] = false);
+        });
+
+        // Attach mobile action button event listeners
+        mobileActionButtons.add.onclick = (e) => {
+            // Use clientX/Y from event or a dummy value if not available for clicks
+            handleVoxelAction(e.clientX || window.innerWidth / 2, e.clientY || window.innerHeight / 2, Modes.ADD, false, false);
+            currentMode = Modes.ADD; // Set mode immediately
+            setModeDisplay();
+        };
+        mobileActionButtons.delete.onclick = (e) => {
+            handleVoxelAction(e.clientX || window.innerWidth / 2, e.clientY || window.innerHeight / 2, Modes.DELETE, false, false);
+            currentMode = Modes.DELETE; // Set mode immediately
+            setModeDisplay();
+        };
+        mobileActionButtons.draw.onclick = (e) => {
+            handleVoxelAction(e.clientX || window.innerWidth / 2, e.clientY || window.innerHeight / 2, Modes.DRAW, false, false);
+            currentMode = Modes.DRAW; // Set mode immediately
+            setModeDisplay();
+        };
+
+        // Ensure no active keys from desktop controls
+        keys = {};
+        updateInfoBox();
+    };
+
+    // Initialize control mode based on detection and local storage
+    const savedControlMode = localStorage.getItem('voxelEditorControlMode');
+    if (savedControlMode) {
+        if (savedControlMode === ControlModes.MOBILE) {
+            enableMobileControls();
+        } else {
+            enableDesktopControls();
+        }
+    } else {
+        if (isMobileDevice()) {
+            enableMobileControls();
+        } else {
+            enableDesktopControls();
+        }
+    }
+
+    // Toggle Control Mode Button
+    document.getElementById('toggleControlModeBtn').onclick = () => {
+        if (currentControlMode === ControlModes.DESKTOP) {
+            enableMobileControls();
+        } else {
+            enableDesktopControls();
+        }
+    };
+    /* --- End Control Mode Implementation --- */
+
+
+    /* Event Handlers - Now conditional based on control mode */
+    function handleDesktopPointerDown(e) {
+        if (e.button === 2) { // Right mouse button
+            rotate = true;
+            cvs.requestPointerLock();
+            return;
+        }
+        if (e.button !== 0) return; // Only proceed if it's the left mouse button
+
+        isShiftDragging = e.shiftKey;
+        isControlDragging = e.ctrlKey || e.metaKey;
+
+        if (!isShiftDragging && !isControlDragging) {
+            // Single click for any mode
+            handleVoxelAction(e.clientX, e.clientY, currentMode, false, false);
+        } else if (isShiftDragging && currentMode === Modes.ADD) {
+            // Shift-Drag in ADD mode for fixed level
+            // Determine the initial fixed level based on hit or activeDrawingLevel
+            const rect = cvs.getBoundingClientRect();
+            const mouse = new THREE.Vector2(((e.clientX - rect.left) / rect.width) * 2 - 1, -((e.clientY - rect.top) / rect.height) * 2 + 1);
+            const ray = new THREE.Raycaster();
+            ray.setFromCamera(mouse, cam);
+            const hits = ray.intersectObject(voxelMesh);
+            let initialFixedLevel;
+            let axisToFix = 'y'; // Default
+            if (e.altKey && e.shiftKey) { // Alt+Shift (Z-Axis)
+                axisToFix = 'z';
+                initialFixedLevel = hits.length > 0 ? Math.floor(hits[0].point.z / VS) : activeDrawingLevel.z;
+            } else if (e.altKey && (e.ctrlKey || e.metaKey)) { // Alt+Control (X-Axis)
+                axisToFix = 'x';
+                initialFixedLevel = hits.length > 0 ? Math.floor(hits[0].point.x / VS) : activeDrawingLevel.x;
+            } else { // Shift only (Y-Axis) - default
+                axisToFix = 'y';
+                initialFixedLevel = hits.length > 0 ? Math.floor(hits[0].point.y / VS) : activeDrawingLevel.y;
+            }
+            currentShiftDragLevel = Math.max(0, Math.min(GRID - 1, initialFixedLevel));
+            currentDrawingAxis = axisToFix; // Store the axis that's being fixed
+            handleVoxelAction(e.clientX, e.clientY, currentMode, true, false, currentShiftDragLevel, currentDrawingAxis);
+        } else if (isShiftDragging && (currentMode === Modes.DELETE || currentMode === Modes.DRAW)) {
+            // Shift-Drag in DELETE or DRAW mode (now allows action on plane if no voxel is hit)
+            handleVoxelAction(e.clientX, e.clientY, currentMode, true, false);
+        } else if (isControlDragging && currentMode === Modes.ADD) {
+            // Control-Drag for stacking in ADD mode
+            handleVoxelAction(e.clientX, e.clientY, currentMode, true, true);
+        }
+    }
+
+    function handleDesktopPointerMove(e) {
+        if (rotate) {
+            euler.y -= e.movementX * rotSpeed;
+            euler.x -= e.movementY * rotSpeed;
+            euler.x = Math.max(-Math.PI / 2, Math.min(Math.PI / 2, euler.x));
+            cam.quaternion.setFromEuler(euler);
+        }
+        if (e.buttons & 1) { // Left mouse button is down
+            if (isShiftDragging && currentMode === Modes.ADD) {
+                handleVoxelAction(e.clientX, e.clientY, currentMode, true, false, currentShiftDragLevel, currentDrawingAxis);
+            } else if (isShiftDragging && (currentMode === Modes.DELETE || currentMode === Modes.DRAW)) {
+                handleVoxelAction(e.clientX, e.clientY, currentMode, true, false);
+            } else if (isControlDragging && currentMode === Modes.ADD) {
+                handleVoxelAction(e.clientX, e.clientY, currentMode, true, true);
+            }
+            // No action for regular click/drag if not in shift/control modes, single clicks are handled on pointerdown
+        }
+    }
+
+    function handleDesktopPointerUp(e) {
+        if (e.button === 2) {
+            rotate = false;
+            document.exitPointerLock();
+        }
+        isShiftDragging = false;
+        isControlDragging = false;
+        currentShiftDragLevel = null; // Reset fixed level
+        currentDrawingAxis = 'y'; // Reset drawing axis to default
+    }
+
+    function handleDesktopWheel(e) {
+        e.preventDefault();
+        const step = e.deltaY > 0 ? -1 : 1;
+        if (e.altKey) {
+            if (e.shiftKey) {
+                currentDrawingAxis = 'z';
+                activeDrawingLevel.z = Math.max(0, Math.min(GRID - 1, activeDrawingLevel.z + step));
+            } else if (e.ctrlKey || e.metaKey) {
+                currentDrawingAxis = 'x';
+                activeDrawingLevel.x = Math.max(0, Math.min(GRID - 1, activeDrawingLevel.x + step));
+            } else {
+                currentDrawingAxis = 'y';
+                activeDrawingLevel.y = Math.max(0, Math.min(GRID - 1, activeDrawingLevel.y + step));
+            }
+            updateGridHelperPosition();
+        } else {
+            // Adjusted sensitivity for camera speed
+            moveSpeed *= e.deltaY < 0 ? 1.05 : 0.95; // Smaller steps for finer control
+            moveSpeed = Math.max(0.005, Math.min(2, moveSpeed)); // Tighter min/max range
+            flySpeedSlider.value = moveSpeed; // Update slider
+            flySpeedDisplay.textContent = moveSpeed.toFixed(2); // Update display
+            localStorage.setItem('voxelEditorFlySpeed', moveSpeed.toString()); // Save to local storage
+        }
+    }
+
+    function handleDesktopKeyDown(e) {
+        keys[e.code] = true;
+        if (e.code === 'Tab') {
+            cycleMode();
+            setModeDisplay();
+            e.preventDefault();
+        } else if (e.ctrlKey || e.metaKey) { // Check for Ctrl or Cmd key
+            if (e.code === 'KeyY' || (e.code === 'KeyZ' && e.shiftKey)) {
+                redo();
+                e.preventDefault(); // Prevent browser undo/redo
+            } else if (e.code === 'KeyZ') {
+                undo();
+                e.preventDefault(); // Prevent browser undo/redo
+            }
+        } else if (e.code === 'Digit1') {
+            setActivePreset(0);
+        } else if (e.code === 'Digit2') {
+            setActivePreset(1);
+        } else if (e.code === 'Digit3') {
+            setActivePreset(2);
+        }
+    }
+
+    function handleDesktopKeyUp(e) {
+        keys[e.code] = false;
+    }
+
+    // Mobile Touch Handlers for Camera Rotation
+    // These functions are attached/removed in enableDesktopControls/enableMobileControls
+    function handleMobileTouchStart(e) {
+        if (e.touches.length === 1) { // Only handle single touch for camera rotation
+            mobileTouchStartX = e.touches[0].clientX;
+            mobileTouchStartY = e.touches[0].clientY;
+            mobileIsDraggingCamera = true;
+        }
+    }
+
+    function handleMobileTouchMove(e) {
+        if (mobileIsDraggingCamera && e.touches.length === 1) {
+            const deltaX = e.touches[0].clientX - mobileTouchStartX;
+            const deltaY = e.touches[0].clientY - mobileTouchStartY;
+
+            // Adjust rotation speed for touch, usually slower and more direct
+            const touchRotSpeed = 0.005; // Experiment with this value
+
+            euler.y -= deltaX * touchRotSpeed;
+            euler.x -= deltaY * touchRotSpeed;
+            euler.x = Math.max(-Math.PI / 2, Math.min(Math.PI / 2, euler.x));
+            cam.quaternion.setFromEuler(euler);
+
+            mobileTouchStartX = e.touches[0].clientX;
+            mobileTouchStartY = e.touches[0].clientY;
+        }
+        e.preventDefault(); // Prevent scrolling/zooming on mobile while dragging
+    }
+
+    function handleMobileTouchEnd(e) {
+        mobileIsDraggingCamera = false;
+    }
+
+    // Mobile Movement Buttons (already handled directly in enableMobileControls)
+    // Mobile Action Buttons (already handled directly in enableMobileControls)
+
+    /* Render-Loop */
+    (function loop() {
+        requestAnimationFrame(loop);
+
+        const dir = new THREE.Vector3();
+        cam.getWorldDirection(dir);
+        const right = new THREE.Vector3().crossVectors(dir, cam.up);
+        const up = new THREE.Vector3().copy(cam.up); // Get the camera's up direction
+
+        if (keys.KeyW) cam.position.addScaledVector(dir, moveSpeed);
+        if (keys.KeyS) cam.position.addScaledVector(dir, -moveSpeed);
+        if (keys.KeyA) cam.position.addScaledVector(right, -moveSpeed);
+        if (keys.KeyD) cam.position.addScaledVector(right, moveSpeed);
+        if (keys.KeyE) cam.position.addScaledVector(up, moveSpeed); // Move along camera's local up
+        if (keys.KeyQ) cam.position.addScaledVector(up, -moveSpeed); // Move along camera's local down
+
+        ren.render(scene, cam);
+    })();
+};
+
+/* ---------- Hilfsfunktionen ---------- */
+function onResize() {
+    // Use containerDiv for sizing
+    cam.aspect = containerDiv.clientWidth / containerDiv.clientHeight;
+    cam.updateProjectionMatrix();
+    ren.setSize(containerDiv.clientWidth, containerDiv.clientHeight);
+}
+
+function rebuildHelpers() {
+    // Check if THREE is defined before using it in helper functions
+    if (typeof THREE === 'undefined') {
+        console.error("THREE is not defined in rebuildHelpers. Cannot rebuild helpers.");
+        return;
+    }
+    if (gridHelper) scene.remove(gridHelper);
+    if (boxHelper) scene.remove(boxHelper);
+
+    const size = GRID * VS;
+
+    if (currentDrawingAxis === 'y') {
+        gridHelper = new THREE.GridHelper(size, GRID, 0x444444, 0x444444 );
+        gridHelper.position.set(size / 2, activeDrawingLevel.y * VS, size / 2);
+    } else if (currentDrawingAxis === 'x') {
+        gridHelper = new THREE.GridHelper(size, GRID, 0x444444, 0x444444);
+        gridHelper.rotation.z = Math.PI / 2;
+        gridHelper.position.set(activeDrawingLevel.x * VS, size / 2, size / 2);
+    } else if (currentDrawingAxis === 'z') {
+        gridHelper = new THREE.GridHelper(size, GRID, 0x444444, 0x444444);
+        gridHelper.rotation.x = Math.PI / 2;
+        gridHelper.position.set(size / 2, size / 2, activeDrawingLevel.z * VS);
+    }
+    scene.add(gridHelper);
+
+    const edges = new THREE.EdgesGeometry(new THREE.BoxGeometry(size, size, size));
+    boxHelper = new THREE.LineSegments(edges, new THREE.LineBasicMaterial({ color: 0xcccccc }));
+    boxHelper.position.set(size / 2, size / 2, size / 2);
+    scene.add(boxHelper);
+}
+
+function updateGridHelperPosition() {
+    if (gridHelper) {
+        const size = GRID * VS;
+        if (currentDrawingAxis === 'y') {
+            gridHelper.position.set(size / 2, activeDrawingLevel.y * VS, size / 2);
+            gridHelper.rotation.set(0, 0, 0); // Reset rotation
+        } else if (currentDrawingAxis === 'x') {
+            gridHelper.position.set(activeDrawingLevel.x * VS, size / 2, size / 2);
+            gridHelper.rotation.set(0, 0, Math.PI / 2);
+        } else if (currentDrawingAxis === 'z') {
+            gridHelper.position.set(size / 2, size / 2, activeDrawingLevel.z * VS);
+            gridHelper.rotation.set(Math.PI / 2, 0, 0);
+        }
+    }
+}
+
+function setActivePreset(index) {
+    // Remove 'active' class from all boxes
+    presetBoxes.forEach(box => box.classList.remove('active'));
+
+    // Add 'active' class to the clicked box
+    const selectedBox = presetBoxes[index];
+    selectedBox.classList.add('active');
+
+    // Set currentColor and color picker to the selected preset's color
+    currentColor = presetColors[index];
+    document.getElementById('color-picker').value = currentColor;
+    localStorage.setItem('voxelEditorColor', currentColor);
+
+    activePresetIndex = index; // Store which preset is currently active
+}
+
+function cycleMode() {
+    const modesArray = Object.values(Modes);
+    const currentIndex = modesArray.indexOf(currentMode);
+    const nextIndex = (currentIndex + 1) % modesArray.length;
+    currentMode = modesArray[nextIndex];
+}
+
+function handleVoxelAction(clientX, clientY, mode, isDrag = false, isStacking = false, fixedLevel = null, fixedAxis = 'y') {
+    const rect = cvs.getBoundingClientRect();
+    const mouse = new THREE.Vector2(
+        ((clientX - rect.left) / rect.width) * 2 - 1,
+        -((clientY - rect.top) / rect.height) * 2 + 1
+    );
+
+    const ray = new THREE.Raycaster();
+    ray.setFromCamera(mouse, cam);
+
+    let intersections;
+    // Intersect with the combined voxel mesh
+    intersections = ray.intersectObject(voxelMesh);
+
+
+    let newVoxels = []; // To store voxels added/modified in this action for history
+    let removedVoxels = []; // To store voxels removed in this action for history
+
+    // Function to calculate grid position from world position
+    const getGridPos = (p) => {
+        return {
+            gx: Math.floor(p.x / VS),
+            gy: Math.floor(p.y / VS),
+            gz: Math.floor(p.z / VS)
+        };
+    };
+
+    if (mode === Modes.ADD) {
+        if (isStacking) { // Control-Drag
+            if (intersections.length > 0) {
+                const intersect = intersections[0];
+                const face = intersect.face;
+                const normal = face.normal;
+                const point = intersect.point;
+
+                // Calculate position for new voxel on top of the intersected face
+                let { gx, gy, gz } = getGridPos(point.clone().add(normal.multiplyScalar(0.01)));
+                
+                // If it's a drag, ensure we add voxels adjacent to the previous one
+                // This complex logic for dragging and stacking is simplified for a direct click
+                // For stacking, we just add at the target point + normal
+                const key = `${gx},${gy},${gz}`;
+                if (!voxels.has(key) && gx >= 0 && gx < GRID && gy >= 0 && gy < GRID && gz >= 0 && gz < GRID) {
+                    voxels.set(key, { color: currentColor });
+                    newVoxels.push({ gx, gy, gz, color: currentColor });
+                    updateVoxelGeometry();
+                }
+            }
+        } else if (isDrag) { // Shift-Drag or general drag on mobile
+            // When shift-dragging (or any drag on mobile), if no existing voxel is hit,
+            // we should still be able to place voxels on the drawing plane.
+            let targetPoint;
+            if (intersections.length > 0) {
+                 // Prioritize existing voxel intersection to determine where to place
+                const intersect = intersections[0];
+                const normal = intersect.face.normal;
+                // Add voxel on the face normal
+                targetPoint = intersect.point.clone().add(normal.multiplyScalar(0.01));
+            } else {
+                // If no voxel is hit, use the ray to intersect with the drawing plane
+                const tempPlane = new THREE.Plane();
+                const planeNormal = new THREE.Vector3();
+                let planeConstant;
+
+                if (fixedAxis === 'y') {
+                    planeNormal.set(0, 1, 0);
+                    planeConstant = -fixedLevel * VS;
+                } else if (fixedAxis === 'x') {
+                    planeNormal.set(1, 0, 0);
+                    planeConstant = -fixedLevel * VS;
+                } else if (fixedAxis === 'z') {
+                    planeNormal.set(0, 0, 1);
+                    planeConstant = -fixedLevel * VS;
+                }
+
+                tempPlane.setComponents(planeNormal.x, planeNormal.y, planeNormal.z, planeConstant);
+                const intersectionPoint = new THREE.Vector3();
+                ray.ray.intersectPlane(tempPlane, intersectionPoint);
+
+                if (intersectionPoint) {
+                    targetPoint = intersectionPoint;
+                } else {
+                    return; // No intersection with plane or voxel
+                }
+            }
+
+            let { gx, gy, gz } = getGridPos(targetPoint);
+            
+            // Apply fixed level constraint
+            if (fixedLevel !== null) {
+                if (fixedAxis === 'y') gy = fixedLevel;
+                else if (fixedAxis === 'x') gx = fixedLevel;
+                else if (fixedAxis === 'z') gz = fixedLevel;
+            }
+
+            const key = `${gx},${gy},${gz}`;
+            if (!voxels.has(key) && gx >= 0 && gx < GRID && gy >= 0 && gy < GRID && gz >= 0 && gz < GRID) {
+                voxels.set(key, { color: currentColor });
+                newVoxels.push({ gx, gy, gz, color: currentColor });
+                updateVoxelGeometry();
+            }
+        } else { // Single click ADD
+            if (intersections.length > 0) {
+                const intersect = intersections[0];
+                const face = intersect.face;
+                const normal = face.normal;
+                const point = intersect.point;
+
+                let { gx, gy, gz } = getGridPos(point.clone().add(normal.multiplyScalar(0.01)));
+
+                const key = `${gx},${gy},${gz}`;
+                if (!voxels.has(key) && gx >= 0 && gx < GRID && gy >= 0 && gy < GRID && gz >= 0 && gz < GRID) {
+                    voxels.set(key, { color: currentColor });
+                    newVoxels.push({ gx, gy, gz, color: currentColor });
+                    updateVoxelGeometry();
+                }
+            } else {
+                // If no existing voxel is hit, add at the current drawing level
+                let { gx, gy, gz } = { ...activeDrawingLevel }; // Copy current drawing level
+                // Adjust for camera ray intersection with current drawing plane
+                const tempPlane = new THREE.Plane();
+                const planeNormal = new THREE.Vector3();
+                let planeConstant;
+
+                if (currentDrawingAxis === 'y') {
+                    planeNormal.set(0, 1, 0);
+                    planeConstant = -gy * VS;
+                } else if (currentDrawingAxis === 'x') {
+                    planeNormal.set(1, 0, 0);
+                    planeConstant = -gx * VS;
+                } else if (currentDrawingAxis === 'z') {
+                    planeNormal.set(0, 0, 1);
+                    planeConstant = -gz * VS;
+                }
+                
+                tempPlane.setComponents(planeNormal.x, planeNormal.y, planeNormal.z, planeConstant);
+                const intersectionPoint = new THREE.Vector3();
+                ray.ray.intersectPlane(tempPlane, intersectionPoint);
+
+                if (intersectionPoint) {
+                    // Snap the intersection point to the grid for the two non-fixed axes
+                    if (currentDrawingAxis === 'y') {
+                        gx = Math.floor(intersectionPoint.x / VS);
+                        gz = Math.floor(intersectionPoint.z / VS);
+                    } else if (currentDrawingAxis === 'x') {
+                        gy = Math.floor(intersectionPoint.y / VS);
+                        gz = Math.floor(intersectionPoint.z / VS);
+                    } else if (currentDrawingAxis === 'z') {
+                        gx = Math.floor(intersectionPoint.x / VS);
+                        gy = Math.floor(intersectionPoint.y / VS);
+                    }
+                }
+
+                const key = `${gx},${gy},${gz}`;
+                if (!voxels.has(key) && gx >= 0 && gx < GRID && gy >= 0 && gy < GRID && gz >= 0 && gz < GRID) {
+                    voxels.set(key, { color: currentColor });
+                    newVoxels.push({ gx, gy, gz, color: currentColor });
+                    updateVoxelGeometry();
+                }
+            }
+        }
+    } else if (mode === Modes.DELETE) {
+        if (intersections.length > 0) {
+            const intersect = intersections[0];
+            const { gx, gy, gz } = getGridPos(intersect.object.worldToLocal(intersect.point.clone().sub(intersect.face.normal.clone().multiplyScalar(0.01)))); // Adjust to get the voxel being hit
+            const key = `${gx},${gy},${gz}`;
+
+            if (voxels.has(key)) {
+                removedVoxels.push({ gx, gy, gz, color: voxels.get(key).color }); // Store color for undo
+                voxels.delete(key);
+                updateVoxelGeometry();
+            }
+        }
+    } else if (mode === Modes.DRAW) {
+        if (intersections.length > 0) {
+            const intersect = intersections[0];
+            const { gx, gy, gz } = getGridPos(intersect.object.worldToLocal(intersect.point.clone().sub(intersect.face.normal.clone().multiplyScalar(0.01))));
+            const key = `${gx},${gy},${gz}`;
+
+            if (voxels.has(key)) {
+                // Only change color if it's different to optimize history
+                if (voxels.get(key).color !== currentColor) {
+                    removedVoxels.push({ gx, gy, gz, color: voxels.get(key).color }); // Store old color
+                    voxels.set(key, { color: currentColor });
+                    newVoxels.push({ gx, gy, gz, color: currentColor }); // Store new color
+                    updateVoxelGeometry();
+                }
+            }
+        }
+    }
+
+    if (newVoxels.length > 0 || removedVoxels.length > 0) {
+        addCommand('voxelAction', null, null, null, null, null, removedVoxels, newVoxels);
+    }
+}
+
+function key(x, y, z) {
+    return `${x},${y},${z}`;
+}
+
+function updateVoxelGeometry() {
+    const geometries = [];
+    const colors = [];
+
+    voxels.forEach((data, k) => {
+        const [x, y, z] = k.split(',').map(Number);
+        const box = new THREE.BoxGeometry(VS, VS, VS);
+        box.translate(x * VS + HALF, y * VS + HALF, z * VS + HALF);
+
+        // Apply color to vertices
+        const color = new THREE.Color(data.color);
+        for (let i = 0; i < box.attributes.position.count; i++) {
+            colors.push(color.r, color.g, color.b);
+        }
+
+        geometries.push(box);
+    });
+
+    if (voxelMesh) {
+        scene.remove(voxelMesh);
+    }
+
+    if (geometries.length > 0) {
+        voxelGeometry = THREE.BufferGeometryUtils.mergeBufferGeometries(geometries);
+        voxelGeometry.setAttribute('color', new THREE.Float32BufferAttribute(colors, 3));
+        voxelMesh = new THREE.Mesh(voxelGeometry, meshMaterial);
+        voxelMesh.castShadow = true;
+        voxelMesh.receiveShadow = true;
+        scene.add(voxelMesh);
+    } else {
+        // If no voxels, create an empty geometry to avoid errors
+        voxelGeometry = new THREE.BufferGeometry();
+        voxelMesh = new THREE.Mesh(voxelGeometry, meshMaterial);
+        voxelMesh.castShadow = true;
+        voxelMesh.receiveShadow = true;
+        scene.add(voxelMesh);
+    }
+}
+
+function clearAll() {
+    if (voxels.size === 0) return; // Nothing to clear
+
+    const oldState = [...voxels.entries()].map(([id, data]) => {
+        const parts = id.split(',').map(Number);
+        return { gx: parts[0], gy: parts[1], gz: parts[2], color: data.color };
+    });
+
+    voxels.clear();
+    updateVoxelGeometry();
+    addCommand('clearAll', null, null, null, null, null, oldState, []);
+}
+
+function fillActiveLevel() {
+    const oldVoxelsState = [...voxels.entries()].map(([id, data]) => {
+        const parts = id.split(',').map(Number);
+        return { gx: parts[0], gy: parts[1], gz: parts[2], color: data.color };
+    });
+    const newVoxels = [];
+
+    for (let x = 0; x < GRID; x++) {
+        for (let z = 0; z < GRID; z++) {
+            let gx = x, gy = activeDrawingLevel.y, gz = z;
+            // Adjust based on currentDrawingAxis
+            if (currentDrawingAxis === 'x') {
+                gx = activeDrawingLevel.x;
+                gy = x; // Re-use x for y-coord
+                gz = z;
+            } else if (currentDrawingAxis === 'z') {
+                gx = x;
+                gy = z; // Re-use z for y-coord
+                gz = activeDrawingLevel.z;
+            }
+
+            const k = key(gx, gy, gz);
+            if (!voxels.has(k)) {
+                voxels.set(k, { color: currentColor });
+                newVoxels.push({ gx, gy, gz, color: currentColor });
+            } else {
+                // If voxel exists, check if color is different for history
+                if (voxels.get(k).color !== currentColor) {
+                    // This voxel was not "newly added" but "modified"
+                    // For history, we treat it as removed old color, then added new color
+                    // This is handled by addCommand's diffing, so just add the new state
+                    voxels.set(k, { color: currentColor }); // Update existing voxel color
+                    newVoxels.push({ gx, gy, gz, color: currentColor });
+                }
+            }
+        }
+    }
+    updateVoxelGeometry();
+
+    const newVoxelsState = [...voxels.entries()].map(([id, data]) => {
+        const parts = id.split(',').map(Number);
+        return { gx: parts[0], gy: parts[1], gz: parts[2], color: data.color };
+    });
+    addCommand('fillLevel', null, null, null, null, null, oldVoxelsState, newVoxelsState);
+}
+
+
+function saveJSON() {
+    const data = [];
+    voxels.forEach((v, k) => {
+        const [x, y, z] = k.split(',').map(Number);
+        data.push({ x, y, z, color: v.color });
+    });
+    const blob = new Blob([JSON.stringify({ gridSize: GRID, voxels: data })], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = 'voxel_projekt.json';
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+}
+
+function loadJSON(event) {
+    const file = event.target.files[0];
+    if (!file) return;
+
+    const reader = new FileReader();
+    reader.onload = (e) => {
+        try {
+            const parsed = JSON.parse(e.target.result);
+            if (parsed.gridSize && parsed.voxels) {
+                const oldGrid = GRID;
+                const oldVoxelsState = [...voxels.entries()].map(([id, data]) => {
+                    const parts = id.split(',').map(Number);
+                    return { gx: parts[0], gy: parts[1], gz: parts[2], color: data.color };
+                });
+
+                GRID = parsed.gridSize;
+                localStorage.setItem('voxelEditorGridSize', GRID);
+                document.getElementById('grid-size-slider').value = GRID;
+                document.getElementById('grid-size-display').textContent = `${GRID}×${GRID}×${GRID}`;
+
+                voxels.clear();
+                let maxCoord = 0;
+                parsed.voxels.forEach(v => {
+                    // Check if voxel is within the new grid size
+                    if (v.x >= 0 && v.x < GRID && v.y >= 0 && v.y < GRID && v.z >= 0 && v.z < GRID) {
+                        voxels.set(key(v.x, v.y, v.z), { color: v.color });
+                        maxCoord = Math.max(maxCoord, v.x, v.y, v.z);
+                    }
+                });
+
+                // Adjust grid size slider if loaded voxels exceed current grid
+                const minPossibleGridSize = Math.max(5, maxCoord + 1);
+                if (GRID < minPossibleGridSize) {
+                    GRID = minPossibleGridSize;
+                    document.getElementById('grid-size-slider').value = GRID;
+                    document.getElementById('grid-size-display').textContent = `${GRID}×${GRID}×${GRID}`;
+                    localStorage.setItem('voxelEditorGridSize', GRID);
+                }
+
+                updateVoxelGeometry();
+                rebuildHelpers();
+                updateGridHelperPosition();
+
+                resetCameraPosition();
+
+                // Add to history
+                const newVoxelsState = [...voxels.entries()].map(([id, data]) => {
+                    const parts = id.split(',').map(Number);
+                    return { gx: parts[0], gy: parts[1], gz: parts[2], color: data.color };
+                });
+                addCommand('loadProject', null, null, null, null, null, oldVoxelsState, newVoxelsState, { oldGrid: oldGrid, newGrid: GRID });
+
+            } else {
+                alert('Ungültiges JSON-Format. Erwartet Objekte mit gridSize und voxels Array.');
+            }
+        } catch (error) {
+            alert('Fehler beim Parsen der Datei: ' + error.message);
+            console.error(error);
+        }
+    };
+    reader.readAsText(file);
+}
+
+function exportSTL() {
+    if (typeof THREE.STLExporter === 'undefined') {
+        alert("STL-Exportfunktion nicht verfügbar. Bitte überprüfen Sie, ob die Three.js STLExporter-Skriptdatei korrekt geladen wurde.");
+        console.error("THREE.STLExporter is undefined.");
+        return;
+    }
+
+    if (voxels.size === 0) {
+        alert("Keine Voxel zum Exportieren vorhanden.");
+        return;
+    }
+
+    const exporter = new THREE.STLExporter();
+    const result = exporter.parse(voxelMesh, { binary: true }); // Export as binary STL
+
+    const blob = new Blob([result], { type: 'application/octet-stream' });
+    const url = URL.createObjectURL(blob);
+
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = 'voxel_projekt.stl';
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+}
+
+// Perlin Noise (or Value Noise as implemented here)
+class ValueNoise2D {
+    constructor(seed = '') {
+        if (typeof seedrandom === 'undefined') {
+            console.error("Error: seedrandom library is not loaded. Terrain generation will use a non-seeded random function.");
+            // Provide a basic non-seeded random fallback to prevent immediate crash, though it won't be reproducible
+            this.seedrandom = () => Math.random();
+            // This part is crucial for making the ValueNoise2D class still work, even if not truly seeded.
+            this.permutations = this.generatePermutations();
+            this.p = new Uint8Array(512); // Double array for seamless wrapping
+            for (let i = 0; i < 256; i++) {
+                this.p[i] = this.p[i + 256] = this.permutations[i];
+            }
+            return; // Exit constructor early if crucial part failed
+        }
+        this.seedrandom = seedrandom.alea(seed); // Initialize seedable PRNG
+        this.permutations = this.generatePermutations();
+        this.p = new Uint8Array(512); // Double array for seamless wrapping
+        for (let i = 0; i < 256; i++) {
+            this.p[i] = this.p[i + 256] = this.permutations[i];
+        }
+    }
+
+    generatePermutations() {
+        const p = Array.from({ length: 256 }, (_, i) => i);
+        for (let i = p.length - 1; i > 0; i--) {
+            const j = Math.floor(this.seedrandom() * (i + 1));
+            [p[i], p[j]] = [p[j], p[i]]; // Swap
+        }
+        return p;
+    }
+
+    // Helper to fade/smoother interpolate
+    fade(t) { return t * t * t * (t * (t * 6 - 15) + 10); }
+    lerp(t, a, b) { return a + t * (b - a); }
+
+    // Generates a random value at integer coordinates
+    grad(hash, x, y) {
+        // A simple hash to influence the random value,
+        // using predefined random vectors or simple random values based on hash
+        const v = this.p[hash & 0xFF] / 255.0; // Value between 0 and 1
+        return v * 2 - 1; // Map to -1 to 1
+    }
+
+    // Main noise function
+    noise(x, y) {
+        let X = Math.floor(x) & 255;
+        let Y = Math.floor(y) & 255;
+
+        x -= Math.floor(x);
+        y -= Math.floor(y);
+
+        let u = this.fade(x);
+        let v = this.fade(y);
+
+        let A = this.p[X] + Y;
+        let AA = this.p[A];
+        let AB = this.p[A + 1];
+
+        // Retrieve random values at the corners of the unit square
+        const val00 = this.grad(AA, x, y);
+        const val10 = this.grad(this.p[X + 1] + Y, x - 1, y);
+        const val01 = this.grad(AB, x, y - 1);
+        const val11 = this.grad(this.p[X + 1] + Y + 1, x - 1, y - 1);
+
+        let x1 = this.lerp(u, val00, val10);
+        let x2 = this.lerp(u, val01, val11);
+
+        return this.lerp(v, x1, x2);
+    }
+
+    // Octave noise (Fractal Brownian Motion)
+    octaveNoise(x, y, octaves, frequency, lacunarity, gain) {
+        let total = 0;
+        let maxVal = 0; // Used to normalize result to [-1, 1] or [0, 1]
+        let amplitude = 1;
+
+        for (let i = 0; i < octaves; i++) {
+            total += this.noise(x * frequency, y * frequency) * amplitude;
+            maxVal += amplitude;
+            amplitude *= gain;
+            frequency *= lacunarity;
+        }
+        // Normalize to the range [-1, 1] relative to the sum of amplitudes
+        return total / maxVal;
+    }
+}
+
+
+function generateTerrain() {
+    clearAll(); // Clear existing voxels
+
+    // Update the noise generator with the current seed
+    // Ensure noise2D is valid before proceeding
+    if (typeof ValueNoise2D === 'undefined' || typeof noise2D === 'undefined') {
+        alert("Terrain generation is not available because the noise library could not be loaded.");
+        return;
+    }
+    noise2D = new ValueNoise2D(terrainSeed);
+
+    const oldState = []; // Start with empty old state as clearAll was called
+    const newVoxels = [];
+
+    for (let x = 0; x < GRID; x++) {
+        for (let z = 0; z < GRID; z++) {
+            // Get noise value, scale it, and map to an integer height
+            // noise2D.octaveNoise returns a value typically in [-1, 1]
+            // We want it to be [0, 1] for height calculation
+            const noiseVal = (noise2D.octaveNoise(x, z, terrainOctaves, terrainFrequency, terrainLacunarity, terrainGain) + 1) / 2;
+            const height = Math.floor(noiseVal * terrainHeightScale);
+
+            for (let y = 0; y < height; y++) {
+                const k = key(x, y, z);
+                let voxelColor;
+
+                // Simple biome/material coloring based on height relative to the actual terrainHeightScale
+                if (y < terrainHeightScale * 0.2) { // Example: Water
+                    voxelColor = 0x6495ED; // CornflowerBlue
+                } else if (y < terrainHeightScale * 0.6) { // Example: Earth
+                    voxelColor = 0x8B4513; // SaddleBrown
+                } else { // Example: Grass
+                    voxelColor = 0x708237; // OliveDrab
+                }
+                voxels.set(k, { color: voxelColor }); // Add directly to map
+                newVoxels.push({ gx: x, gy: y, gz: z, color: voxelColor });
+            }
+        }
+    }
+    updateVoxelGeometry(); // Update geometry once after all voxels are added
+    rebuildHelpers(); // Update helpers to new terrain size
+    resetCameraPosition(); // Reset camera to view new terrain
+
+    // Capture the state after terrain generation
+    const newState = [...voxels.entries()].map(([id, data]) => {
+        const parts = id.split(',').map(Number);
+        return { gx: parts[0], gy: parts[1], gz: parts[2], color: data.color };
+    });
+    addCommand('terrainGenerate', null, null, null, null, null, oldState, newState);
+}
+
+function resetCameraPosition() {
+    cam.position.set(GRID * 1.0, GRID * 1.2, GRID * 1.5);
+    cam.lookAt(GRID / 2, GRID / 2, GRID / 2);
+    // Also adjust shadow camera bounds
+    const d_shadow = GRID * VS * 0.7;
+    mainDirectionalLight.shadow.camera.left = -d_shadow;
+    mainDirectionalLight.shadow.camera.right = d_shadow;
+    mainDirectionalLight.shadow.camera.top = d_shadow;
+    mainDirectionalLight.shadow.camera.bottom = -d_shadow;
+    mainDirectionalLight.shadow.camera.updateProjectionMatrix();
+}
+
+
+/* ---------- Undo/Redo Funktionen ---------- */
+
+// Stores a command in the history stack
+function addCommand(type, x, y, z, oldColor, newColor, oldState, newState, metadata = {}) {
+    // Clear redo history if a new command is added
+    if (historyPointer < history.length - 1) {
+        history.splice(historyPointer + 1);
+    }
+    // Add new command
+    history.push({ type, x, y, z, oldColor, newColor, oldState, newState, metadata });
+    historyPointer++;
+
+    // Enforce MAX_HISTORY_SIZE
+    if (history.length > MAX_HISTORY_SIZE) {
+        history.shift(); // Remove oldest command
+        historyPointer--;
+    }
+}
+
+function undo() {
+    if (historyPointer < 0) {
+        console.log("Nichts rückgängig zu machen.");
+        return;
+    }
+
+    const command = history[historyPointer];
+    console.log("Rückgängig:", command);
+
+    applyState(command.oldState, command.metadata.oldGrid);
+    historyPointer--;
+}
+
+function redo() {
+    if (historyPointer >= history.length - 1) {
+        console.log("Nichts wiederherzustellen.");
+        return;
+    }
+
+    historyPointer++;
+    const command = history[historyPointer];
+    console.log("Wiederherstellen:", command);
+
+    applyState(command.newState, command.metadata.newGrid);
+}
+
+function applyState(state, newGridSize = GRID) {
+    const oldGrid = GRID; // Store current GRID before applying new state's grid
+    voxels.clear(); // Clear current state
+
+    // If grid size changed, update GRID and related elements
+    if (newGridSize && newGridSize !== GRID) {
+        GRID = newGridSize;
+        localStorage.setItem('voxelEditorGridSize', GRID);
+        document.getElementById('grid-size-slider').value = GRID;
+        document.getElementById('grid-size-display').textContent = `${GRID}×${GRID}×${GRID}`;
+        rebuildHelpers(); // Rebuild helpers for new grid size
+        updateGridHelperPosition();
+        resetCameraPosition(); // Adjust camera for new grid
+    }
+
+    state.forEach(v => {
+        voxels.set(key(v.gx, v.gy, v.gz), { color: v.color });
+    });
+    updateVoxelGeometry();
+}
+
+</script>
+</body>
+</html>
