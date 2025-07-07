@@ -435,7 +435,30 @@ function releasePointer(e){
     lastPinchDist = null;
     lastSwipeX    = null;
 }
+/* ---------- Menü-Toggle ---------- */
+const menuToggleBtn = document.getElementById('menuToggle');
+const controlsBar   = document.getElementById('controls');
+const terrainPanel  = document.getElementById('terrainControlsPanel');
 
+/* Anfangszustand aus Local Storage lesen (mobile: hidden) */
+if (localStorage.getItem('voxelMenuVisible') === 'true'){
+    controlsBar.style.display = 'flex';
+} else if (window.matchMedia('(max-width:768px)').matches){
+    controlsBar.style.display = 'none';
+}
+
+/* Klick-Handler */
+menuToggleBtn.onclick = () => {
+    const isOpen = controlsBar.style.display !== 'none';
+    if (isOpen){
+        controlsBar.style.display = 'none';
+        terrainPanel.style.display = 'none';   // Sicherstellen, dass Unterpanel mit verschwindet
+        localStorage.setItem('voxelMenuVisible','false');
+    }else{
+        controlsBar.style.display = 'flex';
+        localStorage.setItem('voxelMenuVisible','true');
+    }
+};
     // Make sure THREE is defined here before using it
     if (typeof THREE === 'undefined') {
         console.error("THREE ist nicht definiert. Es gab ein Problem beim Laden der Three.js-Bibliothek. Überprüfen Sie die CDN-Links oder Ihre Internetverbindung.");
