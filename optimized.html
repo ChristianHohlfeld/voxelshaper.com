@@ -23,6 +23,13 @@ html, body, #controls{
     touch-action: none;   /* verhindert Browser-Zoom/Scroll */
 }
 body{margin:0;overflow:hidden;font-family:sans-serif;display:flex;flex-direction:column;height:100vh;background:#282c34;color:#e0e0e0}
+/* verhindert, dass das OS den Canvas als Text selektiert */
+canvas, body, #container{
+    -webkit-user-select: none;
+    -moz-user-select: none;
+    user-select: none;
+    -webkit-touch-callout: none;   /* iOS Kontextmenü */
+}
 #controls{padding:14px;background:#3a3f47;border-bottom:1px solid #4a4f57;display:flex;flex-wrap:wrap;gap:12px;justify-content:center;align-items:center}
 #controls button,#controls label{padding:8px 18px;border:none;border-radius:5px;font-size:1em;background:#555c66;color:#e0e0e0;cursor:pointer}
 #controls button:hover{background:#6a727f}
@@ -591,7 +598,7 @@ menuToggleBtn.onclick = () => {
     onResize(); // Initial call to set size
     updateGridHelperPosition();
     /* Steuerung */
-    let keys = {}, moveSpeed = 0.1, rotSpeed = 0.002;
+    let keys = {}, rotSpeed = 0.002;
     euler = new THREE.Euler().setFromQuaternion(cam.quaternion, 'YXZ'); // Initialize euler here
     const setModeDisplay = () => {
         const m = document.getElementById('current-mode');
@@ -938,8 +945,8 @@ if (!shiftActive() && !isControlDragging) {
 
     cvs.onpointermove = e => {
         if (rotate) {
-            euler.y -= e.movementX * rotSpeed;
-            euler.x -= e.movementY * rotSpeed;
+            euler.y += e.movementX * rotSpeed;
+            euler.x += e.movementY * rotSpeed;
             euler.x = Math.max(-Math.PI / 2, Math.min(Math.PI / 2, euler.x));
             cam.quaternion.setFromEuler(euler);
         }
@@ -1060,8 +1067,8 @@ function handleGesture(e){
         if (prevTouch){
             const dx = p.x - prevTouch.x;
             const dy = p.y - prevTouch.y;
-            euler.y -= dx * rotSpeed;
-            euler.x -= dy * rotSpeed;
+euler.y += dx * rotSpeed;   // horizontale Achse invertiert
+euler.x += dy * rotSpeed;   // vertikale Achse invertiert
             euler.x = Math.max(-Math.PI/2, Math.min(Math.PI/2, euler.x));
             cam.quaternion.setFromEuler(euler);
         }
@@ -1078,8 +1085,9 @@ function handleGesture(e){
         const dist = Math.hypot(p1.x-p0.x, p1.y-p0.y);
         if (lastPinchDist !== null){
             const delta = dist - lastPinchDist;
-            cam.position.addScaledVector(
-                cam.getWorldDirection(new THREE.Vector3()),  delta * 0.01);
+const zoomFactor = moveSpeed * 0.8;   //   0.5 → schneller / langsamer
+cam.position.addScaledVector(
+    cam.getWorldDirection(new THREE.Vector3()), -delta * zoomFactor);
         }
         lastPinchDist = dist;
 
