@@ -1352,7 +1352,7 @@ function handleVoxelAction(clientX, clientY, mode, isDragging, isStackingAdd, fi
                     };
                 }
             }
-        } else if (isDragging && isShiftDragging && fixedLevel !== null && fixedAxis !== null) {
+        } else if (isDragging && shiftActive() && fixedLevel !== null && fixedAxis !== null) {
             // Shift-Drag in ADD mode for fixed level
             let planeNormal, planeConstant;
             if (fixedAxis === 'y') {
@@ -1422,7 +1422,7 @@ function handleVoxelAction(clientX, clientY, mode, isDragging, isStackingAdd, fi
                 gy: Math.floor(p.y / VS),
                 gz: Math.floor(p.z / VS)
             };
-        } else if (isDragging && isShiftDragging) { // Only for Shift-Drag in empty space for DELETE/DRAW
+        } else if (isDragging && shiftActive()) { // Only for Shift-Drag in empty space for DELETE/DRAW
             // If no existing voxel is hit, but we are shift-dragging,
             // we project onto the active drawing plane to determine the target voxel.
             // This allows 'erasing' or 'drawing' on an invisible plane.
