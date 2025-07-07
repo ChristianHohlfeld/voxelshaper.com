@@ -1105,7 +1105,15 @@ if (Math.abs(zoomΔ) > ZOOM_TH){
         zoomΔ * moveSpeed * 0.8);           // Minus = richtiges Zoom-Vorzeichen
     lastPinchDist = dist;                    // nur updaten, wenn gezoomt
 }
-
+    // ⬇️ NEU: Vertikale Kamerabewegung (2 Finger gleichzeitig hoch/runter)
+    const centerY = (p0.y + p1.y) / 2;
+    if (lastSwipeY === null) lastSwipeY = centerY;
+    const centerYΔ = centerY - lastSwipeY;
+    if (Math.abs(centerYΔ) > 1) {
+        const up = cam.up.clone().normalize();
+        cam.position.addScaledVector(up, centerYΔ * 0.01); // Geschwindigkeit ggf. anpassen
+        lastSwipeY = centerY;
+    }
         /* --- Strafen (links / rechts) ------------------------------------ */
         const midX = (p0.x + p1.x) * 0.5;
         if (lastSwipeX !== null){
