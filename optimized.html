@@ -19,6 +19,9 @@
 <meta name="twitter:image" content="https://voxelshaper.com/preview.png">
 <title>VoxelShaper – Voxel Editor & 3D Print Exporter</title>
 <style>
+html, body, #controls{
+    touch-action: none;   /* verhindert Browser-Zoom/Scroll */
+}
 body{margin:0;overflow:hidden;font-family:sans-serif;display:flex;flex-direction:column;height:100vh;background:#282c34;color:#e0e0e0}
 #controls{padding:14px;background:#3a3f47;border-bottom:1px solid #4a4f57;display:flex;flex-wrap:wrap;gap:12px;justify-content:center;align-items:center}
 #controls button,#controls label{padding:8px 18px;border:none;border-radius:5px;font-size:1em;background:#555c66;color:#e0e0e0;cursor:pointer}
@@ -382,7 +385,8 @@ input[type="color"]::-moz-color-swatch {
 const VS = 1, HALF = VS * 0.5;
 
 /* ---------- globale Variablen ---------- */
-
+let prevTouch = null;   
+let touchStartPos = null; // merkt Position für Tap-Erkennung
 let scene, cam, ren, gridHelper, boxHelper;
 let rotSpeed = 0.002;   // Globale Drehgeschwindigkeit    (NEU)
 /* ---------- Touch-Gesten (NEU) ---------- */
@@ -459,11 +463,12 @@ window.onload = () => {
     containerDiv = document.getElementById('container'); // Get reference to the container div
     cvs = document.getElementById('voxelCanvas');
     /* ---------- Pointer-Gesten-Handler (NEU) ---------- */
-cvs.addEventListener('pointerdown', e => {
-  if (e.pointerType !== 'touch') return;      
-   e.preventDefault();     
+cvs.addEventListener('pointerdown', e=>{
+    if (e.pointerType !== 'touch') return;
+    e.preventDefault();
     cvs.setPointerCapture(e.pointerId);
-    activePointers.set(e.pointerId, {x: e.clientX, y: e.clientY});
+    activePointers.set(e.pointerId,{x:e.clientX,y:e.clientY});
+    touchStartPos = {x:e.clientX, y:e.clientY};   // Tap start
 });
 
 cvs.addEventListener('pointermove', e => {
@@ -474,9 +479,18 @@ cvs.addEventListener('pointermove', e => {
     handleGesture(e);                 // Kernlogik
 });
 
-cvs.addEventListener('pointerup', e => {
-    if (e.pointerType !== 'touch') return;   //  <-- ergänzen
-   e.preventDefault();     
+cvs.addEventListener('pointerup', e=>{
+    if (e.pointerType !== 'touch') return;
+    e.preventDefault();
+
+    // Nur kleiner Bewegungsradius? → als Tap werten
+    if (touchStartPos){
+        const dx = e.clientX - touchStartPos.x;
+        const dy = e.clientY - touchStartPos.y;
+        if (Math.hypot(dx,dy) < 8){
+            handleVoxelAction(e.clientX, e.clientY, currentMode, false, false);
+        }
+    }
     releasePointer(e);
 });
 cvs.addEventListener('pointercancel', e => {
@@ -1029,44 +1043,53 @@ function onResize() {
     cam.updateProjectionMatrix();
     ren.setSize(containerDiv.clientWidth, containerDiv.clientHeight);
 }
-/* ===========================================================
-   Touch-Gesten-Logik  (NEU)
-   =========================================================== */
 function handleGesture(e){
-    const pts = [...activePointers.values()]; // alle aktiven Finger
+    const pts = [...activePointers.values()];
 
-    /* ---------- Ein Finger: Kamera drehen ---------- */
+    /* ---------- 1 Finger: Kamera oder Zeichnen ---------- */
     if (pts.length === 1){
         const p = pts[0];
-        if (e.pressure > 0){                 // Finger wirklich bewegt
-            euler.y -= e.movementX * rotSpeed;
-            euler.x -= e.movementY * rotSpeed;
+
+        /* Shift-Lock oder echte Shift-Taste aktiv → Würfelaktion */
+        if (shiftActive()){
+            handleVoxelAction(p.x, p.y, currentMode, true, false);
+            return;
+        }
+
+        /* sonst: Kamera drehen */
+        if (prevTouch){
+            const dx = p.x - prevTouch.x;
+            const dy = p.y - prevTouch.y;
+            euler.y -= dx * rotSpeed;
+            euler.x -= dy * rotSpeed;
             euler.x = Math.max(-Math.PI/2, Math.min(Math.PI/2, euler.x));
             cam.quaternion.setFromEuler(euler);
         }
+        prevTouch = {x:p.x, y:p.y};
         return;
     }
 
-    /* ---------- Zwei Finger: Pinch-Zoom & Horizontal-Swipe ---------- */
+    /* ---------- 2 Finger: Pinch-Zoom + Strafen ---------- */
+    prevTouch = null;                             // Reset, sobald 2 Finger
     if (pts.length === 2){
-        const [p0, p1] = pts;
+        const [p0,p1] = pts;
 
-        // Pinch-Zoom
-        const dist = Math.hypot(p1.x - p0.x, p1.y - p0.y);
+        // Pinch-Zoom (auseinander = reinzoomen)
+        const dist = Math.hypot(p1.x-p0.x, p1.y-p0.y);
         if (lastPinchDist !== null){
-            const delta = dist - lastPinchDist;   // + rauszoomen, – reinzoomen
-cam.position.addScaledVector(
-    cam.getWorldDirection(new THREE.Vector3()),  delta * 0.01);
+            const delta = dist - lastPinchDist;
+            cam.position.addScaledVector(
+                cam.getWorldDirection(new THREE.Vector3()),  delta * 0.01);
         }
         lastPinchDist = dist;
 
-        // Horizontaler Zwei-Finger-Swipe  → Strafen
+        // Horizontal-Swipe = seitwärts bewegen
         const midX = (p0.x + p1.x) * 0.5;
         if (lastSwipeX !== null){
-            const dSwipe = midX - lastSwipeX;     // + nach rechts
+            const d = midX - lastSwipeX;
             const right = new THREE.Vector3().crossVectors(
-                  cam.getWorldDirection(new THREE.Vector3()), cam.up);
-            cam.position.addScaledVector(right, -dSwipe * 0.01);
+                 cam.getWorldDirection(new THREE.Vector3()), cam.up);
+            cam.position.addScaledVector(right, -d * 0.01);
         }
         lastSwipeX = midX;
     }
