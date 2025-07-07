@@ -302,6 +302,7 @@ input[type="color"]::-moz-color-swatch {
     background:#ffa726;   /* Orange – passe gern an */
     color:#fff;
 }
+canvas, body { -webkit-tap-highlight-color: transparent; }
 </style>
 </head>
 <body>
@@ -410,7 +411,7 @@ let currentDrawingAxis = 'y'; // Aktuelle Achse für Alt+Mausrad
 let currentShiftDragLevel = null; // Speichert die Ebene für den aktuellen Shift-Drag-Vorgang
 // Lade die Farbe aus dem Local Storage oder nutze Weiß als Standard
 let currentColor = localStorage.getItem('voxelEditorColor') || '#ffffff';
-let moveSpeed = localStorage.getItem('moveSpeed') || 0.1;
+let moveSpeed = parseFloat(localStorage.getItem('voxelEditorFlySpeed')) || 0.1;
 // Lade die Gittergröße aus dem Local Storage oder nutze 10 als Standard
 let GRID = parseInt(localStorage.getItem('voxelEditorGridSize')) || 10;
 
@@ -598,7 +599,7 @@ menuToggleBtn.onclick = () => {
     onResize(); // Initial call to set size
     updateGridHelperPosition();
     /* Steuerung */
-    let keys = {}, rotSpeed = 0.002;
+    let keys = {};
     euler = new THREE.Euler().setFromQuaternion(cam.quaternion, 'YXZ'); // Initialize euler here
     const setModeDisplay = () => {
         const m = document.getElementById('current-mode');
@@ -945,8 +946,8 @@ if (!shiftActive() && !isControlDragging) {
 
     cvs.onpointermove = e => {
         if (rotate) {
-            euler.y += e.movementX * rotSpeed;
-            euler.x += e.movementY * rotSpeed;
+    euler.y -= e.movementX * rotSpeed;   // rechts = nach rechts drehen
+    euler.x -= e.movementY * rotSpeed;   // hoch  = nach oben schauen
             euler.x = Math.max(-Math.PI / 2, Math.min(Math.PI / 2, euler.x));
             cam.quaternion.setFromEuler(euler);
         }
@@ -1583,7 +1584,6 @@ function fillActiveLevel() {
 // Performance critical function: combines all individual voxel geometries into one
 function updateVoxelGeometry() {
     const geometries = [];
-    const colors = [];
     const tempBox = new THREE.BoxGeometry(VS, VS, VS); // Re-use geometry object
 
     voxels.forEach((dataValue, k) => { // Corrected: value first, then key
@@ -1817,7 +1817,6 @@ class ValueNoise2D {
     // Main FBM (Fractal Brownian Motion) function
     fbm(x, z, octaves, lacunarity, gain) {
         let total = 0;
-        let frequency = this.initialFrequency; // Use an initial frequency for scaling
         let amplitude = 1;
         let maxAmplitude = 0; // Used to normalize the result later
 
@@ -1825,8 +1824,7 @@ class ValueNoise2D {
         // This is a crucial part of controlling the "zoom" of the noise.
         // Higher initialFrequency means "busier" noise for the same terrain size.
         // Multiply by GRID to normalize it relative to the grid size, so 0.05 is consistent.
-        frequency = terrainFrequency;
-
+let frequency = terrainFrequency;
         for (let i = 0; i < octaves; i++) {
             // Get the integer coordinates of the grid cell
             const x0 = Math.floor(x * frequency);
