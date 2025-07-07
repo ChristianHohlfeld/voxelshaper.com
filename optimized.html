@@ -2,7 +2,6 @@
 <html lang="de">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width,initial-scale=1.0">
 <!-- Open Graph Tags -->
 <meta property="og:title" content="VoxelShaper – Create in 3D, Effortlessly" />
 <meta property="og:description" content="A powerful, intuitive voxel-based 3D editor – made for makers, artists, and coders." />
@@ -282,6 +281,12 @@ input[type="color"]::-moz-color-swatch {
     transform: translateY(0);
     box-shadow:0 2px 4px rgba(0,0,0,.35);
 }
+/* Canvas & Container: KEINE default-Gesten */
+#container,
+#voxelCanvas{
+    touch-action: none;          /* iOS ≥13.4, Android, Desktop */
+    -ms-touch-action: none;      /* altes Edge/IE */
+}
 </style>
 </head>
 <body>
@@ -444,12 +449,14 @@ window.onload = () => {
     /* ---------- Pointer-Gesten-Handler (NEU) ---------- */
 cvs.addEventListener('pointerdown', e => {
   if (e.pointerType !== 'touch') return;      
+   e.preventDefault();     
     cvs.setPointerCapture(e.pointerId);
     activePointers.set(e.pointerId, {x: e.clientX, y: e.clientY});
 });
 
 cvs.addEventListener('pointermove', e => {
   if (e.pointerType !== 'touch') return;  
+   e.preventDefault();     
     if (!activePointers.has(e.pointerId)) return;
     activePointers.set(e.pointerId, {x: e.clientX, y: e.clientY});
     handleGesture(e);                 // Kernlogik
@@ -457,10 +464,12 @@ cvs.addEventListener('pointermove', e => {
 
 cvs.addEventListener('pointerup', e => {
     if (e.pointerType !== 'touch') return;   //  <-- ergänzen
+   e.preventDefault();     
     releasePointer(e);
 });
 cvs.addEventListener('pointercancel', e => {
     if (e.pointerType !== 'touch') return;   //  <-- ergänzen
+   e.preventDefault();     
     releasePointer(e);
 });
 
