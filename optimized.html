@@ -376,18 +376,26 @@ window.onload = () => {
     cvs = document.getElementById('voxelCanvas');
     /* ---------- Pointer-Gesten-Handler (NEU) ---------- */
 cvs.addEventListener('pointerdown', e => {
+  if (e.pointerType !== 'touch') return;      
     cvs.setPointerCapture(e.pointerId);
     activePointers.set(e.pointerId, {x: e.clientX, y: e.clientY});
 });
 
 cvs.addEventListener('pointermove', e => {
+  if (e.pointerType !== 'touch') return;  
     if (!activePointers.has(e.pointerId)) return;
     activePointers.set(e.pointerId, {x: e.clientX, y: e.clientY});
     handleGesture(e);                 // Kernlogik
 });
 
-cvs.addEventListener('pointerup',     releasePointer);
-cvs.addEventListener('pointercancel', releasePointer);
+cvs.addEventListener('pointerup', e => {
+    if (e.pointerType !== 'touch') return;   //  <-- ergänzen
+    releasePointer(e);
+});
+cvs.addEventListener('pointercancel', e => {
+    if (e.pointerType !== 'touch') return;   //  <-- ergänzen
+    releasePointer(e);
+});
 
 function releasePointer(e){
     activePointers.delete(e.pointerId);
