@@ -541,6 +541,7 @@ menuToggleBtn.onclick = () => {
         controlsBar.style.display = 'flex';
         localStorage.setItem('voxelMenuVisible','true');
     }
+ setTimeout(onResize, 0);  
 };
     // Make sure THREE is defined here before using it
     if (typeof THREE === 'undefined') {
@@ -1089,16 +1090,21 @@ function handleGesture(e){
     if (pts.length === 2){
         const [p0, p1] = pts;
 
-        /* --- Pinch-Zoom -------------------------------------------------- */
-        const dist   = Math.hypot(p1.x - p0.x, p1.y - p0.y);
-        const zoomΔ  = dist - (lastPinchDist ?? dist);   // positive = Finger auseinander
-        const ZOOM_TH = 4;                               // Schwellwert in px
-        if (Math.abs(zoomΔ) > ZOOM_TH){
-            const zoomFactor = moveSpeed * 0.8;          // Feinfühligkeit
-            cam.position.addScaledVector(
-                cam.getWorldDirection(new THREE.Vector3()),  -zoomΔ * zoomFactor);
-            lastPinchDist = dist;                        // nur updaten, wenn gezoomt
-        }
+/* --- Pinch-Zoom -------------------------------------------------- */
+const dist = Math.hypot(p1.x - p0.x, p1.y - p0.y);
+
+// ‼ NEU: erste Distanz merken
+if (lastPinchDist === null) lastPinchDist = dist;
+
+const zoomΔ = dist - lastPinchDist;          // positive = Finger auseinander
+const ZOOM_TH = 4;                           // Schwelle in Pixel
+
+if (Math.abs(zoomΔ) > ZOOM_TH){
+    cam.position.addScaledVector(
+        cam.getWorldDirection(new THREE.Vector3()),
+        -zoomΔ * moveSpeed * 0.8);           // Minus = richtiges Zoom-Vorzeichen
+    lastPinchDist = dist;                    // nur updaten, wenn gezoomt
+}
 
         /* --- Strafen (links / rechts) ------------------------------------ */
         const midX = (p0.x + p1.x) * 0.5;
