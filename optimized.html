@@ -401,7 +401,7 @@ let rotSpeed = 0.002;   // Globale Drehgeschwindigkeit    (NEU)
 const activePointers = new Map();   // id → {x,y}
 let lastPinchDist = null;           // voriger Zwei-Finger-Abstand
 let lastSwipeX    = null;           // mittlerer X-Wert zweier Finger
-
+let lastSwipeY    = null;   //
 let euler; // Declare euler globally
 const voxels = new Map(); // Stores { color: hex_color } for each voxel, not the mesh
 let cvs;
@@ -510,9 +510,13 @@ cvs.addEventListener('pointercancel', e => {
 
 function releasePointer(e){
     activePointers.delete(e.pointerId);
-if (activePointers.size === 0){    prevTouch = null; }   
+if (activePointers.size === 0){   
+ prevTouch = null;
+ lastSwipeY = null; 
+ }   
  lastPinchDist = null;
     lastSwipeX    = null;
+
 }
 /* ---------- Menü-Toggle ---------- */
 const menuToggleBtn = document.getElementById('menuToggle');
@@ -1056,22 +1060,23 @@ function onResize() {
 function handleGesture(e){
     const pts = [...activePointers.values()];
 
-    /* ---------- 1 Finger: Kamera oder Zeichnen ---------- */
+    /* ---------- 1 Finger: Kamera drehen / Voxelaktion ---------- */
     if (pts.length === 1){
         const p = pts[0];
 
-        /* Shift-Lock oder echte Shift-Taste aktiv → Würfelaktion */
+        // Shift-Lock oder echte Shift-Taste → direkt Voxel­aktion
         if (shiftActive()){
             handleVoxelAction(p.x, p.y, currentMode, true, false);
             return;
         }
 
-        /* sonst: Kamera drehen */
+        // Sonst: Kamera drehen
         if (prevTouch){
             const dx = p.x - prevTouch.x;
             const dy = p.y - prevTouch.y;
-euler.y += dx * rotSpeed;   // horizontale Achse invertiert
-euler.x += dy * rotSpeed;   // vertikale Achse invertiert
+
+            euler.y += dx * rotSpeed;   // Finger nach rechts  → Blick nach rechts
+            euler.x += dy * rotSpeed;   // Finger nach unten  → Blick nach unten
             euler.x = Math.max(-Math.PI/2, Math.min(Math.PI/2, euler.x));
             cam.quaternion.setFromEuler(euler);
         }
@@ -1079,32 +1084,43 @@ euler.x += dy * rotSpeed;   // vertikale Achse invertiert
         return;
     }
 
-    /* ---------- 2 Finger: Pinch-Zoom + Strafen ---------- */
-    prevTouch = null;                             // Reset, sobald 2 Finger
+    /* ---------- ≥2 Finger: Pinch-Zoom + Strafing + Up/Down ---------- */
+    prevTouch = null;                       // Nur 1-Finger-Moves brauchen prevTouch
     if (pts.length === 2){
-        const [p0,p1] = pts;
+        const [p0, p1] = pts;
 
-        // Pinch-Zoom (auseinander = reinzoomen)
-        const dist = Math.hypot(p1.x-p0.x, p1.y-p0.y);
-        if (lastPinchDist !== null){
-            const delta = dist - lastPinchDist; 
-const zoomFactor = moveSpeed * 0.8;   //   0.5 → schneller / langsamer
-cam.position.addScaledVector(
-    cam.getWorldDirection(new THREE.Vector3()), -delta * zoomFactor);
+        /* --- Pinch-Zoom -------------------------------------------------- */
+        const dist   = Math.hypot(p1.x - p0.x, p1.y - p0.y);
+        const zoomΔ  = dist - (lastPinchDist ?? dist);   // positive = Finger auseinander
+        const ZOOM_TH = 4;                               // Schwellwert in px
+        if (Math.abs(zoomΔ) > ZOOM_TH){
+            const zoomFactor = moveSpeed * 0.8;          // Feinfühligkeit
+            cam.position.addScaledVector(
+                cam.getWorldDirection(new THREE.Vector3()),  zoomΔ * zoomFactor);
+            lastPinchDist = dist;                        // nur updaten, wenn gezoomt
         }
-        lastPinchDist = dist;
 
-        // Horizontal-Swipe = seitwärts bewegen
+        /* --- Strafen (links / rechts) ------------------------------------ */
         const midX = (p0.x + p1.x) * 0.5;
         if (lastSwipeX !== null){
-            const d = midX - lastSwipeX;
+            const dx = midX - lastSwipeX;               // Finger nach rechts → Szene nach links
             const right = new THREE.Vector3().crossVectors(
-                 cam.getWorldDirection(new THREE.Vector3()), cam.up);
-            cam.position.addScaledVector(right, -d * 0.01);
+                cam.getWorldDirection(new THREE.Vector3()), cam.up);
+            cam.position.addScaledVector(right, -dx * 0.01);
         }
         lastSwipeX = midX;
+
+        /* --- Vertikal bewegen (hoch / runter) ---------------------------- */
+        const midY = (p0.y + p1.y) * 0.5;
+        if (lastSwipeY !== null){
+            const dy = midY - lastSwipeY;               // Finger hoch → Kamera hoch
+            const up = cam.up.clone().normalize();
+            cam.position.addScaledVector(up, -dy * 0.01);
+        }
+        lastSwipeY = midY;
     }
 }
+
 
 function rebuildHelpers() {
     // Check if THREE is defined before using it in helper functions
