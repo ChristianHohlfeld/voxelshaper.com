@@ -476,6 +476,7 @@ cvs.addEventListener('pointerdown', e=>{
     e.preventDefault();
     cvs.setPointerCapture(e.pointerId);
     activePointers.set(e.pointerId,{x:e.clientX,y:e.clientY});
+ prevTouch = {x:e.clientX, y:e.clientY};   
     touchStartPos = {x:e.clientX, y:e.clientY};   // Tap start
 });
 
@@ -509,7 +510,8 @@ cvs.addEventListener('pointercancel', e => {
 
 function releasePointer(e){
     activePointers.delete(e.pointerId);
-    lastPinchDist = null;
+if (activePointers.size === 0){    prevTouch = null; }   
+ lastPinchDist = null;
     lastSwipeX    = null;
 }
 /* ---------- Menü-Toggle ---------- */
