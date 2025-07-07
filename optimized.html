@@ -287,6 +287,11 @@ input[type="color"]::-moz-color-swatch {
     touch-action: none;          /* iOS ≥13.4, Android, Desktop */
     -ms-touch-action: none;      /* altes Edge/IE */
 }
+/* Shift-Lock: aktiv leuchtend */
+#shiftLockBtn.active{
+    background:#ffa726;   /* Orange – passe gern an */
+    color:#fff;
+}
 </style>
 </head>
 <body>
@@ -316,6 +321,7 @@ input[type="color"]::-moz-color-swatch {
     
     <button id="toggleTerrainControlsBtn">Gelände-Optionen</button>
     <button id="helpToggleBtn">Hilfe</button>
+    <button id="shiftLockBtn">Shift-Lock ✱ aus</button>
 </div>
 
 <div id="terrainControlsPanel" style="display:none;">
@@ -376,6 +382,7 @@ input[type="color"]::-moz-color-swatch {
 const VS = 1, HALF = VS * 0.5;
 
 /* ---------- globale Variablen ---------- */
+
 let scene, cam, ren, gridHelper, boxHelper;
 let rotSpeed = 0.002;   // Globale Drehgeschwindigkeit    (NEU)
 /* ---------- Touch-Gesten (NEU) ---------- */
@@ -409,7 +416,12 @@ let presetBoxes = []; // Global array to store references to preset color boxes
 let mainDirectionalLight;
 
 // Globale Variablen für Dragging-Status
-let isShiftDragging = false;
+let isShiftDragging = false;   // physische Shift-Taste
+let shiftLock       = false;   // permanenter Shift (per Button)
+
+function shiftActive(){        // true, wenn Shift ODER Shift-Lock an
+    return isShiftDragging || shiftLock;
+}
 let isControlDragging = false;
 let rotate = false; // Moved to global as it's used across handlers
 
@@ -795,7 +807,13 @@ menuToggleBtn.onclick = () => {
             localStorage.setItem('voxelEditorHelpVisible', 'false');
         }
     };
-
+// ---------- Shift-Lock ----------
+const shiftBtn = document.getElementById('shiftLockBtn');
+shiftBtn.onclick = () => {
+    shiftLock = !shiftLock;
+    shiftBtn.classList.toggle('active', shiftLock);
+    shiftBtn.textContent = shiftLock ? 'Shift-Lock ✱ an' : 'Shift-Lock ✱ aus';
+};
     // Fly Speed Slider
     const flySpeedSlider = document.getElementById('fly-speed-slider');
     const flySpeedDisplay = document.getElementById('fly-speed-display');
@@ -866,10 +884,10 @@ menuToggleBtn.onclick = () => {
         isShiftDragging = e.shiftKey;
         isControlDragging = e.ctrlKey || e.metaKey;
 
-        if (!isShiftDragging && !isControlDragging) {
+if (!shiftActive() && !isControlDragging) {
             // Single click for any mode
             handleVoxelAction(e.clientX, e.clientY, currentMode, false, false);
-        } else if (isShiftDragging && currentMode === Modes.ADD) {
+        } else if (shiftActive() && currentMode === Modes.ADD) {
             // Shift-Drag in ADD mode for fixed level
             // Determine the initial fixed level based on hit or activeDrawingLevel
             const rect = cvs.getBoundingClientRect();
@@ -895,7 +913,7 @@ menuToggleBtn.onclick = () => {
             currentDrawingAxis = axisToFix; // Store the axis that's being fixed
 
             handleVoxelAction(e.clientX, e.clientY, currentMode, true, false, currentShiftDragLevel, currentDrawingAxis);
-        } else if (isShiftDragging && (currentMode === Modes.DELETE || currentMode === Modes.DRAW)) {
+        } else if (shiftActive() && (currentMode === Modes.DELETE || currentMode === Modes.DRAW)) {
             // Shift-Drag in DELETE or DRAW mode (now allows action on plane if no voxel is hit)
             handleVoxelAction(e.clientX, e.clientY, currentMode, true, false);
         } else if (isControlDragging && currentMode === Modes.ADD) {
@@ -913,9 +931,9 @@ menuToggleBtn.onclick = () => {
         }
 
         if (e.buttons & 1) { // Left mouse button is down
-            if (isShiftDragging && currentMode === Modes.ADD) {
+            if (shiftActive() && currentMode === Modes.ADD) {
                 handleVoxelAction(e.clientX, e.clientY, currentMode, true, false, currentShiftDragLevel, currentDrawingAxis);
-            } else if (isShiftDragging && (currentMode === Modes.DELETE || currentMode === Modes.DRAW)) {
+            } else if (shiftActive() && (currentMode === Modes.DELETE || currentMode === Modes.DRAW)) {
                 handleVoxelAction(e.clientX, e.clientY, currentMode, true, false);
             } else if (isControlDragging && currentMode === Modes.ADD) {
                 handleVoxelAction(e.clientX, e.clientY, currentMode, true, true);
@@ -1037,8 +1055,8 @@ function handleGesture(e){
         const dist = Math.hypot(p1.x - p0.x, p1.y - p0.y);
         if (lastPinchDist !== null){
             const delta = dist - lastPinchDist;   // + rauszoomen, – reinzoomen
-            cam.position.addScaledVector(
-                cam.getWorldDirection(new THREE.Vector3()), -delta * 0.01);
+cam.position.addScaledVector(
+    cam.getWorldDirection(new THREE.Vector3()),  delta * 0.01);
         }
         lastPinchDist = dist;
 
