@@ -316,6 +316,8 @@ input[type="color"]::-moz-color-swatch {
 #voxelCanvas{
     touch-action: none;           /* iOS ≥13.4, Android, Desktop */
     -ms-touch-action: none;       /* altes Edge/IE */
+
+    /* ← neu: sorge dafür, dass die CSS-Border innen sitzt */
            box-sizing: border-box;
 }
 /* Shift-Lock: aktiv leuchtend */
@@ -412,14 +414,7 @@ canvas, body { -webkit-tap-highlight-color: transparent; }
 <script>
 /* ---------- Konstanten ---------- */
 const VS = 1, HALF = VS * 0.5;
-/* -----------------------------
-   Globale FSM-Variable
------------------------------ */
-const gestureState = {
-  type: null,       // 'tap' | 'look' | 'shiftDrag' | 'stackAdd' | 'pinch' | 'pan'
-  hasDrawn: false,  // true sobald handleVoxelAction gezeichnet hat
-  sx: 0, sy: 0,     // Start-Pos für Distanzmessung
-};
+
 /* ---------- globale Variablen ---------- */
 let dblTapShiftLock = false;
 let isDblTapDragActive= false; // Controls if a double-tap-drag should activate drawing
@@ -524,20 +519,9 @@ window.onload = () => {
 cvs.addEventListener('pointerdown', e => {
     // Verhindert Standard-Browserverhalten wie Scrolling oder Kontextmenü
     e.preventDefault();
-/* ---------- FSM initialisieren ---------- */
-if (e.pointerType === 'touch') {
-    gestureState.type     = 'tap';     // Kandidat
-    gestureState.hasDrawn = false;
-    gestureState.sx       = e.clientX; // Start-X
-    gestureState.sy       = e.clientY; // Start-Y
-}
-/* ---------------------------------------- */
+
     // Speichert den Zeiger in der Liste der aktiven Zeiger
-    activePointers.set(e.pointerId, {
-    x:e.clientX, y:e.clientY,
-    px:e.clientX, py:e.clientY,
-    sx:e.clientX, sy:e.clientY 
-});
+    activePointers.set(e.pointerId, {x:e.clientX, y:e.clientY, px:e.clientX, py:e.clientY});
 
     // Nur für Touch-Events relevant, die oft eine spezielle Handhabung erfordern
     if (e.pointerType === 'touch') {
@@ -631,47 +615,16 @@ cvs.addEventListener('pointermove', e => {
     /* das aktualisierte Objekt zurück in die Map schreiben     */
     activePointers.set(e.pointerId, p);
 
-// ---------- Gesten-FSM: Tap → Look / Shift-Drag ----------
-const dx    = e.clientX - gestureState.sx;
-const dy    = e.clientY - gestureState.sy;
-const moved = Math.hypot(dx, dy);
-
-// Tap wird Look
-if (gestureState.type === 'tap' &&
-    moved > MOVE_PX && !dblTapActive) {
-    gestureState.type = 'look';
-}
-
-// Tap wird Shift-Drag (Double-Tap + Bewegung)
-if (gestureState.type === 'tap' &&
-    dblTapActive && moved > MOVE_PX) {
-    gestureState.type = 'shiftDrag';
-}
-
-switch (gestureState.type) {
-
-  case 'look':                                // Kamera bewegen
-      euler.y += dx * rotSpeed;
-      euler.x += dy * rotSpeed;
-      euler.x = Math.max(-Math.PI/2,
-                         Math.min(Math.PI/2, euler.x));
-      cam.quaternion.setFromEuler(euler);
-      break;
-
-  case 'shiftDrag':                           // ⇧-Fläche zeichnen
-      handleVoxelAction(
-        e.clientX, e.clientY,
-        currentMode,
-        /* drag */  true,
-        /* stack */ false,
-        currentShiftDragLevel,
-        currentDrawingAxis
-      );
-      gestureState.hasDrawn = true;
-      break;
-
-// ---------- Ende Gesten-FSM ----------------------------------
-   
+    // NEW: Handle double-tap-drag drawing if active
+    if (dblTapActive && isDblTapDragActive&& activePointers.size === 1) {
+        dblTapDrag = true; // Mark as a drag occurring during a double-tap
+        handleVoxelAction(
+            e.clientX, e.clientY,
+            currentMode,
+            /* drag  */ true,  // Indicate this is a drag operation for continuous drawing
+            /* stack */ false
+        );
+        return; // Prevent other gesture handling (e.g., freelook)
     }
 
     /* zentrale Gesten-FSM ausführen                            */
