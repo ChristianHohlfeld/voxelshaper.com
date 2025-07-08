@@ -393,6 +393,10 @@ canvas, body { -webkit-tap-highlight-color: transparent; }
 const VS = 1, HALF = VS * 0.5;
 
 /* ---------- globale Variablen ---------- */
+/* --- 2-Finger-Drag / Pinch ---------------------------------- */
+let lastSwipeMid = null;   // merkt Mittel-Punkt zweier Finger
+const PINCH_TH   = 3;      // Schwelle: Pixel-Delta ⇒ Pinch
+const DRAG_K     = 0.01;   // Übersetzungs-Faktor Kamera-Drag
 let prevTouch = null;   
 let touchStartPos = null; // merkt Position für Tap-Erkennung
 let scene, cam, ren, gridHelper, boxHelper;
@@ -542,6 +546,7 @@ if (activePointers.size === 0){
  }   
  lastPinchDist = null;
     lastSwipeX    = null;
+lastSwipeMid  = null;
 
 }
 /* ---------- Menü-Toggle ---------- */
@@ -1087,83 +1092,74 @@ function onResize() {
 function handleGesture(e){
     const pts = [...activePointers.values()];
 
-    /* ---------- 1 Finger: Kamera drehen / Voxelaktion ---------- */
-  /* ---------- 1 Finger --------------------------------------- */
-if (pts.length === 1){
-    const p = pts[0];
+    /* ---------- 1 Finger: Kamera drehen / Voxel-Aktion -------- */
+    if (pts.length === 1){
+        const p = pts[0];
 
-    /* 1) Doppel-Tap-Drag  ⇒  Shift-Drag ---------------------- */
-    if (dblTapActive){
-        const moved = Math.hypot(p.x - p.px, p.y - p.py);
-        if (moved > MOVE_PX){
-            dblTapDrag     = true;
-            isShiftDragging = true;         // simuliert Shift
-            handleVoxelAction(p.x, p.y, currentMode, true, false);
+        /* 1) Doppel-Tap-Drag  ⇒  Shift-Drag auf Ebene */
+        if (dblTapActive){
+            const moved = Math.hypot(p.x - touchStartPos.x,
+                                     p.y - touchStartPos.y);
+            if (moved > MOVE_PX){
+                dblTapDrag      = true;
+                isShiftDragging = true;           // simuliert Shift
+                handleVoxelAction(p.x, p.y,
+                                  currentMode, true, false);
+                return;                           // solange Drag: keine Drehung
+            }
         }
-        return;                             // Kamera dreht erst, wenn kein dblTap
+
+        /* 2) Normale Kameradrehung */
+        const dx = p.x - (prevTouch?.x ?? p.x);
+        const dy = p.y - (prevTouch?.y ?? p.y);
+        euler.y += dx * rotSpeed;
+        euler.x += dy * rotSpeed;
+        euler.x = Math.max(-Math.PI/2, Math.min(Math.PI/2, euler.x));
+        cam.quaternion.setFromEuler(euler);
+        prevTouch = {x:p.x, y:p.y};
+        return;
     }
 
-    /* 2) Normale Kamera-Drehung ------------------------------ */
-    const dx = p.x - (prevTouch?.x ?? p.x);
-    const dy = p.y - (prevTouch?.y ?? p.y);
-    euler.y += dx * rotSpeed;
-    euler.x += dy * rotSpeed;
-    euler.x = Math.max(-Math.PI/2, Math.min(Math.PI/2, euler.x));
-    cam.quaternion.setFromEuler(euler);
-    prevTouch = {x:p.x, y:p.y};
-    return;
-}
+    /* ---------- ≥2 Finger: Pinch-Zoom ODER Parallel-Drag ------ */
+    prevTouch = null;           // bei >1 Finger keine Einzel-Drehung
 
-    /* ---------- ≥2 Finger: Pinch-Zoom + Strafing + Up/Down ---------- */
-    prevTouch = null;                       // Nur 1-Finger-Moves brauchen prevTouch
     if (pts.length === 2){
         const [p0, p1] = pts;
 
-/* --- Pinch-Zoom -------------------------------------------------- */
-const dist = Math.hypot(p1.x - p0.x, p1.y - p0.y);
+        /* 1) Pinch-Zoom --------------------------------------- */
+        const dist = Math.hypot(p1.x - p0.x, p1.y - p0.y);
+        if (lastPinchDist === null) lastPinchDist = dist;
+        const scaleΔ = dist - lastPinchDist;
 
-// ‼ NEU: erste Distanz merken
-if (lastPinchDist === null) lastPinchDist = dist;
+        if (Math.abs(scaleΔ) > PINCH_TH){
+            // Zoom entlang Blickrichtung (Finger auseinander → reinzoomen)
+            cam.position.addScaledVector(
+                cam.getWorldDirection(new THREE.Vector3()),
+                -scaleΔ * moveSpeed * 0.8);
+            lastPinchDist = dist;
+            lastSwipeMid  = null;   // verhindert Drag-Sprung nach Pinch
+            return;
+        }
 
-const zoomΔ = dist - lastPinchDist;          // positive = Finger auseinander
-const ZOOM_TH = 4;                           // Schwelle in Pixel
-
-if (Math.abs(zoomΔ) > ZOOM_TH){
-    cam.position.addScaledVector(
-        cam.getWorldDirection(new THREE.Vector3()),
-        zoomΔ * moveSpeed * 0.8);           // Minus = richtiges Zoom-Vorzeichen
-    lastPinchDist = dist;                    // nur updaten, wenn gezoomt
-}
-    // ⬇️ NEU: Vertikale Kamerabewegung (2 Finger gleichzeitig hoch/runter)
-    const centerY = (p0.y + p1.y) / 2;
-    if (lastSwipeY === null) lastSwipeY = centerY;
-    const centerYΔ = centerY - lastSwipeY;
-    if (Math.abs(centerYΔ) > 1) {
-        const up = cam.up.clone().normalize();
-        cam.position.addScaledVector(up, centerYΔ * 0.01); // Geschwindigkeit ggf. anpassen
-        lastSwipeY = centerY;
-    }
-        /* --- Strafen (links / rechts) ------------------------------------ */
+        /* 2) Parallel-Drag (Strafe + Hoch/Runter) -------------- */
         const midX = (p0.x + p1.x) * 0.5;
-        if (lastSwipeX !== null){
-            const dx = midX - lastSwipeX;               // Finger nach rechts → Szene nach links
-            const right = new THREE.Vector3().crossVectors(
-                cam.getWorldDirection(new THREE.Vector3()), cam.up);
-            cam.position.addScaledVector(right, -dx * 0.01);
-        }
-        lastSwipeX = midX;
-
-        /* --- Vertikal bewegen (hoch / runter) ---------------------------- */
         const midY = (p0.y + p1.y) * 0.5;
-        if (lastSwipeY !== null){
-            const dy = midY - lastSwipeY;               // Finger hoch → Kamera hoch
-            const up = cam.up.clone().normalize();
-            cam.position.addScaledVector(up, dy * 0.01);
+
+        if (lastSwipeMid){
+            const dx = midX - lastSwipeMid.x;
+            const dy = midY - lastSwipeMid.y;
+
+            const dir   = cam.getWorldDirection(new THREE.Vector3());
+            const right = new THREE.Vector3()
+                            .crossVectors(dir, cam.up);   // seitwärts
+            const up    = cam.up.clone().normalize();      // vertikal
+
+            cam.position.addScaledVector(right, -dx * DRAG_K);
+            cam.position.addScaledVector(up,     dy * DRAG_K);
         }
-        lastSwipeY = midY;
+        lastSwipeMid = {x: midX, y: midY};
     }
 }
-
 
 function rebuildHelpers() {
     // Check if THREE is defined before using it in helper functions
