@@ -412,24 +412,19 @@
     /* ---------- Konstanten ---------- */
     const VS = 1, HALF = VS * 0.5;
 
-/* ---------- globale Variablen ---------- */
-let gestureMode   = null;   // 'pan' | 'pinch' | null
-let lastMid       = null;   // {x,y} - This variable is not used in the proposed handleGesture and can be removed or ignored.
-let lastDist      = null;   // Abstand der beiden Finger - This variable is not used in the proposed handleGesture and can be removed or ignored.
-const PAN_TH_PX   = 5;      // Startschwelle Parallel-Drag - Consider increasing or removing if using separate thresholds in handleGesture.
-const PINCH_TH_P  = 0.03;   // 3 % relative Änderung - Consider increasing or removing if using separate thresholds in handleGesture.
+    /* ---------- globale Variablen ---------- */
+    let gestureMode   = null;   // 'pan' | 'pinch' | null
+let lastMid       = null;   // {x,y}
+let lastDist      = null;   // Abstand der beiden Finger
+const PAN_TH_PX   = 5;      // Startschwelle Parallel-Drag
+const PINCH_TH_P  = 0.03;   // 3 % relative Änderung
 
-/* --- 2-Finger-Drag / Pinch ---------------------------------- */
-let lastSwipeMid = null;   // merkt Mittel-Punkt zweier Finger
-const PINCH_TH   = 3;      // Schwelle: Pixel-Delta ⇒ Pinch - Consider increasing or removing if using separate thresholds in handleGesture.
-const DRAG_K     = 0.01;   // Übersetzungs-Faktor Kamera-Drag - This value is very small; it should be increased or scaled.
-let prevTouch = null; // Used for single-touch handling, not directly in handleGesture below.
-let touchStartPos = null; // Used for single-tap detection.
-
-/* ---------- Touch-Gesten (NEU) ---------- */
-const activePointers = new Map();   // id → {x,y}
-let lastPinchDist = null;           // voriger Zwei-Finger-Abstand
-
+    /* --- 2-Finger-Drag / Pinch ---------------------------------- */
+    let lastSwipeMid = null;   // merkt Mittel-Punkt zweier Finger
+    const PINCH_TH   = 3;      // Schwelle: Pixel-Delta ⇒ Pinch
+    const DRAG_K     = 0.01;   // Übersetzungs-Faktor Kamera-Drag
+    let prevTouch = null;
+    let touchStartPos = null; // merkt Position für Tap-Erkennung
     let scene, cam, ren, gridHelper, boxHelper;
     let rotSpeed = 0.004;   // Globale Drehgeschwindigkeit    (NEU)
     /* --- Double-Tap Gesten ---------------------------------------- */
@@ -439,6 +434,8 @@ let lastPinchDist = null;           // voriger Zwei-Finger-Abstand
     const DT_MS       = 250;      // max. Abstand Taps (ms)
     const MOVE_PX     = 6;        // ab hier gilt es als Drag
     /* ---------- Touch-Gesten (NEU) ---------- */
+    const activePointers = new Map();   // id → {x,y}
+    let lastPinchDist = null;           // voriger Zwei-Finger-Abstand
 
     let euler; // Declare euler globally
     const voxels = new Map(); // Stores { color: hex_color } for each voxel, not the mesh
@@ -1118,119 +1115,85 @@ let lastPinchDist = null;           // voriger Zwei-Finger-Abstand
 /* ------------------------------------------------------------------ *
    Neues handleGesture()
  * ------------------------------------------------------------------ */
-// Assuming 'cam', 'GRID', and 'moveSpeed' are defined globally or accessible.
-// 'THREE' object is also assumed to be available (e.g., if Three.js is loaded).
+function handleGesture(e){
+    const pts = [...activePointers.values()];
 
-/**
- * handleGesture function for robust two-finger touch control (strafe and zoom).
- * This function should be called within the 'pointermove' event listener.
- * It differentiates between pan (strafe) and pinch (zoom) gestures.
- */
-function handleGesture(e) {
-    // Ensure we are only processing multi-touch gestures (specifically two fingers)
-    if (activePointers.size === 2) {
-        const pointers = Array.from(activePointers.values()); // Get the two active touch points
-        const p1 = pointers[0];
-        const p2 = pointers[1];
-
-        // Calculate the current distance between the two fingers and their midpoint
-        const currentDist = Math.hypot(p2.x - p1.x, p2.y - p1.y);
-        const currentMidX = (p1.x + p2.x) / 2;
-        const currentMidY = (p1.y + p2.y) / 2;
-
-        // Initialize last values on the very first 'pointermove' event after two fingers are down
-        if (lastPinchDist === null || lastSwipeMid === null) {
-            lastPinchDist = currentDist;
-            lastSwipeMid = { x: currentMidX, y: currentMidY };
-            gestureMode = null; // Reset gesture mode until a clear intention is detected
-            return; // Exit as there's no previous state to compare against yet
-        }
-
-        // Calculate deltas for pinch (distance change) and pan (midpoint change)
-        const deltaPinch = currentDist - lastPinchDist;
-        const deltaMidX = currentMidX - lastSwipeMid.x;
-        const deltaMidY = currentMidY - lastSwipeMid.y;
-
-        // --- Thresholds for robust gesture detection ---
-        // These values are increased from the original to prevent jitter and false positives.
-        const PINCH_THRESHOLD_PX = 15; // Absolute pixel change required to detect a pinch
-        const PAN_THRESHOLD_PX = 20;   // Absolute pixel change in midpoint required to detect a pan
-
-        // Determine the primary gesture mode if not already locked into one
-        if (gestureMode === null) {
-            // Prioritize pinch if a significant change in finger distance is detected
-            if (Math.abs(deltaPinch) > PINCH_THRESHOLD_PX) {
-                gestureMode = 'pinch';
-            }
-            // If not a pinch, check for a significant pan movement
-            else if (Math.hypot(deltaMidX, deltaMidY) > PAN_THRESHOLD_PX) {
-                gestureMode = 'pan';
-            }
-        }
-
-        // --- Apply camera movements based on the detected gesture mode ---
-        if (gestureMode === 'pinch') {
-            // Calculate zoom factor based on the relative change in distance
-            // If currentDist > lastPinchDist, zoomFactor > 1 (zoom in/out depending on interpretation)
-            const zoomFactor = currentDist / lastPinchDist;
-
-            // Implement dolly zoom: move the camera along its local Z-axis (forward/backward)
-            // A negative deltaPinch means fingers are spreading (zoom out), positive means pinching (zoom in)
-            // Adjust the sensitivity factor (e.g., `moveSpeed * 0.1` or a fixed value) as needed.
-            const dollyAmount = (lastPinchDist - currentDist) * moveSpeed * 0.1;
-            cam.translateZ(dollyAmount);
-
-        } else if (gestureMode === 'pan') {
-            // Implement strafing: move the camera left/right and up/down relative to its orientation.
-
-            // Get the camera's 'right' and 'up' vectors in world space
-            const right = new THREE.Vector3();
-            cam.getWorldDirection(right); // Get the camera's forward direction
-            right.cross(cam.up); // Cross with the camera's up vector to get the true right vector
-            right.normalize();
-
-            const up = new THREE.Vector3().copy(cam.up).normalize(); // Camera's up vector
-
-            // Adjust strafe speed. `DRAG_K` (0.01) is likely too small for meaningful movement.
-            // A `strafeSpeed` derived from `moveSpeed` makes it consistent with other movements.
-            const strafeSpeed = moveSpeed * 10; // Tune this factor for desired strafe speed
-
-            // Apply movement to the camera's position
-            // Horizontal movement (deltaMidX) translates along the camera's right vector
-            // Vertical movement (deltaMidY) translates along the camera's up vector
-            // Note: Signs (-deltaMidX, +deltaMidY) are typically chosen for intuitive control
-            cam.position.add(right.multiplyScalar(-deltaMidX * strafeSpeed));
-            cam.position.add(up.multiplyScalar(deltaMidY * strafeSpeed));
-
-            // Keep the camera looking at a central point (e.g., the center of your grid)
-            // This is important for "strafe" to maintain the view perspective.
-            cam.lookAt(GRID / 2, GRID / 2, GRID / 2);
-        }
-
-        // Update last values for the next frame's calculations
-        lastPinchDist = currentDist;
-        lastSwipeMid = { x: currentMidX, y: currentMidY };
-
-    } else {
-        // If not exactly two pointers are active (e.g., one finger or more than two),
-        // reset the gesture state to prepare for new gestures.
-        gestureMode = null;
-        lastPinchDist = null;
-        lastSwipeMid = null;
-        // Additional logic for single-finger gestures (e.g., camera rotation) would go here
-        // if you want to implement it, using `prevTouch` and calculating deltas for euler angles.
+    /* ---------- 1 Finger ⇒ Kameradrehung / Tap / (Shift-)Drag ---- */
+    if (pts.length === 1){
+        gestureMode = null;        // Reset
+        lastMid = lastDist = null;
+        /* … dein 1-Finger-Code bleibt unverändert … */
+        return;
     }
+
+    /* ---------- ≥2 Finger --------------------------------------- */
+    if (pts.length !== 2) return;  // mehr als 2 ignorieren wir hier
+    const [p0, p1] = pts;
+
+    /* Mittelpunkt + Abstand */
+    const midX  = (p0.x + p1.x) * 0.5;
+    const midY  = (p0.y + p1.y) * 0.5;
+    const dist  = Math.hypot(p1.x - p0.x, p1.y - p0.y);
+
+    if (lastMid === null){        // erster Frame
+        lastMid  = {x: midX, y: midY};
+        lastDist = dist;
+        return;
+    }
+
+    /* Änderungsgrößen */
+    const dMid   = Math.hypot(midX - lastMid.x, midY - lastMid.y);
+    const dDist  = dist - lastDist;
+    const relΔ   = Math.abs(dDist) / lastDist;  // relative Skalierung
+
+    /* ---------------- Gesten-Mode festlegen --------------------- */
+    if (!gestureMode){
+        if (relΔ > PINCH_TH_P && Math.abs(dDist) > dMid * 0.7){
+            gestureMode = 'pinch';
+        } else if (dMid > PAN_TH_PX && Math.abs(dDist) < dMid * 0.3){
+            gestureMode = 'pan';
+        } else {
+            return; // noch nicht eindeutig
+        }
+    }
+
+    /* ---------------- Ausführen --------------------------------- */
+    if (gestureMode === 'pinch'){
+        /* Zoom (Finger auseinander = reinzoomen) */
+        const zoomΔ = dDist * moveSpeed * 0.8;
+        cam.position.addScaledVector(
+            cam.getWorldDirection(new THREE.Vector3()),
+            zoomΔ);
+    } else if (gestureMode === 'pan'){
+        /* Parallel-Drag: seitwärts + hoch-runter */
+        const dir   = cam.getWorldDirection(new THREE.Vector3());
+        const right = new THREE.Vector3().crossVectors(dir, cam.up);
+        const up    = cam.up.clone().normalize();
+
+        /* Low-Pass: 80 % alt + 20 % neu → glatter */
+        const k = 0.2;
+        const dx = (midX - lastMid.x) * k;
+        const dy = (midY - lastMid.y) * k;
+
+        cam.position.addScaledVector(right, -dx * DRAG_K);
+        cam.position.addScaledVector(up,     dy * DRAG_K);
+    }
+
+    /* ---------------- Update für nächstes Frame ----------------- */
+    lastMid  = {x: midX, y: midY};
+    lastDist = dist;
 }
 
-// --- Update the releasePointer function to also reset gestureMode ---
+/* ------------------------------------------------------------------ *
+   Pointer-Up/Cancel: Gesten-State zurücksetzen
+ * ------------------------------------------------------------------ */
 function releasePointer(e){
     activePointers.delete(e.pointerId);
     if (activePointers.size === 0){
-        prevTouch = null; // Reset prevTouch when no pointers are active
+        gestureMode = null;
+        lastMid = lastDist = null;
+        prevTouch = null;
     }
-    lastPinchDist = null;  // Reset pinch distance
-    lastSwipeMid = null;   // Reset swipe midpoint
-    gestureMode = null;    // Crucially, reset the gesture mode
 }
 
     function rebuildHelpers() {
