@@ -416,26 +416,14 @@ const VS = 1, HALF = VS * 0.5;
 /* ----------------------------------------------
    GLOBAL – neue Hilfs-Variablen
 ---------------------------------------------- */
-let pinchStartDist  = null;        // Abstand beim Start der Geste
-let pinchStartCamZ  = null;        // originale Kamera-Distanz
-const PINCH_SMOOTH  = 0.15;        // Low-Pass-Faktor 0…1
-
-/* ---------- Touch-State-Maschine ---------- */
-// direkt unter den anderen let-Deklarationen
-let gestureLock   = null;
-let gestureCand   = null;
-let gestureCandCnt = 0;
 /* ---------- Double-Tap-State ---------- */
 let tapCandidate   = null;   // {x,y,time}
 const TAP_DIST_TH  = 10;     // max. Bewegung (px) für 'Tap'
 let gestureMode  = null;   // null | 'pan' | 'pinch'
 let gestureMid   = null;   // {x,y}  – letzte Mittel­punkt­position
 let gestureDist  = null;   // vorheriger Zwei-Finger-Abstand
-const PAN_LPF   = 0.25;    // Low-pass-Filter für flüssiges Strafen
 /* --- 2-Finger-Drag / Pinch ---------------------------------- */
-let lastSwipeMid = null;   // merkt Mittel-Punkt zweier Finger
 const PINCH_TH   = 3;      // Schwelle: Pixel-Delta ⇒ Pinch
-const DRAG_K     = 0.01;   // Übersetzungs-Faktor Kamera-Drag
 const DRAG_BASE   = 0.08;   // Grund-faktor (wird mit moveSpeed multipliziert)
 const PAN_PIX_TH  = 6;      // ab 4 px Bewegung → Pan
 const PINCH_REL_TH = 0.08;  // ≥6 % Distanzänderung → Pinch
@@ -451,7 +439,6 @@ const DT_MS       = 250;      // max. Abstand Taps (ms)
 const MOVE_PX     = 6;        // ab hier gilt es als Drag
 /* ---------- Touch-Gesten (NEU) ---------- */
 const activePointers = new Map();   // id → {x,y}
-let lastPinchDist = null;           // voriger Zwei-Finger-Abstand
 
 let euler; // Declare euler globally
 const voxels = new Map(); // Stores { color: hex_color } for each voxel, not the mesh
@@ -556,41 +543,113 @@ cvs.addEventListener('pointerdown', e => {
     cvs.setPointerCapture(e.pointerId);
 });
 
+/* ----------------------------------------------------------
+   TOUCH-Pointer-MOVE  – hält die Map »activePointers« aktuell
+   ---------------------------------------------------------- */
 cvs.addEventListener('pointermove', e => {
-  if (e.pointerType !== 'touch') return;
-   e.preventDefault();
-    if (!activePointers.has(e.pointerId)) return;
-    activePointers.set(e.pointerId, {x: e.clientX, y: e.clientY});
-    handleGesture(e);                 // Kernlogik
-});
 
-cvs.addEventListener('pointerup', e => {
+    /* nur Touch-Events interessieren uns hier                  */
     if (e.pointerType !== 'touch') return;
     e.preventDefault();
 
-    /* Tap-Aktion nur, wenn danach KEIN Pointer mehr aktiv ist ------------- */
+    /* ist der Pointer überhaupt registriert?                   */
     const p = activePointers.get(e.pointerId);
-    const moved = p && Math.hypot(e.clientX - p.x, e.clientY - p.y);
+    if (!p) return;
+
+    /* vorige Position sichern (für evtl. Δ-Berechnungen)       */
+    p.px = p.x;
+    p.py = p.y;
+
+    /* aktuelle Koordinaten eintragen                           */
+    p.x  = e.clientX;
+    p.y  = e.clientY;
+
+    /* das aktualisierte Objekt zurück in die Map schreiben     */
+    activePointers.set(e.pointerId, p);
+
+    /* zentrale Gesten-FSM ausführen                            */
+    handleGesture();   // Übergabe des Events nicht nötig
+});
+/* ==========================================================
+   TOUCH-Pointer-UP  – beendet Gesten, gibt Capture frei,
+   entscheidet über Tap / Double-Tap und räumt States auf
+   ========================================================== */
+cvs.addEventListener('pointerup', e => {
+
+    /* Nur echte Touch-Pointer interessieren */
+    if (e.pointerType !== 'touch') return;
+    e.preventDefault();
+
+    /* --- Bewegung für Tap-Erkennung messen ----------------- */
+    const p     = activePointers.get(e.pointerId);
+    const moved = p ? Math.hypot(e.clientX - p.x, e.clientY - p.y) : 0;
+
+    /* Pointer aus Map entfernen & Capture lösen ------------- */
     activePointers.delete(e.pointerId);
+    cvs.releasePointerCapture(e.pointerId);
+
+    /* --- Wenn jetzt kein Finger mehr aufliegt -------------- */
     if (activePointers.size === 0) {
 
-        /* Ein-Finger-Tap? */
+        /* -------- Einfach-Tap -------- */
         if (!dblTapActive && moved < TAP_DIST_TH) {
-            handleVoxelAction(e.clientX, e.clientY, currentMode, false, false);
+            handleVoxelAction(
+                e.clientX, e.clientY,
+                currentMode,          // ADD / DELETE / DRAW
+                /* drag  */ false,
+                /* stack */ false
+            );
         }
 
-        /* Abschluss des Double-Taps -------------------------------------- */
+        /* -------- Double-Tap-Ende -------- */
         if (dblTapActive) {
-            if (!dblTapDrag) {
-                handleVoxelAction(e.clientX, e.clientY, currentMode, false, false);
+            if (!dblTapDrag) {       // 2. Tap NICHT gezogen → ebenfalls Tap
+                handleVoxelAction(
+                    e.clientX, e.clientY,
+                    currentMode,
+                    /* drag  */ false,
+                    /* stack */ false
+                );
             }
-
+            // Double-Tap-State zurücksetzen
+            dblTapActive = false;
+            dblTapDrag   = false;
         }
 
+        /* -------- Gemeinsamer Reset -------- */
+        tapCandidate    = null;
+        isShiftDragging = false;
+        gestureMid      = null;
+        gestureDist     = null;
+        gestureMode     = null;
+        prevTouch       = null;   // Δ korrekt fürs nächste Down
     }
 
-releasePointer(e.pointerId);
+    /* Zusätzlicher Cleanup (falls nötig) */
+    releasePointer(e.pointerId);
 });
+
+
+/* ==========================================================
+   DESKTOP / STYLUS – Pointer-UP  (nur Nicht-Touch)
+   ========================================================== */
+cvs.onpointerup = e => {
+
+    /* Touch-Events werden bereits oben verarbeitet */
+    if (e.pointerType === 'touch') return;
+
+    /* Rechte Maustaste → Fly-Rotation beenden */
+    if (e.button === 2) {
+        rotate = false;
+        document.exitPointerLock();
+    }
+
+    /* Drag-Status zurücksetzen */
+    isShiftDragging       = false;
+    isControlDragging     = false;
+    currentShiftDragLevel = null;
+    currentDrawingAxis    = 'y';
+};
 
 cvs.addEventListener('pointercancel', e => {
     if (e.pointerType !== 'touch') return;   //  <-- ergänzen
@@ -605,13 +664,10 @@ function releasePointer(id){
         dblTapActive   = false;
         dblTapDrag     = false;
         isShiftDragging = false;
-        gestureLock = gestureCand = null;
-        gestureCandCnt = 0;
 gestureMid  = null;
 gestureDist = null;
 gestureMode = null;
 prevTouch   = null;   // verhindert falsches Δ beim nächsten Tap
-lastPinchDist = null; // falls du’s oben verwendest
     }
 }
 
@@ -1067,16 +1123,7 @@ if (!shiftActive() && !isControlDragging) {
         }
     };
 
-    cvs.onpointerup = e => {
-        if (e.button === 2) {
-            rotate = false;
-            document.exitPointerLock();
-        }
-        isShiftDragging = false;
-        isControlDragging = false;
-        currentShiftDragLevel = null; // Reset fixed level
-        currentDrawingAxis = 'y'; // Reset drawing axis to default
-    };
+
 
     cvs.addEventListener('wheel', e => {
         e.preventDefault();
