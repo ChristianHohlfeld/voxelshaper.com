@@ -413,9 +413,11 @@ canvas, body { -webkit-tap-highlight-color: transparent; }
 const VS = 1, HALF = VS * 0.5;
 
 /* ---------- globale Variablen ---------- */
+let dblTapShiftLock = false;
 /* ----------------------------------------------
    GLOBAL – neue Hilfs-Variablen
 ---------------------------------------------- */
+const PINCH_ZOOM_MULT = 8;     // Zoom-Geschwindigkeit ↑  (vorher 3-5)
 /* ---------- Double-Tap-State ---------- */
 let tapCandidate   = null;   // {x,y,time}
 const TAP_DIST_TH  = 10;     // max. Bewegung (px) für 'Tap'
@@ -1187,6 +1189,9 @@ function onResize() {
 /* =========================================================
    MOBILE-GESTEN  –  handleGesture()
    ========================================================= */
+/* =========================================================
+   TOUCH-GESTEN-FSM  –  handleGesture()
+   ========================================================= */
 function handleGesture () {
 
   const pts = [...activePointers.values()];
@@ -1207,28 +1212,27 @@ function handleGesture () {
                                  p.y - touchStartPos.y);
         if (moved > MOVE_PX){
           dblTapDrag      = true;
-          isShiftDragging = true;          // ⇧ gedrückt
+          isShiftDragging = true;               // ⇧ ein­schalten
 
-          /* Bei ADD-Modus: aktive Ebene (y/x/z) einfrieren,
-             bei DELETE/DRAW brauchen wir nur das Flag       */
+          /* Im ADD-Modus Zeichen­ebene einfrieren -------- */
           if (currentMode === Modes.ADD){
             const rect  = cvs.getBoundingClientRect();
             const mouse = new THREE.Vector2(
-                ((p.x - rect.left) / rect.width)  * 2 - 1,
-               -((p.y - rect.top)  / rect.height) * 2 + 1);
+                 ((p.x - rect.left) / rect.width)  * 2 - 1,
+                -((p.y - rect.top ) / rect.height) * 2 + 1);
             const ray   = new THREE.Raycaster();
             ray.setFromCamera(mouse, cam);
             const hits  = ray.intersectObject(voxelMesh);
 
             currentDrawingAxis    = 'y';
             currentShiftDragLevel = hits.length
-               ? Math.floor(hits[0].point.y / VS)
-               : activeDrawingLevel.y;
+                 ? Math.floor(hits[0].point.y / VS)
+                 : activeDrawingLevel.y;
           }
         }
       }
 
-      /* (b) Sobald als Drag klassifiziert → wie ⇧-Drag zeichnen */
+      /* (b) Sobald als Drag klassifiziert → ⇧-Drag-Action */
       if (dblTapDrag){
         handleVoxelAction(
           p.x, p.y,
@@ -1244,9 +1248,15 @@ function handleGesture () {
       return;
     }
 
-    /* ---------- normales Kamera-Look --------------------- */
-    const dx = p.x - (prevTouch?.x ?? p.x);
-    const dy = p.y - (prevTouch?.y ?? p.y);
+    /* ---------- normales Kamera-Look -------------------- */
+    // Den ersten Frame nach einem beendeten Pinch ignorieren
+    if (prevTouch === null){
+        prevTouch = {x:p.x, y:p.y};
+        return;
+    }
+
+    const dx = p.x - prevTouch.x;
+    const dy = p.y - prevTouch.y;
 
     euler.y +=  dx * rotSpeed;
     euler.x +=  dy * rotSpeed;
@@ -1283,15 +1293,15 @@ function handleGesture () {
   }
 
   if (gestureMode === 'pinch'){
-    /* ---------- Pinch-Zoom (Vorzeichen korrigiert) -------- */
-    const scale     = dist / gestureDist;                   // >1 = spreizen
-    const zoomDelta = (scale - 1) * 3* moveSpeed;          // richtiger Drehsinn
+    /* ---------- Pinch-Zoom (beschleunigt x5) ------------- */
+    const scale     = dist / gestureDist;               // >1 = spreizen
+    const zoomDelta = (scale - 1) * PINCH_ZOOM_MULT  * moveSpeed;      // zügiger Zoom
     cam.position.addScaledVector(
         cam.getWorldDirection(new THREE.Vector3()),
         zoomDelta
     );
-    gestureDist = dist;                                     // erst jetzt refresh
-  } else { /* ---------- Zwei-Finger-Pan ------------------- */
+    gestureDist = dist;                                 // erst jetzt refresh
+  } else { /* ---------- Zwei-Finger-Pan ------------------ */
     const panFactor = DRAG_BASE * (moveSpeed * 5);
     const dx = (midX - gestureMid.x) * panFactor;
     const dy = (midY - gestureMid.y) * panFactor;
@@ -1303,26 +1313,40 @@ function handleGesture () {
     cam.position.addScaledVector(right, -dx);
     cam.position.addScaledVector(upVec,    dy);
 
-    gestureMid = {x:midX, y:midY};                          // refresh
+    gestureMid = {x:midX, y:midY};                      // refresh
   }
+
+  /* prevTouch bleibt NULL, damit der erste 1-Finger-Frame
+     nach dem Pinch ignoriert wird (siehe oben)            */
+  prevTouch = null;
 }
 
 /* =========================================================
    RELEASE-CLEANUP  –  Ergänzung in releasePointer()
    ========================================================= */
 function releasePointer(id){
-  activePointers.delete(id);
-  if (activePointers.size === 0){
-    tapCandidate  = null;
-    dblTapActive  = false;
-    dblTapDrag    = false;
-    isShiftDragging = false;
+    activePointers.delete(id);
 
-    /* wichtig für sauberen Neustart */
-    gestureMid  = gestureDist = null;
-    gestureMode = null;
-    prevTouch   = null;
-  }
+    /* 1 Finger übrig → von Pinch auf Look umschalten */
+    if (activePointers.size === 1){
+        const last = [...activePointers.values()][0];
+        prevTouch   = { x:last.x, y:last.y }; // Null-Δ
+        gestureMid  = gestureDist = null;    // Pinch-State weg
+        gestureMode = null;
+        return;                              // erstes Look-Frame skippen
+    }
+
+    /* gar kein Finger mehr → kompletter Reset */
+    if (activePointers.size === 0){
+        tapCandidate   = null;
+        dblTapActive   = false;
+        dblTapDrag     = false;
+        isShiftDragging = false;
+
+        gestureMid  = gestureDist = null;
+        gestureMode = null;
+        prevTouch   = null;
+    }
 }
 
 function rebuildHelpers() {
