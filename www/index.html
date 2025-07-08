@@ -9,7 +9,7 @@
 <meta property="og:url" content="https://voxelshaper.com/" />
 <meta property="og:type" content="website" />
 <meta name="viewport"
-      content="width=device-width,initial-scale=1.0,maximum-scale=1.0,user-scalable=no">
+      content="width=device-width,initial-scale=1.0,maximum-scale=1.0,user-scalable=no,viewport-fit=cover">
 <link rel="icon" type="image/png" href="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAACAAAAAgCAIAAAD8GO2jAAAFmUlEQVR4nK1WX28bxxGfmd29P+SRvI..."/>
 
 <!-- Twitter Card -->
@@ -19,16 +19,35 @@
 <meta name="twitter:image" content="https://voxelshaper.com/preview.png">
 <title>VoxelShaper – Voxel Editor & 3D Print Exporter</title>
 <style>
-html, body, #controls{
-    touch-action: none;   /* verhindert Browser-Zoom/Scroll */
+/* CSS für den Body mit Safe-Area-Anpassungen */
+body {
+    margin: 0;
+    overflow: hidden;
+    font-family: sans-serif;
+    display: flex;
+    flex-direction: column;
+    height: 100vh;
+    background: #282c34;
+    color: #e0e0e0;
+
+    /* --- WICHTIG: ANPASSUNGEN FÜR SICHERE BEREICHE --- */
+    /* Verschiebt den Inhalt nach unten, um Platz für die Statusleiste/Notch zu schaffen */
+    padding-top: env(safe-area-inset-top);
+    /* Fügt Polsterung für den unteren Bereich hinzu (z.B. für Home-Indikatoren auf iPhones) */
+    padding-bottom: env(safe-area-inset-bottom);
+    padding-left: env(safe-area-inset-left);
+    padding-right: env(safe-area-inset-right);
+    /* Entscheidend: Stellt sicher, dass das Padding in der 100vh Höhe enthalten ist */
+    box-sizing: border-box;
+    /* --- ENDE ANPASSUNGEN FÜR SICHERE BEREICHE --- */
 }
-body{margin:0;overflow:hidden;font-family:sans-serif;display:flex;flex-direction:column;height:100vh;background:#282c34;color:#e0e0e0}
+
 /* verhindert, dass das OS den Canvas als Text selektiert */
 canvas, body, #container{
     -webkit-user-select: none;
     -moz-user-select: none;
     user-select: none;
-    -webkit-touch-callout: none;   /* iOS Kontextmenü */
+    -webkit-touch-callout: none;    /* iOS Kontextmenü */
 }
 #controls{padding:14px;background:#3a3f47;border-bottom:1px solid #4a4f57;display:flex;flex-wrap:wrap;gap:12px;justify-content:center;align-items:center}
 #controls button,#controls label{padding:8px 18px;border:none;border-radius:5px;font-size:1em;background:#555c66;color:#e0e0e0;cursor:pointer}
@@ -230,13 +249,14 @@ input[type="color"]::-moz-color-swatch {
     transition: all 0.3s ease-in-out;
 }
 /* ---------------------------------------------------
-   HAMBURGER-BUTTON
-   --------------------------------------------------- */
+    HAMBURGER-BUTTON
+    --------------------------------------------------- */
 #menuToggle{
     position: fixed;
-    top: 10px;
+    /* top: 10px; <-- DIESE ZEILE WIRD GEÄNDERT! */
+    top: calc(10px + env(safe-area-inset-top)); /* <-- NEU: Verschiebt es um 10px + Safe-Area nach unten */
     right: 10px;
-    z-index: 1500;               /* über allen Panels */
+    z-index: 1500;             /* über allen Panels */
     width: 42px; height: 42px;
     font-size: 1.4em;
     line-height: 42px;
@@ -251,15 +271,15 @@ input[type="color"]::-moz-color-swatch {
 #menuToggle:hover{background:#6a727f}
 
 /* ---------------------------------------------------
-   Responsive-Regel: Auf Viewports ≤ 768 px wird
-   das Bedienfeld anfangs versteckt.
-   --------------------------------------------------- */
+    Responsive-Regel: Auf Viewports ≤ 768 px wird
+    das Bedienfeld anfangs versteckt.
+    --------------------------------------------------- */
 @media (max-width:768px){
     #controls{display:none;}
 }
 /* ---------------------------------------------------
-   Gelände-Button optisch hervorheben
-   --------------------------------------------------- */
+    Gelände-Button optisch hervorheben
+    --------------------------------------------------- */
 #generateTerrainBtn{
     padding: 12px 26px;
     font-size: 1.05em;
@@ -294,12 +314,12 @@ input[type="color"]::-moz-color-swatch {
 /* Canvas & Container: KEINE default-Gesten */
 #container,
 #voxelCanvas{
-    touch-action: none;          /* iOS ≥13.4, Android, Desktop */
-    -ms-touch-action: none;      /* altes Edge/IE */
+    touch-action: none;           /* iOS ≥13.4, Android, Desktop */
+    -ms-touch-action: none;       /* altes Edge/IE */
 }
 /* Shift-Lock: aktiv leuchtend */
 #shiftLockBtn.active{
-    background:#ffa726;   /* Orange – passe gern an */
+    background:#ffa726;    /* Orange – passe gern an */
     color:#fff;
 }
 canvas, body { -webkit-tap-highlight-color: transparent; }
@@ -383,10 +403,10 @@ canvas, body { -webkit-tap-highlight-color: transparent; }
     </div>
 </div>
 
-<script src="https://cdn.jsdelivr.net/npm/three@0.128.0/build/three.min.js"></script>
-<script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/utils/BufferGeometryUtils.js"></script>
-<script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/exporters/STLExporter.js"></script>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/seedrandom/3.0.5/seedrandom.min.js"></script>
+<script src="lib/three.min.js"></script>
+<script src="lib/BufferGeometryUtils.js"></script>
+<script src="lib/STLExporter.js"></script>
+<script src="lib/seedrandom.min.js"></script>
 
 <script>
 /* ---------- Konstanten ---------- */
@@ -549,7 +569,7 @@ lastSwipeMid  = null;
 /* ---------- Menü-Toggle ---------- */
 const menuToggleBtn = document.getElementById('menuToggle');
 const controlsBar   = document.getElementById('controls');
-const terrainPanel  = document.getElementById('terrainControlsPanel');
+const terrainControlsPanel   = document.getElementById('terrainControlsPanel');
 
 /* Anfangszustand aus Local Storage lesen (mobile: hidden) */
 if (localStorage.getItem('voxelMenuVisible') === 'true'){
@@ -563,7 +583,7 @@ menuToggleBtn.onclick = () => {
     const isOpen = controlsBar.style.display !== 'none';
     if (isOpen){
         controlsBar.style.display = 'none';
-        terrainPanel.style.display = 'none';   // Sicherstellen, dass Unterpanel mit verschwindet
+         terrainControlsPanel.style.display = 'none';
         localStorage.setItem('voxelMenuVisible','false');
     }else{
         controlsBar.style.display = 'flex';
@@ -916,7 +936,6 @@ shiftBtn.onclick = () => {
 
     // Toggle Terrain Controls Panel
     const toggleTerrainControlsBtn = document.getElementById('toggleTerrainControlsBtn');
-    const terrainControlsPanel = document.getElementById('terrainControlsPanel');
 
     toggleTerrainControlsBtn.onclick = () => {
         if (terrainControlsPanel.style.display === 'none') {
@@ -1785,7 +1804,7 @@ function loadJSON(event) {
                 // Load terrain parameters
                 terrainHeightScale = loadedSettings.terrainHeightScale !== undefined ? loadedSettings.terrainHeightScale : 10;
                 terrainFrequency = loadedSettings.terrainFrequency !== undefined ? loadedSettings.terrainFrequency : 0.05;
-                terrainOctaves = loadedSettings.octaves !== undefined ? loadedSettings.octaves : 4; // Corrected to octaves
+                terrainOctaves = loadedSettings.terrainOctaves !== undefined  ? loadedSettings.terrainOctaves : 4;
                 terrainLacunarity = loadedSettings.terrainLacunarity !== undefined ? loadedSettings.terrainLacunarity : 2.0;
                 terrainGain = loadedSettings.terrainGain !== undefined ? loadedSettings.terrainGain : 0.5;
                 terrainSeed = loadedSettings.terrainSeed !== undefined ? loadedSettings.terrainSeed : '';
