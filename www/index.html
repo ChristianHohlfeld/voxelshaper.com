@@ -659,6 +659,9 @@ switch (gestureState.type) {
       euler.x = Math.max(-Math.PI/2,
                          Math.min(Math.PI/2, euler.x));
       cam.quaternion.setFromEuler(euler);
+    // ▼ neu hinzufügen, damit der nächste dx/dy-Versatz stimmt
+    gestureState.sx = e.clientX;
+    gestureState.sy = e.clientY;
       break;
 
   case 'shiftDrag':                           // ⇧-Fläche zeichnen
@@ -671,6 +674,9 @@ switch (gestureState.type) {
         currentDrawingAxis
       );
       gestureState.hasDrawn = true;
+    // ▼ ebenfalls nachführen
+    gestureState.sx = e.clientX;
+    gestureState.sy = e.clientY;
       break;
 
 // ---------- Ende Gesten-FSM ----------------------------------
