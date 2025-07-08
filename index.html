@@ -564,9 +564,6 @@ cvs.addEventListener('pointerup', e => {
     /* Tap-Aktion nur, wenn danach KEIN Pointer mehr aktiv ist ------------- */
     const p = activePointers.get(e.pointerId);
     const moved = p && Math.hypot(e.clientX - p.x, e.clientY - p.y);
-
-    activePointers.delete(e.pointerId);
-
     if (activePointers.size === 0) {
 
         /* Ein-Finger-Tap? */
@@ -602,6 +599,11 @@ function releasePointer(id){
         isShiftDragging = false;
         gestureLock = gestureCand = null;
         gestureCandCnt = 0;
+gestureMid  = null;
+gestureDist = null;
+gestureMode = null;
+prevTouch   = null;   // verhindert falsches Δ beim nächsten Tap
+lastPinchDist = null; // falls du’s oben verwendest
     }
 }
 
