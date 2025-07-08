@@ -414,7 +414,7 @@ const VS = 1, HALF = VS * 0.5;
 
 /* ---------- globale Variablen ---------- */
 let dblTapShiftLock = false;
-let isDblTapDrawingMode = false; // Controls if a double-tap-drag should activate drawing
+let isDblTapDragActive= false; // Controls if a double-tap-drag should activate drawing
 /* ----------------------------------------------
    GLOBAL – neue Hilfs-Variablen
 ---------------------------------------------- */
@@ -472,7 +472,6 @@ let mainDirectionalLight;
 // Globale Variablen für Dragging-Status
 let isShiftDragging = false;   // physische Shift-Taste
 let shiftLock       = false;   // permanenter Shift (per Button)
-let isDblTapDrawing = false; // Steuert, ob ein Double-Tap-Drag als Zeichenaktion interpretiert wird
 
 function shiftActive(){        // true, wenn Shift ODER Shift-Lock an
     return isShiftDragging || shiftLock;
@@ -535,8 +534,7 @@ cvs.addEventListener('pointerdown', e => {
                 /* zweiter Tap erkannt */
                 dblTapActive  = true;  // Flag, dass ein Double-Tap-Zyklus aktiv ist
                 dblTapDrag    = false; // Flag, ob nach dem Double-Tap gezogen wird (wird im pointermove gesetzt)
-                isDblTapDrawing = false; // Zurücksetzen des Double-Tap-Zeichenmodus, bis ein Drag beginnt
-                isDblTapDrawingMode = true; 
+                isDblTapDragActive= true; 
                 // isShiftDragging = false;   // Optional: Diese Zeile entfernen/kommentieren,
                                             // wenn ein physischer Shift-Key auch während des Double-Tap-Zustands funktionieren soll.
                                             // Für reine Mobile-Gesten weniger relevant.
@@ -544,7 +542,7 @@ cvs.addEventListener('pointerdown', e => {
             } else {
                 /* Neuer Kandidat für einen Double-Tap */
                 tapCandidate = {x:e.clientX, y:e.clientY, time:now};
-                          isDblTapDrawingMode = false; // NEW: Reset if not a valid double tap sequence
+                          isDblTapDragActive= false; // NEW: Reset if not a valid double tap sequence
             }
             // --- DOUBLE-TAP-ERKENNUNG UND INITIALISIERUNG ENDE ---
 
@@ -582,7 +580,6 @@ cvs.addEventListener('pointerdown', e => {
             /* ≥2 Finger erkannt → Double-Tap-State und Hold-Draw verwerfen */
             tapCandidate  = null;
             dblTapActive  = false;
-            isDblTapDrawing = false; // Auch hier Double-Tap-Drawing-Flag zurücksetzen
             clearTimeout(longPressTimer); // Long-Press abbrechen bei Multi-Touch
             isHoldDrawingActive = false; // Hold-Draw-Flag zurücksetzen
         }
@@ -616,7 +613,7 @@ cvs.addEventListener('pointermove', e => {
     activePointers.set(e.pointerId, p);
 
     // NEW: Handle double-tap-drag drawing if active
-    if (dblTapActive && isDblTapDrawingMode && activePointers.size === 1) {
+    if (dblTapActive && isDblTapDragActive&& activePointers.size === 1) {
         dblTapDrag = true; // Mark as a drag occurring during a double-tap
         handleVoxelAction(
             e.clientX, e.clientY,
@@ -679,7 +676,7 @@ cvs.addEventListener('pointerup', e => {
         /* -------- Gemeinsamer Reset -------- */
         tapCandidate    = null;
         isShiftDragging = false;
-             isDblTapDrawingMode = false; // NEW: Reset double-tap drawing mode
+             isDblTapDragActive= false; // NEW: Reset double-tap drawing mode
         gestureMid      = null;
         gestureDist     = null;
         gestureMode     = null;
@@ -1402,7 +1399,7 @@ function releasePointer(id){
         dblTapActive   = false;
         dblTapDrag     = false;
         isShiftDragging = false;
-
+        isDblTapDragActive= false;   // ← add this line
         gestureMid  = gestureDist = null;
         gestureMode = null;
         prevTouch   = null;
