@@ -624,8 +624,6 @@ cvs.addEventListener('pointerup', e => {
         prevTouch       = null;   // Δ korrekt fürs nächste Down
     }
 
-    /* Zusätzlicher Cleanup (falls nötig) */
-    releasePointer(e.pointerId);
 });
 
 
@@ -651,24 +649,10 @@ cvs.onpointerup = e => {
 };
 
 cvs.addEventListener('pointercancel', e => {
-    if (e.pointerType !== 'touch') return;   //  <-- ergänzen
-   e.preventDefault();
-    releasePointer(e.pointerId);
+  if (e.pointerType !== 'touch') return;
+  e.preventDefault();
+  releasePointer(e.pointerId);   // ruft jetzt die EINZIGE releasePointer()
 });
-
-function releasePointer(id){
-    activePointers.delete(id);
-    if (activePointers.size === 0){
-        tapCandidate   = null;
-        dblTapActive   = false;
-        dblTapDrag     = false;
-        isShiftDragging = false;
-gestureMid  = null;
-gestureDist = null;
-gestureMode = null;
-prevTouch   = null;   // verhindert falsches Δ beim nächsten Tap
-    }
-}
 
 /* ---------- Menü-Toggle ---------- */
 const menuToggleBtn = document.getElementById('menuToggle');
@@ -1301,7 +1285,7 @@ function handleGesture () {
   if (gestureMode === 'pinch'){
     /* ---------- Pinch-Zoom (Vorzeichen korrigiert) -------- */
     const scale     = dist / gestureDist;                   // >1 = spreizen
-    const zoomDelta = (scale - 1) * 5 * moveSpeed;          // richtiger Drehsinn
+    const zoomDelta = (scale - 1) * 3* moveSpeed;          // richtiger Drehsinn
     cam.position.addScaledVector(
         cam.getWorldDirection(new THREE.Vector3()),
         zoomDelta
