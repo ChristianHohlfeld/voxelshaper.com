@@ -418,6 +418,8 @@ const VS = 1, HALF = VS * 0.5;
 /* ---------- globale Variablen ---------- */
 let dblTapShiftLock = false;
 let isDblTapDragActive= false; // Controls if a double-tap-drag should activate drawing
+let activeGestureMode = 'none'; // NEU: Verfolgt den aktuell aktiven Gestenmodus
+let initialDblTapDragLevelY = null; // Speichert die Y-Ebene für Double-Tap-Drag
 /* ----------------------------------------------
    GLOBAL – neue Hilfs-Variablen
 ---------------------------------------------- */
@@ -592,103 +594,209 @@ cvs.addEventListener('pointerdown', e => {
     cvs.setPointerCapture(e.pointerId);
 });
 /* ----------------------------------------------------------
-   TOUCH-Pointer-MOVE  – hält die Map »activePointers« aktuell
+   Pointer-MOVE  – updates the »activePointers« Map and handles gestures
    ---------------------------------------------------------- */
 cvs.addEventListener('pointermove', e => {
-
-    /* nur Touch-Events interessieren uns hier                  */
-    if (e.pointerType !== 'touch') return;
     e.preventDefault();
 
-    /* ist der Pointer überhaupt registriert?                   */
     const p = activePointers.get(e.pointerId);
     if (!p) return;
 
-    /* vorige Position sichern (für evtl. Δ-Berechnungen)       */
     p.px = p.x;
     p.py = p.y;
-
-    /* aktuelle Koordinaten eintragen                           */
     p.x  = e.clientX;
     p.y  = e.clientY;
-
-    /* das aktualisierte Objekt zurück in die Map schreiben     */
     activePointers.set(e.pointerId, p);
 
-    // NEW: Handle double-tap-drag drawing if active
-    if (dblTapActive && isDblTapDragActive&& activePointers.size === 1) {
-        dblTapDrag = true; // Mark as a drag occurring during a double-tap
-        handleVoxelAction(
-            e.clientX, e.clientY,
-            currentMode,
-            /* drag  */ true,  // Indicate this is a drag operation for continuous drawing
-            /* stack */ false
-        );
-        return; // Prevent other gesture handling (e.g., freelook)
-    }
-
-    /* zentrale Gesten-FSM ausführen                            */
-    handleGesture();   // Übergabe des Events nicht nötig
-});
-/* ==========================================================
-   TOUCH-Pointer-UP  – beendet Gesten, gibt Capture frei,
-   entscheidet über Tap / Double-Tap und räumt States auf
-   ========================================================== */
-cvs.addEventListener('pointerup', e => {
-
-    /* Nur echte Touch-Pointer interessieren */
-    if (e.pointerType !== 'touch') return;
-    e.preventDefault();
-
-    /* --- Bewegung für Tap-Erkennung messen ----------------- */
-    const p     = activePointers.get(e.pointerId);
-    const moved = p ? Math.hypot(e.clientX - p.x, e.clientY - p.y) : 0;
-
-    /* Pointer aus Map entfernen & Capture lösen ------------- */
-    activePointers.delete(e.pointerId);
-    cvs.releasePointerCapture(e.pointerId);
-
-    /* --- Wenn jetzt kein Finger mehr aufliegt -------------- */
-    if (activePointers.size === 0) {
-
-        /* -------- Einfach-Tap -------- */
-        if (!dblTapActive && moved < TAP_DIST_TH) {
-            handleVoxelAction(
-                e.clientX, e.clientY,
-                currentMode,          // ADD / DELETE / DRAW
-                /* drag  */ false,
-                /* stack */ false
-            );
+    // --- DESKTOP (MAUS/STIFT) LOGIK ---
+    // Diese Logik gilt nur für Maus- oder Stift-Eingaben
+    if (e.pointerType === 'mouse' || e.pointerType === 'pen') {
+        if (rotate) { // Kamera-Rotation, wenn rechte Maustaste gehalten wird
+            // Die eigentliche Kamera-Rotationslogik wird durch PointerLock und den Update-Loop gehandhabt.
+            // Hier ist keine direkte Aktion erforderlich.
+            return;
         }
 
-        /* -------- Double-Tap-Ende -------- */
-        if (dblTapActive) {
-            if (!dblTapDrag) {       // 2. Tap NICHT gezogen → ebenfalls Tap
+        if (isShiftDragging || shiftLock) { // Shift-Taste ODER Shift-Lock + Linke Maustaste gedrückt halten
+            activeGestureMode = 'shiftDragDraw';
+            handleVoxelAction(
+                e.clientX, e.clientY,
+                currentMode,
+                /* isDragging    */ true,
+                /* isStackingAdd */ false,
+                /* fixedLevel    */ currentShiftDragLevel ? currentShiftDragLevel.level : null,
+                /* fixedAxis     */ currentShiftDragLevel ? currentShiftDragLevel.axis : null
+            );
+            return;
+        }
+
+        if (isControlDragging) { // Control-Taste + Linke Maustaste gedrückt halten
+            activeGestureMode = 'controlStackDraw';
+            handleVoxelAction(
+                e.clientX, e.clientY,
+                currentMode,
+                /* isDragging    */ true,
+                /* isStackingAdd */ true,
+                /* fixedLevel    */ null,
+                /* fixedAxis     */ null
+            );
+            return;
+        }
+        // Normale Linksklick-Aktion (einzelnes Voxel hinzufügen/löschen/zeichnen) beim Ziehen
+        if (e.buttons & 1 && !(e.shiftKey || shiftLock) && !e.ctrlKey) { // Prüfen, ob linke Maustaste gedrückt ist
+            // Stellen Sie sicher, dass es sich um einen Drag handelt, bevor handleVoxelAction als Drag aufgerufen wird
+            if (activeGestureMode === 'voxelAction' && Math.hypot(p.x - touchStartPos.x, p.y - touchStartPos.y) > MOVE_PX) {
                 handleVoxelAction(
                     e.clientX, e.clientY,
                     currentMode,
-                    /* drag  */ false,
-                    /* stack */ false
+                    /* isDragging    */ true,
+                    /* isStackingAdd */ false,
+                    /* fixedLevel    */ null,
+                    /* fixedAxis     */ null
                 );
             }
-            // Double-Tap-State zurücksetzen
-            dblTapActive = false;
-            dblTapDrag   = false;
+        }
+    }
+    // --- ENDE DESKTOP LOGIK ---
+
+    // --- TOUCH-SPEZIFISCHE LOGIK ---
+    // Diese Logik gilt nur für Touch-Eingaben
+    else if (e.pointerType === 'touch') {
+        // Double-Tap-Drag-Zeichnen
+        if (activeGestureMode === 'dblTapDragDraw' && activePointers.size === 1) {
+            dblTapDrag = true; // Markieren als Drag während eines Double-Taps
+            handleVoxelAction(
+                e.clientX, e.clientY,
+                currentMode,
+                /* isDragging    */ true,
+                /* isStackingAdd */ false, // Double-Tap-Drag ist kein Stacking-Add
+                /* fixedLevel    */ initialDblTapDragLevelY, // Das festgelegte Y-Level
+                /* fixedAxis     */ 'y' // Für Double-Tap-Drag ist die feste Achse immer 'y'
+            );
+            return; // Verhindert andere Gesten-Handhabung (z.B. Pan/Pinch)
         }
 
-        /* -------- Gemeinsamer Reset -------- */
-        tapCandidate    = null;
-        isShiftDragging = false;
-             isDblTapDragActive= false; // NEW: Reset double-tap drawing mode
-        gestureMid      = null;
-        gestureDist     = null;
-        gestureMode     = null;
-        prevTouch       = null;   // Δ korrekt fürs nächste Down
+        // Langdruck-Zeichnen
+        if (activeGestureMode === 'longPressDraw' && activePointers.size === 1) {
+            handleVoxelAction(
+                e.clientX, e.clientY,
+                currentMode,
+                /* isDragging    */ true,
+                /* isStackingAdd */ false,
+                /* fixedLevel    */ null,
+                /* fixedAxis     */ null
+            );
+            return;
+        }
+
+        // Wenn kein spezifischer Zeichenmodus aktiv ist, Kamera-Gesten für Touch handhaben (Pan/Pinch)
+        // Prüfen, ob die Bewegung signifikant genug ist, um von einem potenziellen Tap zu einem Pan überzugehen
+        if (activePointers.size === 1 && touchStartPos && Math.hypot(e.clientX - touchStartPos.x, e.clientY - touchStartPos.y) > PAN_PIX_TH) {
+            activeGestureMode = 'cameraPan'; // Wechsel in den Pan-Modus
+        } else if (activePointers.size > 1) {
+            activeGestureMode = 'cameraPan'; // Multi-Touch bedeutet immer Kamera-Pan/Pinch
+        }
+
+        if (activeGestureMode === 'cameraPan') {
+            clearTimeout(longPressTimer); // Langdruck abbrechen, wenn Kamera-Geste beginnt
+            isHoldDrawingActive = false;
+            handleGesture(); // Zentrale Gesten-FSM (Finite-State-Machine)
+        }
     }
-
+    // --- ENDE TOUCH-SPEZIFISCHE LOGIK ---
 });
+/* ==========================================================
+   Pointer-UP  – ends gestures, releases capture,
+   decides on Tap / Double-Tap and cleans up states
+   ========================================================== */
+cvs.addEventListener('pointerup', e => {
+    e.preventDefault();
 
+    const p = activePointers.get(e.pointerId);
+    // Berechne die bewegte Distanz nur, wenn der Zeiger gefunden wurde
+    const moved = p ? Math.hypot(e.clientX - p.x, e.clientY - p.y) : 0;
 
+    activePointers.delete(e.pointerId);
+    cvs.releasePointerCapture(e.pointerId);
+
+    clearTimeout(longPressTimer); // Timer immer bei Pointer-Up löschen
+    isHoldDrawingActive = false; // Flag für kontinuierliches Zeichnen zurücksetzen
+
+    // --- DESKTOP (MAUS/STIFT) LOGIK ---
+    if (e.pointerType === 'mouse' || e.pointerType === 'pen') {
+        if (e.button === 2) { // Rechte Maustaste
+            rotate = false;
+            document.exitPointerLock();
+        } else if (e.button === 0) { // Linke Maustaste
+            // Wenn es ein einzelner Klick war (kein Drag) und linke Maustaste, führe Voxel-Aktion aus
+            // Dies ist für den Fall, dass activeGestureMode auf 'voxelAction' gesetzt wurde,
+            // aber kein signifikanter Drag stattfand.
+            if (activeGestureMode === 'voxelAction' && moved < TAP_DIST_TH) {
+                 handleVoxelAction(
+                    e.clientX, e.clientY,
+                    currentMode,
+                    /* isDragging    */ false, // Dies ist ein Tap, kein Drag
+                    /* isStackingAdd */ false,
+                    /* fixedLevel    */ null,
+                    /* fixedAxis     */ null
+                );
+            }
+        }
+        // Desktop-spezifische Drag-Zustände zurücksetzen
+        isShiftDragging = false;
+        isControlDragging = false;
+        currentShiftDragLevel = null; // Shift-Drag-Ebene zurücksetzen
+        //currentDrawingAxis = 'y'; // Nur zurücksetzen, wenn es hier global kontrolliert wird
+    }
+    // --- ENDE DESKTOP LOGIK ---
+
+    // --- TOUCH-SPEZIFISCHE LOGIK ---
+    else if (e.pointerType === 'touch') {
+        if (activePointers.size === 0) {
+            /* -------- Single Tap -------- */
+            // Nur ausführen, wenn kein Double-Tap aktiv war und es ein kurzer Tap war
+            if (!dblTapActive && activeGestureMode === 'voxelAction' && moved < TAP_DIST_TH) {
+                handleVoxelAction(
+                    e.clientX, e.clientY,
+                    currentMode,
+                    /* isDragging    */ false,
+                    /* isStackingAdd */ false,
+                    /* fixedLevel    */ null,
+                    /* fixedAxis     */ null
+                );
+            }
+
+            /* -------- Double-Tap Ende -------- */
+            if (dblTapActive) {
+                if (!dblTapDrag) { // 2. Tap NICHT gezogen → auch ein Tap
+                    handleVoxelAction(
+                        e.clientX, e.clientY,
+                        currentMode,
+                        /* isDragging    */ false,
+                        /* isStackingAdd */ false,
+                        /* fixedLevel    */ null,
+                        /* fixedAxis     */ null
+                    );
+                }
+                // Double-Tap-Status zurücksetzen
+                dblTapActive = false;
+                dblTapDrag   = false;
+            }
+        }
+        // Gemeinsame Touch-spezifische Zurücksetzungen
+        tapCandidate            = null;
+        isDblTapDragActive      = false;
+        gestureMid              = null;
+        gestureDist             = null;
+        gestureMode             = null; // gestureMode zurücksetzen, wenn für Touch Pan/Pinch verwendet
+        prevTouch               = null; // Δ für nächsten Down korrigieren
+        initialDblTapDragLevelY = null; // Festgelegtes Y-Level zurücksetzen
+    }
+    // --- ENDE TOUCH-SPEZIFISCHE LOGIK ---
+
+    // Globaler Reset des aktiven Gestenmodus für alle Pointer-Typen
+    activeGestureMode = 'none'; // Immer auf 'none' zurücksetzen
+});
 /* ==========================================================
    DESKTOP / STYLUS – Pointer-UP  (nur Nicht-Touch)
    ========================================================== */
@@ -710,10 +818,221 @@ cvs.onpointerup = e => {
     currentDrawingAxis    = 'y';
 };
 
+/* ----------------------------------------------------------
+   Pointer-MOVE  – updates the »activePointers« Map and handles gestures
+   ---------------------------------------------------------- */
+cvs.addEventListener('pointermove', e => {
+    e.preventDefault();
+
+    const p = activePointers.get(e.pointerId);
+    if (!p) return;
+
+    p.px = p.x;
+    p.py = p.y;
+    p.x  = e.clientX;
+    p.y  = e.clientY;
+    activePointers.set(e.pointerId, p);
+
+    // --- DESKTOP (MAUS/STIFT) LOGIK ---
+    if (e.pointerType === 'mouse' || e.pointerType === 'pen') {
+        if (rotate) { // Kamera-Rotation, wenn rechte Maustaste gehalten wird
+            // Die eigentliche Kamera-Rotationslogik wird durch PointerLock und den Update-Loop gehandhabt.
+            // Hier ist keine direkte Aktion erforderlich.
+            return;
+        }
+
+        if (isShiftDragging || shiftLock) { // Shift-Taste ODER Shift-Lock + Linke Maustaste gedrückt halten
+            activeGestureMode = 'shiftDragDraw';
+            handleVoxelAction(
+                e.clientX, e.clientY,
+                currentMode,
+                /* drag  */ true,
+                /* stack */ false,
+                /* fixedYLevel */ currentShiftDragLevel ? currentShiftDragLevel.y : null // Nutze das festgelegte Level, falls gesetzt
+            );
+            return;
+        }
+
+        if (isControlDragging) { // Control-Taste + Linke Maustaste gedrückt halten
+            activeGestureMode = 'controlStackDraw';
+            handleVoxelAction(
+                e.clientX, e.clientY,
+                currentMode,
+                /* drag  */ true,
+                /* stack */ true // Stapel-Indikator
+            );
+            return;
+        }
+        // Wenn keine spezielle Taste gedrückt ist und die linke Maustaste gedrückt ist,
+        // ist es eine normale Voxel-Aktion (Drag).
+        if (e.buttons & 1 && !(e.shiftKey || shiftLock) && !e.ctrlKey) { // Prüfen, ob linke Maustaste gedrückt ist
+            if (activeGestureMode === 'voxelAction' && Math.hypot(p.x - touchStartPos.x, p.y - touchStartPos.y) > MOVE_PX) {
+                handleVoxelAction(
+                    e.clientX, e.clientY,
+                    currentMode,
+                    /* drag  */ true,
+                    /* stack */ false
+                );
+            }
+        }
+    }
+    // --- ENDE DESKTOP LOGIK ---
+
+    // --- TOUCH-SPEZIFISCHE LOGIK ---
+    else if (e.pointerType === 'touch') {
+        if (activeGestureMode === 'dblTapDragDraw' && activePointers.size === 1) {
+            dblTapDrag = true; // Markieren als Drag während eines Double-Taps
+            handleVoxelAction(
+                e.clientX, e.clientY,
+                currentMode,
+                /* drag  */ true,
+                /* stack */ false,
+                /* fixedYLevel */ initialDblTapDragLevelY // Das festgelegte Y-Level übergeben
+            );
+            return; // Verhindert andere Gesten-Handhabung (z.B. Pan/Pinch)
+        }
+
+        if (activeGestureMode === 'longPressDraw' && activePointers.size === 1) {
+            handleVoxelAction(
+                e.clientX, e.clientY,
+                currentMode,
+                /* drag  */ true,
+                /* stack */ false
+            );
+            return;
+        }
+
+        // Wenn kein spezifischer Zeichenmodus aktiv ist, Kamera-Gesten für Touch handhaben (Pan/Pinch)
+        // Prüfen, ob die Bewegung signifikant genug ist, um von einem potenziellen Tap zu einem Pan überzugehen
+        if (activePointers.size === 1 && touchStartPos && Math.hypot(e.clientX - touchStartPos.x, e.clientY - touchStartPos.y) > PAN_PIX_TH) {
+            activeGestureMode = 'cameraPan'; // Wechsel in den Pan-Modus
+        } else if (activePointers.size > 1) {
+            activeGestureMode = 'cameraPan'; // Multi-Touch bedeutet immer Kamera-Pan/Pinch
+        }
+
+        if (activeGestureMode === 'cameraPan') {
+            clearTimeout(longPressTimer); // Langdruck abbrechen, wenn Kamera-Geste beginnt
+            isHoldDrawingActive = false;
+            handleGesture(); // Zentrale Gesten-FSM (Finite-State-Machine)
+        }
+    }
+    // --- ENDE TOUCH-SPEZIFISCHE LOGIK ---
+});
+/* ==========================================================
+   Pointer-UP  – ends gestures, releases capture,
+   decides on Tap / Double-Tap and cleans up states
+   ========================================================== */
+cvs.addEventListener('pointerup', e => {
+    e.preventDefault();
+
+    const p = activePointers.get(e.pointerId);
+    // Berechne die bewegte Distanz nur, wenn der Zeiger gefunden wurde
+    const moved = p ? Math.hypot(e.clientX - p.x, e.clientY - p.y) : 0;
+
+    activePointers.delete(e.pointerId);
+    cvs.releasePointerCapture(e.pointerId);
+
+    clearTimeout(longPressTimer); // Timer immer bei Pointer-Up löschen
+    isHoldDrawingActive = false; // Flag für kontinuierliches Zeichnen zurücksetzen
+
+    // --- DESKTOP (MAUS/STIFT) LOGIK ---
+    if (e.pointerType === 'mouse' || e.pointerType === 'pen') {
+        if (e.button === 2) { // Rechte Maustaste
+            rotate = false;
+            document.exitPointerLock();
+        } else if (e.button === 0) { // Linke Maustaste
+            // Wenn es ein einzelner Klick war (kein Drag) und linke Maustaste, führe Voxel-Aktion aus
+            // Dies ist für den Fall, dass activeGestureMode auf 'voxelAction' gesetzt wurde,
+            // aber kein signifikanter Drag stattfand.
+            if (activeGestureMode === 'voxelAction' && moved < TAP_DIST_TH) {
+                 handleVoxelAction(
+                    e.clientX, e.clientY,
+                    currentMode,
+                    /* drag  */ false,
+                    /* stack */ false
+                );
+            }
+        }
+        // Desktop-spezifische Drag-Zustände zurücksetzen
+        isShiftDragging = false;
+        isControlDragging = false;
+        currentShiftDragLevel = null; // Shift-Drag-Ebene zurücksetzen
+    }
+    // --- ENDE DESKTOP LOGIK ---
+
+    // --- TOUCH-SPEZIFISCHE LOGIK ---
+    else if (e.pointerType === 'touch') {
+        if (activePointers.size === 0) {
+            /* -------- Single Tap -------- */
+            // Nur ausführen, wenn kein Double-Tap aktiv war und es ein kurzer Tap war
+            if (!dblTapActive && activeGestureMode === 'voxelAction' && moved < TAP_DIST_TH) {
+                handleVoxelAction(
+                    e.clientX, e.clientY,
+                    currentMode,
+                    /* drag  */ false,
+                    /* stack */ false
+                );
+            }
+
+            /* -------- Double-Tap Ende -------- */
+            if (dblTapActive) {
+                if (!dblTapDrag) { // 2. Tap NICHT gezogen → auch ein Tap
+                    handleVoxelAction(
+                        e.clientX, e.clientY,
+                        currentMode,
+                        /* drag  */ false,
+                        /* stack */ false
+                    );
+                }
+                // Double-Tap-Status zurücksetzen
+                dblTapActive = false;
+                dblTapDrag   = false;
+            }
+        }
+        // Gemeinsame Touch-spezifische Zurücksetzungen
+        tapCandidate        = null;
+        isDblTapDragActive  = false;
+        gestureMid          = null;
+        gestureDist         = null;
+        gestureMode         = null; // gestureMode zurücksetzen, wenn für Touch Pan/Pinch verwendet
+        prevTouch           = null; // Δ für nächsten Down korrigieren
+        initialDblTapDragLevelY = null; // Festgelegtes Y-Level zurücksetzen
+    }
+    // --- ENDE TOUCH-SPEZIFISCHE LOGIK ---
+
+    // Globaler Reset des aktiven Gestenmodus
+    activeGestureMode = 'none'; // Immer auf 'none' zurücksetzen
+});
+
+
 cvs.addEventListener('pointercancel', e => {
-  if (e.pointerType !== 'touch') return;
-  e.preventDefault();
-  releasePointer(e.pointerId);   // ruft jetzt die EINZIGE releasePointer()
+  // Wenn ein Zeiger abgebrochen wird, dessen Capture freigeben und aus aktiven Zeigern entfernen
+  if (activePointers.has(e.pointerId)) {
+    activePointers.delete(e.pointerId);
+    cvs.releasePointerCapture(e.pointerId);
+  }
+
+  // Wenn keine Zeiger mehr vorhanden sind, alle gestenbezogenen Zustände zurücksetzen
+  // Dies sollte für alle Pointer-Typen gelten, um Konflikte zu vermeiden.
+  if (activePointers.size === 0) {
+    activeGestureMode       = 'none'; // Modus auf 'none' zurücksetzen
+    tapCandidate            = null;
+    dblTapActive            = false;
+    dblTapDrag              = false;
+    isDblTapDragActive      = false;
+    isHoldDrawingActive     = false;
+    clearTimeout(longPressTimer);
+    isShiftDragging         = false;
+    isControlDragging       = false;
+    currentShiftDragLevel   = null;
+    initialDblTapDragLevelY = null;
+    gestureMid              = null;
+    gestureDist             = null;
+    gestureMode             = null;
+    prevTouch               = null;
+    rotate                  = false;
+    // document.exitPointerLock(); // Nur aufrufen, wenn Pointer Lock aktiv war und es notwendig ist
+  }
 });
 
 /* ---------- Menü-Toggle ---------- */
@@ -1689,8 +2008,25 @@ function handleVoxelAction(clientX, clientY, mode, isDragging, isStackingAdd, fi
                     };
                 }
             }
-        } else if (isDragging && shiftActive() && fixedLevel !== null && fixedAxis !== null) {
-            // Shift-Drag in ADD mode for fixed level
+        } else if (activeGestureMode === 'dblTapDragDraw' && isDragging && fixedLevel !== null && fixedAxis === 'y') { // NEU: Double-Tap-Drag-Zeichnen
+            // Bei Double-Tap-Drag zeichnen wir auf einer festen Y-Ebene.
+            // Die X- und Z-Koordinaten werden vom Raycast auf dieser Ebene bestimmt.
+            let planeNormal = new THREE.Vector3(0, 1, 0);
+            let planeConstant = fixedLevel * VS + HALF; // Die feste Y-Ebene
+            const plane = new THREE.Plane(planeNormal, -planeConstant);
+            const intersectionPoint = new THREE.Vector3();
+            ray.ray.intersectPlane(plane, intersectionPoint);
+
+            if (intersectionPoint) {
+                hitVoxel = {
+                    gx: Math.floor(intersectionPoint.x / VS),
+                    gy: fixedLevel, // Hier wird die feste Y-Ebene erzwungen
+                    gz: Math.floor(intersectionPoint.z / VS)
+                };
+            }
+        }
+        else if (isDragging && shiftActive() && fixedLevel !== null && fixedAxis !== null) {
+            // Shift-Drag in ADD mode for fixed level (your existing logic)
             let planeNormal, planeConstant;
             if (fixedAxis === 'y') {
                 planeNormal = new THREE.Vector3(0, 1, 0);
@@ -1750,8 +2086,6 @@ function handleVoxelAction(clientX, clientY, mode, isDragging, isStackingAdd, fi
             const n = hit.face.normal;
 
             // Nudge the hit point slightly inwards based on the face normal
-            // This ensures we correctly identify the voxel that was hit,
-            // even if the hit point is exactly on a voxel boundary due to floating point precision.
             p.sub(n.clone().multiplyScalar(0.01));
 
             hitVoxel = {
@@ -1762,7 +2096,6 @@ function handleVoxelAction(clientX, clientY, mode, isDragging, isStackingAdd, fi
         } else if (isDragging && shiftActive()) { // Only for Shift-Drag in empty space for DELETE/DRAW
             // If no existing voxel is hit, but we are shift-dragging,
             // we project onto the active drawing plane to determine the target voxel.
-            // This allows 'erasing' or 'drawing' on an invisible plane.
             let planeNormal, planeConstant;
             if (currentDrawingAxis === 'y') {
                 planeNormal = new THREE.Vector3(0, 1, 0);
@@ -1785,7 +2118,6 @@ function handleVoxelAction(clientX, clientY, mode, isDragging, isStackingAdd, fi
                     gz: Math.floor(intersectionPoint.z / VS)
                 };
                 // Crucially, set the coordinate for the current drawing axis to the active drawing level
-                // as this is the "plane" where the action is meant to occur if no voxel is hit.
                 if (currentDrawingAxis === 'y') hitVoxel.gy = activeDrawingLevel.y;
                 if (currentDrawingAxis === 'x') hitVoxel.gx = activeDrawingLevel.x;
                 if (currentDrawingAxis === 'z') hitVoxel.gz = activeDrawingLevel.z;
@@ -1825,8 +2157,6 @@ function handleVoxelAction(clientX, clientY, mode, isDragging, isStackingAdd, fi
         }
     }
 }
-
-
 function clearAllInternal(fromHistory = false, triggerGeometryUpdate = true) {
     if (!fromHistory) {
         const oldState = [...voxels.entries()].map(([id, data]) => {
