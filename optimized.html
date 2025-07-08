@@ -397,6 +397,12 @@ let prevTouch = null;
 let touchStartPos = null; // merkt Position für Tap-Erkennung
 let scene, cam, ren, gridHelper, boxHelper;
 let rotSpeed = 0.004;   // Globale Drehgeschwindigkeit    (NEU)
+/* --- Double-Tap Gesten ---------------------------------------- */
+let lastTap       = 0;        // Zeitstempel des letzten pointerup
+let dblTapActive  = false;    // true während des 2. Taps
+let dblTapDrag    = false;    // wird true, sobald Finger > MOVE_PX zieht
+const DT_MS       = 250;      // max. Abstand Taps (ms)
+const MOVE_PX     = 6;        // ab hier gilt es als Drag
 /* ---------- Touch-Gesten (NEU) ---------- */
 const activePointers = new Map();   // id → {x,y}
 let lastPinchDist = null;           // voriger Zwei-Finger-Abstand
@@ -474,6 +480,13 @@ window.onload = () => {
 cvs.addEventListener('pointerdown', e=>{
     if (e.pointerType !== 'touch') return;
     e.preventDefault();
+    /* ----- Doppel-Tap erkennen ----- */
+    const now = Date.now();
+    if (now - lastTap < DT_MS){
+        dblTapActive = true;          // zweiter Tap
+        dblTapDrag   = false;
+        isShiftDragging = false;      // echte Shift wird überschrieben
+    }
     cvs.setPointerCapture(e.pointerId);
     activePointers.set(e.pointerId,{x:e.clientX,y:e.clientY});
  prevTouch = {x:e.clientX, y:e.clientY};   
@@ -499,6 +512,19 @@ cvs.addEventListener('pointerup', e=>{
         if (Math.hypot(dx,dy) < 8){
             handleVoxelAction(e.clientX, e.clientY, currentMode, false, false);
         }
+    }
+    /* ----- Doppel-Tap Aktion & Reset ----- */
+    if (dblTapActive){
+        if (!dblTapDrag){
+            /* Schnell losgelassen ⇒ Einzel-Block-Aktion */
+            handleVoxelAction(e.clientX, e.clientY, currentMode, false, false);
+        }
+        dblTapActive   = false;
+        dblTapDrag     = false;
+        isShiftDragging = false;
+        lastTap = 0;                     // verhindert Trippel-Tap
+    }else{
+        lastTap = Date.now();            // speichert Zeit des 1. Taps
     }
     releasePointer(e);
 });
@@ -1062,28 +1088,31 @@ function handleGesture(e){
     const pts = [...activePointers.values()];
 
     /* ---------- 1 Finger: Kamera drehen / Voxelaktion ---------- */
-    if (pts.length === 1){
-        const p = pts[0];
+  /* ---------- 1 Finger --------------------------------------- */
+if (pts.length === 1){
+    const p = pts[0];
 
-        // Shift-Lock oder echte Shift-Taste → direkt Voxel­aktion
-        if (shiftActive()){
+    /* 1) Doppel-Tap-Drag  ⇒  Shift-Drag ---------------------- */
+    if (dblTapActive){
+        const moved = Math.hypot(p.x - p.px, p.y - p.py);
+        if (moved > MOVE_PX){
+            dblTapDrag     = true;
+            isShiftDragging = true;         // simuliert Shift
             handleVoxelAction(p.x, p.y, currentMode, true, false);
-            return;
         }
-
-        // Sonst: Kamera drehen
-        if (prevTouch){
-            const dx = p.x - prevTouch.x;
-            const dy = p.y - prevTouch.y;
-
-            euler.y += dx * rotSpeed;   // Finger nach rechts  → Blick nach rechts
-            euler.x += dy * rotSpeed;   // Finger nach unten  → Blick nach unten
-            euler.x = Math.max(-Math.PI/2, Math.min(Math.PI/2, euler.x));
-            cam.quaternion.setFromEuler(euler);
-        }
-        prevTouch = {x:p.x, y:p.y};
-        return;
+        return;                             // Kamera dreht erst, wenn kein dblTap
     }
+
+    /* 2) Normale Kamera-Drehung ------------------------------ */
+    const dx = p.x - (prevTouch?.x ?? p.x);
+    const dy = p.y - (prevTouch?.y ?? p.y);
+    euler.y += dx * rotSpeed;
+    euler.x += dy * rotSpeed;
+    euler.x = Math.max(-Math.PI/2, Math.min(Math.PI/2, euler.x));
+    cam.quaternion.setFromEuler(euler);
+    prevTouch = {x:p.x, y:p.y};
+    return;
+}
 
     /* ---------- ≥2 Finger: Pinch-Zoom + Strafing + Up/Down ---------- */
     prevTouch = null;                       // Nur 1-Finger-Moves brauchen prevTouch
