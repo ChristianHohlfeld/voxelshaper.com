@@ -1207,48 +1207,60 @@ function onResize() {
    TOUCH-GESTEN-ROUTINE — handleGesture()
    ========================================================= */
 function handleGesture () {
+
     const pts = [...activePointers.values()];
     if (pts.length === 0) return;
 
     /* ======================================================
-       1 Finger  →  Kamera-Look ODER Double-Tap-Shift-Drag
+       1 Finger  →  Kamera-Look  ODER  Double-Tap-Shift-Drag
     ====================================================== */
     if (pts.length === 1){
         const p = pts[0];
 
-        /* ---------- Double-Tap-Hold  (virtueller ⇧-Drag) ---- */
+        /* ---------- Double-Tap-Hold (virtueller ⇧-Drag) ---- */
         if (dblTapActive){
-            if (!dblTapDrag){                // erstes Frame nach dem 2. Tap
-                dblTapDrag      = true;
-                isShiftDragging = true;      // ⇧ gilt als gedrückt
 
-                /* Ebene fixieren — identisch zu Desktop-Shift-Drag */
-                if (currentMode === Modes.ADD){
-                    const rect  = cvs.getBoundingClientRect();
-                    const mouse = new THREE.Vector2(
-                        ((p.x - rect.left) / rect.width)  * 2 - 1,
-                        -((p.y - rect.top)  / rect.height) * 2 + 1
-                    );
-                    const ray   = new THREE.Raycaster();
-                    ray.setFromCamera(mouse, cam);
-                    const hits  = ray.intersectObject(voxelMesh);
+            /* Wurde bereits als Drag eingestuft? ------------- */
+            if (!dblTapDrag){
+                /* Prüfe, ob der Finger die Drag-Schwelle überschritten hat */
+                const moved = Math.hypot(p.x - touchStartPos.x,
+                                         p.y - touchStartPos.y);
 
-                    currentDrawingAxis = 'y';                                 // wie Desktop
-                    currentShiftDragLevel =
-                        hits.length ? Math.floor(hits[0].point.y / VS)        // Ebene unter Finger
-                                    : activeDrawingLevel.y;                   // Fallback
+                if (moved > MOVE_PX){
+                    dblTapDrag      = true;
+                    isShiftDragging = true;      // ⇧ gilt als gedrückt
+
+                    /* Ebene fixieren — identisch zum Desktop-Shift-Drag */
+                    if (currentMode === Modes.ADD){
+                        const rect  = cvs.getBoundingClientRect();
+                        const mouse = new THREE.Vector2(
+                            ((p.x - rect.left) / rect.width)  * 2 - 1,
+                            -((p.y - rect.top)  / rect.height) * 2 + 1
+                        );
+                        const ray   = new THREE.Raycaster();
+                        ray.setFromCamera(mouse, cam);
+                        const hits  = ray.intersectObject(voxelMesh);
+
+                        currentDrawingAxis    = 'y';
+                        currentShiftDragLevel = hits.length
+                              ? Math.floor(hits[0].point.y / VS)
+                              : activeDrawingLevel.y;
+                    }
                 }
             }
 
-            /* Danach kontinuierliches Shift-Drag-Zeichnen */
-            handleVoxelAction(
-                p.x, p.y,
-                currentMode,
-                /* drag   */ true,
-                /* stack  */ false,
-                currentShiftDragLevel,
-                currentDrawingAxis
-            );
+            /* Sobald Drag aktiv ist → kontinuierliches ⇧-Zeichnen */
+            if (dblTapDrag){
+                handleVoxelAction(
+                    p.x, p.y,
+                    currentMode,
+                    /* drag  */ true,
+                    /* stack */ false,
+                    currentShiftDragLevel,
+                    currentDrawingAxis
+                );
+            }
+
             prevTouch = {x:p.x, y:p.y};
             return;
         }
@@ -1267,7 +1279,7 @@ function handleGesture () {
     }
 
     /* ======================================================
-       2 Finger  →  Pinch-Zoom   ODER   Parallel-Pan
+       2 Finger  →  Pinch-Zoom  ODER  Parallel-Pan
     ====================================================== */
     if (pts.length !== 2) return;
 
@@ -1291,19 +1303,18 @@ function handleGesture () {
     if (gestureMode === null){
         if (relΔ > PINCH_REL_TH)       gestureMode = 'pinch';
         else if (dMid > PAN_PIX_TH)    gestureMode = 'pan';
-        else return;                   // zu wenig Info: warten
+        else return;                   // zu wenig Info → warten
     }
 
     /* ---------- Aktion je nach Modus ---------------------- */
     if (gestureMode === 'pinch'){
-        /* sanftes Zoom — Verhältnis statt Delta            */
         const scale      = dist / gestureDist;          // >1 → rein, <1 → raus
-        const zoomDelta  = (1 - scale) * 5 * moveSpeed; // Faktor feinjustieren
+        const zoomDelta  = (1 - scale) * 5 * moveSpeed; // feinjustiert
         cam.position.addScaledVector(
             cam.getWorldDirection(new THREE.Vector3()),
             zoomDelta
         );
-        gestureDist = dist;           // Referenz sofort nachziehen
+        gestureDist = dist;           // Referenz nachziehen
     } else { /* 'pan' */
         const panFactor = DRAG_BASE * (moveSpeed * 5);
         const dx =  (midX - gestureMid.x) * panFactor;
