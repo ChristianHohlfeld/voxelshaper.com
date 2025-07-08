@@ -417,7 +417,7 @@ let dblTapShiftLock = false;
 /* ----------------------------------------------
    GLOBAL – neue Hilfs-Variablen
 ---------------------------------------------- */
-const PINCH_ZOOM_MULT = 8;     // Zoom-Geschwindigkeit ↑  (vorher 3-5)
+const PINCH_ZOOM_MULT = 12;     // Zoom-Geschwindigkeit ↑  (vorher 3-5)
 /* ---------- Double-Tap-State ---------- */
 let tapCandidate   = null;   // {x,y,time}
 const TAP_DIST_TH  = 10;     // max. Bewegung (px) für 'Tap'
@@ -469,6 +469,7 @@ let mainDirectionalLight;
 // Globale Variablen für Dragging-Status
 let isShiftDragging = false;   // physische Shift-Taste
 let shiftLock       = false;   // permanenter Shift (per Button)
+let isDblTapDrawing = false; // Steuert, ob ein Double-Tap-Drag als Zeichenaktion interpretiert wird
 
 function shiftActive(){        // true, wenn Shift ODER Shift-Lock an
     return isShiftDragging || shiftLock;
@@ -511,39 +512,80 @@ window.onload = () => {
     cvs = document.getElementById('voxelCanvas');
     /* ---------- Pointer-Gesten-Handler (NEU) ---------- */
 cvs.addEventListener('pointerdown', e => {
-    if (e.pointerType !== 'touch') return;
+    // Verhindert Standard-Browserverhalten wie Scrolling oder Kontextmenü
     e.preventDefault();
 
+    // Speichert den Zeiger in der Liste der aktiven Zeiger
     activePointers.set(e.pointerId, {x:e.clientX, y:e.clientY, px:e.clientX, py:e.clientY});
 
-    /* Double-Tap nur starten, wenn dies der ERSTE Finger ist -------------- */
-    if (activePointers.size === 1) {
-        const now = Date.now();
+    // Nur für Touch-Events relevant, die oft eine spezielle Handhabung erfordern
+    if (e.pointerType === 'touch') {
+        if (activePointers.size === 1) { // Nur wenn genau ein Finger auf dem Bildschirm ist
+            const now = Date.now();
 
-        if (tapCandidate &&
-            now - tapCandidate.time < DT_MS &&
-            Math.hypot(e.clientX - tapCandidate.x,
-                       e.clientY - tapCandidate.y) < TAP_DIST_TH)
-        {
-            /* zweiter Tap erkannt */
-            dblTapActive  = true;
-            dblTapDrag    = false;
-            isShiftDragging = false;   // echte Shift überstimmen
-            tapCandidate  = null;      // consumed
+            // --- DOUBLE-TAP-ERKENNUNG UND INITIALISIERUNG START ---
+            if (tapCandidate &&
+                now - tapCandidate.time < DT_MS && // DT_MS ist der maximale Abstand zwischen zwei Taps
+                Math.hypot(e.clientX - tapCandidate.x,
+                           e.clientY - tapCandidate.y) < TAP_DIST_TH) // TAP_DIST_TH ist der maximale Abstand für einen Tap
+            {
+                /* zweiter Tap erkannt */
+                dblTapActive  = true;  // Flag, dass ein Double-Tap-Zyklus aktiv ist
+                dblTapDrag    = false; // Flag, ob nach dem Double-Tap gezogen wird (wird im pointermove gesetzt)
+                isDblTapDrawing = false; // Zurücksetzen des Double-Tap-Zeichenmodus, bis ein Drag beginnt
+                // isShiftDragging = false;   // Optional: Diese Zeile entfernen/kommentieren,
+                                            // wenn ein physischer Shift-Key auch während des Double-Tap-Zustands funktionieren soll.
+                                            // Für reine Mobile-Gesten weniger relevant.
+                tapCandidate  = null;      // Der Kandidat wurde verbraucht
+            } else {
+                /* Neuer Kandidat für einen Double-Tap */
+                tapCandidate = {x:e.clientX, y:e.clientY, time:now};
+            }
+            // --- DOUBLE-TAP-ERKENNUNG UND INITIALISIERUNG ENDE ---
+
+            // --- HOLD VIBRATE DRAW LOGIK START ---
+            clearTimeout(longPressTimer); // Sicherstellen, dass kein alter Long-Press-Timer läuft
+            isHoldDrawingActive = false;  // Reset des Hold-Draw-Flags
+            initialHoldDrawPos = {x: e.clientX, y: e.clientY}; // Speichern der initialen Position für die Bewegungserkennung
+
+            longPressTimer = setTimeout(() => {
+                // Prüfen, ob immer noch genau ein Finger aktiv ist und keine signifikante Bewegung stattgefunden hat
+                const currentPointer = activePointers.get(e.pointerId);
+                if (currentPointer &&
+                    Math.hypot(currentPointer.x - initialHoldDrawPos.x,
+                               currentPointer.y - initialHoldDrawPos.y) < MOVE_PX) // MOVE_PX ist Ihr Schwellenwert für Bewegung
+                {
+                    // Long-Press wurde erfolgreich erkannt
+                    isHoldDrawingActive = true; // Aktiviert den Hold-Draw-Modus
+                    if (navigator.vibrate) {
+                        navigator.vibrate(50); // Kurzes Vibrationsfeedback (50ms)
+                    }
+                    // Zeichne den ersten Punkt sofort nach der Vibration
+                    handleVoxelAction(
+                        e.clientX, e.clientY,
+                        currentMode,
+                        /* drag  */ false, // Dies ist der initiale Klick, noch kein Drag
+                        /* stack */ false
+                    );
+                }
+                longPressTimer = null; // Der Timer ist nun entweder ausgelöst oder abgebrochen
+            }, LONG_PRESS_DELAY_MS); // LONG_PRESS_DELAY_MS ist die Wartezeit für den Long-Press
+            // --- HOLD VIBRATE DRAW LOGIK ENDE ---
+
+            touchStartPos = {x:e.clientX, y:e.clientY}; // Für allgemeine Drag-Erkennung
         } else {
-            /* neuer Kandidat */
-            tapCandidate = {x:e.clientX, y:e.clientY, time:now};
+            /* ≥2 Finger erkannt → Double-Tap-State und Hold-Draw verwerfen */
+            tapCandidate  = null;
+            dblTapActive  = false;
+            isDblTapDrawing = false; // Auch hier Double-Tap-Drawing-Flag zurücksetzen
+            clearTimeout(longPressTimer); // Long-Press abbrechen bei Multi-Touch
+            isHoldDrawingActive = false; // Hold-Draw-Flag zurücksetzen
         }
-        touchStartPos = {x:e.clientX, y:e.clientY};
-    } else {
-        /* ≥2 Finger → Double-Tap-State verwerfen */
-        tapCandidate  = null;
-        dblTapActive  = false;
     }
 
+    // Für alle Zeigertypen: Pointer-Capture setzen, um Ereignisse auch außerhalb des Canvas zu erhalten
     cvs.setPointerCapture(e.pointerId);
 });
-
 /* ----------------------------------------------------------
    TOUCH-Pointer-MOVE  – hält die Map »activePointers« aktuell
    ---------------------------------------------------------- */
