@@ -1200,112 +1200,146 @@ function onResize() {
     cam.updateProjectionMatrix();
     ren.setSize(containerDiv.clientWidth, containerDiv.clientHeight);
 }
-/* ============================================================
-   TOUCH-GESTEN-ROUTINE – handleGesture()
-   ============================================================ */
+/* =========================================================
+   MOBILE-GESTEN  –  handleGesture()
+   ========================================================= */
 function handleGesture () {
-    const pts = [...activePointers.values()];
-    if (pts.length === 0) return;
 
-    /* ======================================================
-       1 Finger → Look / Double-Tap-Shift-Drag
-    ====================================================== */
-    if (pts.length === 1){
-        const p = pts[0];
+  const pts = [...activePointers.values()];
+  if (pts.length === 0) return;
 
-        /* ---------- Double-Tap-Hold -------------------- */
-        if (dblTapActive){
-            if (!dblTapDrag){                 // erstes Frame nach dem 2. Tap
-                dblTapDrag      = true;
-                isShiftDragging = true;       // ⇧ gilt als gedrückt
+  /* ======================================================
+       1-FINGER  →  Look-Around  ODER  Double-Tap-Hold-Drag
+     ====================================================== */
+  if (pts.length === 1){
+    const p = pts[0];
 
-                /* Ebene fixieren nur im ADD-Modus */
-                if (currentMode === Modes.ADD){
-                    currentDrawingAxis    = 'y';
-                    currentShiftDragLevel = activeDrawingLevel.y;
-                }
-            }
+    /* ---------- Double-Tap-Hold (virtueller ⇧-Drag) ------ */
+    if (dblTapActive){
 
-            /* Aktion ausführen, keine Kameradrehung */
-            handleVoxelAction(
-                p.x, p.y,
-                currentMode,          // bleibt ADD / DELETE / DRAW
-                /* drag   */ true,
-                /* stack  */ false,
-                currentShiftDragLevel,
-                currentDrawingAxis
-            );
-            prevTouch = {x:p.x, y:p.y};
-            return;
+      /* (a) Entscheiden, ob wir schon als Drag gelten */
+      if (!dblTapDrag){
+        const moved = Math.hypot(p.x - touchStartPos.x,
+                                 p.y - touchStartPos.y);
+        if (moved > MOVE_PX){
+          dblTapDrag      = true;
+          isShiftDragging = true;          // ⇧ gedrückt
+
+          /* Bei ADD-Modus: aktive Ebene (y/x/z) einfrieren,
+             bei DELETE/DRAW brauchen wir nur das Flag       */
+          if (currentMode === Modes.ADD){
+            const rect  = cvs.getBoundingClientRect();
+            const mouse = new THREE.Vector2(
+                ((p.x - rect.left) / rect.width)  * 2 - 1,
+               -((p.y - rect.top)  / rect.height) * 2 + 1);
+            const ray   = new THREE.Raycaster();
+            ray.setFromCamera(mouse, cam);
+            const hits  = ray.intersectObject(voxelMesh);
+
+            currentDrawingAxis    = 'y';
+            currentShiftDragLevel = hits.length
+               ? Math.floor(hits[0].point.y / VS)
+               : activeDrawingLevel.y;
+          }
         }
+      }
 
-        /* ---------- normales Look-Around --------------- */
-        const dx = p.x - (prevTouch?.x ?? p.x);
-        const dy = p.y - (prevTouch?.y ?? p.y);
-
-        euler.y += dx * rotSpeed;
-        euler.x += dy * rotSpeed;
-        euler.x  = Math.max(-Math.PI/2, Math.min(Math.PI/2, euler.x));
-        cam.quaternion.setFromEuler(euler);
-
-        prevTouch = {x:p.x, y:p.y};
-        return;
-    }
-
-    /* ======================================================
-       2 Finger → Pinch-Zoom   oder   Parallel-Pan
-    ====================================================== */
-    if (pts.length !== 2) return;
-
-    const [p0, p1] = pts;
-    const midX = (p0.x + p1.x) * 0.5;
-    const midY = (p0.y + p1.y) * 0.5;
-    const dist = Math.hypot(p1.x - p0.x, p1.y - p0.y);
-
-    /* ---------- erstes Frame eines Gesten-Zyklus ------- */
-    if (gestureMid === null){
-        gestureMid  = {x:midX, y:midY};
-        gestureDist = dist;
-        gestureMode = null;                 // noch unentschieden
-    }
-
-    const dMid  = Math.hypot(midX - gestureMid.x, midY - gestureMid.y);
-    const dDist = dist - gestureDist;
-    const relΔ  = Math.abs(dDist) / gestureDist;
-
-    /* ---------- EINMALIGE Modus-Entscheidung ----------- */
-    if (gestureMode === null){              // nur solange noch offen
-        if (relΔ > PINCH_REL_TH)       gestureMode = 'pinch';
-        else if (dMid > PAN_PIX_TH)    gestureMode = 'pan';
-        else return;                         // noch zu wenig Info → warten
-    }
-
-    /* ---------- Aktion je nach Modus ------------------- */
-    if (gestureMode === 'pinch'){
-        /* weicher Zoom */
-        const scale      = dist / gestureDist;          // Verhältnis statt Delta
-        const zoomDelta  = (1 - scale) * 5 * moveSpeed; // Faktor anpassen
-        cam.position.addScaledVector(
-            cam.getWorldDirection(new THREE.Vector3()),
-            zoomDelta
+      /* (b) Sobald als Drag klassifiziert → wie ⇧-Drag zeichnen */
+      if (dblTapDrag){
+        handleVoxelAction(
+          p.x, p.y,
+          currentMode,
+          /* drag */  true,
+          /* stack*/  false,
+          currentShiftDragLevel,
+          currentDrawingAxis
         );
-        gestureDist = dist;               // Referenz sofort nachziehen
-    } else { /* 'pan' */
-        const panFactor = DRAG_BASE * (moveSpeed * 5);
-        const dx =  (midX - gestureMid.x) * panFactor;
-        const dy =  (midY - gestureMid.y) * panFactor;
+      }
 
-        const dir   = cam.getWorldDirection(new THREE.Vector3());
-        const right = new THREE.Vector3().crossVectors(dir, cam.up).normalize();
-        const upVec = cam.up.clone().normalize();
-
-        cam.position.addScaledVector(right, -dx);
-        cam.position.addScaledVector(upVec,   dy);
+      prevTouch = {x:p.x, y:p.y};
+      return;
     }
 
-    gestureMid = {x:midX, y:midY};          // Referenz nachziehen
+    /* ---------- normales Kamera-Look --------------------- */
+    const dx = p.x - (prevTouch?.x ?? p.x);
+    const dy = p.y - (prevTouch?.y ?? p.y);
+
+    euler.y +=  dx * rotSpeed;
+    euler.x +=  dy * rotSpeed;
+    euler.x  =  Math.max(-Math.PI/2, Math.min(Math.PI/2, euler.x));
+    cam.quaternion.setFromEuler(euler);
+
+    prevTouch = {x:p.x, y:p.y};
+    return;
+  }
+
+  /* ======================================================
+       2-FINGER  →  Pinch-Zoom   ODER   Zwei-Finger-Pan
+     ====================================================== */
+  if (pts.length !== 2) return;
+
+  const [p0, p1] = pts;
+  const midX  = (p0.x + p1.x) * 0.5;
+  const midY  = (p0.y + p1.y) * 0.5;
+  const dist  = Math.hypot(p1.x - p0.x, p1.y - p0.y);
+
+  if (gestureMid === null){               // erster Frame
+    gestureMid  = {x:midX, y:midY};
+    gestureDist = dist;
+    gestureMode = null;
+  }
+
+  const dMid  = Math.hypot(midX - gestureMid.x, midY - gestureMid.y);
+  const relΔ  = Math.abs(dist - gestureDist) / gestureDist;
+
+  if (gestureMode === null){
+    if (relΔ > PINCH_REL_TH)       gestureMode = 'pinch';
+    else if (dMid > PAN_PIX_TH)    gestureMode = 'pan';
+    else return;                   // noch unklar → warten
+  }
+
+  if (gestureMode === 'pinch'){
+    /* ---------- Pinch-Zoom (Vorzeichen korrigiert) -------- */
+    const scale     = dist / gestureDist;                   // >1 = spreizen
+    const zoomDelta = (scale - 1) * 5 * moveSpeed;          // richtiger Drehsinn
+    cam.position.addScaledVector(
+        cam.getWorldDirection(new THREE.Vector3()),
+        zoomDelta
+    );
+    gestureDist = dist;                                     // erst jetzt refresh
+  } else { /* ---------- Zwei-Finger-Pan ------------------- */
+    const panFactor = DRAG_BASE * (moveSpeed * 5);
+    const dx = (midX - gestureMid.x) * panFactor;
+    const dy = (midY - gestureMid.y) * panFactor;
+
+    const dir   = cam.getWorldDirection(new THREE.Vector3());
+    const right = new THREE.Vector3().crossVectors(dir, cam.up).normalize();
+    const upVec = cam.up.clone().normalize();
+
+    cam.position.addScaledVector(right, -dx);
+    cam.position.addScaledVector(upVec,    dy);
+
+    gestureMid = {x:midX, y:midY};                          // refresh
+  }
 }
 
+/* =========================================================
+   RELEASE-CLEANUP  –  Ergänzung in releasePointer()
+   ========================================================= */
+function releasePointer(id){
+  activePointers.delete(id);
+  if (activePointers.size === 0){
+    tapCandidate  = null;
+    dblTapActive  = false;
+    dblTapDrag    = false;
+    isShiftDragging = false;
+
+    /* wichtig für sauberen Neustart */
+    gestureMid  = gestureDist = null;
+    gestureMode = null;
+    prevTouch   = null;
+  }
+}
 
 function rebuildHelpers() {
     // Check if THREE is defined before using it in helper functions
