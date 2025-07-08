@@ -413,6 +413,12 @@
     const VS = 1, HALF = VS * 0.5;
 
     /* ---------- globale Variablen ---------- */
+    let gestureMode   = null;   // 'pan' | 'pinch' | null
+let lastMid       = null;   // {x,y}
+let lastDist      = null;   // Abstand der beiden Finger
+const PAN_TH_PX   = 5;      // Startschwelle Parallel-Drag
+const PINCH_TH_P  = 0.03;   // 3 % relative Änderung
+
     /* --- 2-Finger-Drag / Pinch ---------------------------------- */
     let lastSwipeMid = null;   // merkt Mittel-Punkt zweier Finger
     const PINCH_TH   = 3;      // Schwelle: Pixel-Delta ⇒ Pinch
@@ -1105,77 +1111,90 @@
         cam.updateProjectionMatrix();
         ren.setSize(containerDiv.clientWidth, containerDiv.clientHeight);
     }
-    function handleGesture(e){
-        const pts = [...activePointers.values()];
 
-        /* ---------- 1 Finger: Kamera drehen / Voxel-Aktion -------- */
-        if (pts.length === 1){
-            const p = pts[0];
+/* ------------------------------------------------------------------ *
+   Neues handleGesture()
+ * ------------------------------------------------------------------ */
+function handleGesture(e){
+    const pts = [...activePointers.values()];
 
-            /* 1) Doppel-Tap-Drag  ⇒  Shift-Drag auf Ebene */
-            if (dblTapActive){
-                const moved = Math.hypot(p.x - touchStartPos.x,
-                                         p.y - touchStartPos.y);
-                if (moved > MOVE_PX){
-                    dblTapDrag      = true;
-                    isShiftDragging = true;           // simuliert Shift
-                    handleVoxelAction(p.x, p.y,
-                                      currentMode, true, false);
-                    return;                           // solange Drag: keine Drehung
-                }
-            }
+    /* ---------- 1 Finger ⇒ Kameradrehung / Tap / (Shift-)Drag ---- */
+    if (pts.length === 1){
+        gestureMode = null;        // Reset
+        lastMid = lastDist = null;
+        /* … dein 1-Finger-Code bleibt unverändert … */
+        return;
+    }
 
-            /* 2) Normale Kameradrehung */
-            const dx = p.x - (prevTouch?.x ?? p.x);
-            const dy = p.y - (prevTouch?.y ?? p.y);
-            euler.y += dx * rotSpeed;
-            euler.x += dy * rotSpeed;
-            euler.x = Math.max(-Math.PI/2, Math.min(Math.PI/2, euler.x));
-            cam.quaternion.setFromEuler(euler);
-            prevTouch = {x:p.x, y:p.y};
-            return;
-        }
+    /* ---------- ≥2 Finger --------------------------------------- */
+    if (pts.length !== 2) return;  // mehr als 2 ignorieren wir hier
+    const [p0, p1] = pts;
 
-        /* ---------- ≥2 Finger: Pinch-Zoom ODER Parallel-Drag ------ */
-        prevTouch = null;           // bei >1 Finger keine Einzel-Drehung
+    /* Mittelpunkt + Abstand */
+    const midX  = (p0.x + p1.x) * 0.5;
+    const midY  = (p0.y + p1.y) * 0.5;
+    const dist  = Math.hypot(p1.x - p0.x, p1.y - p0.y);
 
-        if (pts.length === 2){
-            const [p0, p1] = pts;
+    if (lastMid === null){        // erster Frame
+        lastMid  = {x: midX, y: midY};
+        lastDist = dist;
+        return;
+    }
 
-            /* 1) Pinch-Zoom --------------------------------------- */
-            const dist = Math.hypot(p1.x - p0.x, p1.y - p0.y);
-            if (lastPinchDist === null) lastPinchDist = dist;
-            const scaleΔ = dist - lastPinchDist;
+    /* Änderungsgrößen */
+    const dMid   = Math.hypot(midX - lastMid.x, midY - lastMid.y);
+    const dDist  = dist - lastDist;
+    const relΔ   = Math.abs(dDist) / lastDist;  // relative Skalierung
 
-            if (Math.abs(scaleΔ) > PINCH_TH){
-                // Zoom entlang Blickrichtung (Finger auseinander → reinzoomen)
-                cam.position.addScaledVector(
-                    cam.getWorldDirection(new THREE.Vector3()),
-                    scaleΔ * moveSpeed * 0.8);
-                lastPinchDist = dist;
-                lastSwipeMid  = null;   // verhindert Drag-Sprung nach Pinch
-                return;
-            }
-
-            /* 2) Parallel-Drag (Strafe + Hoch/Runter) -------------- */
-            const midX = (p0.x + p1.x) * 0.5;
-            const midY = (p0.y + p1.y) * 0.5;
-
-            if (lastSwipeMid){
-                const dx = midX - lastSwipeMid.x;
-                const dy = midY - lastSwipeMid.y;
-
-                const dir   = cam.getWorldDirection(new THREE.Vector3());
-                const right = new THREE.Vector3()
-                                .crossVectors(dir, cam.up);   // seitwärts
-                const up    = cam.up.clone().normalize();      // vertikal
-
-                cam.position.addScaledVector(right, -dx * DRAG_K);
-                cam.position.addScaledVector(up,     dy * DRAG_K);
-            }
-            lastSwipeMid = {x: midX, y: midY};
+    /* ---------------- Gesten-Mode festlegen --------------------- */
+    if (!gestureMode){
+        if (relΔ > PINCH_TH_P && Math.abs(dDist) > dMid * 0.7){
+            gestureMode = 'pinch';
+        } else if (dMid > PAN_TH_PX && Math.abs(dDist) < dMid * 0.3){
+            gestureMode = 'pan';
+        } else {
+            return; // noch nicht eindeutig
         }
     }
+
+    /* ---------------- Ausführen --------------------------------- */
+    if (gestureMode === 'pinch'){
+        /* Zoom (Finger auseinander = reinzoomen) */
+        const zoomΔ = dDist * moveSpeed * 0.8;
+        cam.position.addScaledVector(
+            cam.getWorldDirection(new THREE.Vector3()),
+            zoomΔ);
+    } else if (gestureMode === 'pan'){
+        /* Parallel-Drag: seitwärts + hoch-runter */
+        const dir   = cam.getWorldDirection(new THREE.Vector3());
+        const right = new THREE.Vector3().crossVectors(dir, cam.up);
+        const up    = cam.up.clone().normalize();
+
+        /* Low-Pass: 80 % alt + 20 % neu → glatter */
+        const k = 0.2;
+        const dx = (midX - lastMid.x) * k;
+        const dy = (midY - lastMid.y) * k;
+
+        cam.position.addScaledVector(right, -dx * DRAG_K);
+        cam.position.addScaledVector(up,     dy * DRAG_K);
+    }
+
+    /* ---------------- Update für nächstes Frame ----------------- */
+    lastMid  = {x: midX, y: midY};
+    lastDist = dist;
+}
+
+/* ------------------------------------------------------------------ *
+   Pointer-Up/Cancel: Gesten-State zurücksetzen
+ * ------------------------------------------------------------------ */
+function releasePointer(e){
+    activePointers.delete(e.pointerId);
+    if (activePointers.size === 0){
+        gestureMode = null;
+        lastMid = lastDist = null;
+        prevTouch = null;
+    }
+}
 
     function rebuildHelpers() {
         // Check if THREE is defined before using it in helper functions
