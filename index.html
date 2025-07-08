@@ -1155,39 +1155,45 @@ function onResize() {
     ren.setSize(containerDiv.clientWidth, containerDiv.clientHeight);
 }
 /* ============================================================
-   TOUCH-GESTEN-ROUTINE  (komplett)
-   – inkl. Sofort-Umschalten auf Shift-Drag nach Double-Tap-Hold
+   TOUCH-GESTEN-ROUTINE – handleGesture()
    ============================================================ */
 function handleGesture () {
     const pts = [...activePointers.values()];
     if (pts.length === 0) return;
 
     /* ======================================================
-       1 Finger  → Kamera-Look  ODER  Double-Tap-Shift-Drag
+       1 Finger → Kamera-Look  ODER  Double-Tap-Shift-Drag
     ====================================================== */
     if (pts.length === 1){
         const p = pts[0];
 
-        /* ---------- Double-Tap-Hold: sofort in Shift-Drag --- */
+        /* ---------- Double-Tap-Hold ------------------------- */
         if (dblTapActive){
-            if (!dblTapDrag){                       // erster Frame nach dem 2. Tap
-                dblTapDrag            = true;       // Flag setzen
-                isShiftDragging       = true;       // „Shift“ aktivieren
-                currentDrawingAxis    = 'y';        // zeichne auf Y-Ebene
-                currentShiftDragLevel = activeDrawingLevel.y;
+            if (!dblTapDrag){                 // erstes Frame nach dem 2. Tap
+                dblTapDrag      = true;
+                isShiftDragging = true;       // ⇧ gilt als gedrückt
+
+                // Ebene fixieren nur im ADD-Modus
+                if (currentMode === Modes.ADD){
+                    currentDrawingAxis    = 'y';
+                    currentShiftDragLevel = activeDrawingLevel.y;
+                }
             }
 
-            /* immer zeichnen, KEINE Kamerarotation */
+            /* immer Aktion ausführen, keine Kameradrehung */
             handleVoxelAction(
-                p.x, p.y, currentMode,
-                /*drag*/ true, /*stack*/ false,
-                currentShiftDragLevel, currentDrawingAxis
+                p.x, p.y,
+                currentMode,          // bleibt unverändert (ADD / DELETE / DRAW)
+                /* drag   */ true,
+                /* stack  */ false,
+                currentShiftDragLevel,
+                currentDrawingAxis
             );
-            prevTouch = {x:p.x, y:p.y};             // Position merken
-            return;                                 // fertig
+            prevTouch = {x:p.x, y:p.y};
+            return;
         }
 
-        /* ---------- normales 1-Finger Look-Around ----------- */
+        /* ---------- normales Look-Around ------------------- */
         const dx = p.x - (prevTouch?.x ?? p.x);
         const dy = p.y - (prevTouch?.y ?? p.y);
 
@@ -1201,7 +1207,7 @@ function handleGesture () {
     }
 
     /* ======================================================
-       ≥2 Finger  → Pinch-Zoom  oder  Parallel-Pan
+       ≥2 Finger → Pinch-Zoom  oder  Parallel-Pan (Strafe)
     ====================================================== */
     if (pts.length !== 2) return;
 
