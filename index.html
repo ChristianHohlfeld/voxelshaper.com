@@ -413,6 +413,13 @@ canvas, body { -webkit-tap-highlight-color: transparent; }
 const VS = 1, HALF = VS * 0.5;
 
 /* ---------- globale Variablen ---------- */
+/* ----------------------------------------------
+   GLOBAL – neue Hilfs-Variablen
+---------------------------------------------- */
+let pinchStartDist  = null;        // Abstand beim Start der Geste
+let pinchStartCamZ  = null;        // originale Kamera-Distanz
+const PINCH_SMOOTH  = 0.15;        // Low-Pass-Faktor 0…1
+
 /* ---------- Touch-State-Maschine ---------- */
 // direkt unter den anderen let-Deklarationen
 let gestureLock   = null;
@@ -1147,38 +1154,40 @@ function onResize() {
     cam.updateProjectionMatrix();
     ren.setSize(containerDiv.clientWidth, containerDiv.clientHeight);
 }
-/* ---------- Touch-Gesten ---------- */
+/* ============================================================
+   TOUCH-GESTEN-ROUTINE  (komplett)
+   – inkl. Sofort-Umschalten auf Shift-Drag nach Double-Tap-Hold
+   ============================================================ */
 function handleGesture () {
     const pts = [...activePointers.values()];
     if (pts.length === 0) return;
 
     /* ======================================================
-       1 Finger  → Kamera-Look  oder   DoubleTap-Shift-Drag
+       1 Finger  → Kamera-Look  ODER  Double-Tap-Shift-Drag
     ====================================================== */
     if (pts.length === 1){
         const p = pts[0];
 
-        // ----- Double-Tap-Hold ⇒ Shift-Drag auf fixer Ebene
+        /* ---------- Double-Tap-Hold: sofort in Shift-Drag --- */
         if (dblTapActive){
-            const moved = Math.hypot(p.x - touchStartPos.x,
-                                     p.y - touchStartPos.y);
-            if (!dblTapDrag && moved > MOVE_PX){
-                dblTapDrag        = true;
-                isShiftDragging   = true;
-                currentDrawingAxis  = 'y';
+            if (!dblTapDrag){                       // erster Frame nach dem 2. Tap
+                dblTapDrag            = true;       // Flag setzen
+                isShiftDragging       = true;       // „Shift“ aktivieren
+                currentDrawingAxis    = 'y';        // zeichne auf Y-Ebene
                 currentShiftDragLevel = activeDrawingLevel.y;
             }
-            if (dblTapDrag){
-                handleVoxelAction(
-                    p.x, p.y, currentMode,
-                    /*drag*/ true, /*stack*/ false,
-                    currentShiftDragLevel, currentDrawingAxis
-                );
-                return;
-            }
+
+            /* immer zeichnen, KEINE Kamerarotation */
+            handleVoxelAction(
+                p.x, p.y, currentMode,
+                /*drag*/ true, /*stack*/ false,
+                currentShiftDragLevel, currentDrawingAxis
+            );
+            prevTouch = {x:p.x, y:p.y};             // Position merken
+            return;                                 // fertig
         }
 
-        // ----- normales Look-Around
+        /* ---------- normales 1-Finger Look-Around ----------- */
         const dx = p.x - (prevTouch?.x ?? p.x);
         const dy = p.y - (prevTouch?.y ?? p.y);
 
@@ -1187,53 +1196,52 @@ function handleGesture () {
         euler.x  = Math.max(-Math.PI/2, Math.min(Math.PI/2, euler.x));
         cam.quaternion.setFromEuler(euler);
 
-        prevTouch = { x:p.x, y:p.y };
+        prevTouch = {x:p.x, y:p.y};
         return;
     }
 
     /* ======================================================
-       2 Finger  → Pinch-Zoom  oder  Parallel-Pan (Strafe)
+       ≥2 Finger  → Pinch-Zoom  oder  Parallel-Pan
     ====================================================== */
     if (pts.length !== 2) return;
 
-    const [p0,p1] = pts;
-    const midX  = (p0.x + p1.x) * 0.5;
-    const midY  = (p0.y + p1.y) * 0.5;
-    const dist  = Math.hypot(p1.x - p0.x, p1.y - p0.y);
+    const [p0, p1] = pts;
+    const midX = (p0.x + p1.x) * 0.5;
+    const midY = (p0.y + p1.y) * 0.5;
+    const dist = Math.hypot(p1.x - p0.x, p1.y - p0.y);
 
     /* --- Init beim ersten Frame -------------------------- */
     if (gestureMid === null){
-        gestureMid  = { x: midX, y: midY };
+        gestureMid  = {x:midX, y:midY};
         gestureDist = dist;
         gestureMode = null;
         return;
     }
 
-    const dMid   = Math.hypot(midX - gestureMid.x, midY - gestureMid.y);
-    const dDist  = dist - gestureDist;
-    const relΔ   = Math.abs(dDist) / gestureDist;
+    const dMid  = Math.hypot(midX - gestureMid.x, midY - gestureMid.y);
+    const dDist = dist - gestureDist;
+    const relΔ  = Math.abs(dDist) / gestureDist;
 
-    /* --- Moduswahl (muss in ZWEI Folgerahmen gleich sein) */
+    /* --- Moduswahl --------------------------------------- */
     const decided =
-          (relΔ  > PINCH_REL_TH) ? 'pinch'
-        : (dMid  > PAN_PIX_TH)   ? 'pan'
+          (relΔ > PINCH_REL_TH) ? 'pinch'
+        : (dMid > PAN_PIX_TH)   ? 'pan'
         : null;
 
     if (decided){
         if (gestureMode === decided){
-            // bereits bestätigter Modus
+            /* Modus bestätigt – unten ausführen */
         } else if (gestureMode === null){
-            // erste Stimme – merken, noch nicht handeln
+            /* erste „Stimme“ – noch warten */
             gestureMode = decided;
             return;
         } else {
-            // wechselnde Stimmen → warten
+            /* wechselnde Stimmen – zurücksetzen */
             gestureMode = null;
             return;
         }
     } else {
-        // noch unklar
-        return;
+        return;   // noch unentschieden
     }
 
     /* --- Aktion ausführen -------------------------------- */
@@ -1244,7 +1252,7 @@ function handleGesture () {
             zoomΔ
         );
     } else { // 'pan'
-        const panFactor = DRAG_BASE * (moveSpeed * 5); // dynamisch schneller
+        const panFactor = DRAG_BASE * (moveSpeed * 5);
         const dx =  (midX - gestureMid.x) * panFactor;
         const dy =  (midY - gestureMid.y) * panFactor;
 
@@ -1252,12 +1260,12 @@ function handleGesture () {
         const right = new THREE.Vector3().crossVectors(dir, cam.up).normalize();
         const upVec = cam.up.clone().normalize();
 
-        cam.position.addScaledVector(right, -dx); // Strafe
-        cam.position.addScaledVector(upVec,   dy); // Up/Down
+        cam.position.addScaledVector(right, -dx);   // Strafe
+        cam.position.addScaledVector(upVec,   dy);  // Up/Down
     }
 
     /* --- History aktualisieren --------------------------- */
-    gestureMid  = { x: midX, y: midY };
+    gestureMid  = {x:midX, y:midY};
     gestureDist = dist;
 }
 
