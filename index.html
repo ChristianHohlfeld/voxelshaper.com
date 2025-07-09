@@ -676,8 +676,10 @@ initialTouchDrawingLevelY = activeDrawingLevel.y; // Erfasse die anfängliche Y-
                         handleVoxelAction(
                             e.clientX, e.clientY,
                             currentMode,
-                            false,
-                            false
+                            /* isDragging */ false,
+                            /* isStackingAdd */ false,
+                            /* fixedLevel */ initialTouchDrawingLevelY, // <-- NEU
+                            /* fixedAxis */ 'y' // <-- NEU
                         );
                     }
                     longPressTimer = null; // Der Timer ist nun entweder ausgelöst oder abgebrochen
@@ -774,10 +776,11 @@ cvs.addEventListener('pointermove', e => {
             handleVoxelAction(
                 e.clientX, e.clientY,
                 currentMode,
-                /* isDragging    */ true,
-                /* isStackingAdd */ false,
-                /* fixedLevel    */ null,
-                /* fixedAxis     */ null
+               true,
+               false,
+               null,
+                  initialTouchDrawingLevelY, 
+                   fixedAxis */ 'y'
             );
             return; // Verhindert andere Gesten-Handhabung
         }
