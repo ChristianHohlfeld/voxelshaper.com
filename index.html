@@ -423,6 +423,7 @@ let initialDblTapDragLevelY = null; // Speichert die Y-Ebene für Double-Tap-Dra
 let isHoldDrawingActive = false;   // NEU: Verfolgt, ob ein Long-Press-Zeichnen aktiv ist
 let initialHoldDrawPos = null;     // NEU: Speichert die Startposition für Long-Press-Bewegungserkennung
 const LONG_PRESS_DELAY_MS = 500;   // NEU: Wartezeit (in Millisekunden) für Long-Press-Erkennung
+
 /* ----------------------------------------------
    GLOBAL – neue Hilfs-Variablen
 ---------------------------------------------- */
@@ -800,111 +801,7 @@ cvs.addEventListener('pointermove', e => {
     }
     // --- ENDE TOUCH-SPEZIFISCHE LOGIK ---
 });
-/* ==========================================================
-   Pointer-UP  – ends gestures, releases capture,
-   decides on Tap / Double-Tap and cleans up states
-   ========================================================== */
-cvs.addEventListener('pointerup', e => {
-    e.preventDefault(); // Verhindert Standard-Browserverhalten
 
-    // Entferne den Pointer aus der Liste der aktiven Pointer
-    const p = activePointers.get(e.pointerId);
-    activePointers.delete(e.pointerId);
-    cvs.releasePointerCapture(e.pointerId); // Zeiger-Capture freigeben
-
-    // Bewegung des Zeigers seit dem letzten Event (für Tap-Erkennung)
-    const moved = p ? Math.hypot(e.clientX - p.x, e.clientY - p.y) : 0;
-
-    // Timer und Flags für Long-Press zurücksetzen
-    clearTimeout(longPressTimer);
-    isHoldDrawingActive = false;
-
-    // --- DESKTOP (MAUS/STIFT) LOGIK ---
-    if (e.pointerType === 'mouse' || e.pointerType === 'pen') {
-        if (e.button === 2) { // Rechte Maustaste
-            // Kamera-Rotation beenden
-            rotate = false;
-            document.exitPointerLock(); // PointerLock aufheben
-        } else if (e.button === 0) { // Linke Maustaste
-            // Wenn es ein einzelner Klick war (kein Drag und kein spezieller Modus aktiv war)
-            // Die desktop-spezifische voxelAction wird hier ausgeführt.
-            // activeGestureMode === 'voxelAction' stellt sicher, dass es ein einfacher Klick war, kein Drag-Beginn
-            if (activeGestureMode === 'voxelAction' && moved < TAP_DIST_TH) {
-                 handleVoxelAction(
-                    e.clientX, e.clientY,
-                    currentMode,
-                    /* isDragging    */ false, // Dies war ein Tap, kein Drag
-                    /* isStackingAdd */ false,
-                    /* fixedLevel    */ null,
-                    /* fixedAxis     */ null
-                );
-            }
-        }
-        // Flags für Desktop-Drag-Modi zurücksetzen
-        isShiftDragging = false;
-        isControlDragging = false;
-        currentShiftDragLevel = null;
-    }
-    // --- ENDE DESKTOP LOGIK ---
-
-
-    // --- TOUCH-SPEZIFISCHE LOGIK ---
-    else if (e.pointerType === 'touch') {
-        // Nur wenn alle Finger den Bildschirm verlassen haben (oder der letzte Finger)
-        if (activePointers.size === 0) {
-            /* -------- Single Tap (für Voxel-Aktion) -------- */
-            // Wenn der Modus noch 'pendingCameraOrTap' ist (d.h., es wurde kein Pan oder Zeichenmodus ausgelöst)
-            // UND es war ein kurzer Tap (kein signifikantes Ziehen)
-            if (activeGestureMode === 'pendingCameraOrTap' && moved < TAP_DIST_TH) {
-                handleVoxelAction(
-                    e.clientX, e.clientY,
-                    currentMode,
-                    /* isDragging    */ false, // Dies war ein Tap, kein Drag
-                    /* isStackingAdd */ false,
-                    /* fixedLevel    */ null,
-                    /* fixedAxis     */ null
-                );
-            }
-
-            /* -------- Double-Tap Ende -------- */
-            // Wenn ein Double-Tap aktiv war
-            if (dblTapActive) {
-                // Und es wurde nach dem zweiten Tap nicht gezogen (ist also ein zweiter Tap-Klick)
-                if (!dblTapDrag) {
-                    handleVoxelAction(
-                        e.clientX, e.clientY,
-                        currentMode,
-                        /* isDragging    */ false, // Dies war ein Tap, kein Drag
-                        /* isStackingAdd */ false,
-                        /* fixedLevel    */ null,
-                        /* fixedAxis     */ null
-                    );
-                }
-                // Double-Tap-Flags zurücksetzen
-                dblTapActive   = false;
-                dblTapDrag     = false;
-            }
-        }
-
-        // Gemeinsame Touch-spezifische Zurücksetzungen, wenn der Pointer gelöst wird
-        // Unabhängig davon, ob es der letzte Finger war oder nicht
-        // (Ausnahme: tapCandidate wird im pointerdown für DBL-TAP-Erkennung verwaltet)
-        isDblTapDragActive      = false;
-        gestureMid              = null; // Zurücksetzen für Multi-Touch-Gesten
-        gestureDist             = null; // Zurücksetzen für Multi-Touch-Gesten
-        prevTouch               = null; // Delta-Tracking für Kamera-Pan zurücksetzen
-        initialDblTapDragLevelY = null; // Gespeicherte Y-Ebene für Double-Tap-Drag zurücksetzen
-    }
-    // --- ENDE TOUCH-SPEZIFISCHE LOGIK ---
-
-    // Globaler Reset des aktiven Gestenmodus, wenn keine Pointer mehr aktiv sind
-    if (activePointers.size === 0) {
-        activeGestureMode = 'none';
-        // Sicherstellen, dass touchStartPos auch zurückgesetzt wird, wenn alle Pointer weg sind
-        touchStartPos = null;
-        tapCandidate = null; // Hier auch zurücksetzen, falls ein Tap-Kandidat übrig bleibt und keine DBL-TAP-Sequenz abgeschlossen wurde
-    }
-});
 /* ==========================================================
    DESKTOP / STYLUS – Pointer-UP  (nur Nicht-Touch)
    ========================================================== */
