@@ -561,8 +561,11 @@ cvs.addEventListener('pointerdown', e => {
                 // Bestimme die Ebene und Achse basierend auf der aktuellen Kameraposition
                 const camDir = new THREE.Vector3();
                 cam.getWorldDirection(camDir);
-                const absCamDir = camDir.clone().abs();
-
+                const absCamDir = new THREE.Vector3(
+    Math.abs(camDir.x),
+    Math.abs(camDir.y),
+    Math.abs(camDir.z)
+);
                 // Finde die Achse, die am meisten zur Kamera zeigt (näher an 1)
                 // Die feste Ebene wird dann die Koordinate auf dieser Achse sein,
                 // die der Kamera am nächsten ist.
