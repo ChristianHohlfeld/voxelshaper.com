@@ -423,6 +423,7 @@ let initialDblTapDragLevelY = null; // Speichert die Y-Ebene für Double-Tap-Dra
 let isHoldDrawingActive = false;   // NEU: Verfolgt, ob ein Long-Press-Zeichnen aktiv ist
 let initialHoldDrawPos = null;     // NEU: Speichert die Startposition für Long-Press-Bewegungserkennung
 const LONG_PRESS_DELAY_MS = 500;   // NEU: Wartezeit (in Millisekunden) für Long-Press-Erkennung
+let previewVoxelMesh = null; // Variable für das Vorschau-Voxel-Mesh deklarieren
 
 /* ----------------------------------------------
    GLOBAL – neue Hilfs-Variablen
@@ -1988,20 +1989,67 @@ function recolorVoxel(x, y, z, newColorHex, fromHistory = false, triggerGeometry
         }
     }
 }
+// Annahmen, die im Code verwendet werden:
+// VS (Voxel Size) - die Größe eines Voxels
+// HALF (VS / 2)
+// cam (THREE.Camera)
+// raycaster (THREE.Raycaster)
+// voxelMesh (das THREE.Mesh-Objekt, das alle Voxel darstellt und für Raycasting verwendet wird)
+// voxels (Map oder ähnliche Struktur, die deine Voxel-Daten speichert)
+// key(x,y,z) - deine Funktion zum Generieren eines Schlüssels für die Voxel-Map
+// currentColor - die aktuell ausgewählte Farbe
+// addVoxel(x, y, z, color) - deine Funktion zum Hinzufügen eines Voxels
+// removeVoxel(x, y, z) - deine Funktion zum Entfernen eines Voxels
+// recolorVoxel(x, y, z, color) - deine Funktion zum Umfärben eines Voxels
+// updateVoxelGeometry() - Funktion zum Aktualisieren der Three.js-Geometrie
+// previewVoxelMesh - Ein Three.js Mesh für den Vorschau-Voxel (muss initialisiert sein, z.B. als global)
+// activeDrawingLevel - Objekt, das die aktuelle feste Y-Ebene für bestimmte Zeichenmodi speichert (z.B. {y: 0})
+// activeGestureMode - string, der den aktuellen Drag-Modus speichert (z.B. 'shiftDragDraw', 'controlStackDraw')
+// shiftActive() - Funktion, die prüft, ob Shift gedrückt ist (oder Shift-Lock)
+// currentDrawingAxis - speichert die Achse ('x', 'y', 'z') für feste Zeichenebenen
+
+// ************************************************************************************************
+// NEU: Globale Variable für den Vorschau-Voxel (muss einmalig im Setup initialisiert werden)
+// Füge dies zu deinen globalen/Modul-Variablen hinzu:
+// let previewVoxelMesh;
+// const previewVoxelGeometry = new THREE.BoxGeometry(VS, VS, VS);
+// const previewVoxelMaterial = new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.5 });
+// scene.add(previewVoxelMesh = new THREE.Mesh(previewVoxelGeometry, previewVoxelMaterial));
+// previewVoxelMesh.visible = false; // Standardmäßig unsichtbar
+
+// NEU: Hilfsfunktion zum Aktualisieren des Vorschau-Voxels
+function updatePreviewVoxel(x, y, z, visible) {
+    if (previewVoxelMesh) {
+        if (visible) {
+            previewVoxelMesh.position.set(x * VS + HALF, y * VS + HALF, z * VS + HALF);
+            previewVoxelMesh.visible = true;
+            previewVoxelMaterial.color.set(currentColor); // Vorschau-Farbe an aktuelle Farbe anpassen
+        } else {
+            previewVoxelMesh.visible = false;
+        }
+    }
+}
+// ************************************************************************************************
+
 
 function handleVoxelAction(clientX, clientY, mode, isDragging, isStackingAdd, fixedLevel = null, fixedAxis = null) {
     const rect = cvs.getBoundingClientRect();
     const mouse = new THREE.Vector2(((clientX - rect.left) / rect.width) * 2 - 1,
         -((clientY - rect.top) / rect.height) * 2 + 1);
-    const ray = new THREE.Raycaster(); ray.setFromCamera(mouse, cam);
-    let hitVoxel = null; // This will store the {gx, gy, gz} of the target voxel
 
-    const hits = ray.intersectObject(voxelMesh);
+    const raycaster = new THREE.Raycaster(); // Verwende 'raycaster' anstelle von 'ray' um Konflikte mit 'ray.ray' zu vermeiden
+    raycaster.setFromCamera(mouse, cam);
 
+    let targetVoxelCoords = null; // Speichert die Gitterkoordinaten {gx, gy, gz} für die Aktion
+    let targetVoxelIsOccupied = false; // Flag, ob an der Zielposition bereits ein Voxel existiert
+
+    const intersects = raycaster.intersectObject(voxelMesh); // Verwende 'intersects' anstelle von 'hits'
+
+    // --- LOGIK FÜR MODES.ADD ---
     if (mode === Modes.ADD) {
-        if (isStackingAdd) { // Ctrl-Drag for stacking add (only for ADD mode)
-            if (hits.length > 0) {
-                const hit = hits[0];
+        if (isStackingAdd) { // Ctrl-Drag für das Stapeln (Stapel-Modus)
+            if (intersects.length > 0) {
+                const hit = intersects[0];
                 const gx = Math.floor(hit.point.x / VS);
                 const gz = Math.floor(hit.point.z / VS);
                 let highestY = -1;
@@ -2010,42 +2058,41 @@ function handleVoxelAction(clientX, clientY, mode, isDragging, isStackingAdd, fi
                         highestY = y;
                     }
                 }
-                hitVoxel = { gx: gx, gy: highestY + 1, gz: gz };
+                targetVoxelCoords = { gx: gx, gy: highestY + 1, gz: gz };
             } else {
-                // If Ctrl-dragging in empty space, place at activeDrawingLevel
-                let planeNormal, planeConstant;
-                planeNormal = new THREE.Vector3(0, 1, 0);
-                planeConstant = activeDrawingLevel.y * VS + HALF; // Plane at the center of the active level
+                // Wenn Ctrl-Drag im leeren Raum, auf aktuellem Zeichenlevel Y-Ebene platzieren
+                const planeNormal = new THREE.Vector3(0, 1, 0);
+                const planeConstant = activeDrawingLevel.y * VS + HALF;
                 const plane = new THREE.Plane(planeNormal, -planeConstant);
                 const intersectionPoint = new THREE.Vector3();
-                ray.ray.intersectPlane(plane, intersectionPoint);
+                raycaster.ray.intersectPlane(plane, intersectionPoint);
                 if (intersectionPoint) {
-                    hitVoxel = {
+                    targetVoxelCoords = {
                         gx: Math.floor(intersectionPoint.x / VS),
-                        gy: activeDrawingLevel.y, // Fixed Y
+                        gy: activeDrawingLevel.y, // Feste Y-Koordinate
                         gz: Math.floor(intersectionPoint.z / VS)
                     };
                 }
             }
-        } else if (activeGestureMode === 'dblTapDragDraw' && isDragging && fixedLevel !== null && fixedAxis === 'y') { // NEU: Double-Tap-Drag-Zeichnen
-            // Bei Double-Tap-Drag zeichnen wir auf einer festen Y-Ebene.
-            // Die X- und Z-Koordinaten werden vom Raycast auf dieser Ebene bestimmt.
-            let planeNormal = new THREE.Vector3(0, 1, 0);
-            let planeConstant = fixedLevel * VS + HALF; // Die feste Y-Ebene
+        }
+        // NEU: Logik für Double-Tap-Drag-Zeichnen (feste Y-Ebene)
+        else if (activeGestureMode === 'dblTapDragDraw' && isDragging && fixedLevel !== null && fixedAxis === 'y') {
+            const planeNormal = new THREE.Vector3(0, 1, 0);
+            const planeConstant = fixedLevel * VS + HALF; // Die feste Y-Ebene
             const plane = new THREE.Plane(planeNormal, -planeConstant);
             const intersectionPoint = new THREE.Vector3();
-            ray.ray.intersectPlane(plane, intersectionPoint);
+            raycaster.ray.intersectPlane(plane, intersectionPoint);
 
             if (intersectionPoint) {
-                hitVoxel = {
+                targetVoxelCoords = {
                     gx: Math.floor(intersectionPoint.x / VS),
                     gy: fixedLevel, // Hier wird die feste Y-Ebene erzwungen
                     gz: Math.floor(intersectionPoint.z / VS)
                 };
             }
         }
+        // NEU: Logik für Shift-Drag mit fester Achse (existierende Logik, aber mit 'raycaster')
         else if (isDragging && shiftActive() && fixedLevel !== null && fixedAxis !== null) {
-            // Shift-Drag in ADD mode for fixed level (your existing logic)
             let planeNormal, planeConstant;
             if (fixedAxis === 'y') {
                 planeNormal = new THREE.Vector3(0, 1, 0);
@@ -2059,38 +2106,59 @@ function handleVoxelAction(clientX, clientY, mode, isDragging, isStackingAdd, fi
             }
             const plane = new THREE.Plane(planeNormal, -planeConstant);
             const intersectionPoint = new THREE.Vector3();
-            ray.ray.intersectPlane(plane, intersectionPoint);
+            raycaster.ray.intersectPlane(plane, intersectionPoint);
 
             if (intersectionPoint) {
-                hitVoxel = {
+                targetVoxelCoords = {
                     gx: Math.floor(intersectionPoint.x / VS),
                     gy: Math.floor(intersectionPoint.y / VS),
                     gz: Math.floor(intersectionPoint.z / VS)
                 };
-                // Override the coordinate for the fixed axis
-                if (fixedAxis === 'y') hitVoxel.gy = fixedLevel;
-                if (fixedAxis === 'x') hitVoxel.gx = fixedLevel;
-                if (fixedAxis === 'z') hitVoxel.gz = fixedLevel;
+                // Achsen-Override für die feste Achse
+                if (fixedAxis === 'y') targetVoxelCoords.gy = fixedLevel;
+                if (fixedAxis === 'x') targetVoxelCoords.gx = fixedLevel;
+                if (fixedAxis === 'z') targetVoxelCoords.gz = fixedLevel;
             }
-        } else { // Normal single click or regular drag (no Shift/Ctrl) in ADD mode
-            if (hits.length > 0) {
-                const hit = hits[0];
-                const point = hit.point.clone();
-                const face = hit.face.normal;
-                hitVoxel = {
-                    gx: Math.floor((point.x + face.x * 0.01) / VS),
-                    gy: Math.floor((point.y + face.y * 0.01) / VS),
-                    gz: Math.floor((point.z + face.z * 0.01) / VS)
+        }
+        // ÄNDERUNG: Normaler Klick oder Drag im ADD-Modus (Kein Shift/Ctrl)
+        // Dies ist der Bereich, der das "Stapeln" verhindert, wenn auf die Seite geklickt wird.
+        else {
+            if (intersects.length > 0) {
+                const hit = intersects[0];
+                const hitPoint = hit.point.clone(); // Der genaue Trefferpunkt
+                const hitFaceNormal = hit.face.normal.clone(); // Die Normale der getroffenen Fläche
+
+                // Hier ist die entscheidende Änderung:
+                // Um einen Voxel angrenzend an den getroffenen Voxel zu platzieren,
+                // muss man vom Zentrum des getroffenen Voxels um eine Voxel-Größe
+                // in Richtung der hitFaceNormal verschieben.
+                // Three.js gibt `hit.face.normal` korrekt an der getroffenen Fläche zurück.
+                // Voxel-Koordinaten sind in deiner Map ganze Zahlen.
+                
+                // Zuerst die Gitterkoordinaten des getroffenen Voxels finden
+                // (p.sub(n.clone().multiplyScalar(0.01)) war für DELETE/DRAW, um den Voxel selbst zu finden)
+                // Hier wollen wir den Voxel *neben* dem getroffenen finden.
+                const currentHitVoxelX = Math.floor(hitPoint.x / VS);
+                const currentHitVoxelY = Math.floor(hitPoint.y / VS);
+                const currentHitVoxelZ = Math.floor(hitPoint.z / VS);
+
+                // Die neuen Koordinaten sind die des getroffenen Voxels PLUS die Normale.
+                // Die 0.01 Nudge ist hier NICHT nötig, da wir den angrenzenden Voxel suchen.
+                targetVoxelCoords = {
+                    gx: currentHitVoxelX + Math.round(hitFaceNormal.x), // Normale ist -1, 0 oder 1
+                    gy: currentHitVoxelY + Math.round(hitFaceNormal.y),
+                    gz: currentHitVoxelZ + Math.round(hitFaceNormal.z)
                 };
             } else {
-                // If clicking in empty space, place at activeDrawingLevel Y plane
+                // Wenn im leeren Raum geklickt, auf aktuellem Zeichenlevel Y-Ebene platzieren
+                // Diese Logik bleibt unverändert und ist korrekt für das Platzieren auf der Ebene
                 let planeNormal = new THREE.Vector3(0, 1, 0);
                 let planeConstant = activeDrawingLevel.y * VS + HALF;
                 const plane = new THREE.Plane(planeNormal, -planeConstant);
                 const intersectionPoint = new THREE.Vector3();
-                ray.ray.intersectPlane(plane, intersectionPoint);
+                raycaster.ray.intersectPlane(plane, intersectionPoint);
                 if (intersectionPoint) {
-                    hitVoxel = {
+                    targetVoxelCoords = {
                         gx: Math.floor(intersectionPoint.x / VS),
                         gy: activeDrawingLevel.y,
                         gz: Math.floor(intersectionPoint.z / VS)
@@ -2098,23 +2166,29 @@ function handleVoxelAction(clientX, clientY, mode, isDragging, isStackingAdd, fi
                 }
             }
         }
-    } else { // Modes.DELETE or Modes.DRAW
-        if (hits.length > 0) {
-            const hit = hits[0];
+    }
+    // --- LOGIK FÜR MODES.DELETE oder MODES.DRAW ---
+    // Hier ist das Ziel, den *getroffenen* Voxel zu identifizieren, nicht den danebenliegenden.
+    else { // mode === Modes.DELETE or mode === Modes.DRAW
+        if (intersects.length > 0) {
+            const hit = intersects[0];
             const p = hit.point.clone();
             const n = hit.face.normal;
 
             // Nudge the hit point slightly inwards based on the face normal
+            // Dies ist korrekt für DELETE/DRAW, um den Voxel zu finden, der wirklich angeklickt wurde.
             p.sub(n.clone().multiplyScalar(0.01));
 
-            hitVoxel = {
+            targetVoxelCoords = {
                 gx: Math.floor(p.x / VS),
                 gy: Math.floor(p.y / VS),
                 gz: Math.floor(p.z / VS)
             };
-        } else if (isDragging && shiftActive()) { // Only for Shift-Drag in empty space for DELETE/DRAW
-            // If no existing voxel is hit, but we are shift-dragging,
-            // we project onto the active drawing plane to determine the target voxel.
+            targetVoxelIsOccupied = voxels.has(key(targetVoxelCoords.gx, targetVoxelCoords.gy, targetVoxelCoords.gz));
+
+        } else if (isDragging && shiftActive()) { // Nur für Shift-Drag im leeren Raum für DELETE/DRAW
+            // Wenn kein existierender Voxel getroffen wird, aber wir mit Shift-Drag ziehen,
+            // projizieren wir auf die aktive Zeichenebene, um den Zielvoxel zu bestimmen.
             let planeNormal, planeConstant;
             if (currentDrawingAxis === 'y') {
                 planeNormal = new THREE.Vector3(0, 1, 0);
@@ -2128,27 +2202,59 @@ function handleVoxelAction(clientX, clientY, mode, isDragging, isStackingAdd, fi
             }
             const plane = new THREE.Plane(planeNormal, -planeConstant);
             const intersectionPoint = new THREE.Vector3();
-            ray.ray.intersectPlane(plane, intersectionPoint);
+            raycaster.ray.intersectPlane(plane, intersectionPoint);
 
             if (intersectionPoint) {
-                hitVoxel = {
+                targetVoxelCoords = {
                     gx: Math.floor(intersectionPoint.x / VS),
                     gy: Math.floor(intersectionPoint.y / VS),
                     gz: Math.floor(intersectionPoint.z / VS)
                 };
-                // Crucially, set the coordinate for the current drawing axis to the active drawing level
-                if (currentDrawingAxis === 'y') hitVoxel.gy = activeDrawingLevel.y;
-                if (currentDrawingAxis === 'x') hitVoxel.gx = activeDrawingLevel.x;
-                if (currentDrawingAxis === 'z') hitVoxel.gz = activeDrawingLevel.z;
+                // Wichtig: Setze die Koordinate für die aktuelle Zeichenachse auf das aktive Zeichenlevel
+                if (currentDrawingAxis === 'y') targetVoxelCoords.gy = activeDrawingLevel.y;
+                if (currentDrawingAxis === 'x') targetVoxelCoords.gx = activeDrawingLevel.x;
+                if (currentDrawingAxis === 'z') targetVoxelCoords.gz = activeDrawingLevel.z;
             }
+            targetVoxelIsOccupied = voxels.has(key(targetVoxelCoords.gx, targetVoxelCoords.gy, targetVoxelCoords.gz));
         }
     }
 
-    if (hitVoxel) {
-        // Clamp coordinates to grid boundaries
-        const x = Math.max(0, Math.min(GRID - 1, hitVoxel.gx));
-        const y = Math.max(0, Math.min(GRID - 1, hitVoxel.gy));
-        const z = Math.max(0, Math.min(GRID - 1, hitVoxel.gz));
+
+    // ************************************************************************************************
+    // NEU: Update des Vorschau-Voxels (IMMER AM ENDE DER BERECHNUNG DES ZIEL-VOXELS)
+    if (targetVoxelCoords) {
+        // Überprüfen, ob die berechneten Koordinaten innerhalb der Grenzen liegen,
+        // bevor der Vorschau-Voxel aktualisiert wird.
+        const x = Math.max(0, Math.min(GRID - 1, targetVoxelCoords.gx));
+        const y = Math.max(0, Math.min(GRID - 1, targetVoxelCoords.gy));
+        const z = Math.max(0, Math.min(GRID - 1, targetVoxelCoords.gz));
+
+        // Nur anzeigen, wenn die Position gültig ist und nicht bereits ein Voxel dort ist (für ADD-Modus)
+        // Oder wenn es DELETE/DRAW ist und ein Voxel da ist
+        let shouldShowPreview = false;
+        if (mode === Modes.ADD && !voxels.has(key(x, y, z))) {
+             shouldShowPreview = true;
+        } else if ((mode === Modes.DELETE || mode === Modes.DRAW) && voxels.has(key(x, y, z))) {
+             shouldShowPreview = true;
+        }
+
+        if (shouldShowPreview) {
+             updatePreviewVoxel(x, y, z, true);
+        } else {
+             updatePreviewVoxel(0, 0, 0, false); // Vorschau verbergen
+        }
+
+    } else {
+        updatePreviewVoxel(0, 0, 0, false); // Vorschau verbergen, wenn kein Ziel gefunden
+    }
+    // ************************************************************************************************
+
+
+    if (targetVoxelCoords) {
+        // clamp coordinates to grid boundaries for the actual action
+        const x = Math.max(0, Math.min(GRID - 1, targetVoxelCoords.gx));
+        const y = Math.max(0, Math.min(GRID - 1, targetVoxelCoords.gy));
+        const z = Math.max(0, Math.min(GRID - 1, targetVoxelCoords.gz));
 
         // Ensure the calculated coordinates are within bounds before attempting action
         if (x < 0 || x >= GRID || y < 0 || y >= GRID || z < 0 || z >= GRID) {
@@ -2156,25 +2262,37 @@ function handleVoxelAction(clientX, clientY, mode, isDragging, isStackingAdd, fi
         }
 
         const voxelKey = key(x, y, z);
-        const hasVoxel = voxels.has(voxelKey);
+        // targetVoxelIsOccupied wurde bereits oben für DELETE/DRAW gesetzt.
+        // Für ADD müssen wir es hier nochmal prüfen, da die Logik neu ist.
+        const actualHasVoxel = voxels.has(voxelKey); // Der tatsächliche Zustand im Map
+
 
         switch (mode) {
             case Modes.ADD:
-                // Call addVoxel. It handles if voxel exists and color is same/different.
-                addVoxel(x, y, z, currentColor);
+                // Wenn im ADD-Modus ein Voxel hinzugefügt werden soll, aber schon einer da ist, tue nichts.
+                if (!actualHasVoxel) {
+                    addVoxel(x, y, z, currentColor);
+                }
                 break;
             case Modes.DELETE:
-                if (hasVoxel) {
+                if (actualHasVoxel) { // Nur löschen, wenn Voxel vorhanden
                     removeVoxel(x, y, z);
                 }
                 break;
-            case Modes.DRAW:
-                if (hasVoxel) {
+            case Modes.DRAW: // Umfärben
+                if (actualHasVoxel) { // Nur umfärben, wenn Voxel vorhanden
                     recolorVoxel(x, y, z, currentColor);
                 }
                 break;
         }
     }
+
+
+// HINWEIS: Es ist sehr wahrscheinlich, dass du die `handleVoxelAction` auch für den `pointermove`-Event
+// aufrufen möchtest, um den Vorschau-Voxel zu aktualisieren, aber ohne die eigentliche Voxel-Aktion auszuführen.
+// Du müsstest in den 'pointermove'-Handlern eine neue Variable einführen, z.B. `isPreviewMode`,
+// und die switch-Anweisung am Ende der Funktion nur ausführen, wenn `isPreviewMode` `false` ist.
+// Oder du trennst die Vorschau-Logik komplett in eine eigene Funktion, die von `pointermove` aufgerufen wird.
 }
 function clearAllInternal(fromHistory = false, triggerGeometryUpdate = true) {
     if (!fromHistory) {
