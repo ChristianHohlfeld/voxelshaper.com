@@ -187,7 +187,7 @@ input[type="color"]::-moz-color-swatch {
     padding: 30px;
     border-radius: 8px;
     text-align: center;
-    box-shadow: 0 4px 8px rgba(0, 0, 0, 0.2);
+    box-shadow: 0 4px 8px rgba(0,0,0,.2);
     max-width: 400px;
     color: #e0e0e0;
 }
@@ -367,7 +367,7 @@ canvas, body { -webkit-tap-highlight-color: transparent; }
     <button id="exportStlBtn">STL Export</button>
 
     <label for="fly-speed-slider">Fluggeschwindigkeit:</label>
-    <input type="range" id="fly-speed-slider" min="0.01" max="2.0" step="0.01" value="0.1">
+    <input type="range" id="fly-speed-slider" min="0.01" max="1.0" step="0.01" value="0.1">
     <span id="fly-speed-display">0.10</span>
 
     <button id="toggleTerrainControlsBtn">Gelände-Optionen</button>
@@ -450,7 +450,7 @@ const LONG_PRESS_DELAY_MS = 500;   // NEU: Wartezeit (in Millisekunden) für Lon
 ---------------------------------------------- */
 let initialTouchDrawingLevelY = null; // Speichert die Y-Ebene für den Beginn eines Touch-Drag-Zeichnens
 
-const PINCH_ZOOM_MULT = 12;     // Zoom-Geschwindigkeit ↑  (vorher 3-5)
+const PINCH_ZOOM_MULT = 15;     // Zoom-Geschwindigkeit ↑  (vorher 12)
 /* ---------- Double-Tap-State ---------- */
 let tapCandidate   = null;   // {x,y,time}
 const TAP_DIST_TH  = 10;     // max. Bewegung (px) für 'Tap'
@@ -460,7 +460,7 @@ let gestureDist  = null;   // vorheriger Zwei-Finger-Abstand
 let longPressTimer = null; // Initialize longPressTimer to null
 
 /* --- 2-Finger-Drag / Pinch ---------------------------------- */
-const DRAG_BASE   = 0.08;   // Grund-faktor (wird mit moveSpeed multipliziert)
+const DRAG_BASE   = 0.1;   // Grund-faktor (wird mit moveSpeed multipliziert) (vorher 0.08)
 const PAN_PIX_TH  = 10;      // ab 4 px Bewegung → Pan
 const PINCH_REL_TH = 0.08;  // ≥6 % Distanzänderung → Pinch
 let prevTouch = null;
@@ -472,7 +472,7 @@ let lastTap       = 0;        // Zeitstempel des letzten pointerup
 let dblTapActive  = false;    // true während des 2. Taps
 let dblTapDrag    = false;    // wird true, sobald Finger > MOVE_PX zieht
 const DT_MS       = 250;      // max. Abstand Taps (ms)
-const MOVE_PX     = 6;        // ab hier gilt es als Drag
+const MOVE_PX     = 10;        // ab hier gilt es als Drag (erhöht von 6)
 /* ---------- Touch-Gesten (NEU) ---------- */
 const activePointers = new Map();   // id → {x,y}
 
@@ -513,6 +513,11 @@ let rotate = false; // Moved to global as it's used across handlers
 let isPointerLocked = false; // NEW: Track pointer lock status
 let lastActionVoxelCoords = null; // NEW: Tracks the last voxel acted upon for drag drawing
 let initialClickPos = null; // To differentiate click from drag
+
+// NEW: Variables for normal drag fixed plane behavior
+let isNormalDragFixedPlaneActive = false;
+let normalDragFixedLevel = null;
+let normalDragFixedAxis = null;
 
 
 // Performance optimization: Single mesh for all voxels
@@ -720,17 +725,17 @@ function handleGesture () {
         zoomDelta
     );
     gestureDist = dist;
-  } else {
+  } else { // Pan (strafe left/right, up/down)
     const panFactor = DRAG_BASE * (moveSpeed * 5);
     const dx = (midX - gestureMid.x) * panFactor;
-    const dy = (midY - gestureMidy) * panFactor;
+    const dy = (midY - gestureMid.y) * panFactor;
 
     const dir   = cam.getWorldDirection(new THREE.Vector3());
     const right = new THREE.Vector3().crossVectors(dir, cam.up).normalize();
-    const upVec = cam.up.clone().normalize();
+    const upVec = cam.up.clone().normalize(); // Use world up for vertical movement
 
-    cam.position.addScaledVector(right, -dx);
-    cam.position.addScaledVector(upVec,    dy);
+    cam.position.addScaledVector(right, -dx); // Strafe left/right
+    cam.position.addScaledVector(upVec, dy);   // Strafe up/down
 
     gestureMid = {x:midX, y:midY};
   }
@@ -886,7 +891,6 @@ function executeCommand(command, reverse = false) {
             }
             break;
         case 'fillLevel':
-            // For fillLevel, 'oldState' contains an array of voxels before fill, 'newState' after
             if (reverse) {
                 // Restore state before the fill operation
                 // To restore the state, we first remove all voxels that are in the newState
@@ -1112,54 +1116,56 @@ function calculateTargetVoxelCoords(clientX, clientY, mode, isDragging, isStacki
     let targetVoxelCoords = null;
     const intersects = raycaster.intersectObject(voxelMesh);
 
-    // Determine the plane for drawing based on currentDrawingAxis and activeDrawingLevel
-    let drawingPlane = null;
+    // Determine the plane for drawing based on active drawing level or a fixed drag plane
+    let drawingPlane = new THREE.Plane();
     let planeNormal = new THREE.Vector3();
-    let planeConstant = 0;
+    let levelToUse = activeDrawingLevel[currentDrawingAxis];
+    let axisToUse = currentDrawingAxis;
 
-    // Use the dynamically set fixedLevel if available, otherwise fallback to activeDrawingLevel
-    const currentLevelForPlane = (fixedLevel !== null) ? fixedLevel : activeDrawingLevel[currentDrawingAxis];
-
-    if (currentDrawingAxis === 'y') {
-        planeNormal.set(0, 1, 0);
-        planeConstant = -( currentLevelForPlane * VS ); // Plane at the bottom edge of the voxel row
-    } else if (currentDrawingAxis === 'x') {
-        planeNormal.set(1, 0, 0);
-        planeConstant = -( currentLevelForPlane * VS ); // Plane at the left edge of the voxel column
-    } else if (currentDrawingAxis === 'z') {
-        planeNormal.set(0, 0, 1);
-        planeConstant = -( currentLevelForPlane * VS ); // Plane at the front edge of the voxel depth
+    // Prioritize fixed plane parameters if provided by drag modes
+    if (fixedLevel !== null && fixedAxis !== null) {
+        levelToUse = fixedLevel;
+        axisToUse = fixedAxis;
     }
-    drawingPlane = new THREE.Plane(planeNormal, planeConstant);
 
-    // --- LOGIC FOR MODES.ADD, DELETE, DRAW, RECTANGLE_ADD ---
-    if (shiftActive() || isDblTapDragActive) { // This block handles all "fixed plane" drawing (Shift-drag, Double-tap-drag)
-        // For drawing on a fixed plane, we intersect the ray with that plane
+    if (axisToUse === 'y') {
+        planeNormal.set(0, 1, 0);
+    } else if (axisToUse === 'x') {
+        planeNormal.set(1, 0, 0);
+    } else if (axisToUse === 'z') {
+        planeNormal.set(0, 0, 1);
+    }
+    drawingPlane.set(planeNormal, -(levelToUse * VS)); // Plane at the bottom edge of the voxel row/column/depth
+
+
+    // --- NEW LOGIC: Prioritize fixed plane intersection for drag operations ---
+    // If a continuous drawing mode (drag) is active AND it's not a stacking add (Ctrl-drag)
+    // AND it's ADD/DELETE/DRAW mode (not RECTANGLE_ADD which has its own logic)
+    if (isDragging && !isStackingAdd && (mode === Modes.ADD || mode === Modes.DELETE || mode === Modes.DRAW)) {
         const intersectionPoint = new THREE.Vector3();
         raycaster.ray.intersectPlane(drawingPlane, intersectionPoint);
 
         if (intersectionPoint) {
-            // Use Math.floor for all coordinates initially
             let gx = Math.floor(intersectionPoint.x / VS);
             let gy = Math.floor(intersectionPoint.y / VS);
             let gz = Math.floor(intersectionPoint.z / VS);
 
-            // Explicitly set the coordinate on the fixed axis to fixedLevel
-            if (currentDrawingAxis === 'y') {
-                gy = fixedLevel;
-            } else if (currentDrawingAxis === 'x') {
-                gx = fixedLevel;
-            } else if (currentDrawingAxis === 'z') {
-                gz = fixedLevel;
+            // Override the coordinate on the fixed axis with the fixed level
+            if (axisToUse === 'y') {
+                gy = levelToUse;
+            } else if (axisToUse === 'x') {
+                gx = levelToUse;
+            } else if (axisToUse === 'z') {
+                gz = levelToUse;
             }
-
             targetVoxelCoords = { gx, gy, gz };
         }
     }
-    else if (mode === Modes.ADD || mode === Modes.RECTANGLE_ADD) {
-        if (isStackingAdd) { // Ctrl-Drag for stacking
-            if (intersects.length > 0) {
-                const hit = intersects[0];
+    // --- END NEW LOGIC ---
+    else if (intersects.length > 0) { // If not a fixed-plane drag, or if fixed-plane drag failed to intersect
+        const hit = intersects[0];
+        if (mode === Modes.ADD || mode === Modes.RECTANGLE_ADD) {
+            if (isStackingAdd) { // Ctrl-Drag for stacking
                 const gx = Math.floor(hit.point.x / VS);
                 const gz = Math.floor(hit.point.z / VS);
                 let highestY = -1;
@@ -1169,50 +1175,20 @@ function calculateTargetVoxelCoords(clientX, clientY, mode, isDragging, isStacki
                     }
                 }
                 targetVoxelCoords = { gx: gx, gy: highestY + 1, gz: gz };
-            } else {
-                // If no voxel hit, use the active drawing plane for stacking base
-                const intersectionPoint = new THREE.Vector3();
-                raycaster.ray.intersectPlane(drawingPlane, intersectionPoint);
-                if (intersectionPoint) {
-                    targetVoxelCoords = {
-                        gx: Math.floor(intersectionPoint.x / VS),
-                        gy: activeDrawingLevel.y, // Use the active drawing level for the base
-                        gz: Math.floor(intersectionPoint.z / VS)
-                    };
-                }
-            }
-        } else { // Normal click or drag in ADD mode (No Shift/Ctrl) or RECTANGLE_ADD
-            if (intersects.length > 0) {
-                const hit = intersects[0];
+            } else { // Normal ADD or RECTANGLE_ADD when hitting a voxel (single click or initial drag point)
                 // Nudge the hit point slightly inwards along the normal to ensure we're inside the hit voxel
                 const hitPointInVoxel = hit.point.clone().sub(hit.face.normal.clone().multiplyScalar(0.001));
                 const hitVoxelX = Math.floor(hitPointInVoxel.x / VS);
                 const hitVoxelY = Math.floor(hitPointInVoxel.y / VS);
                 const hitVoxelZ = Math.floor(hitPointInVoxel.z / VS);
 
-                // Then, add the normal components to get the adjacent voxel
                 targetVoxelCoords = {
                     gx: hitVoxelX + hit.face.normal.x,
                     gy: hitVoxelY + hit.face.normal.y,
                     gz: hitVoxelZ + hit.face.normal.z
                 };
-            } else {
-                // If no voxel is hit, use the active drawing plane
-                const intersectionPoint = new THREE.Vector3();
-                raycaster.ray.intersectPlane(drawingPlane, intersectionPoint);
-                if (intersectionPoint) {
-                    targetVoxelCoords = {
-                        gx: Math.floor(intersectionPoint.x / VS),
-                        gy: activeDrawingLevel.y,
-                        gz: Math.floor(intersectionPoint.z / VS)
-                    };
-                }
             }
-        }
-    }
-    else { // mode === Modes.DELETE or mode === Modes.DRAW (normal click/drag, not fixed plane)
-        if (intersects.length > 0) {
-            const hit = intersects[0];
+        } else { // DELETE or DRAW when hitting a voxel (single click or initial drag point)
             const p = hit.point.clone();
             const n = hit.face.normal;
             p.sub(n.clone().multiplyScalar(0.01)); // Nudge slightly inwards to get the hit voxel
@@ -1223,7 +1199,25 @@ function calculateTargetVoxelCoords(clientX, clientY, mode, isDragging, isStacki
                 gz: Math.floor(p.z / VS)
             };
         }
-        // If no intersection, and not a fixed-plane drag, then no target voxel.
+    } else if (mode === Modes.ADD || mode === Modes.RECTANGLE_ADD) { // If no voxel hit, use the drawing plane as fallback for ADD/RECTANGLE_ADD
+        const intersectionPoint = new THREE.Vector3();
+        raycaster.ray.intersectPlane(drawingPlane, intersectionPoint);
+
+        if (intersectionPoint) {
+            let gx = Math.floor(intersectionPoint.x / VS);
+            let gy = Math.floor(intersectionPoint.y / VS);
+            let gz = Math.floor(intersectionPoint.z / VS);
+
+            // Apply the fixed level based on the determined axis for the plane
+            if (axisToUse === 'y') {
+                gy = levelToUse;
+            } else if (axisToUse === 'x') {
+                gx = levelToUse;
+            } else if (axisToUse === 'z') {
+                gz = levelToUse;
+            }
+            targetVoxelCoords = { gx, gy, gz };
+        }
     }
 
     if (targetVoxelCoords) {
@@ -1447,7 +1441,7 @@ function loadJSON(event) {
                 terrainFrequency = loadedSettings.terrainFrequency !== undefined ? loadedSettings.terrainFrequency : 0.05;
                 terrainOctaves = loadedSettings.terrainOctaves !== undefined  ? loadedSettings.octaves : 4;
                 terrainLacunarity = loadedSettings.lacunarity !== undefined ? loadedSettings.lacunarity : 2.0;
-                terrainGain = loadedSettings.terrainGain !== undefined ? loadedSettings.gain : 0.5;
+                terrainGain = loadedSettings.gain !== undefined ? loadedSettings.gain : 0.5;
                 terrainSeed = loadedSettings.terrainSeed !== undefined ? loadedSettings.terrainSeed : '';
 
                 document.getElementById('terrain-height-scale').value = terrainHeightScale;
@@ -1894,6 +1888,11 @@ function onPointerDown(e) {
             // No immediate action here, it will be handled by onPointerMove or onPointerUp
         }, LONG_PRESS_DELAY_MS);
 
+        // Reset normal drag fixed plane state
+        isNormalDragFixedPlaneActive = false;
+        normalDragFixedLevel = null;
+        normalDragFixedAxis = null;
+
         // Check for double-tap start (for dblTapDragDraw)
         const now = performance.now();
         if (now - lastTap < DT_MS && tapCandidate && Math.hypot(e.clientX - tapCandidate.x, e.clientY - tapCandidate.y) < TAP_DIST_TH) {
@@ -1907,7 +1906,25 @@ function onPointerDown(e) {
             const raycaster = new THREE.Raycaster();
             raycaster.setFromCamera(mouse, cam);
             const intersects = raycaster.intersectObject(voxelMesh);
-            currentShiftDragLevel = intersects.length ? Math.floor(intersects[0].point.y / VS) : activeDrawingLevel.y;
+            
+            // Determine fixed level and axis for double-tap drag
+            if (intersects.length > 0) {
+                const hit = intersects[0];
+                const hitNormal = hit.face.normal;
+                if (Math.abs(hitNormal.y) > Math.abs(hitNormal.x) && Math.abs(hitNormal.y) > Math.abs(hitNormal.z)) {
+                    currentDrawingAxis = 'y';
+                    currentShiftDragLevel = Math.floor(hit.point.y / VS) + Math.round(hitNormal.y);
+                } else if (Math.abs(hitNormal.x) > Math.abs(hitNormal.y) && Math.abs(hitNormal.x) > Math.abs(hitNormal.z)) {
+                    currentDrawingAxis = 'x';
+                    currentShiftDragLevel = Math.floor(hit.point.x / VS) + Math.round(hitNormal.x);
+                } else {
+                    currentDrawingAxis = 'z';
+                    currentShiftDragLevel = Math.floor(hit.point.z / VS) + Math.round(hitNormal.z);
+                }
+            } else {
+                currentDrawingAxis = 'y'; // Default to Y if no hit
+                currentShiftDragLevel = activeDrawingLevel.y;
+            }
 
         } else {
             dblTapActive = false;
@@ -1916,7 +1933,7 @@ function onPointerDown(e) {
             tapCandidate = { x: e.clientX, y: e.clientY, time: now };
         }
 
-        // NEW: Determine fixed drawing plane for Shift-drag or Ctrl-drag (if not stacking)
+        // Determine fixed drawing plane for Shift-drag or Ctrl-drag (if not stacking)
         // This needs to be done *before* any potential drag logic in onPointerMove
         if (e.buttons === 1 && (e.shiftKey || shiftLock)) { // Left mouse button + Shift key or Shift-Lock
             const rect = cvs.getBoundingClientRect();
@@ -1961,10 +1978,40 @@ function onPointerDown(e) {
                 currentShiftDragLevel = activeDrawingLevel[currentDrawingAxis];
             }
             rebuildHelpers(); // Update grid helper to show the fixed plane
+        } else if (e.buttons === 1 && currentMode === Modes.ADD) { // Normal left-click in ADD mode
+            // Determine initial fixed plane for normal drag in ADD mode
+            const rect = cvs.getBoundingClientRect();
+            const mouse = new THREE.Vector2(((e.clientX - rect.left) / rect.width) * 2 - 1,
+                                            -((e.clientY - rect.top) / rect.height) * 2 + 1);
+            const raycaster = new THREE.Raycaster();
+            raycaster.setFromCamera(mouse, cam);
+            const intersects = raycaster.intersectObject(voxelMesh);
+
+            isNormalDragFixedPlaneActive = true;
+            if (intersects.length > 0) {
+                const hit = intersects[0];
+                const hitNormal = hit.face.normal;
+                // Determine the dominant axis of the hit face normal to set the drawing plane
+                if (Math.abs(hitNormal.y) > Math.abs(hitNormal.x) && Math.abs(hitNormal.y) > Math.abs(hitNormal.z)) {
+                    normalDragFixedAxis = 'y';
+                    normalDragFixedLevel = Math.floor(hit.point.y / VS) + Math.round(hitNormal.y); // Place on top
+                } else if (Math.abs(hitNormal.x) > Math.abs(hitNormal.y) && Math.abs(hitNormal.x) > Math.abs(hitNormal.z)) {
+                    normalDragFixedAxis = 'x';
+                    normalDragFixedLevel = Math.floor(hit.point.x / VS) + Math.round(hitNormal.x);
+                } else { // Z-axis dominant
+                    normalDragFixedAxis = 'z';
+                    normalDragFixedLevel = Math.floor(hit.point.z / VS) + Math.round(hitNormal.z);
+                }
+            } else {
+                // If no voxel is hit, default to the current active drawing level and axis
+                normalDragFixedAxis = currentDrawingAxis;
+                normalDragFixedLevel = activeDrawingLevel[currentDrawingAxis];
+            }
+            rebuildHelpers(); // Update grid helper to show the fixed plane
         } else {
-            // Reset fixed level and axis if not shift-dragging
+            // Reset fixed level and axis if not shift-dragging or normal ADD mode drag
             currentShiftDragLevel = null;
-            // currentDrawingAxis remains as set by Alt+Mousewheel
+            // currentDrawingAxis remains as set by Alt+Mausrad
         }
 
 
@@ -1993,7 +2040,12 @@ function onPointerMove(e) {
     // Update pointer position for multi-touch gestures
     if (e.pointerType === 'touch') {
         activePointers.set(e.pointerId, { x: e.clientX, y: e.clientY });
-        handleGesture();
+        handleGesture(); // This handles camera movement (pan/pinch) and dblTapDrag drawing
+        // If a multi-touch gesture (pan/pinch) is active, prevent other drawing
+        if (activePointers.size > 1 && (gestureMode === 'pan' || gestureMode === 'pinch')) {
+            updatePreviewVoxel(0, 0, 0, false); // Hide preview during multi-touch camera gestures
+            return; // Exit early, no drawing during camera gestures
+        }
     } else if (isPointerLocked) { // Mouse right-click rotation (Unreal Engine style)
         // Use movementX/Y for rotation when pointer is locked
         const dx = e.movementX || 0;
@@ -2004,61 +2056,78 @@ function onPointerMove(e) {
         euler.x -= dy * rotSpeed;
         euler.x = Math.max(-Math.PI / 2, Math.min(Math.PI / 2, euler.x)); // Clamp vertical rotation
         cam.quaternion.setFromEuler(euler);
+        return; // Exit early, no drawing during fly mode
+    }
 
-        // No direct camera position update here; it's handled in animate() loop via keyboard input
-    } else { // Not pointer locked
-        const currentTargetVoxel = calculateTargetVoxelCoords(e.clientX, e.clientY, currentMode, true, isControlDragging, currentShiftDragLevel, currentDrawingAxis);
+    // IMPORTANT: Only proceed with drawing/preview if the pointer is down
+    // AND it's not a camera control gesture (e.g., right-click drag, multi-touch pan/pinch)
+    if (!pointerIsDown || isPointerLocked || (e.pointerType === 'touch' && activePointers.size > 1 && (gestureMode === 'pan' || gestureMode === 'pinch'))) {
+        updatePreviewVoxel(0, 0, 0, false); // Ensure preview is off if not in drawing mode
+        rectanglePreviewMesh.visible = false; // Also hide rectangle preview
+        return;
+    }
 
-        if (currentTargetVoxel) {
-            // Update preview voxel for single-voxel modes, hide if drawing rectangle
-            let shouldShowPreview = false;
-            if (currentMode !== Modes.RECTANGLE_ADD) {
-                if (currentMode === Modes.ADD && !voxels.has(key(currentTargetVoxel.gx, currentTargetVoxel.gy, currentTargetVoxel.gz))) {
-                    shouldShowPreview = true;
-                } else if ((currentMode === Modes.DELETE || currentMode === Modes.DRAW) && voxels.has(key(currentTargetVoxel.gx, currentTargetVoxel.gy, currentTargetVoxel.gz))) {
-                    shouldShowPreview = true;
-                }
+    // This part now only executes if not in pointer-locked mode (desktop right-click)
+    // AND not in an active multi-touch camera gesture (for mobile)
+    let fixedLevelToUse = null;
+    let fixedAxisToUse = null;
+
+    if (shiftActive() || isDblTapDragActive) {
+        fixedLevelToUse = currentShiftDragLevel;
+        fixedAxisToUse = currentDrawingAxis; // currentDrawingAxis is set by Alt+Mousewheel or initial shift-drag hit
+    } else if (isNormalDragFixedPlaneActive && currentMode === Modes.ADD) { // Only for normal drag in ADD mode
+        fixedLevelToUse = normalDragFixedLevel;
+        fixedAxisToUse = normalDragFixedAxis;
+    }
+
+    const currentTargetVoxel = calculateTargetVoxelCoords(e.clientX, e.clientY, currentMode, true, isControlDragging, fixedLevelToUse, fixedAxisToUse);
+
+    if (currentTargetVoxel) {
+        // Update preview voxel for single-voxel modes, hide if drawing rectangle
+        let shouldShowPreview = false;
+        if (currentMode !== Modes.RECTANGLE_ADD) {
+            if (currentMode === Modes.ADD && !voxels.has(key(currentTargetVoxel.gx, currentTargetVoxel.gy, currentTargetVoxel.gz))) {
+                shouldShowPreview = true;
+            } else if ((currentMode === Modes.DELETE || currentMode === Modes.DRAW) && voxels.has(key(currentTargetVoxel.gx, currentTargetVoxel.gy, currentTargetVoxel.gz))) {
+                shouldShowPreview = true;
             }
-            updatePreviewVoxel(currentTargetVoxel.gx, currentTargetVoxel.gy, currentTargetVoxel.gz, shouldShowPreview && !isDrawingRectangle);
-        } else {
-            updatePreviewVoxel(0, 0, 0, false); // Hide single preview
         }
+        updatePreviewVoxel(currentTargetVoxel.gx, currentTargetVoxel.gy, currentTargetVoxel.gz, shouldShowPreview && !isDrawingRectangle);
+    } else {
+        updatePreviewVoxel(0, 0, 0, false); // Hide single preview
+    }
 
-        if (pointerIsDown) { // LMB is held down (drag or long-press drag)
-            // Check if it's a drag (moved more than a few pixels from initial click)
-            const movedDistance = initialClickPos ? Math.hypot(e.clientX - initialClickPos.x, e.clientY - initialClickPos.y) : 0;
-            const isActualDrag = movedDistance > MOVE_PX; // MOVE_PX is already defined (6px)
+    // Only draw if pointer is down AND it's a drag (or special drag mode)
+    // This ensures single clicks don't draw immediately on pointer down + move
+    if (pointerIsDown) {
+        const movedDistance = initialClickPos ? Math.hypot(e.clientX - initialClickPos.x, e.clientY - initialClickPos.y) : 0;
+        const isActualDrag = movedDistance > MOVE_PX;
 
-            if (isActualDrag || isHoldDrawingActive || isDblTapDragActive) { // If it's a drag, or a special drag mode
-                if (currentTargetVoxel) {
-                    if (currentMode === Modes.RECTANGLE_ADD && isDrawingRectangle) {
-                        // Update rectangle preview
-                        updateRectanglePreview(rectangleStartCoords, currentTargetVoxel);
-                    } else { // For other modes (ADD, DELETE, DRAW)
-                        // If this is a shift-drag or control-drag or dblTapDrag, draw a line segment
-                        if (shiftActive() || isControlDragging || isDblTapDragActive) {
-                            // Only draw if the target voxel has changed from the last action voxel
-                            if (!lastActionVoxelCoords ||
-                                lastActionVoxelCoords.gx !== currentTargetVoxel.gx ||
-                                lastActionVoxelCoords.gy !== currentTargetVoxel.gy ||
-                                lastActionVoxelCoords.gz !== currentTargetVoxel.gz) {
-
-                                if (lastActionVoxelCoords) { // Draw line from last acted-upon to current
-                                    drawLineOfVoxels(lastActionVoxelCoords, currentTargetVoxel, currentMode, currentColor);
-                                } else { // First point of the drag, just act on it
-                                    performVoxelModification(currentTargetVoxel.gx, currentTargetVoxel.gy, currentTargetVoxel.gz, currentMode, currentColor);
-                                }
-                                lastActionVoxelCoords = { ...currentTargetVoxel }; // Update last acted-upon voxel
-                            }
-                        } else { // Normal drag (not fixed plane, not stacking)
-                            // Only perform modification if the target voxel has changed
-                            if (!lastActionVoxelCoords ||
-                                lastActionVoxelCoords.gx !== currentTargetVoxel.gx ||
-                                lastActionVoxelCoords.gy !== currentTargetVoxel.gy ||
-                                lastActionVoxelCoords.gz !== currentTargetVoxel.gz) {
+        if (isActualDrag || isHoldDrawingActive || isDblTapDragActive) {
+            if (currentTargetVoxel) {
+                if (currentMode === Modes.RECTANGLE_ADD && isDrawingRectangle) {
+                    updateRectanglePreview(rectangleStartCoords, currentTargetVoxel);
+                } else {
+                    // This condition now checks for ANY line drawing mode (Shift, Ctrl, DblTap, or the new normal drag fixed plane)
+                    if (shiftActive() || isControlDragging || isDblTapDragActive || (isNormalDragFixedPlaneActive && currentMode === Modes.ADD)) {
+                        if (!lastActionVoxelCoords ||
+                            lastActionVoxelCoords.gx !== currentTargetVoxel.gx ||
+                            lastActionVoxelCoords.gy !== currentTargetVoxel.gy ||
+                            lastActionVoxelCoords.gz !== currentTargetVoxel.gz) {
+                            if (lastActionVoxelCoords) {
+                                drawLineOfVoxels(lastActionVoxelCoords, currentTargetVoxel, currentMode, currentColor);
+                            } else {
                                 performVoxelModification(currentTargetVoxel.gx, currentTargetVoxel.gy, currentTargetVoxel.gz, currentMode, currentColor);
-                                lastActionVoxelCoords = { ...currentTargetVoxel };
                             }
+                            lastActionVoxelCoords = { ...currentTargetVoxel };
+                        }
+                    } else { // Normal drag for DELETE or DRAW modes, or ADD mode if not on a fixed plane
+                        if (!lastActionVoxelCoords ||
+                            lastActionVoxelCoords.gx !== currentTargetVoxel.gx ||
+                            lastActionVoxelCoords.gy !== currentTargetVoxel.gy ||
+                            lastActionVoxelCoords.gz !== currentTargetVoxel.gz) {
+                            performVoxelModification(currentTargetVoxel.gx, currentTargetVoxel.gy, currentTargetVoxel.gz, currentMode, currentColor);
+                            lastActionVoxelCoords = { ...currentTargetVoxel };
                         }
                     }
                 }
@@ -2074,19 +2143,18 @@ function onPointerUp(e) {
     }
     isHoldDrawingActive = false;
 
-    if (e.pointerType === 'mouse' && e.button === 2) { // Right-click up
-        rotate = false;
-        document.exitPointerLock();
-    }
+    if (e.pointerType === 'mouse') {
+        if (e.button === 2) { // Right-click up
+            rotate = false;
+            document.exitPointerLock();
+            return; // No further action for mouse right-click
+        }
 
-    if (e.pointerType === 'touch') {
-        releasePointer(e.pointerId);
-    } else {
-        // Handle single click (no drag occurred)
+        // Mouse Left Click Up: Handle single click or end of drag
         const movedDistance = initialClickPos ? Math.hypot(e.clientX - initialClickPos.x, e.clientY - initialClickPos.y) : 0;
-        const wasSingleClick = movedDistance <= MOVE_PX; // Use MOVE_PX for click threshold
+        const wasSingleClick = movedDistance <= MOVE_PX;
 
-        if (pointerIsDown && !isPointerLocked) { // Ensure pointer was down and not in fly mode
+        if (pointerIsDown && !isPointerLocked) {
             if (currentMode === Modes.RECTANGLE_ADD && isDrawingRectangle) {
                 const finalTargetVoxel = calculateTargetVoxelCoords(e.clientX, e.clientY, currentMode, false, false);
                 if (rectangleStartCoords && finalTargetVoxel) {
@@ -2094,11 +2162,11 @@ function onPointerUp(e) {
                 }
                 isDrawingRectangle = false;
                 rectangleStartCoords = null;
-                rectanglePreviewMesh.visible = false; // Hide preview
+                rectanglePreviewMesh.visible = false;
                 if (rectanglePreviewMesh.geometry) {
-                    rectanglePreviewMesh.geometry.dispose(); // Dispose old geometry
+                    rectanglePreviewMesh.geometry.dispose();
                 }
-                rectanglePreviewMesh.geometry = new THREE.BufferGeometry(); // Reset to empty
+                rectanglePreviewMesh.geometry = new THREE.BufferGeometry();
             } else if (wasSingleClick) { // Single click for other modes
                 const clickedVoxel = calculateTargetVoxelCoords(e.clientX, e.clientY, currentMode, false, false);
                 if (clickedVoxel) {
@@ -2106,19 +2174,55 @@ function onPointerUp(e) {
                 }
             }
         }
+        pointerIsDown = false; // Reset pointer down state for mouse
+        lastTap = performance.now(); // Update lastTap for mouse
+    } else if (e.pointerType === 'touch') {
+        // Touch Up: Determine if it was a single tap or end of a drag/gesture
+        releasePointer(e.pointerId); // Remove pointer from active list
 
-        pointerIsDown = false;
-        updatePreviewVoxel(0, 0, 0, false);
+        // Only process if no other active pointers (i.e., not part of a multi-touch gesture)
+        // and it was a single tap (not a drag)
+        const movedDistance = initialClickPos ? Math.hypot(e.clientX - initialClickPos.x, e.clientY - initialClickPos.y) : 0;
+        const wasSingleTap = movedDistance <= TAP_DIST_TH; // Use TAP_DIST_TH for touch tap threshold
+
+        if (!isPointerLocked && activePointers.size === 0) { // Ensure not in fly mode and all fingers are lifted
+            if (currentMode === Modes.RECTANGLE_ADD && isDrawingRectangle) {
+                // This case should ideally not happen for a "single tap" in rectangle mode,
+                // as rectangle mode implies a drag.
+                const finalTargetVoxel = calculateTargetVoxelCoords(e.clientX, e.clientY, currentMode, false, false);
+                if (rectangleStartCoords && finalTargetVoxel) {
+                    fillRectangle(rectangleStartCoords, finalTargetVoxel, currentColor);
+                }
+                isDrawingRectangle = false;
+                rectangleStartCoords = null;
+                rectanglePreviewMesh.visible = false;
+                if (rectanglePreviewMesh.geometry) {
+                    rectanglePreviewMesh.geometry.dispose();
+                }
+                rectanglePreviewMesh.geometry = new THREE.BufferGeometry();
+            } else if (wasSingleTap && !dblTapActive && !dblTapDrag) { // Ensure it's a single tap, not part of a double-tap sequence
+                const clickedVoxel = calculateTargetVoxelCoords(e.clientX, e.clientY, currentMode, false, false);
+                if (clickedVoxel) {
+                    performVoxelModification(clickedVoxel.gx, clickedVoxel.gy, clickedVoxel.gz, currentMode, currentColor);
+                }
+            }
+        }
     }
+
+    // Common resets for both mouse and touch (after specific handling)
+    updatePreviewVoxel(0, 0, 0, false);
     isControlDragging = false;
     isShiftDragging = false;
     dblTapDrag = false;
     isDblTapDragActive = false;
     activeGestureMode = 'none';
-    lastActionVoxelCoords = null; // Reset for next click/drag
-    initialClickPos = null; // Reset initial click position
+    lastActionVoxelCoords = null;
+    initialClickPos = null;
 
-    lastTap = performance.now();
+    // NEW: Reset normal drag fixed plane state
+    isNormalDragFixedPlaneActive = false;
+    normalDragFixedLevel = null;
+    normalDragFixedAxis = null;
 }
 
 function onPointerLockChange() {
@@ -2127,6 +2231,10 @@ function onPointerLockChange() {
         // When pointer is locked, hide the preview voxel
         updatePreviewVoxel(0,0,0,false);
         rectanglePreviewMesh.visible = false; // Hide rectangle preview too
+
+        // NEU: Synchronisiere Euler-Winkel mit der aktuellen Kameraausrichtung bei Zeigerfixierung
+        euler.setFromQuaternion(cam.quaternion, 'YXZ');
+
     } else {
         isPointerLocked = false;
         rotate = false; // Ensure rotate is false if pointer lock is lost
@@ -2155,7 +2263,7 @@ function onMouseWheel(e) {
     } else {
         // NEW: Adjust fly speed with mouse wheel when not holding Alt
         const speedChange = -Math.sign(e.deltaY) * 0.01; // Adjust speed by 0.01 per scroll tick
-        moveSpeed = Math.max(0.01, Math.min(2.0, moveSpeed + speedChange)); // Clamp speed
+        moveSpeed = Math.max(0.01, Math.min(1.0, moveSpeed + speedChange)); // Clamp speed to new max 1.0
         document.getElementById('fly-speed-slider').value = moveSpeed;
         document.getElementById('fly-speed-display').textContent = moveSpeed.toFixed(2);
         localStorage.setItem('voxelEditorFlySpeed', moveSpeed);
