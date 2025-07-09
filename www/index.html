@@ -2,7 +2,6 @@
 <html lang="de">
 <head>
 <meta charset="UTF-8">
-<!-- Open Graph Tags -->
 <meta property="og:title" content="VoxelShaper – Create in 3D, Effortlessly" />
 <meta property="og:description" content="A powerful, intuitive voxel-based 3D editor – made for makers, artists, and coders." />
 <meta property="og:image" content="https://voxelshaper.com/preview.png" />
@@ -10,9 +9,8 @@
 <meta property="og:type" content="website" />
 <meta name="viewport"
       content="width=device-width,initial-scale=1.0,maximum-scale=1.0,user-scalable=no,viewport-fit=cover">
-<link rel="icon" type="image/png" href="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAACAAAAAgCAIAAAD8GO2jAAAFmUlEQVR4nK1WX28bxxGfmd29P+SRvI..."/>
+<link rel="icon" type="image/png" href="data:image/png;base64,iVBORw0KGgoAAAANl..."/>
 
-<!-- Twitter Card -->
 <meta name="twitter:card" content="summary_large_image">
 <meta name="twitter:title" content="VoxelShaper – Create in 3D, Effortlessly">
 <meta name="twitter:description" content="A powerful, intuitive voxel-based 3D editor – made for makers, artists, and coders.">
@@ -146,7 +144,27 @@ input[type="color"]::-moz-color-swatch-wrapper {
 }
 input[type="color"]::-moz-color-swatch {
     border: 1px solid #555c66;
-    border-radius: 50%; /* Made round */
+    border-radius: 50%;
+}
+
+/* Style for the preset color boxes - KEPT RECTANGULAR */
+.color-preset-box {
+    width: 38px;
+    height: 38px;
+    border-radius: 5px; /* Kept rectangular */
+    border: 2px solid #555c66;
+    cursor: pointer;
+    display: inline-block;
+    vertical-align: middle;
+    box-sizing: border-box;
+    transition: transform 0.1s ease-in-out, border-color 0.2s ease-in-out, box-shadow 0.2s ease-in-out;
+}
+.color-preset-box:hover {
+    transform: scale(1.1);
+}
+.color-preset-box.active {
+    border-color: #90caf9;
+    box-shadow: 0 0 8px rgba(144, 202, 249, 0.7);
 }
 
 /* Modal Styles */
@@ -329,7 +347,6 @@ canvas, body { -webkit-tap-highlight-color: transparent; }
 </style>
 </head>
 <body>
-<!-- Menü-Toggle (Hamburger) -->
 <button id="menuToggle" aria-label="Menü umschalten">☰</button>
 
 <div id="controls">
@@ -386,7 +403,7 @@ canvas, body { -webkit-tap-highlight-color: transparent; }
     **Shift + Linke MT gedrückt + Maus ziehen → Voxel Aktion auf aktiver Ebene (Hinzufügen / Löschen / Zeichnen)**<br>
     **Control + Linke MT gedrückt + Maus ziehen → Voxel ziehen zum Hinzufügen (Stapeln, nur im Hinzufügen-Modus)**<br>
     Mausrad → Kamera Geschwindigkeit anpassen<br>
-    **Tab → Modus wechseln (Hinzufügen / Löschen / Zeichnen)**<br>
+    **Tab → Modus wechseln (Hinzufügen / Löschen / Zeichnen / Rechteck hinzufügen)**<br>
     **1, 2, 3 → Voreingestellte Farbe wählen**<br>
     **Strg + Z → Rückgängig (Undo)**<br>
     **Strg + Y oder Strg + Shift + Z → Wiederholen (Redo)**
@@ -406,10 +423,14 @@ canvas, body { -webkit-tap-highlight-color: transparent; }
     </div>
 </div>
 
-<script src="lib/three.min.js"></script>
-<script src="lib/BufferGeometryUtils.js"></script>
-<script src="lib/STLExporter.js"></script>
-<script src="lib/seedrandom.min.js"></script>
+
+<script src="https://cdn.jsdelivr.net/npm/three@0.128.0/build/three.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/utils/BufferGeometryUtils.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/exporters/STLExporter.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/seedrandom/3.0.5/seedrandom.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/noisejs/2.1.0/perlin.js"></script>
+
+
 
 <script>
 /* ---------- Konstanten ---------- */
@@ -423,7 +444,6 @@ let initialDblTapDragLevelY = null; // Speichert die Y-Ebene für Double-Tap-Dra
 let isHoldDrawingActive = false;   // NEU: Verfolgt, ob ein Long-Press-Zeichnen aktiv ist
 let initialHoldDrawPos = null;     // NEU: Speichert die Startposition für Long-Press-Bewegungserkennung
 const LONG_PRESS_DELAY_MS = 500;   // NEU: Wartezeit (in Millisekunden) für Long-Press-Erkennung
-let previewVoxelMesh = null; // Variable für das Vorschau-Voxel-Mesh deklarieren
 
 /* ----------------------------------------------
    GLOBAL – neue Hilfs-Variablen
@@ -490,17 +510,28 @@ function shiftActive(){        // true, wenn Shift ODER Shift-Lock an
 }
 let isControlDragging = false;
 let rotate = false; // Moved to global as it's used across handlers
+let isPointerLocked = false; // NEW: Track pointer lock status
+let lastActionVoxelCoords = null; // NEW: Tracks the last voxel acted upon for drag drawing
+let initialClickPos = null; // To differentiate click from drag
+
 
 // Performance optimization: Single mesh for all voxels
 let voxelGeometry;
 let voxelMesh;
 let meshMaterial; // Material for the combined mesh
 
+// NEU: Globale Variable für den Vorschau-Voxel
+const previewVoxelGeometry = new THREE.BoxGeometry(VS, VS, VS);
+const previewVoxelMaterial = new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.5, depthTest: false }); // depthTest: false, damit er immer sichtbar ist
+let previewVoxelMesh = new THREE.Mesh(previewVoxelGeometry, previewVoxelMaterial); // Initialize here
+// ENDE NEU
+
 // Modus-Enum
 const Modes = {
     ADD: 'Hinzufügen',
     DELETE: 'Löschen',
-    DRAW: 'Zeichnen'
+    DRAW: 'Zeichnen',
+    RECTANGLE_ADD: 'Rechteck hinzufügen' // New mode for rectangle fill
 };
 let currentMode = Modes.ADD; // Standardmodus
 
@@ -520,1135 +551,128 @@ let hasUserTypedSeed = false; // Flag to track if user has manually set the seed
 // Global instance of the noise generator
 let noise2D;
 
-/* ---------- Initialisierung ---------- */
-window.onload = () => {
-    containerDiv = document.getElementById('container'); // Get reference to the container div
-    cvs = document.getElementById('voxelCanvas');
-    /* ---------- Pointer-Gesten-Handler (NEU) ---------- */
-cvs.addEventListener('pointerdown', e => {
-    // Verhindert Standard-Browserverhalten wie Scrolling oder Kontextmenü
-    e.preventDefault();
-
-    // Setzt Pointer-Capture, um Ereignisse auch außerhalb des Canvas zu erhalten
-    cvs.setPointerCapture(e.pointerId);
-
-    // Speichert den Zeiger in der Liste der aktiven Zeiger
-    // Beachten Sie, dass wir hier nur die Startposition speichern,
-    // die 'p' im pointermove wird separat aktualisiert
-    activePointers.set(e.pointerId, { x: e.clientX, y: e.clientY, px: e.clientX, py: e.clientY });
-
-    // Initialisiere touchStartPos für alle Pointerdowns (wichtig für Distanzberechnungen)
-    // Wenn es der erste Pointer ist, merke seine Position.
-    if (activePointers.size === 1) {
-        touchStartPos = { x: e.clientX, y: e.clientY };
+// Custom ValueNoise2D as a function constructor to avoid lexical declaration issues
+function ValueNoise2D(seed = '') {
+    this.seed = seed;
+    this.rng = new Math.seedrandom(seed);
+    // Initialize Perlin noise. The 'noise' object should be available from perlin.js
+    if (typeof noise === 'undefined') {
+        console.warn("Perlin.js library (noise object) not found. ValueNoise2D will use basic Math.random.");
+        this.noiseGenerator = null;
+    } else {
+        this.noiseGenerator = new noise.Perlin();
     }
-
-
-    // --- DESKTOP (MAUS/STIFT) LOGIK ---
-    if (e.pointerType === 'mouse' || e.pointerType === 'pen') {
-        // Rechte Maustaste für Kamera-Rotation
-        if (e.button === 2) {
-            rotate = true;
-            cvs.requestPointerLock();
-            activeGestureMode = 'cameraRotate'; // Neuer Modus für Kamera-Rotation
-            return; // Beende hier, um keine anderen Zeichenaktionen zu starten
-        }
-
-        // Linke Maustaste gedrückt
-        if (e.buttons & 1) {
-            if (e.shiftKey) { // Shift-Taste gedrückt: Starte Shift-Drag-Zeichnen
-                isShiftDragging = true;
-                activeGestureMode = 'shiftDragDraw';
-                // Bestimme die Ebene und Achse basierend auf der aktuellen Kameraposition
-                const camDir = new THREE.Vector3();
-                cam.getWorldDirection(camDir);
-                const absCamDir = new THREE.Vector3(
-    Math.abs(camDir.x),
-    Math.abs(camDir.y),
-    Math.abs(camDir.z)
-);
-                // Finde die Achse, die am meisten zur Kamera zeigt (näher an 1)
-                // Die feste Ebene wird dann die Koordinate auf dieser Achse sein,
-                // die der Kamera am nächsten ist.
-                if (absCamDir.y >= absCamDir.x && absCamDir.y >= absCamDir.z) {
-                    currentShiftDragLevel = { level: activeDrawingLevel.y, axis: 'y' };
-                } else if (absCamDir.x >= absCamDir.y && absCamDir.x >= absCamDir.z) {
-                    currentShiftDragLevel = { level: activeDrawingLevel.x, axis: 'x' };
-                } else {
-                    currentShiftDragLevel = { level: activeDrawingLevel.z, axis: 'z' };
-                }
-
-                // Führe die erste Zeichenaktion sofort aus
-                handleVoxelAction(
-                    e.clientX, e.clientY,
-                    currentMode,
-                    false, 
-                   false,
-                  currentShiftDragLevel.level,
-                   currentShiftDragLevel.axis
-                );
-                return;
-            } else if (e.ctrlKey) { // Control-Taste gedrückt: Starte Control-Stack-Zeichnen
-                isControlDragging = true;
-                activeGestureMode = 'controlStackDraw';
-                 // Führe die erste Zeichenaktion sofort aus
-                handleVoxelAction(
-                    e.clientX, e.clientY,
-                    currentMode,
-                    false, 
-                   true, // Dies ist ein Stacking-Add
-                   null,
-                   null
-                );
-                return;
-            } else { // Normale Linksklick-Aktion (potenzieller Tap oder Drag)
-                activeGestureMode = 'voxelAction'; // Standardmodus für Desktop-Zeichenaktionen
-                handleVoxelAction(
-                    e.clientX, e.clientY,
-                    currentMode,
-                  false,
-                 false,
-                    null,
-                  null
-                );
-            }
-        }
-    }
-    // --- ENDE DESKTOP (MAUS/STIFT) LOGIK ---
-
-
-    // --- TOUCH-SPEZIFISCHE LOGIK ---
-    else if (e.pointerType === 'touch') {
-        clearTimeout(longPressTimer); // Sicherstellen, dass kein alter Long-Press-Timer läuft
-        isHoldDrawingActive = false; // Reset des Hold-Draw-Flags
-
-        // NEU: Setze den anfänglichen Gestenmodus basierend auf der Anzahl der Finger
-        if (activePointers.size > 1) { // Mehr als ein Finger -> Kamera-Schwenken/Zoomen
-            activeGestureMode = 'cameraPan';
-            // Bei Multi-Touch sofort Long-Press-Timer abbrechen
-            clearTimeout(longPressTimer);
-            isHoldDrawingActive = false;
-        } else { // Genau ein Finger auf dem Bildschirm
-            activeGestureMode = 'pendingCameraOrTap'; // Warten auf weitere Bewegung/Tap/Long-Press
-
-            // DBL-TAP-ERKENNUNG UND INITIALISIERUNG
-            if (tapCandidate !== null && (e.timeStamp - tapCandidate.time < DT_MS)) {
-                const dist = Math.hypot(e.clientX - tapCandidate.x, e.clientY - tapCandidate.y);
-                if (dist < TAP_DIST_TH) {
-                    /* zweiter Tap erkannt */
-                    dblTapActive        = true;
-                    dblTapDrag          = false;
-                    isDblTapDragActive  = true;
-                    activeGestureMode   = 'dblTapDragDraw'; // Überschreibt pendingCameraOrTap
-                    initialDblTapDragLevelY = activeDrawingLevel.y; // Y-Ebene erfassen
-                    tapCandidate        = null; // Kandidat verbraucht
-                    clearTimeout(longPressTimer); // Long-Press abbrechen
-                    isHoldDrawingActive = false;
-                } else {
-                     // 2. Tap außerhalb des Tap-Bereichs -> neuer Tap-Kandidat
-                     tapCandidate = { x: e.clientX, y: e.clientY, time: e.timeStamp };
-                     dblTapActive = false;
-                     isDblTapDragActive = false;
-                }
-            } else {
-                /* Neuer Kandidat für einen Double-Tap */
-                tapCandidate = {x: e.clientX, y: e.clientY, time: e.timeStamp};
-initialTouchDrawingLevelY = activeDrawingLevel.y; // Erfasse die anfängliche Y-Ebene für jegliches Single-Touch-Zeichnen
-
-                dblTapActive = false;
-                isDblTapDragActive = false;
-            }
-
-            // HOLDS-DRAW-LOGIK STARTET NUR, WENN NICHT DBL-TAP-DRAW AKTIV IST
-            if (activeGestureMode !== 'dblTapDragDraw') {
-                initialHoldDrawPos = {x: e.clientX, y: e.clientY}; // Speichern der initialen Position für die Bewegungserkennung
-
-                longPressTimer = setTimeout(() => {
-                    // Prüfen, ob immer noch genau ein Finger aktiv ist und keine signifikante Bewegung stattgefunden hat
-                    const currentPointer = activePointers.get(e.pointerId);
-                    if (currentPointer && activePointers.size === 1 &&
-                        Math.hypot(currentPointer.x - initialHoldDrawPos.x,
-                                   currentPointer.y - initialHoldDrawPos.y) < MOVE_PX) // MOVE_PX ist Ihr Schwellenwert für Bewegung
-                    {
-                        // Long-Press wurde erfolgreich erkannt
-                        isHoldDrawingActive = true; // Aktiviert den Hold-Draw-Modus
-                        activeGestureMode = 'longPressDraw'; // Überschreibt pendingCameraOrTap
-                        if (navigator.vibrate) {
-                            navigator.vibrate(50); // Kurzes Vibrationsfeedback (50ms)
-                        }
-                        // Zeichne den ersten Punkt sofort nach der Vibration
-                        handleVoxelAction(
-                            e.clientX, e.clientY,
-                            currentMode,
-                        false,
-                         false,
-                            /* fixedLevel */ initialTouchDrawingLevelY, 
-                      'y'
-                        );
-                    }
-                    longPressTimer = null; // Der Timer ist nun entweder ausgelöst oder abgebrochen
-                }, LONG_PRESS_DELAY_MS); // LONG_PRESS_DELAY_MS ist die Wartezeit für den Long-Press
-            }
-        }
-    }
-    // --- ENDE TOUCH-SPEZIFISCHE LOGIK ---
-});
-/* ----------------------------------------------------------
-   Pointer-MOVE  – updates the »activePointers« Map and handles gestures
-   ---------------------------------------------------------- */
-cvs.addEventListener('pointermove', e => {
-    e.preventDefault();
-
-    const p = activePointers.get(e.pointerId);
-    if (!p) return;
-
-    p.px = p.x; // Speichern der vorherigen X-Position
-    p.py = p.y; // Speichern der vorherigen Y-Position
-    p.x  = e.clientX; // Aktuelle X-Position
-    p.y  = e.clientY; // Aktuelle Y-Position
-    activePointers.set(e.pointerId, p); // Aktualisiertes Pointer-Objekt zurück in die Map schreiben
-
-    // --- DESKTOP (MAUS/STIFT) LOGIK ---
-    // Diese Logik gilt nur für Maus- oder Stift-Eingaben
-    if (e.pointerType === 'mouse' || e.pointerType === 'pen') {
-        if (activeGestureMode === 'cameraRotate') { // Kamera-Rotation, wenn rechte Maustaste gedrückt
-            // Die eigentliche Kamera-Rotationslogik wird durch PointerLock und den Update-Loop gehandhabt.
-            // Hier ist keine direkte Aktion erforderlich.
-            return;
-        }
-
-        if (activeGestureMode === 'shiftDragDraw') { // Shift-Taste ODER Shift-Lock + Linke Maustaste gedrückt halten
-            handleVoxelAction(
-                e.clientX, e.clientY,
-                currentMode,
-                /* isDragging    */ true,
-                /* isStackingAdd */ false,
-                /* fixedLevel    */ currentShiftDragLevel ? currentShiftDragLevel.level : null,
-                /* fixedAxis     */ currentShiftDragLevel ? currentShiftDragLevel.axis : null
-            );
-            return; // Verhindert andere Gesten-Handhabung
-        }
-
-        if (activeGestureMode === 'controlStackDraw') { // Control-Taste + Linke Maustaste gedrückt halten
-            handleVoxelAction(
-                e.clientX, e.clientY,
-                currentMode,
-                /* isDragging    */ true,
-                /* isStackingAdd */ true,
-                /* fixedLevel    */ null,
-                /* fixedAxis     */ null
-            );
-            return; // Verhindert andere Gesten-Handhabung
-        }
-
-        // Normale Linksklick-Aktion (einzelnes Voxel hinzufügen/löschen/zeichnen) beim Ziehen
-        // Wenn der Modus noch 'voxelAction' ist und eine signifikante Bewegung stattgefunden hat (ein Drag)
-        if (activeGestureMode === 'voxelAction' && (e.buttons & 1)) { // Prüfen, ob linke Maustaste gedrückt ist
-            if (Math.hypot(e.clientX - touchStartPos.x, e.clientY - touchStartPos.y) > MOVE_PX) {
-                handleVoxelAction(
-                    e.clientX, e.clientY,
-                    currentMode,
-                    /* isDragging    */ true, // Indicate this is a drag operation for continuous drawing
-                    /* isStackingAdd */ false,
-                    /* fixedLevel    */ null,
-                    /* fixedAxis     */ null
-                );
-            }
-        }
-    }
-    // --- ENDE DESKTOP LOGIK ---
-
-
-    // --- TOUCH-SPEZIFISCHE LOGIK ---
-    // Diese Logik gilt nur für Touch-Eingaben
-    else if (e.pointerType === 'touch') {
-        // Priorisiere explizite Zeichenmodi
-        if (activeGestureMode === 'dblTapDragDraw' && activePointers.size === 1) {
-            dblTapDrag = true; // Markieren als Drag während eines Double-Taps
-            handleVoxelAction(
-                e.clientX, e.clientY,
-                currentMode,
-                /* isDragging    */ true,
-                /* isStackingAdd */ false, // Double-Tap-Drag ist kein Stacking-Add
-                /* fixedLevel    */ initialDblTapDragLevelY, // Das festgelegte Y-Level
-                /* fixedAxis     */ 'y' // Für Double-Tap-Drag ist die feste Achse immer 'y'
-            );
-            return; // Verhindert andere Gesten-Handhabung (z.B. Freilook)
-        }
-
-        if (activeGestureMode === 'longPressDraw' && activePointers.size === 1) {
-            handleVoxelAction(
-                e.clientX, e.clientY,
-                currentMode,
-               true,
-               false,
-               null,
-                  initialTouchDrawingLevelY, 
-                    'y'
-            );
-            return; // Verhindert andere Gesten-Handhabung
-        }
-
-        // NEU: Wenn im 'pendingCameraOrTap' Modus, prüfe auf signifikante Bewegung
-        // Wenn Multi-Touch, oder ausreichend Bewegung, wechsle zu 'cameraPan'
-        if (activeGestureMode === 'pendingCameraOrTap') {
-            const currentDist = Math.hypot(e.clientX - touchStartPos.x, e.clientY - touchStartPos.y);
-            if (activePointers.size > 1 || currentDist > PAN_PIX_TH) {
-                activeGestureMode = 'cameraPan'; // Wechsel in den Kamera-Modus
-                clearTimeout(longPressTimer); // Langdruck abbrechen, wenn Kamera-Geste beginnt
-                isHoldDrawingActive = false; // Sicherstellen, dass Langdruck-Zeichnung inaktiv ist
-            }
-        } else if (activePointers.size > 1) { // Direkt Multi-Touch -> Kamera-Pan/Pinch
-            activeGestureMode = 'cameraPan';
-            clearTimeout(longPressTimer);
-            isHoldDrawingActive = false;
-        }
-
-
-        // Wenn der Modus jetzt 'cameraPan' ist, führe die Gestenbehandlung aus
-        if (activeGestureMode === 'cameraPan') {
-            handleGesture(); // Zentrale Gesten-FSM
-        }
-    }
-    // --- ENDE TOUCH-SPEZIFISCHE LOGIK ---
-});
-
-/* ==========================================================
-   DESKTOP / STYLUS – Pointer-UP  (nur Nicht-Touch)
-   ========================================================== */
-cvs.onpointerup = e => {
-
-    /* Touch-Events werden bereits oben verarbeitet */
-    if (e.pointerType === 'touch') return;
-
-    /* Rechte Maustaste → Fly-Rotation beenden */
-    if (e.button === 2) {
-        rotate = false;
-        document.exitPointerLock();
-    }
-
-    /* Drag-Status zurücksetzen */
-    isShiftDragging       = false;
-    isControlDragging     = false;
-    currentShiftDragLevel = null;
-    currentDrawingAxis    = 'y';
-};
-
-/* ----------------------------------------------------------
-   Pointer-MOVE  – updates the »activePointers« Map and handles gestures
-   ---------------------------------------------------------- */
-cvs.addEventListener('pointermove', e => {
-    e.preventDefault();
-
-    const p = activePointers.get(e.pointerId);
-    if (!p) return;
-
-    p.px = p.x;
-    p.py = p.y;
-    p.x  = e.clientX;
-    p.y  = e.clientY;
-    activePointers.set(e.pointerId, p);
-
-    // --- DESKTOP (MAUS/STIFT) LOGIK ---
-    if (e.pointerType === 'mouse' || e.pointerType === 'pen') {
-        if (rotate) { // Kamera-Rotation, wenn rechte Maustaste gehalten wird
-            // Die eigentliche Kamera-Rotationslogik wird durch PointerLock und den Update-Loop gehandhabt.
-            // Hier ist keine direkte Aktion erforderlich.
-            return;
-        }
-
-        if (isShiftDragging || shiftLock) { // Shift-Taste ODER Shift-Lock + Linke Maustaste gedrückt halten
-            activeGestureMode = 'shiftDragDraw';
-            handleVoxelAction(
-                e.clientX, e.clientY,
-                currentMode,
-                /* drag  */ true,
-                /* stack */ false,
-                /* fixedYLevel */ currentShiftDragLevel ? currentShiftDragLevel.y : null // Nutze das festgelegte Level, falls gesetzt
-            );
-            return;
-        }
-
-        if (isControlDragging) { // Control-Taste + Linke Maustaste gedrückt halten
-            activeGestureMode = 'controlStackDraw';
-            handleVoxelAction(
-                e.clientX, e.clientY,
-                currentMode,
-                /* drag  */ true,
-                /* stack */ true // Stapel-Indikator
-            );
-            return;
-        }
-        // Wenn keine spezielle Taste gedrückt ist und die linke Maustaste gedrückt ist,
-        // ist es eine normale Voxel-Aktion (Drag).
-        if (e.buttons & 1 && !(e.shiftKey || shiftLock) && !e.ctrlKey) { // Prüfen, ob linke Maustaste gedrückt ist
-            if (activeGestureMode === 'voxelAction' && Math.hypot(p.x - touchStartPos.x, p.y - touchStartPos.y) > MOVE_PX) {
-                handleVoxelAction(
-                    e.clientX, e.clientY,
-                    currentMode,
-                    /* drag  */ true,
-                    /* stack */ false
-                );
-            }
-        }
-    }
-    // --- ENDE DESKTOP LOGIK ---
-
-    // --- TOUCH-SPEZIFISCHE LOGIK ---
-    else if (e.pointerType === 'touch') {
-        if (activeGestureMode === 'dblTapDragDraw' && activePointers.size === 1) {
-            dblTapDrag = true; // Markieren als Drag während eines Double-Taps
-            handleVoxelAction(
-                e.clientX, e.clientY,
-                currentMode,
-                /* drag  */ true,
-                /* stack */ false,
-                /* fixedYLevel */ initialDblTapDragLevelY // Das festgelegte Y-Level übergeben
-            );
-            return; // Verhindert andere Gesten-Handhabung (z.B. Pan/Pinch)
-        }
-
-        if (activeGestureMode === 'longPressDraw' && activePointers.size === 1) {
-handleVoxelAction(
-    e.clientX, e.clientY,
-    currentMode,
-     true,
-false,
-    initialTouchDrawingLevelY, 
- 'y'
-);
-            return;
-        }
-
-        // Wenn kein spezifischer Zeichenmodus aktiv ist, Kamera-Gesten für Touch handhaben (Pan/Pinch)
-        // Prüfen, ob die Bewegung signifikant genug ist, um von einem potenziellen Tap zu einem Pan überzugehen
-        if (activePointers.size === 1 && touchStartPos && Math.hypot(e.clientX - touchStartPos.x, e.clientY - touchStartPos.y) > PAN_PIX_TH) {
-            activeGestureMode = 'cameraPan'; // Wechsel in den Pan-Modus
-        } else if (activePointers.size > 1) {
-            activeGestureMode = 'cameraPan'; // Multi-Touch bedeutet immer Kamera-Pan/Pinch
-        }
-
-        if (activeGestureMode === 'cameraPan') {
-            clearTimeout(longPressTimer); // Langdruck abbrechen, wenn Kamera-Geste beginnt
-            isHoldDrawingActive = false;
-            handleGesture(); // Zentrale Gesten-FSM (Finite-State-Machine)
-        }
-    }
-    // --- ENDE TOUCH-SPEZIFISCHE LOGIK ---
-});
-/* ==========================================================
-   Pointer-UP  – ends gestures, releases capture,
-   decides on Tap / Double-Tap and cleans up states
-   ========================================================== */
-cvs.addEventListener('pointerup', e => {
-    e.preventDefault();
-
-    const p = activePointers.get(e.pointerId);
-    // Berechne die bewegte Distanz nur, wenn der Zeiger gefunden wurde
-    const moved = p ? Math.hypot(e.clientX - p.x, e.clientY - p.y) : 0;
-
-    activePointers.delete(e.pointerId);
-    cvs.releasePointerCapture(e.pointerId);
-
-    clearTimeout(longPressTimer); // Timer immer bei Pointer-Up löschen
-    isHoldDrawingActive = false; // Flag für kontinuierliches Zeichnen zurücksetzen
-
-    // --- DESKTOP (MAUS/STIFT) LOGIK ---
-    if (e.pointerType === 'mouse' || e.pointerType === 'pen') {
-        if (e.button === 2) { // Rechte Maustaste
-            rotate = false;
-            document.exitPointerLock();
-        } else if (e.button === 0) { // Linke Maustaste
-            // Wenn es ein einzelner Klick war (kein Drag) und linke Maustaste, führe Voxel-Aktion aus
-            // Dies ist für den Fall, dass activeGestureMode auf 'voxelAction' gesetzt wurde,
-            // aber kein signifikanter Drag stattfand.
-            if (activeGestureMode === 'voxelAction' && moved < TAP_DIST_TH) {
-                 handleVoxelAction(
-                    e.clientX, e.clientY,
-                    currentMode,
-                    /* drag  */ false,
-                    /* stack */ false
-                );
-            }
-        }
-        // Desktop-spezifische Drag-Zustände zurücksetzen
-        isShiftDragging = false;
-        isControlDragging = false;
-        currentShiftDragLevel = null; // Shift-Drag-Ebene zurücksetzen
-    }
-    // --- ENDE DESKTOP LOGIK ---
-
-    // --- TOUCH-SPEZIFISCHE LOGIK ---
-    else if (e.pointerType === 'touch') {
-        if (activePointers.size === 0) {
-initialTouchDrawingLevelY = null; // Setze die Variable zurück, wenn der Touch-Vorgang beendet ist
-
-            /* -------- Single Tap -------- */
-            // Nur ausführen, wenn kein Double-Tap aktiv war und es ein kurzer Tap war
-            if (!dblTapActive && activeGestureMode === 'voxelAction' && moved < TAP_DIST_TH) {
-                handleVoxelAction(
-                    e.clientX, e.clientY,
-                    currentMode,
-                    /* drag  */ false,
-                    /* stack */ false
-                );
-            }
-
-            /* -------- Double-Tap Ende -------- */
-            if (dblTapActive) {
-                if (!dblTapDrag) { // 2. Tap NICHT gezogen → auch ein Tap
-                    handleVoxelAction(
-                        e.clientX, e.clientY,
-                        currentMode,
-                        /* drag  */ false,
-                        /* stack */ false
-                    );
-                }
-                // Double-Tap-Status zurücksetzen
-                dblTapActive = false;
-                dblTapDrag   = false;
-            }
-        }
-        // Gemeinsame Touch-spezifische Zurücksetzungen
-        tapCandidate        = null;
-        isDblTapDragActive  = false;
-        gestureMid          = null;
-        gestureDist         = null;
-        gestureMode         = null; // gestureMode zurücksetzen, wenn für Touch Pan/Pinch verwendet
-        prevTouch           = null; // Δ für nächsten Down korrigieren
-        initialDblTapDragLevelY = null; // Festgelegtes Y-Level zurücksetzen
-    }
-    // --- ENDE TOUCH-SPEZIFISCHE LOGIK ---
-
-    // Globaler Reset des aktiven Gestenmodus
-    activeGestureMode = 'none'; // Immer auf 'none' zurücksetzen
-});
-
-
-cvs.addEventListener('pointercancel', e => {
-  // Wenn ein Zeiger abgebrochen wird, dessen Capture freigeben und aus aktiven Zeigern entfernen
-  if (activePointers.has(e.pointerId)) {
-    activePointers.delete(e.pointerId);
-    cvs.releasePointerCapture(e.pointerId);
-  }
-
-  // Wenn keine Zeiger mehr vorhanden sind, alle gestenbezogenen Zustände zurücksetzen
-  // Dies sollte für alle Pointer-Typen gelten, um Konflikte zu vermeiden.
-  if (activePointers.size === 0) {
-    activeGestureMode       = 'none'; // Modus auf 'none' zurücksetzen
-    tapCandidate            = null;
-    dblTapActive            = false;
-    dblTapDrag              = false;
-    isDblTapDragActive      = false;
-    isHoldDrawingActive     = false;
-    clearTimeout(longPressTimer);
-    isShiftDragging         = false;
-    isControlDragging       = false;
-    currentShiftDragLevel   = null;
-    initialDblTapDragLevelY = null;
-    gestureMid              = null;
-    gestureDist             = null;
-    gestureMode             = null;
-    prevTouch               = null;
-    rotate                  = false;
-    // document.exitPointerLock(); // Nur aufrufen, wenn Pointer Lock aktiv war und es notwendig ist
-  }
-});
-
-/* ---------- Menü-Toggle ---------- */
-const menuToggleBtn = document.getElementById('menuToggle');
-const controlsBar   = document.getElementById('controls');
-const terrainControlsPanel   = document.getElementById('terrainControlsPanel');
-
-/* Anfangszustand aus Local Storage lesen (mobile: hidden) */
-if (localStorage.getItem('voxelMenuVisible') === 'true'){
-    controlsBar.style.display = 'flex';
-} else if (window.matchMedia('(max-width:768px)').matches){
-    controlsBar.style.display = 'none';
 }
 
-/* Klick-Handler */
-menuToggleBtn.onclick = () => {
-    const isOpen = controlsBar.style.display !== 'none';
-    if (isOpen){
-        controlsBar.style.display = 'none';
-         terrainControlsPanel.style.display = 'none';
-        localStorage.setItem('voxelMenuVisible','false');
-    }else{
-        controlsBar.style.display = 'flex';
-        localStorage.setItem('voxelMenuVisible','true');
-    }
- setTimeout(onResize, 0);
-};
-    // Make sure THREE is defined here before using it
-    if (typeof THREE === 'undefined') {
-        console.error("THREE ist nicht definiert. Es gab ein Problem beim Laden der Three.js-Bibliothek. Überprüfen Sie die CDN-Links oder Ihre Internetverbindung.");
-        alert("Fehler: Die Kern-3D-Bibliothek konnte nicht geladen werden. Bitte versuchen Sie es erneut oder überprüfen Sie Ihre Internetverbindung.");
-        return; // Stop execution if THREE is not available
-    }
-    // Also check for BufferGeometryUtils and STLExporter
-    if (typeof THREE.BufferGeometryUtils === 'undefined') {
-        console.warn("WARNUNG: THREE.BufferGeometryUtils ist nicht definiert. Der STL Export könnte fehlschlagen, wenn diese Utility benötigt wird.");
-    }
-    if (typeof THREE.STLExporter === 'undefined') {
-        console.warn("WARNUNG: THREE.STLExporter ist nicht definiert. Der STL Export wird fehlschlagen.");
-    }
-    scene = new THREE.Scene();
-    scene.background = new THREE.Color(0x282c34);
-    cam = new THREE.PerspectiveCamera(75, containerDiv.clientWidth / containerDiv.clientHeight, 0.1, 1000);
-    // Kameraposition an die Gittergröße anpassen
-    cam.position.set(GRID * 1.0, GRID * 1.2, GRID * 1.5);
-    cam.lookAt(GRID / 2, GRID / 2, GRID / 2);
-    ren = new THREE.WebGLRenderer({ canvas: cvs, antialias: true });
-    ren.setSize(containerDiv.clientWidth, containerDiv.clientHeight);
-    ren.setPixelRatio(window.devicePixelRatio);
-    ren.shadowMap.enabled = true;
-    ren.shadowMap.type = THREE.PCFSoftShadowMap; // Weichere Schatten
-    /* Licht */
-    // Verbesserte Beleuchtung, Intensität reduziert
-    scene.add(new THREE.HemisphereLight(0xaaaaaa, 0x444444, 0.3)); // Himmel- und Bodenlicht, Intensität 0.3
-    mainDirectionalLight = new THREE.DirectionalLight(0xffffff, 0.7); // Intensität reduziert auf 0.7
-    mainDirectionalLight.position.set(5, 10, 7).normalize().multiplyScalar(50);
-    mainDirectionalLight.castShadow = true;
-    mainDirectionalLight.shadow.mapSize.width = 1024;
-    mainDirectionalLight.shadow.mapSize.height = 1024;
-    mainDirectionalLight.shadow.camera.near = 0.5;
-    mainDirectionalLight.shadow.camera.far = 50;
-    const d = GRID * VS * 0.7;
-    mainDirectionalLight.shadow.camera.left = -d;
-    mainDirectionalLight.shadow.camera.right = d;
-    mainDirectionalLight.shadow.camera.top = d;
-    mainDirectionalLight.shadow.camera.bottom = -d;
-    mainDirectionalLight.shadow.camera.updateProjectionMatrix();
-    scene.add(mainDirectionalLight);
-    const d2 = new THREE.DirectionalLight(0xffffff, 0.15);
-    d2.position.set(-5, -5, -7).normalize();
-    scene.add(d2); // Intensität reduziert auf 0.15
-
-    // Initialize voxel rendering components
-    meshMaterial = new THREE.MeshStandardMaterial({
-        vertexColors: true, // Enable vertex colors to render different voxel colors
-        roughness: 0.9,
-        metalness: 0.0
-    });
-    voxelGeometry = new THREE.BufferGeometry(); // Start with an empty geometry
-    voxelMesh = new THREE.Mesh(voxelGeometry, meshMaterial);
-    voxelMesh.castShadow = true;
-    voxelMesh.receiveShadow = true;
-    scene.add(voxelMesh);
-    updateVoxelGeometry(); // Initial empty geometry
-
-    rebuildHelpers(); // Erstellt Grid und Box initial
-    window.addEventListener('resize', onResize);
-    onResize(); // Initial call to set size
-    updateGridHelperPosition();
-    /* Steuerung */
-    let keys = {};
-    euler = new THREE.Euler().setFromQuaternion(cam.quaternion, 'YXZ'); // Initialize euler here
-    const setModeDisplay = () => {
-        const m = document.getElementById('current-mode');
-        m.textContent = `Modus: ${currentMode}`;
-        let borderColor;
-        switch (currentMode) {
-            case Modes.ADD:
-                m.style.color = '#81c784'; // Green
-                borderColor = '#81c784';
-                break;
-            case Modes.DELETE:
-                m.style.color = '#ef5350'; // Red
-                borderColor = '#ef5350';
-                break;
-            case Modes.DRAW:
-                m.style.color = '#ffa726'; // Orange
-                borderColor = '#ffa726';
-                break;
-        }
-        // Apply the border color to the container div
-        if (containerDiv) { // Ensure containerDiv is defined
-            containerDiv.style.border = `2px solid ${borderColor}`; // 2px solid border with dynamic color
-        }
-    };
-    setModeDisplay();
-    document.getElementById('modeToggle').onclick = () => {
-        cycleMode();
-        setModeDisplay();
-    };
-
-    // MODAL-HANDLING FÜR "ALLES LÖSCHEN"
-    const clearConfirmationModal = document.getElementById('clearConfirmationModal');
-    document.getElementById('clearBtn').onclick = () => {
-        clearConfirmationModal.style.display = 'flex'; // Show modal
-    };
-
-    document.getElementById('saveAndClearBtn').onclick = () => {
-        saveJSON(); // Save first
-        clearAll(); // Then clear
-        clearConfirmationModal.style.display = 'none'; // Hide modal
-    };
-
-    document.getElementById('clearWithoutSaveBtn').onclick = () => {
-        clearAll(); // Clear directly
-        clearConfirmationModal.style.display = 'none'; // Hide modal
-    };
-
-    document.getElementById('cancelClearBtn').onclick = () => {
-        clearConfirmationModal.style.display = 'none'; // Hide modal
-    };
-    // ENDE MODAL-HANDLING
-
-    document.getElementById('fillLevelBtn').onclick = fillActiveLevel;
-    document.getElementById('saveBtn').onclick = saveJSON;
-    document.getElementById('loadBtn').onclick = () => document.getElementById('fileInput').click();
-    document.getElementById('fileInput').onchange = loadJSON;
-    document.getElementById('exportStlBtn').onclick = exportSTL;
-
-    // Terrain Generation Button Logic
-    document.getElementById('generateTerrainBtn').onclick = () => {
-        // Warning if scene is not empty
-        if (voxels.size > 0) {
-            const confirmGenerate = confirm("Das Generieren von Gelände wird alle vorhandenen Würfel löschen. Möchten Sie fortfahren?");
-            if (!confirmGenerate) {
-                return; // User cancelled
-            }
-        }
-
-        const seedInput = document.getElementById('terrain-seed');
-
-        // If the user hasn't manually typed a seed OR if they typed and then cleared it
-        if (!hasUserTypedSeed || seedInput.value === '') {
-            terrainSeed = Date.now().toString() + Math.random().toString(36).substring(2, 15);
-            seedInput.value = terrainSeed; // Display the new random seed
-            hasUserTypedSeed = false; // Reset the flag, as this is now an auto-generated seed
-        } else {
-            // User has manually typed and the field is not empty, so use their custom seed.
-            // terrainSeed is already updated by the oninput handler.
-        }
-        generateTerrain();
-    };
-
-    // Gittergröße Slider Event Listener
-    const gridSizeSlider = document.getElementById('grid-size-slider');
-    const gridSizeDisplay = document.getElementById('grid-size-display');
-    gridSizeSlider.value = GRID;
-    gridSizeDisplay.textContent = `${GRID}×${GRID}×${GRID}`;
-    gridSizeSlider.oninput = (e) => {
-        let newGridSize = parseInt(e.target.value, 10);
-
-        // Calculate max coordinate among existing voxels
-        let maxCoord = 0;
-        voxels.forEach((data, k) => {
-            const [x, y, z] = k.split(',').map(Number);
-            maxCoord = Math.max(maxCoord, x, y, z);
-        });
-
-        const minPossibleGridSize = Math.max(5, maxCoord + 1); // Grid must be at least 5
-
-        if (newGridSize < minPossibleGridSize) {
-            newGridSize = minPossibleGridSize;
-            // Update the slider value to clamp it visually
-            gridSizeSlider.value = newGridSize;
-        }
-
-        if (newGridSize !== GRID) {
-            const oldGrid = GRID;
-            const oldVoxelsState = [...voxels.entries()].map(([id, data]) => {
-                const parts = id.split(',').map(Number);
-                return { gx: parts[0], gy: parts[1], gz: parts[2], color: data.color };
-            });
-
-            GRID = newGridSize;
-            gridSizeDisplay.textContent = `${GRID}×${GRID}×${GRID}`;
-            localStorage.setItem('voxelEditorGridSize', GRID);
-
-            // No need to remove voxels explicitly as newGridSize is clamped to contain all existing ones.
-
-            // Add to history
-            const newVoxelsState = [...voxels.entries()].map(([id, data]) => {
-                const parts = id.split(',').map(Number);
-                return { gx: parts[0], gy: parts[1], gz: parts[2], color: data.color };
-            });
-            addCommand('resizeGrid', null, null, null, null, null, oldVoxelsState, newVoxelsState, { oldGrid: oldGrid, newGrid: GRID });
-
-            // Update rendering and camera
-            updateVoxelGeometry();
-            rebuildHelpers();
-            updateGridHelperPosition();
-
-            // Adjust camera position and lookAt relative to the new grid size
-            cam.position.set(GRID * 1.0, GRID * 1.2, GRID * 1.5);
-            cam.lookAt(GRID / 2, GRID / 2, GRID / 2);
-            const d_shadow = GRID * VS * 0.7;
-            mainDirectionalLight.shadow.camera.left = -d_shadow;
-            mainDirectionalLight.shadow.camera.right = d_shadow;
-            mainDirectionalLight.shadow.camera.top = d_shadow;
-            mainDirectionalLight.shadow.camera.bottom = -d_shadow;
-            mainDirectionalLight.shadow.camera.updateProjectionMatrix();
-        }
-    };
-
-    // Farbauswahl Event Listener
-    const colorPicker = document.getElementById('color-picker');
-    colorPicker.value = currentColor;
-    colorPicker.oninput = (e) => {
-        currentColor = e.target.value;
-        localStorage.setItem('voxelEditorColor', currentColor);
-        // Update the active preset color if one is active
-        if (activePresetIndex !== -1) {
-            presetColors[activePresetIndex] = currentColor;
-            document.getElementById(`color-preset-${activePresetIndex + 1}`).style.backgroundColor = currentColor;
-            localStorage.setItem(`voxelPresetColor${activePresetIndex + 1}`, currentColor);
-        }
-    };
-
-    // Initialize preset color boxes and set initial active preset
-    for (let i = 1; i <= 3; i++) {
-        const presetBox = document.getElementById(`color-preset-${i}`);
-        presetBox.style.backgroundColor = presetColors[i - 1]; // Set initial color
-        presetBox.onclick = () => {
-            setActivePreset(i - 1); // Set this preset as active
-        };
-        // Allow changing preset colors with the color picker context menu or double click
-        presetBox.oncontextmenu = (e) => {
-            e.preventDefault(); // Prevent default right-click menu
-            // Temporarily set the color picker to the preset color's value for editing
-            colorPicker.value = presetColors[i - 1];
-            colorPicker.click(); // Open the color picker
-            // When the color picker changes, its oninput handler will save the new color.
-            // We need to specifically update the preset color too.
-            const tempInputHandler = (event) => {
-                presetColors[i - 1] = event.target.value;
-                presetBox.style.backgroundColor = presetColors[i - 1];
-                localStorage.setItem(`voxelPresetColor${i}`, presetColors[i - 1]);
-                colorPicker.removeEventListener('input', tempInputHandler); // Clean up
-                // After changing a preset, make sure the global currentColor and picker reflect it
-                currentColor = presetColors[i - 1];
-                colorPicker.value = currentColor;
-                localStorage.setItem('voxelEditorColor', currentColor);
-            };
-            colorPicker.addEventListener('input', tempInputHandler);
-        };
-        presetBoxes.push(presetBox);
-    }
-
-    // Set the initial current color based on local storage, and then activate the corresponding preset if it matches.
-    // This ensures the correct color is active if the user previously selected a preset and it was saved.
-    const savedColor = localStorage.getItem('voxelEditorColor') || '#ffffff';
-    let matchedPreset = false;
-    for(let i = 0; i < presetColors.length; i++) {
-        // Compare hex codes (normalize to uppercase if needed for consistency)
-        if (presetColors[i].toUpperCase() === savedColor.toUpperCase()) {
-            setActivePreset(i);
-            matchedPreset = true;
-            break;
-        }
-    }
-    if (!matchedPreset) {
-        // If the saved color doesn't match any preset, ensure no preset is marked active.
-        presetBoxes.forEach(box => box.classList.remove('active'));
-        activePresetIndex = -1;
-    }
-    colorPicker.value = savedColor;
-    currentColor = savedColor;
-
-
-    // Help Toggle Button and Local Storage
-    const infoBox = document.getElementById('infoBox');
-    const helpToggleBtn = document.getElementById('helpToggleBtn');
-
-    // Load initial visibility state from Local Storage
-    // Default to 'false' (hidden) if not found in Local Storage
-    const helpVisible = localStorage.getItem('voxelEditorHelpVisible');
-    if (helpVisible === 'true') {
-        infoBox.style.display = 'block';
-    } else {
-        infoBox.style.display = 'none';
-    }
-
-    helpToggleBtn.onclick = () => {
-        if (infoBox.style.display === 'none') {
-            infoBox.style.display = 'block';
-            localStorage.setItem('voxelEditorHelpVisible', 'true');
-        } else {
-            infoBox.style.display = 'none';
-            localStorage.setItem('voxelEditorHelpVisible', 'false');
-        }
-    };
-// ---------- Shift-Lock ----------
-const shiftBtn = document.getElementById('shiftLockBtn');
-shiftBtn.onclick = () => {
-    shiftLock = !shiftLock;
-    shiftBtn.classList.toggle('active', shiftLock);
-    shiftBtn.textContent = shiftLock ? 'Shift-Lock ✱ an' : 'Shift-Lock ✱ aus';
-};
-    // Fly Speed Slider
-    const flySpeedSlider = document.getElementById('fly-speed-slider');
-    const flySpeedDisplay = document.getElementById('fly-speed-display');
-    // Load initial fly speed from local storage
-    moveSpeed = parseFloat(localStorage.getItem('voxelEditorFlySpeed')) || 0.1;
-    flySpeedSlider.value = moveSpeed;
-    flySpeedDisplay.textContent = moveSpeed.toFixed(2);
-    flySpeedSlider.oninput = (e) => {
-        moveSpeed = parseFloat(e.target.value);
-        flySpeedDisplay.textContent = moveSpeed.toFixed(2);
-        localStorage.setItem('voxelEditorFlySpeed', moveSpeed.toString()); // Save to local storage
-    };
-
-    // Terrain Parameters Inputs
-    // These consts are local to window.onload. The generateTerrain function will use the global variables directly.
-    const terrainHeightScaleInput = document.getElementById('terrain-height-scale');
-    const terrainFrequencyInput = document.getElementById('terrain-frequency');
-    const terrainOctavesInput = document.getElementById('terrain-octaves');
-    const terrainLacunarityInput = document.getElementById('terrain-lacunarity');
-    const terrainGainInput = document.getElementById('terrain-gain');
-    const terrainSeedInput = document.getElementById('terrain-seed'); // Still need this to get value initially
-
-    terrainHeightScaleInput.value = terrainHeightScale;
-    terrainFrequencyInput.value = terrainFrequency;
-    terrainOctavesInput.value = terrainOctaves;
-    terrainLacunarityInput.value = terrainLacunarity;
-    terrainGainInput.value = terrainGain;
-    terrainSeedInput.value = terrainSeed;
-
-    // Add oninput listeners for terrain parameters to update global variables
-    terrainHeightScaleInput.oninput = (e) => terrainHeightScale = parseFloat(e.target.value);
-    terrainFrequencyInput.oninput = (e) => terrainFrequency = parseFloat(e.target.value);
-    terrainOctavesInput.oninput = (e) => terrainOctaves = parseInt(e.target.value, 10);
-    terrainLacunarityInput.oninput = (e) => terrainLacunarity = parseFloat(e.target.value);
-    terrainGainInput.oninput = (e) => terrainGain = parseFloat(e.target.value);
-    terrainSeedInput.oninput = (e) => {
-        terrainSeed = e.target.value;
-        hasUserTypedSeed = (e.target.value !== ''); // Set flag if user types anything
-    };
-
-    // Initialize noise2D globally
-    noise2D = new ValueNoise2D(terrainSeed); // Initialized with default (random) seed if terrainSeed is empty
-
-    // Toggle Terrain Controls Panel
-    const toggleTerrainControlsBtn = document.getElementById('toggleTerrainControlsBtn');
-
-    toggleTerrainControlsBtn.onclick = () => {
-        if (terrainControlsPanel.style.display === 'none') {
-            terrainControlsPanel.style.display = 'flex';
-        } else {
-            terrainControlsPanel.style.display = 'none';
-        }
-    };
-
-
-    cvs.oncontextmenu = e => e.preventDefault();
-
-    cvs.onpointerdown = e => {
-  if (e.pointerType === 'touch') return; // Touch wird separat behandelt
-        if (e.button === 2) { // Right mouse button
-            rotate = true;
-            cvs.requestPointerLock();
-            return;
-        }
-        if (e.button !== 0) return; // Only proceed if it's the left mouse button
-
-        isShiftDragging = e.shiftKey;
-        isControlDragging = e.ctrlKey || e.metaKey;
-
-if (!shiftActive() && !isControlDragging) {
-            // Single click for any mode
-            handleVoxelAction(e.clientX, e.clientY, currentMode, false, false);
-        } else if (shiftActive() && currentMode === Modes.ADD) {
-            // Shift-Drag in ADD mode for fixed level
-            // Determine the initial fixed level based on hit or activeDrawingLevel
-            const rect = cvs.getBoundingClientRect();
-            const mouse = new THREE.Vector2(((e.clientX - rect.left) / rect.width) * 2 - 1,
-                -((e.clientY - rect.top) / rect.height) * 2 + 1);
-            const ray = new THREE.Raycaster(); ray.setFromCamera(mouse, cam);
-            const hits = ray.intersectObject(voxelMesh);
-
-            let initialFixedLevel;
-            let axisToFix = 'y'; // Default
-
-            if (e.altKey && e.shiftKey) { // Alt+Shift (Z-Axis)
-                axisToFix = 'z';
-                initialFixedLevel = hits.length > 0 ? Math.floor(hits[0].point.z / VS) : activeDrawingLevel.z;
-            } else if (e.altKey && (e.ctrlKey || e.metaKey)) { // Alt+Control (X-Axis)
-                axisToFix = 'x';
-                initialFixedLevel = hits.length > 0 ? Math.floor(hits[0].point.x / VS) : activeDrawingLevel.x;
-            } else { // Shift only (Y-Axis) - default
-                axisToFix = 'y';
-                initialFixedLevel = hits.length > 0 ? Math.floor(hits[0].point.y / VS) : activeDrawingLevel.y;
-            }
-            currentShiftDragLevel = Math.max(0, Math.min(GRID - 1, initialFixedLevel));
-            currentDrawingAxis = axisToFix; // Store the axis that's being fixed
-
-            handleVoxelAction(e.clientX, e.clientY, currentMode, true, false, currentShiftDragLevel, currentDrawingAxis);
-        } else if (shiftActive() && (currentMode === Modes.DELETE || currentMode === Modes.DRAW)) {
-            // Shift-Drag in DELETE or DRAW mode (now allows action on plane if no voxel is hit)
-            handleVoxelAction(e.clientX, e.clientY, currentMode, true, false);
-        } else if (isControlDragging && currentMode === Modes.ADD) {
-            // Control-Drag for stacking in ADD mode
-            handleVoxelAction(e.clientX, e.clientY, currentMode, true, true);
-        }
-    };
-
-    cvs.onpointermove = e => {
-        if (rotate) {
-    euler.y -= e.movementX * rotSpeed;   // rechts = nach rechts drehen
-    euler.x -= e.movementY * rotSpeed;   // hoch  = nach oben schauen
-            euler.x = Math.max(-Math.PI / 2, Math.min(Math.PI / 2, euler.x));
-            cam.quaternion.setFromEuler(euler);
-        }
-
-        if (e.buttons & 1) { // Left mouse button is down
-            if (shiftActive() && currentMode === Modes.ADD) {
-                handleVoxelAction(e.clientX, e.clientY, currentMode, true, false, currentShiftDragLevel, currentDrawingAxis);
-            } else if (shiftActive() && (currentMode === Modes.DELETE || currentMode === Modes.DRAW)) {
-                handleVoxelAction(e.clientX, e.clientY, currentMode, true, false);
-            } else if (isControlDragging && currentMode === Modes.ADD) {
-                handleVoxelAction(e.clientX, e.clientY, currentMode, true, true);
-            }
-            // No action for regular click/drag if not in shift/control modes, single clicks are handled on pointerdown
-        }
-    };
-
-
-
-    cvs.addEventListener('wheel', e => {
-        e.preventDefault();
-        const step = e.deltaY > 0 ? -1 : 1;
-
-        if (e.altKey) {
-            if (e.shiftKey) {
-                currentDrawingAxis = 'z';
-                activeDrawingLevel.z = Math.max(0, Math.min(GRID - 1, activeDrawingLevel.z + step));
-            } else if (e.ctrlKey || e.metaKey) {
-                currentDrawingAxis = 'x';
-                activeDrawingLevel.x = Math.max(0, Math.min(GRID - 1, activeDrawingLevel.x + step));
-            } else {
-                currentDrawingAxis = 'y';
-                activeDrawingLevel.y = Math.max(0, Math.min(GRID - 1, activeDrawingLevel.y + step));
-            }
-            updateGridHelperPosition();
-        } else {
-            // Adjusted sensitivity for camera speed
-            moveSpeed *= e.deltaY < 0 ? 1.05 : 0.95; // Smaller steps for finer control
-            moveSpeed = Math.max(0.005, Math.min(2, moveSpeed)); // Tighter min/max range
-            flySpeedSlider.value = moveSpeed; // Update slider
-            flySpeedDisplay.textContent = moveSpeed.toFixed(2); // Update display
-            localStorage.setItem('voxelEditorFlySpeed', moveSpeed.toString()); // Save to local storage
-        }
-    }, { passive: false });
-
-    window.onkeydown = e => {
-        keys[e.code] = true;
-        if (e.code === 'Tab') {
-            cycleMode();
-            setModeDisplay();
-            e.preventDefault();
-        } else if (e.ctrlKey || e.metaKey) { // Check for Ctrl or Cmd key
-            if (e.code === 'KeyY' || (e.code === 'KeyZ' && e.shiftKey)) {
-                redo();
-                e.preventDefault(); // Prevent browser undo/redo
-            } else if (e.code === 'KeyZ') {
-                undo();
-                e.preventDefault(); // Prevent browser undo/redo
-            }
-        } else if (e.code === 'Digit1') {
-            setActivePreset(0);
-        } else if (e.code === 'Digit2') {
-            setActivePreset(1);
-        } else if (e.code === 'Digit3') {
-            setActivePreset(2);
-        }
-    };
-    window.onkeyup = e => keys[e.code] = false;
-
-    /* Render-Loop */
-    (function loop() {
-        requestAnimationFrame(loop);
-        const dir = new THREE.Vector3();
-        cam.getWorldDirection(dir);
-        const right = new THREE.Vector3().crossVectors(dir, cam.up);
-        const up = new THREE.Vector3().copy(cam.up); // Get the camera's up direction
-
-        if (keys.KeyW) cam.position.addScaledVector(dir, moveSpeed);
-        if (keys.KeyS) cam.position.addScaledVector(dir, -moveSpeed);
-        if (keys.KeyA) cam.position.addScaledVector(right, -moveSpeed);
-        if (keys.KeyD) cam.position.addScaledVector(right, moveSpeed);
-        if (keys.KeyE) cam.position.addScaledVector(up, moveSpeed); // Move along camera's local up
-        if (keys.KeyQ) cam.position.addScaledVector(up, -moveSpeed); // Move along camera's local down
-
-        ren.render(scene, cam);
-    })();
+ValueNoise2D.prototype._smoothstep = function(t) {
+    return t * t * (3 - 2 * t);
 };
 
-/* ---------- Hilfsfunktionen ---------- */
+ValueNoise2D.prototype._lerp = function(a, b, t) {
+    return a + t * (b - a);
+};
+
+ValueNoise2D.prototype.fbm = function(x, z, octaves, lacunarity, gain) {
+    let total = 0;
+    let amplitude = 1;
+    let maxAmplitude = 0;
+    let frequency = terrainFrequency;
+
+    for (let i = 0; i < octaves; i++) {
+        const x0 = Math.floor(x * frequency);
+        const z0 = Math.floor(z * frequency);
+        const x1 = x0 + 1;
+        const z1 = z0 + 1;
+
+        const fx = (x * frequency) - x0;
+        const fz = (z * frequency) - z0;
+
+        // Use a temporary seeded RNG for each corner value to ensure determinism
+        const val00 = new Math.seedrandom(`${this.seed}-${x0}-${z0}`)();
+        const val10 = new Math.seedrandom(`${this.seed}-${x1}-${z0}`)();
+        const val01 = new Math.seedrandom(`${this.seed}-${x0}-${z1}`)();
+        const val11 = new Math.seedrandom(`${this.seed}-${x1}-${z1}`)();
+
+        const ix0 = this._lerp(val00, val10, this._smoothstep(fx));
+        const ix1 = this._lerp(val01, val11, this._smoothstep(fz));
+
+        total += this._lerp(ix0, ix1, this._smoothstep(fz)) * amplitude;
+
+        maxAmplitude += amplitude;
+
+        frequency *= lacunarity;
+        amplitude *= gain;
+    }
+
+    if (maxAmplitude === 0) return 0;
+    return (total / maxAmplitude) * 2 - 1;
+};
+
+
+/* ---------- Hilfsfunktionen (alle vor window.onload verschoben) ---------- */
+
 function onResize() {
     // Use containerDiv for sizing
     cam.aspect = containerDiv.clientWidth / containerDiv.clientHeight;
     cam.updateProjectionMatrix();
     ren.setSize(containerDiv.clientWidth, containerDiv.clientHeight);
 }
-/* =========================================================
-   MOBILE-GESTEN  –  handleGesture()
-   ========================================================= */
-/* =========================================================
-   TOUCH-GESTEN-FSM  –  handleGesture()
-   ========================================================= */
-function handleGesture () {
 
+function handleGesture () {
   const pts = [...activePointers.values()];
   if (pts.length === 0) return;
 
-  /* ======================================================
-       1-FINGER  →  Look-Around  ODER  Double-Tap-Hold-Drag
-     ====================================================== */
   if (pts.length === 1){
     const p = pts[0];
 
-    /* ---------- Double-Tap-Hold (virtueller ⇧-Drag) ------ */
     if (dblTapActive){
-
-      /* (a) Entscheiden, ob wir schon als Drag gelten */
       if (!dblTapDrag){
         const moved = Math.hypot(p.x - touchStartPos.x,
                                  p.y - touchStartPos.y);
         if (moved > MOVE_PX){
           dblTapDrag      = true;
-          isShiftDragging = true;               // ⇧ ein­schalten
+          isShiftDragging = true;
 
-          /* Im ADD-Modus Zeichen­ebene einfrieren -------- */
           if (currentMode === Modes.ADD){
             const rect  = cvs.getBoundingClientRect();
             const mouse = new THREE.Vector2(
                  ((p.x - rect.left) / rect.width)  * 2 - 1,
                 -((p.y - rect.top ) / rect.height) * 2 + 1);
-            const ray   = new THREE.Raycaster();
-            ray.setFromCamera(mouse, cam);
-            const hits  = ray.intersectObject(voxelMesh);
+            const raycaster   = new THREE.Raycaster();
+            raycaster.setFromCamera(mouse, cam);
+            const intersects  = raycaster.intersectObject(voxelMesh);
 
             currentDrawingAxis    = 'y';
-            currentShiftDragLevel = hits.length
-                 ? Math.floor(hits[0].point.y / VS)
+            currentShiftDragLevel = intersects.length
+                 ? Math.floor(intersects[0].point.y / VS)
                  : activeDrawingLevel.y;
           }
         }
       }
 
-      /* (b) Sobald als Drag klassifiziert → ⇧-Drag-Action */
       if (dblTapDrag){
-        handleVoxelAction(
-          p.x, p.y,
-          currentMode,
-          /* drag */  true,
-          /* stack*/  false,
-          currentShiftDragLevel,
-          currentDrawingAxis
-        );
+        // In touch, dblTapDrag is like a shift-drag, so it should draw a line
+        const currentTargetVoxel = calculateTargetVoxelCoords(p.x, p.y, currentMode, true, false, currentShiftDragLevel, currentDrawingAxis);
+        if (currentTargetVoxel) {
+            if (!lastActionVoxelCoords ||
+                lastActionVoxelCoords.gx !== currentTargetVoxel.gx ||
+                lastActionVoxelCoords.gy !== currentTargetVoxel.gy ||
+                lastActionVoxelCoords.gz !== currentTargetVoxel.gz) {
+                
+                if (lastActionVoxelCoords) {
+                    drawLineOfVoxels(lastActionVoxelCoords, currentTargetVoxel, currentMode, currentColor);
+                } else {
+                    performVoxelModification(currentTargetVoxel.gx, currentTargetVoxel.gy, currentTargetVoxel.gz, currentMode, currentColor);
+                }
+                lastActionVoxelCoords = { ...currentTargetVoxel };
+            }
+        }
       }
 
       prevTouch = {x:p.x, y:p.y};
       return;
     }
 
-    /* ---------- normales Kamera-Look -------------------- */
-    // Den ersten Frame nach einem beendeten Pinch ignorieren
     if (prevTouch === null){
         prevTouch = {x:p.x, y:p.y};
         return;
@@ -1666,9 +690,6 @@ function handleGesture () {
     return;
   }
 
-  /* ======================================================
-       2-FINGER  →  Pinch-Zoom   ODER   Zwei-Finger-Pan
-     ====================================================== */
   if (pts.length !== 2) return;
 
   const [p0, p1] = pts;
@@ -1676,7 +697,7 @@ function handleGesture () {
   const midY  = (p0.y + p1.y) * 0.5;
   const dist  = Math.hypot(p1.x - p0.x, p1.y - p0.y);
 
-  if (gestureMid === null){               // erster Frame
+  if (gestureMid === null){
     gestureMid  = {x:midX, y:midY};
     gestureDist = dist;
     gestureMode = null;
@@ -1688,22 +709,21 @@ function handleGesture () {
   if (gestureMode === null){
     if (relΔ > PINCH_REL_TH)       gestureMode = 'pinch';
     else if (dMid > PAN_PIX_TH)    gestureMode = 'pan';
-    else return;                   // noch unklar → warten
+    else return;
   }
 
   if (gestureMode === 'pinch'){
-    /* ---------- Pinch-Zoom (beschleunigt x5) ------------- */
-    const scale     = dist / gestureDist;               // >1 = spreizen
-    const zoomDelta = (scale - 1) * PINCH_ZOOM_MULT  * moveSpeed;      // zügiger Zoom
+    const scale     = dist / gestureDist;
+    const zoomDelta = (scale - 1) * PINCH_ZOOM_MULT  * moveSpeed;
     cam.position.addScaledVector(
         cam.getWorldDirection(new THREE.Vector3()),
         zoomDelta
     );
-    gestureDist = dist;                                 // erst jetzt refresh
-  } else { /* ---------- Zwei-Finger-Pan ------------------ */
+    gestureDist = dist;
+  } else {
     const panFactor = DRAG_BASE * (moveSpeed * 5);
     const dx = (midX - gestureMid.x) * panFactor;
-    const dy = (midY - gestureMid.y) * panFactor;
+    const dy = (midY - gestureMidy) * panFactor;
 
     const dir   = cam.getWorldDirection(new THREE.Vector3());
     const right = new THREE.Vector3().crossVectors(dir, cam.up).normalize();
@@ -1712,44 +732,37 @@ function handleGesture () {
     cam.position.addScaledVector(right, -dx);
     cam.position.addScaledVector(upVec,    dy);
 
-    gestureMid = {x:midX, y:midY};                      // refresh
+    gestureMid = {x:midX, y:midY};
   }
 
-  /* prevTouch bleibt NULL, damit der erste 1-Finger-Frame
-     nach dem Pinch ignoriert wird (siehe oben)            */
   prevTouch = null;
 }
 
-/* =========================================================
-   RELEASE-CLEANUP  –  Ergänzung in releasePointer()
-   ========================================================= */
 function releasePointer(id){
     activePointers.delete(id);
 
-    /* 1 Finger übrig → von Pinch auf Look umschalten */
     if (activePointers.size === 1){
         const last = [...activePointers.values()][0];
-        prevTouch   = { x:last.x, y:last.y }; // Null-Δ
-        gestureMid  = gestureDist = null;    // Pinch-State weg
+        prevTouch   = { x:last.x, y:last.y };
+        gestureMid  = gestureDist = null;
         gestureMode = null;
-        return;                              // erstes Look-Frame skippen
+        return;
     }
 
-    /* gar kein Finger mehr → kompletter Reset */
     if (activePointers.size === 0){
         tapCandidate   = null;
         dblTapActive   = false;
         dblTapDrag     = false;
         isShiftDragging = false;
-        isDblTapDragActive= false;   // ← add this line
+        isDblTapDragActive= false;
         gestureMid  = gestureDist = null;
         gestureMode = null;
         prevTouch   = null;
+        lastActionVoxelCoords = null; // Reset for next touch interaction
     }
 }
 
 function rebuildHelpers() {
-    // Check if THREE is defined before using it in helper functions
     if (typeof THREE === 'undefined') {
         console.error("THREE is not defined in rebuildHelpers. Cannot rebuild helpers.");
         return;
@@ -1796,9 +809,13 @@ function cycleMode() {
             currentMode = Modes.DRAW;
             break;
         case Modes.DRAW:
+            currentMode = Modes.RECTANGLE_ADD; // Cycle to new mode
+            break;
+        case Modes.RECTANGLE_ADD: // Cycle back to ADD
             currentMode = Modes.ADD;
             break;
     }
+    document.getElementById('current-mode').textContent = `Modus: ${currentMode}`;
 }
 
 function setActivePreset(index) {
@@ -1915,6 +932,11 @@ function executeCommand(command, reverse = false) {
             const targetState = reverse ? oldState : newState;
             targetState.forEach(v => voxels.set(key(v.gx, v.gy, v.gz), { color: v.color }));
             break;
+        case 'fillRectangle': // Handle the new rectangle fill command
+            clearAllInternal(true, false); // Clear current state without history
+            const rectTargetVoxels = reverse ? oldState : newState;
+            rectTargetVoxels.forEach(v => voxels.set(key(v.gx, v.gy, v.gz), { color: v.color }));
+            break;
     }
     updateVoxelGeometry(); // Update geometry once after the command is fully processed
     rebuildHelpers(); // Ensure helpers reflect the new state (especially for fillLevel, terrainGenerate)
@@ -1989,33 +1011,69 @@ function recolorVoxel(x, y, z, newColorHex, fromHistory = false, triggerGeometry
         }
     }
 }
-// Annahmen, die im Code verwendet werden:
-// VS (Voxel Size) - die Größe eines Voxels
-// HALF (VS / 2)
-// cam (THREE.Camera)
-// raycaster (THREE.Raycaster)
-// voxelMesh (das THREE.Mesh-Objekt, das alle Voxel darstellt und für Raycasting verwendet wird)
-// voxels (Map oder ähnliche Struktur, die deine Voxel-Daten speichert)
-// key(x,y,z) - deine Funktion zum Generieren eines Schlüssels für die Voxel-Map
-// currentColor - die aktuell ausgewählte Farbe
-// addVoxel(x, y, z, color) - deine Funktion zum Hinzufügen eines Voxels
-// removeVoxel(x, y, z) - deine Funktion zum Entfernen eines Voxels
-// recolorVoxel(x, y, z, color) - deine Funktion zum Umfärben eines Voxels
-// updateVoxelGeometry() - Funktion zum Aktualisieren der Three.js-Geometrie
-// previewVoxelMesh - Ein Three.js Mesh für den Vorschau-Voxel (muss initialisiert sein, z.B. als global)
-// activeDrawingLevel - Objekt, das die aktuelle feste Y-Ebene für bestimmte Zeichenmodi speichert (z.B. {y: 0})
-// activeGestureMode - string, der den aktuellen Drag-Modus speichert (z.B. 'shiftDragDraw', 'controlStackDraw')
-// shiftActive() - Funktion, die prüft, ob Shift gedrückt ist (oder Shift-Lock)
-// currentDrawingAxis - speichert die Achse ('x', 'y', 'z') für feste Zeichenebenen
 
-// ************************************************************************************************
-// NEU: Globale Variable für den Vorschau-Voxel (muss einmalig im Setup initialisiert werden)
-// Füge dies zu deinen globalen/Modul-Variablen hinzu:
-// let previewVoxelMesh;
-// const previewVoxelGeometry = new THREE.BoxGeometry(VS, VS, VS);
-// const previewVoxelMaterial = new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.5 });
-// scene.add(previewVoxelMesh = new THREE.Mesh(previewVoxelGeometry, previewVoxelMaterial));
-// previewVoxelMesh.visible = false; // Standardmäßig unsichtbar
+// NEW: Helper function to perform the actual voxel modification
+function performVoxelModification(x, y, z, mode, color) {
+    const voxelKey = key(x, y, z);
+    const actualHasVoxel = voxels.has(voxelKey);
+
+    // Clamp coordinates to grid boundaries before performing modification
+    x = Math.max(0, Math.min(GRID - 1, x));
+    y = Math.max(0, Math.min(GRID - 1, y));
+    z = Math.max(0, Math.min(GRID - 1, z));
+
+    switch (mode) {
+        case Modes.ADD:
+            if (!actualHasVoxel) {
+                addVoxel(x, y, z, color);
+            }
+            break;
+        case Modes.DELETE:
+            if (actualHasVoxel) {
+                removeVoxel(x, y, z);
+            }
+            break;
+        case Modes.DRAW:
+            if (actualHasVoxel && voxels.get(voxelKey).color !== color) {
+                recolorVoxel(x, y, z, color);
+            }
+            break;
+    }
+}
+
+// NEW: DDA (Digital Differential Analyzer) for 3D Line Drawing
+function drawLineOfVoxels(start, end, mode, color) {
+    let x = start.gx;
+    let y = start.gy;
+    let z = start.gz;
+    const x2 = end.gx;
+    const y2 = end.gy;
+    const z2 = end.gz;
+
+    const dx = x2 - x;
+    const dy = y2 - y;
+    const dz = z2 - z;
+
+    const steps = Math.max(Math.abs(dx), Math.abs(dy), Math.abs(dz));
+
+    // Handle the case where start and end are the same (single point)
+    if (steps === 0) {
+        performVoxelModification(x, y, z, mode, color);
+        return;
+    }
+
+    const x_inc = dx / steps;
+    const y_inc = dy / steps;
+    const z_inc = dz / steps;
+
+    for (let i = 0; i <= steps; i++) {
+        performVoxelModification(Math.round(x), Math.round(y), Math.round(z), mode, color);
+        x += x_inc;
+        y += y_inc;
+        z += z_inc;
+    }
+}
+
 
 // NEU: Hilfsfunktion zum Aktualisieren des Vorschau-Voxels
 function updatePreviewVoxel(x, y, z, visible) {
@@ -2024,30 +1082,82 @@ function updatePreviewVoxel(x, y, z, visible) {
             previewVoxelMesh.position.set(x * VS + HALF, y * VS + HALF, z * VS + HALF);
             previewVoxelMesh.visible = true;
             previewVoxelMaterial.color.set(currentColor); // Vorschau-Farbe an aktuelle Farbe anpassen
+            // Optional: Passe die Opazität basierend auf dem Modus an
+            if (currentMode === Modes.DELETE) {
+                previewVoxelMaterial.opacity = 0.2; // Weniger sichtbar beim Löschen
+            } else {
+                previewVoxelMaterial.opacity = 0.5; // Standard Opazität
+            }
         } else {
             previewVoxelMesh.visible = false;
         }
     }
 }
-// ************************************************************************************************
+// ENDE NEU
 
+// Modified handleVoxelAction to only calculate and return target coords
+function calculateTargetVoxelCoords(clientX, clientY, mode, isDragging, isStackingAdd, fixedLevel = null, fixedAxis = null) {
+    // If pointer is locked (fly mode), no target voxel can be calculated for actions
+    if (isPointerLocked) {
+        return null;
+    }
 
-function handleVoxelAction(clientX, clientY, mode, isDragging, isStackingAdd, fixedLevel = null, fixedAxis = null) {
     const rect = cvs.getBoundingClientRect();
     const mouse = new THREE.Vector2(((clientX - rect.left) / rect.width) * 2 - 1,
         -((clientY - rect.top) / rect.height) * 2 + 1);
 
-    const raycaster = new THREE.Raycaster(); // Verwende 'raycaster' anstelle von 'ray' um Konflikte mit 'ray.ray' zu vermeiden
+    const raycaster = new THREE.Raycaster();
     raycaster.setFromCamera(mouse, cam);
 
-    let targetVoxelCoords = null; // Speichert die Gitterkoordinaten {gx, gy, gz} für die Aktion
-    let targetVoxelIsOccupied = false; // Flag, ob an der Zielposition bereits ein Voxel existiert
+    let targetVoxelCoords = null;
+    const intersects = raycaster.intersectObject(voxelMesh);
 
-    const intersects = raycaster.intersectObject(voxelMesh); // Verwende 'intersects' anstelle von 'hits'
+    // Determine the plane for drawing based on currentDrawingAxis and activeDrawingLevel
+    let drawingPlane = null;
+    let planeNormal = new THREE.Vector3();
+    let planeConstant = 0;
 
-    // --- LOGIK FÜR MODES.ADD ---
-    if (mode === Modes.ADD) {
-        if (isStackingAdd) { // Ctrl-Drag für das Stapeln (Stapel-Modus)
+    // Use the dynamically set fixedLevel if available, otherwise fallback to activeDrawingLevel
+    const currentLevelForPlane = (fixedLevel !== null) ? fixedLevel : activeDrawingLevel[currentDrawingAxis];
+
+    if (currentDrawingAxis === 'y') {
+        planeNormal.set(0, 1, 0);
+        planeConstant = -( currentLevelForPlane * VS ); // Plane at the bottom edge of the voxel row
+    } else if (currentDrawingAxis === 'x') {
+        planeNormal.set(1, 0, 0);
+        planeConstant = -( currentLevelForPlane * VS ); // Plane at the left edge of the voxel column
+    } else if (currentDrawingAxis === 'z') {
+        planeNormal.set(0, 0, 1);
+        planeConstant = -( currentLevelForPlane * VS ); // Plane at the front edge of the voxel depth
+    }
+    drawingPlane = new THREE.Plane(planeNormal, planeConstant);
+
+    // --- LOGIC FOR MODES.ADD, DELETE, DRAW, RECTANGLE_ADD ---
+    if (shiftActive() || isDblTapDragActive) { // This block handles all "fixed plane" drawing (Shift-drag, Double-tap-drag)
+        // For drawing on a fixed plane, we intersect the ray with that plane
+        const intersectionPoint = new THREE.Vector3();
+        raycaster.ray.intersectPlane(drawingPlane, intersectionPoint);
+
+        if (intersectionPoint) {
+            // Use Math.floor for all coordinates initially
+            let gx = Math.floor(intersectionPoint.x / VS);
+            let gy = Math.floor(intersectionPoint.y / VS);
+            let gz = Math.floor(intersectionPoint.z / VS);
+
+            // Explicitly set the coordinate on the fixed axis to fixedLevel
+            if (currentDrawingAxis === 'y') {
+                gy = fixedLevel;
+            } else if (currentDrawingAxis === 'x') {
+                gx = fixedLevel;
+            } else if (currentDrawingAxis === 'z') {
+                gz = fixedLevel;
+            }
+
+            targetVoxelCoords = { gx, gy, gz };
+        }
+    }
+    else if (mode === Modes.ADD || mode === Modes.RECTANGLE_ADD) {
+        if (isStackingAdd) { // Ctrl-Drag for stacking
             if (intersects.length > 0) {
                 const hit = intersects[0];
                 const gx = Math.floor(hit.point.x / VS);
@@ -2060,103 +1170,36 @@ function handleVoxelAction(clientX, clientY, mode, isDragging, isStackingAdd, fi
                 }
                 targetVoxelCoords = { gx: gx, gy: highestY + 1, gz: gz };
             } else {
-                // Wenn Ctrl-Drag im leeren Raum, auf aktuellem Zeichenlevel Y-Ebene platzieren
-                const planeNormal = new THREE.Vector3(0, 1, 0);
-                const planeConstant = activeDrawingLevel.y * VS + HALF;
-                const plane = new THREE.Plane(planeNormal, -planeConstant);
+                // If no voxel hit, use the active drawing plane for stacking base
                 const intersectionPoint = new THREE.Vector3();
-                raycaster.ray.intersectPlane(plane, intersectionPoint);
+                raycaster.ray.intersectPlane(drawingPlane, intersectionPoint);
                 if (intersectionPoint) {
                     targetVoxelCoords = {
                         gx: Math.floor(intersectionPoint.x / VS),
-                        gy: activeDrawingLevel.y, // Feste Y-Koordinate
+                        gy: activeDrawingLevel.y, // Use the active drawing level for the base
                         gz: Math.floor(intersectionPoint.z / VS)
                     };
                 }
             }
-        }
-        // NEU: Logik für Double-Tap-Drag-Zeichnen (feste Y-Ebene)
-        else if (activeGestureMode === 'dblTapDragDraw' && isDragging && fixedLevel !== null && fixedAxis === 'y') {
-            const planeNormal = new THREE.Vector3(0, 1, 0);
-            const planeConstant = fixedLevel * VS + HALF; // Die feste Y-Ebene
-            const plane = new THREE.Plane(planeNormal, -planeConstant);
-            const intersectionPoint = new THREE.Vector3();
-            raycaster.ray.intersectPlane(plane, intersectionPoint);
-
-            if (intersectionPoint) {
-                targetVoxelCoords = {
-                    gx: Math.floor(intersectionPoint.x / VS),
-                    gy: fixedLevel, // Hier wird die feste Y-Ebene erzwungen
-                    gz: Math.floor(intersectionPoint.z / VS)
-                };
-            }
-        }
-        // NEU: Logik für Shift-Drag mit fester Achse (existierende Logik, aber mit 'raycaster')
-        else if (isDragging && shiftActive() && fixedLevel !== null && fixedAxis !== null) {
-            let planeNormal, planeConstant;
-            if (fixedAxis === 'y') {
-                planeNormal = new THREE.Vector3(0, 1, 0);
-                planeConstant = fixedLevel * VS + HALF;
-            } else if (fixedAxis === 'x') {
-                planeNormal = new THREE.Vector3(1, 0, 0);
-                planeConstant = fixedLevel * VS + HALF;
-            } else if (fixedAxis === 'z') {
-                planeNormal = new THREE.Vector3(0, 0, 1);
-                planeConstant = fixedLevel * VS + HALF;
-            }
-            const plane = new THREE.Plane(planeNormal, -planeConstant);
-            const intersectionPoint = new THREE.Vector3();
-            raycaster.ray.intersectPlane(plane, intersectionPoint);
-
-            if (intersectionPoint) {
-                targetVoxelCoords = {
-                    gx: Math.floor(intersectionPoint.x / VS),
-                    gy: Math.floor(intersectionPoint.y / VS),
-                    gz: Math.floor(intersectionPoint.z / VS)
-                };
-                // Achsen-Override für die feste Achse
-                if (fixedAxis === 'y') targetVoxelCoords.gy = fixedLevel;
-                if (fixedAxis === 'x') targetVoxelCoords.gx = fixedLevel;
-                if (fixedAxis === 'z') targetVoxelCoords.gz = fixedLevel;
-            }
-        }
-        // ÄNDERUNG: Normaler Klick oder Drag im ADD-Modus (Kein Shift/Ctrl)
-        // Dies ist der Bereich, der das "Stapeln" verhindert, wenn auf die Seite geklickt wird.
-        else {
+        } else { // Normal click or drag in ADD mode (No Shift/Ctrl) or RECTANGLE_ADD
             if (intersects.length > 0) {
                 const hit = intersects[0];
-                const hitPoint = hit.point.clone(); // Der genaue Trefferpunkt
-                const hitFaceNormal = hit.face.normal.clone(); // Die Normale der getroffenen Fläche
+                // Nudge the hit point slightly inwards along the normal to ensure we're inside the hit voxel
+                const hitPointInVoxel = hit.point.clone().sub(hit.face.normal.clone().multiplyScalar(0.001));
+                const hitVoxelX = Math.floor(hitPointInVoxel.x / VS);
+                const hitVoxelY = Math.floor(hitPointInVoxel.y / VS);
+                const hitVoxelZ = Math.floor(hitPointInVoxel.z / VS);
 
-                // Hier ist die entscheidende Änderung:
-                // Um einen Voxel angrenzend an den getroffenen Voxel zu platzieren,
-                // muss man vom Zentrum des getroffenen Voxels um eine Voxel-Größe
-                // in Richtung der hitFaceNormal verschieben.
-                // Three.js gibt `hit.face.normal` korrekt an der getroffenen Fläche zurück.
-                // Voxel-Koordinaten sind in deiner Map ganze Zahlen.
-                
-                // Zuerst die Gitterkoordinaten des getroffenen Voxels finden
-                // (p.sub(n.clone().multiplyScalar(0.01)) war für DELETE/DRAW, um den Voxel selbst zu finden)
-                // Hier wollen wir den Voxel *neben* dem getroffenen finden.
-                const currentHitVoxelX = Math.floor(hitPoint.x / VS);
-                const currentHitVoxelY = Math.floor(hitPoint.y / VS);
-                const currentHitVoxelZ = Math.floor(hitPoint.z / VS);
-
-                // Die neuen Koordinaten sind die des getroffenen Voxels PLUS die Normale.
-                // Die 0.01 Nudge ist hier NICHT nötig, da wir den angrenzenden Voxel suchen.
+                // Then, add the normal components to get the adjacent voxel
                 targetVoxelCoords = {
-                    gx: currentHitVoxelX + Math.round(hitFaceNormal.x), // Normale ist -1, 0 oder 1
-                    gy: currentHitVoxelY + Math.round(hitFaceNormal.y),
-                    gz: currentHitVoxelZ + Math.round(hitFaceNormal.z)
+                    gx: hitVoxelX + hit.face.normal.x,
+                    gy: hitVoxelY + hit.face.normal.y,
+                    gz: hitVoxelZ + hit.face.normal.z
                 };
             } else {
-                // Wenn im leeren Raum geklickt, auf aktuellem Zeichenlevel Y-Ebene platzieren
-                // Diese Logik bleibt unverändert und ist korrekt für das Platzieren auf der Ebene
-                let planeNormal = new THREE.Vector3(0, 1, 0);
-                let planeConstant = activeDrawingLevel.y * VS + HALF;
-                const plane = new THREE.Plane(planeNormal, -planeConstant);
+                // If no voxel is hit, use the active drawing plane
                 const intersectionPoint = new THREE.Vector3();
-                raycaster.ray.intersectPlane(plane, intersectionPoint);
+                raycaster.ray.intersectPlane(drawingPlane, intersectionPoint);
                 if (intersectionPoint) {
                     targetVoxelCoords = {
                         gx: Math.floor(intersectionPoint.x / VS),
@@ -2167,133 +1210,32 @@ function handleVoxelAction(clientX, clientY, mode, isDragging, isStackingAdd, fi
             }
         }
     }
-    // --- LOGIK FÜR MODES.DELETE oder MODES.DRAW ---
-    // Hier ist das Ziel, den *getroffenen* Voxel zu identifizieren, nicht den danebenliegenden.
-    else { // mode === Modes.DELETE or mode === Modes.DRAW
+    else { // mode === Modes.DELETE or mode === Modes.DRAW (normal click/drag, not fixed plane)
         if (intersects.length > 0) {
             const hit = intersects[0];
             const p = hit.point.clone();
             const n = hit.face.normal;
-
-            // Nudge the hit point slightly inwards based on the face normal
-            // Dies ist korrekt für DELETE/DRAW, um den Voxel zu finden, der wirklich angeklickt wurde.
-            p.sub(n.clone().multiplyScalar(0.01));
+            p.sub(n.clone().multiplyScalar(0.01)); // Nudge slightly inwards to get the hit voxel
 
             targetVoxelCoords = {
                 gx: Math.floor(p.x / VS),
                 gy: Math.floor(p.y / VS),
                 gz: Math.floor(p.z / VS)
             };
-            targetVoxelIsOccupied = voxels.has(key(targetVoxelCoords.gx, targetVoxelCoords.gy, targetVoxelCoords.gz));
-
-        } else if (isDragging && shiftActive()) { // Nur für Shift-Drag im leeren Raum für DELETE/DRAW
-            // Wenn kein existierender Voxel getroffen wird, aber wir mit Shift-Drag ziehen,
-            // projizieren wir auf die aktive Zeichenebene, um den Zielvoxel zu bestimmen.
-            let planeNormal, planeConstant;
-            if (currentDrawingAxis === 'y') {
-                planeNormal = new THREE.Vector3(0, 1, 0);
-                planeConstant = activeDrawingLevel.y * VS + HALF;
-            } else if (currentDrawingAxis === 'x') {
-                planeNormal = new THREE.Vector3(1, 0, 0);
-                planeConstant = activeDrawingLevel.x * VS + HALF;
-            } else if (currentDrawingAxis === 'z') {
-                planeNormal = new THREE.Vector3(0, 0, 1);
-                planeConstant = activeDrawingLevel.z * VS + HALF;
-            }
-            const plane = new THREE.Plane(planeNormal, -planeConstant);
-            const intersectionPoint = new THREE.Vector3();
-            raycaster.ray.intersectPlane(plane, intersectionPoint);
-
-            if (intersectionPoint) {
-                targetVoxelCoords = {
-                    gx: Math.floor(intersectionPoint.x / VS),
-                    gy: Math.floor(intersectionPoint.y / VS),
-                    gz: Math.floor(intersectionPoint.z / VS)
-                };
-                // Wichtig: Setze die Koordinate für die aktuelle Zeichenachse auf das aktive Zeichenlevel
-                if (currentDrawingAxis === 'y') targetVoxelCoords.gy = activeDrawingLevel.y;
-                if (currentDrawingAxis === 'x') targetVoxelCoords.gx = activeDrawingLevel.x;
-                if (currentDrawingAxis === 'z') targetVoxelCoords.gz = activeDrawingLevel.z;
-            }
-            targetVoxelIsOccupied = voxels.has(key(targetVoxelCoords.gx, targetVoxelCoords.gy, targetVoxelCoords.gz));
         }
+        // If no intersection, and not a fixed-plane drag, then no target voxel.
     }
-
-
-    // ************************************************************************************************
-    // NEU: Update des Vorschau-Voxels (IMMER AM ENDE DER BERECHNUNG DES ZIEL-VOXELS)
-    if (targetVoxelCoords) {
-        // Überprüfen, ob die berechneten Koordinaten innerhalb der Grenzen liegen,
-        // bevor der Vorschau-Voxel aktualisiert wird.
-        const x = Math.max(0, Math.min(GRID - 1, targetVoxelCoords.gx));
-        const y = Math.max(0, Math.min(GRID - 1, targetVoxelCoords.gy));
-        const z = Math.max(0, Math.min(GRID - 1, targetVoxelCoords.gz));
-
-        // Nur anzeigen, wenn die Position gültig ist und nicht bereits ein Voxel dort ist (für ADD-Modus)
-        // Oder wenn es DELETE/DRAW ist und ein Voxel da ist
-        let shouldShowPreview = false;
-        if (mode === Modes.ADD && !voxels.has(key(x, y, z))) {
-             shouldShowPreview = true;
-        } else if ((mode === Modes.DELETE || mode === Modes.DRAW) && voxels.has(key(x, y, z))) {
-             shouldShowPreview = true;
-        }
-
-        if (shouldShowPreview) {
-             updatePreviewVoxel(x, y, z, true);
-        } else {
-             updatePreviewVoxel(0, 0, 0, false); // Vorschau verbergen
-        }
-
-    } else {
-        updatePreviewVoxel(0, 0, 0, false); // Vorschau verbergen, wenn kein Ziel gefunden
-    }
-    // ************************************************************************************************
-
 
     if (targetVoxelCoords) {
-        // clamp coordinates to grid boundaries for the actual action
-        const x = Math.max(0, Math.min(GRID - 1, targetVoxelCoords.gx));
-        const y = Math.max(0, Math.min(GRID - 1, targetVoxelCoords.gy));
-        const z = Math.max(0, Math.min(GRID - 1, targetVoxelCoords.gz));
-
-        // Ensure the calculated coordinates are within bounds before attempting action
-        if (x < 0 || x >= GRID || y < 0 || y >= GRID || z < 0 || z >= GRID) {
-            return; // Do nothing if out of bounds
-        }
-
-        const voxelKey = key(x, y, z);
-        // targetVoxelIsOccupied wurde bereits oben für DELETE/DRAW gesetzt.
-        // Für ADD müssen wir es hier nochmal prüfen, da die Logik neu ist.
-        const actualHasVoxel = voxels.has(voxelKey); // Der tatsächliche Zustand im Map
-
-
-        switch (mode) {
-            case Modes.ADD:
-                // Wenn im ADD-Modus ein Voxel hinzugefügt werden soll, aber schon einer da ist, tue nichts.
-                if (!actualHasVoxel) {
-                    addVoxel(x, y, z, currentColor);
-                }
-                break;
-            case Modes.DELETE:
-                if (actualHasVoxel) { // Nur löschen, wenn Voxel vorhanden
-                    removeVoxel(x, y, z);
-                }
-                break;
-            case Modes.DRAW: // Umfärben
-                if (actualHasVoxel) { // Nur umfärben, wenn Voxel vorhanden
-                    recolorVoxel(x, y, z, currentColor);
-                }
-                break;
-        }
+        // Clamp coordinates to grid boundaries
+        targetVoxelCoords.gx = Math.max(0, Math.min(GRID - 1, targetVoxelCoords.gx));
+        targetVoxelCoords.gy = Math.max(0, Math.min(GRID - 1, targetVoxelCoords.gy));
+        targetVoxelCoords.gz = Math.max(0, Math.min(GRID - 1, targetVoxelCoords.gz));
+        return targetVoxelCoords;
     }
-
-
-// HINWEIS: Es ist sehr wahrscheinlich, dass du die `handleVoxelAction` auch für den `pointermove`-Event
-// aufrufen möchtest, um den Vorschau-Voxel zu aktualisieren, aber ohne die eigentliche Voxel-Aktion auszuführen.
-// Du müsstest in den 'pointermove'-Handlern eine neue Variable einführen, z.B. `isPreviewMode`,
-// und die switch-Anweisung am Ende der Funktion nur ausführen, wenn `isPreviewMode` `false` ist.
-// Oder du trennst die Vorschau-Logik komplett in eine eigene Funktion, die von `pointermove` aufgerufen wird.
+    return null;
 }
+
 function clearAllInternal(fromHistory = false, triggerGeometryUpdate = true) {
     if (!fromHistory) {
         const oldState = [...voxels.entries()].map(([id, data]) => {
@@ -2503,9 +1445,9 @@ function loadJSON(event) {
                 // Load terrain parameters
                 terrainHeightScale = loadedSettings.terrainHeightScale !== undefined ? loadedSettings.terrainHeightScale : 10;
                 terrainFrequency = loadedSettings.terrainFrequency !== undefined ? loadedSettings.terrainFrequency : 0.05;
-                terrainOctaves = loadedSettings.terrainOctaves !== undefined  ? loadedSettings.terrainOctaves : 4;
-                terrainLacunarity = loadedSettings.terrainLacunarity !== undefined ? loadedSettings.terrainLacunarity : 2.0;
-                terrainGain = loadedSettings.terrainGain !== undefined ? loadedSettings.terrainGain : 0.5;
+                terrainOctaves = loadedSettings.terrainOctaves !== undefined  ? loadedSettings.octaves : 4;
+                terrainLacunarity = loadedSettings.lacunarity !== undefined ? loadedSettings.lacunarity : 2.0;
+                terrainGain = loadedSettings.terrainGain !== undefined ? loadedSettings.gain : 0.5;
                 terrainSeed = loadedSettings.terrainSeed !== undefined ? loadedSettings.terrainSeed : '';
 
                 document.getElementById('terrain-height-scale').value = terrainHeightScale;
@@ -2564,86 +1506,6 @@ function exportSTL() {
     URL.revokeObjectURL(url);
 }
 
-// Simple 2D Value Noise implementation
-class ValueNoise2D {
-    constructor(seed = '') {
-        this.seed = seed;
-        this.random = new Math.seedrandom(this.seed);
-    }
-
-    // Generates a random value between 0 and 1 using the seeded randomizer
-    _rand() {
-        return this.random();
-    }
-
-    // Smoothstep interpolation
-    _smoothstep(t) {
-        return t * t * (3 - 2 * t);
-    }
-
-    // Linear interpolation
-    _lerp(a, b, t) {
-        return a + t * (b - a);
-    }
-
-    // Main FBM (Fractal Brownian Motion) function
-    fbm(x, z, octaves, lacunarity, gain) {
-        let total = 0;
-        let amplitude = 1;
-        let maxAmplitude = 0; // Used to normalize the result later
-
-        // Set initial frequency based on global terrainFrequency
-        // This is a crucial part of controlling the "zoom" of the noise.
-        // Higher initialFrequency means "busier" noise for the same terrain size.
-        // Multiply by GRID to normalize it relative to the grid size, so 0.05 is consistent.
-let frequency = terrainFrequency;
-        for (let i = 0; i < octaves; i++) {
-            // Get the integer coordinates of the grid cell
-            const x0 = Math.floor(x * frequency);
-            const z0 = Math.floor(z * frequency);
-            const x1 = x0 + 1;
-            const z1 = z0 + 1;
-
-            // Get the fractional parts
-            const fx = (x * frequency) - x0;
-            const fz = (z * frequency) - z0;
-
-            // Get the 4 corner values (pseudo-random based on integer coordinates)
-            // Need a consistent way to generate values for given integer coords
-            const val00 = this._value(x0, z0);
-            const val10 = this._value(x1, z0);
-            const val01 = this._value(x0, z1);
-            const val11 = this._value(x1, z1);
-
-            // Interpolate in X direction
-            const ix0 = this._lerp(val00, val10, this._smoothstep(fx));
-            const ix1 = this._lerp(val01, val11, this._smoothstep(fz));
-
-            // Interpolate in Z direction
-            total += this._lerp(ix0, ix1, this._smoothstep(fz)) * amplitude;
-
-            maxAmplitude += amplitude; // Accumulate max possible amplitude
-
-            // Apply lacunarity and gain for the next octave
-            frequency *= lacunarity;
-            amplitude *= gain;
-        }
-
-        // Normalize the total to be between 0 and 1, then scale to -1 to 1 for typical noise range
-        // If maxAmplitude is 0 (e.g., octaves = 0), avoid division by zero.
-        if (maxAmplitude === 0) return 0;
-        return (total / maxAmplitude) * 2 - 1; // Normalize to -1 to 1 range
-    }
-
-    // Generates a pseudo-random value for integer coordinates
-    _value(x, y) {
-        // Simple hash function for reproducibility based on seed
-        this.random = new Math.seedrandom(`${this.seed}-${x}-${y}`);
-        return this._rand();
-    }
-}
-
-
 function generateTerrain() {
     const oldState = [...voxels.entries()].map(([id, data]) => {
         const parts = id.split(',').map(Number);
@@ -2701,6 +1563,725 @@ function resetCameraPosition() {
     }
 }
 
+
+/* ---------- Initialisierung bei Fensterladung ---------- */
+window.onload = function() {
+    cvs = document.getElementById('voxelCanvas');
+    containerDiv = document.getElementById('container'); // Get reference to the container div
+
+    // Scene
+    scene = new THREE.Scene();
+    scene.background = new THREE.Color(0x282c34);
+
+    // Camera
+    const aspect = containerDiv.clientWidth / containerDiv.clientHeight;
+    cam = new THREE.PerspectiveCamera(75, aspect, 0.1, 1000);
+    resetCameraPosition(); // Set initial camera position and look-at
+    euler = new THREE.Euler(0, 0, 0, 'YXZ'); // Initialize euler with 'YXZ' order for consistent rotation
+
+    // Renderer
+    ren = new THREE.WebGLRenderer({ canvas: cvs, antialias: true });
+    ren.setSize(containerDiv.clientWidth, containerDiv.clientHeight);
+    ren.setPixelRatio(window.devicePixelRatio);
+    ren.shadowMap.enabled = true; // Enable shadow maps
+    ren.shadowMap.type = THREE.PCFSoftShadowMap; // Softer shadows
+
+    // Lights
+    const ambientLight = new THREE.AmbientLight(0x404040); // Soft white light
+    scene.add(ambientLight);
+
+    mainDirectionalLight = new THREE.DirectionalLight(0xffffff, 0.8);
+    mainDirectionalLight.position.set(10, 20, 15);
+    mainDirectionalLight.castShadow = true;
+    mainDirectionalLight.shadow.mapSize.width = 2048; // Increased for better shadow quality
+    mainDirectionalLight.shadow.mapSize.height = 2048;
+    mainDirectionalLight.shadow.camera.near = 0.5;
+    mainDirectionalLight.shadow.camera.far = 50;
+    mainDirectionalLight.shadow.camera.left = -30; // Adjust shadow camera volume
+    mainDirectionalLight.shadow.camera.right = 30;
+    mainDirectionalLight.shadow.camera.top = 30;
+    mainDirectionalLight.shadow.camera.bottom = -30;
+    scene.add(mainDirectionalLight);
+
+    // Initial Material for combined mesh (now supports vertex colors)
+    meshMaterial = new THREE.MeshLambertMaterial({ vertexColors: true });
+
+    // Add initial empty voxel mesh to scene
+    voxelGeometry = new THREE.BufferGeometry();
+    voxelMesh = new THREE.Mesh(voxelGeometry, meshMaterial);
+    voxelMesh.castShadow = true;
+    voxelMesh.receiveShadow = true;
+    scene.add(voxelMesh);
+
+    // NEU: Vorschau-Voxel zur Szene hinzufügen
+    scene.add(previewVoxelMesh);
+    updatePreviewVoxel(0,0,0,false); // Initial verstecken
+
+    // NEW: Initialize rectangle preview mesh
+    rectanglePreviewMesh = new THREE.Mesh(new THREE.BufferGeometry(), rectanglePreviewMaterial);
+    scene.add(rectanglePreviewMesh);
+    rectanglePreviewMesh.visible = false; // Initially hidden
+
+    // Helpers
+    rebuildHelpers(); // Build initial grid and box helpers
+
+    // Event Listeners
+    window.addEventListener('resize', onResize);
+    // Use containerDiv for pointer events to allow controls to be clickable
+    containerDiv.addEventListener('pointerdown', onPointerDown);
+    containerDiv.addEventListener('pointermove', onPointerMove);
+    containerDiv.addEventListener('pointerup', onPointerUp);
+    containerDiv.addEventListener('pointercancel', onPointerUp); // Treat cancel as up
+    containerDiv.addEventListener('wheel', onMouseWheel, { passive: false }); // Prevent default scroll
+
+    document.addEventListener('keydown', onKeyDown);
+    document.addEventListener('keyup', onKeyUp);
+    // NEW: Listen for pointer lock changes
+    document.addEventListener('pointerlockchange', onPointerLockChange, false);
+
+
+    // Prevent context menu on right click
+    containerDiv.addEventListener('contextmenu', (e) => e.preventDefault());
+
+    // UI event listeners
+    document.getElementById('grid-size-slider').addEventListener('input', (e) => {
+        const oldGrid = GRID; // Capture old GRID size for history
+        GRID = parseInt(e.target.value);
+        document.getElementById('grid-size-display').textContent = `${GRID}×${GRID}×${GRID}`;
+        localStorage.setItem('voxelEditorGridSize', GRID);
+
+        // Capture current voxel state before clear for history
+        const oldVoxelState = [...voxels.entries()].map(([id, data]) => {
+            const parts = id.split(',').map(Number);
+            return { gx: parts[0], gy: parts[1], gz: parts[2], color: data.color };
+        });
+
+        // Clear voxels outside new bounds and update geometry
+        const newVoxelsMap = new Map();
+        oldVoxelState.forEach(v => {
+            if (v.gx < GRID && v.gy < GRID && v.gz < GRID) {
+                newVoxelsMap.set(key(v.gx, v.gy, v.gz), { color: v.color });
+            }
+        });
+        voxels.clear();
+        newVoxelsMap.forEach((data, k) => voxels.set(k, data));
+        updateVoxelGeometry();
+
+        // Capture new voxel state after resize for history
+        const newVoxelState = [...voxels.entries()].map(([id, data]) => {
+            const parts = id.split(',').map(Number);
+            return { gx: parts[0], gy: parts[1], gz: parts[2], color: data.color };
+        });
+
+        addCommand('resizeGrid', null, null, null, null, null, oldVoxelState, newVoxelState, { oldGrid: oldGrid, newGrid: GRID });
+
+        rebuildHelpers();
+        resetCameraPosition(); // Reset camera to new grid center
+    });
+
+    document.getElementById('color-picker').addEventListener('input', (e) => {
+        currentColor = e.target.value;
+        localStorage.setItem('voxelEditorColor', currentColor);
+        // Deactivate all presets when custom color is picked
+        presetBoxes.forEach(box => box.classList.remove('active'));
+        activePresetIndex = -1;
+    });
+
+    // Populate and add listeners for preset color boxes
+    presetBoxes = [
+        document.getElementById('color-preset-1'),
+        document.getElementById('color-preset-2'),
+        document.getElementById('color-preset-3')
+    ];
+    presetColors.forEach((color, index) => {
+        const box = presetBoxes[index];
+        box.style.backgroundColor = color;
+        box.addEventListener('click', () => {
+            setActivePreset(index);
+        });
+    });
+    // Set initial active preset if one was loaded
+    if (activePresetIndex !== -1) {
+        setActivePreset(activePresetIndex);
+    } else {
+        // If no preset was active, ensure current color is shown on picker and no preset box is active
+        document.getElementById('color-picker').value = currentColor;
+    }
+
+
+    document.getElementById('modeToggle').addEventListener('click', cycleMode); // Use new cycleMode
+    document.getElementById('current-mode').textContent = `Modus: ${currentMode}`; // Update initial display
+
+    const clearConfirmationModal = document.getElementById('clearConfirmationModal');
+    document.getElementById('clearBtn').addEventListener('click', () => {
+        clearConfirmationModal.style.display = 'flex';
+    });
+    document.getElementById('saveAndClearBtn').addEventListener('click', () => {
+        saveJSON();
+        clearAll();
+        clearConfirmationModal.style.display = 'none';
+    });
+    document.getElementById('clearWithoutSaveBtn').addEventListener('click', () => {
+        clearAll();
+        clearConfirmationModal.style.display = 'none';
+    });
+    document.getElementById('cancelClearBtn').addEventListener('click', () => {
+        clearConfirmationModal.style.display = 'none';
+    });
+
+
+    document.getElementById('fillLevelBtn').addEventListener('click', fillActiveLevel);
+    document.getElementById('saveBtn').addEventListener('click', saveJSON);
+    document.getElementById('loadBtn').addEventListener('click', () => {
+        document.getElementById('fileInput').click();
+    });
+    document.getElementById('fileInput').addEventListener('change', loadJSON);
+    document.getElementById('exportStlBtn').addEventListener('click', exportSTL);
+
+    document.getElementById('fly-speed-slider').addEventListener('input', (e) => {
+        moveSpeed = parseFloat(e.target.value);
+        document.getElementById('fly-speed-display').textContent = moveSpeed.toFixed(2);
+        localStorage.setItem('voxelEditorFlySpeed', moveSpeed);
+    });
+
+    // Info Box (Help) Toggle Logic
+    const infoBox = document.getElementById('infoBox');
+    const helpToggleBtn = document.getElementById('helpToggleBtn');
+    let showInfoBox = localStorage.getItem('showInfoBox') === 'true'; // Default to true if not set
+
+    function updateInfoBoxVisibility() {
+        infoBox.style.display = showInfoBox ? 'block' : 'none';
+        helpToggleBtn.textContent = showInfoBox ? 'Hilfe ausblenden' : 'Hilfe anzeigen';
+        localStorage.setItem('showInfoBox', showInfoBox);
+    }
+    helpToggleBtn.addEventListener('click', () => {
+        showInfoBox = !showInfoBox;
+        updateInfoBoxVisibility();
+    });
+    updateInfoBoxVisibility(); // Set initial visibility on load
+
+    // Terrain Controls Toggle Logic
+    const terrainControlsPanel = document.getElementById('terrainControlsPanel');
+    const toggleTerrainControlsBtn = document.getElementById('toggleTerrainControlsBtn');
+    let showTerrainControls = localStorage.getItem('showTerrainControls') === 'true';
+
+    function updateTerrainControlsVisibility() {
+        terrainControlsPanel.style.display = showTerrainControls ? 'flex' : 'none';
+        toggleTerrainControlsBtn.textContent = showTerrainControls ? 'Gelände-Optionen ausblenden' : 'Gelände-Optionen anzeigen';
+        localStorage.setItem('showTerrainControls', showTerrainControls);
+    }
+    toggleTerrainControlsBtn.addEventListener('click', () => {
+        showTerrainControls = !showTerrainControls;
+        updateTerrainControlsVisibility();
+    });
+    updateTerrainControlsVisibility();
+
+    // Terrain parameter input event listeners
+    document.getElementById('terrain-height-scale').addEventListener('input', (e) => terrainHeightScale = parseInt(e.target.value));
+    document.getElementById('terrain-frequency').addEventListener('input', (e) => terrainFrequency = parseFloat(e.target.value));
+    document.getElementById('terrain-octaves').addEventListener('input', (e) => terrainOctaves = parseInt(e.target.value));
+    document.getElementById('terrain-lacunarity').addEventListener('input', (e) => terrainLacunarity = parseFloat(e.target.value));
+    document.getElementById('terrain-gain').addEventListener('input', (e) => terrainGain = parseFloat(e.target.value));
+    document.getElementById('terrain-seed').addEventListener('input', (e) => {
+        terrainSeed = e.target.value;
+        hasUserTypedSeed = (terrainSeed !== '');
+    });
+
+    document.getElementById('generateTerrainBtn').addEventListener('click', generateTerrain);
+
+    // Shift-Lock Button
+    const shiftLockBtn = document.getElementById('shiftLockBtn');
+    shiftLockBtn.addEventListener('click', () => {
+        shiftLock = !shiftLock;
+        shiftLockBtn.textContent = `Shift-Lock ✱ ${shiftLock ? 'an' : 'aus'}`;
+        shiftLockBtn.classList.toggle('active', shiftLock); // Add/remove 'active' class
+    });
+
+
+    // Hamburger menu toggle for mobile
+    const menuToggle = document.getElementById('menuToggle');
+    menuToggle.addEventListener('click', () => {
+        const controlsPanel = document.getElementById('controls');
+        if (controlsPanel.style.display === 'none' || controlsPanel.style.display === '') {
+            controlsPanel.style.display = 'flex';
+        } else {
+            controlsPanel.style.display = 'none';
+        }
+    });
+
+    // Check media query on load and resize
+    const mediaQuery = window.matchMedia('(max-width: 768px)');
+    function handleMediaQueryChange(e) {
+        const controlsPanel = document.getElementById('controls');
+        if (e.matches) {
+            // Mobile view: hide controls by default, show menu toggle
+            controlsPanel.style.display = 'none';
+            menuToggle.style.display = 'block';
+        } else {
+            // Desktop view: show controls by default, hide menu toggle
+            controlsPanel.style.display = 'flex';
+            menuToggle.style.display = 'none';
+        }
+    }
+    mediaQuery.addListener(handleMediaQueryChange); // Add listener for changes
+    handleMediaQueryChange(mediaQuery); // Call once on load
+
+    // Initialisiere noise2D mit dem aktuellen Seed
+    noise2D = new ValueNoise2D(terrainSeed);
+
+    // Start animation loop
+    animate();
+}; // END window.onload
+
+/* ---------- Animations-Loop ---------- */
+function animate() {
+    requestAnimationFrame(animate);
+
+    // Continuous keyboard movement when pointer is locked (fly mode)
+    if (isPointerLocked) {
+        const forward = cam.getWorldDirection(new THREE.Vector3());
+        const right = new THREE.Vector3().crossVectors(forward, cam.up).normalize();
+        const up = new THREE.Vector3(0, 1, 0); // World up direction
+
+        const currentMoveSpeed = moveSpeed * 5; // Adjust this multiplier for desired feel
+
+        if (keyboard['w']) cam.position.addScaledVector(forward, currentMoveSpeed);
+        if (keyboard['s']) cam.position.addScaledVector(forward, -currentMoveSpeed);
+        if (keyboard['a']) cam.position.addScaledVector(right, -currentMoveSpeed);
+        if (keyboard['d']) cam.position.addScaledVector(right, currentMoveSpeed);
+        if (keyboard['q']) cam.position.addScaledVector(up, -currentMoveSpeed);
+        if (keyboard['e']) cam.position.addScaledVector(up, currentMoveSpeed);
+    }
+
+    ren.render(scene, cam);
+}
+
+/* ---------- Mouse / Pointer Input ---------- */
+let pointerIsDown = false;
+let lastX, lastY;
+let isPointerOverCanvas = false;
+let currentHoveredVoxel = null; // Store {x, y, z} of the voxel currently hovered by the mouse
+
+// NEW: Variables for rectangle drawing
+let isDrawingRectangle = false;
+let rectangleStartCoords = null; // {gx, gy, gz}
+let rectanglePreviewMesh = null; // THREE.Mesh for the preview
+const rectanglePreviewMaterial = new THREE.MeshBasicMaterial({ color: 0x00ff00, transparent: true, opacity: 0.3, depthTest: false });
+
+
+function onPointerDown(e) {
+    if (e.pointerType === 'mouse' && e.button === 2) { // Right-click (mouse only)
+        rotate = true;
+        // Request pointer lock only on right click down
+        cvs.requestPointerLock();
+        e.preventDefault(); // Prevent context menu
+        return;
+    }
+
+    // Only proceed with voxel actions if not in fly mode (pointer not locked)
+    if (!isPointerLocked) {
+        pointerIsDown = true;
+        lastX = e.clientX;
+        lastY = e.clientY;
+        lastActionVoxelCoords = null; // NEW: Reset last acted-upon voxel on pointer down
+
+        // Store initial position for drag detection (to differentiate click from drag)
+        initialClickPos = { x: e.clientX, y: e.clientY };
+
+        // Start long-press timer
+        longPressTimer = setTimeout(() => {
+            isHoldDrawingActive = true;
+            // No immediate action here, it will be handled by onPointerMove or onPointerUp
+        }, LONG_PRESS_DELAY_MS);
+
+        // Check for double-tap start (for dblTapDragDraw)
+        const now = performance.now();
+        if (now - lastTap < DT_MS && tapCandidate && Math.hypot(e.clientX - tapCandidate.x, e.clientY - tapCandidate.y) < TAP_DIST_TH) {
+            dblTapActive = true;
+            isDblTapDragActive = true; // Activate double-tap-drag mode
+            activeGestureMode = 'dblTapDragDraw';
+
+            const rect = cvs.getBoundingClientRect();
+            const mouse = new THREE.Vector2(((e.clientX - rect.left) / rect.width) * 2 - 1,
+                                            -((e.clientY - rect.top) / rect.height) * 2 + 1);
+            const raycaster = new THREE.Raycaster();
+            raycaster.setFromCamera(mouse, cam);
+            const intersects = raycaster.intersectObject(voxelMesh);
+            currentShiftDragLevel = intersects.length ? Math.floor(intersects[0].point.y / VS) : activeDrawingLevel.y;
+
+        } else {
+            dblTapActive = false;
+            isDblTapDragActive = false;
+            activeGestureMode = 'none';
+            tapCandidate = { x: e.clientX, y: e.clientY, time: now };
+        }
+
+        // NEW: Determine fixed drawing plane for Shift-drag or Ctrl-drag (if not stacking)
+        // This needs to be done *before* any potential drag logic in onPointerMove
+        if (e.buttons === 1 && (e.shiftKey || shiftLock)) { // Left mouse button + Shift key or Shift-Lock
+            const rect = cvs.getBoundingClientRect();
+            const mouse = new THREE.Vector2(((e.clientX - rect.left) / rect.width) * 2 - 1,
+                                            -((e.clientY - rect.top) / rect.height) * 2 + 1);
+            const raycaster = new THREE.Raycaster();
+            raycaster.setFromCamera(mouse, cam);
+            const intersects = raycaster.intersectObject(voxelMesh);
+
+            // If a voxel is hit, set the fixed level based on the hit point and normal
+            if (intersects.length > 0) {
+                const hit = intersects[0];
+                const hitNormal = hit.face.normal;
+                // Determine the dominant axis of the hit face normal to set the drawing plane
+                if (Math.abs(hitNormal.y) > Math.abs(hitNormal.x) && Math.abs(hitNormal.y) > Math.abs(hitNormal.z)) {
+                    currentDrawingAxis = 'y';
+                    // Calculate the plane level. If adding, it's the plane *above* the hit voxel.
+                    // If deleting/drawing, it's the plane *of* the hit voxel.
+                    if (currentMode === Modes.ADD || currentMode === Modes.RECTANGLE_ADD) {
+                        currentShiftDragLevel = Math.floor(hit.point.y / VS) + Math.round(hitNormal.y);
+                    } else { // DELETE or DRAW
+                        currentShiftDragLevel = Math.floor(hit.point.y / VS);
+                    }
+                } else if (Math.abs(hitNormal.x) > Math.abs(hitNormal.y) && Math.abs(hitNormal.x) > Math.abs(hitNormal.z)) {
+                    currentDrawingAxis = 'x';
+                    if (currentMode === Modes.ADD || currentMode === Modes.RECTANGLE_ADD) {
+                        currentShiftDragLevel = Math.floor(hit.point.x / VS) + Math.round(hitNormal.x);
+                    } else {
+                        currentShiftDragLevel = Math.floor(hit.point.x / VS);
+                    }
+                } else { // Z-axis dominant
+                    currentDrawingAxis = 'z';
+                    if (currentMode === Modes.ADD || currentMode === Modes.RECTANGLE_ADD) {
+                        currentShiftDragLevel = Math.floor(hit.point.z / VS) + Math.round(hitNormal.z);
+                    } else {
+                        currentShiftDragLevel = Math.floor(hit.point.z / VS);
+                    }
+                }
+            } else {
+                // If no voxel is hit, default to the current active drawing level and axis
+                // This assumes the user wants to draw on the currently visible grid plane.
+                currentShiftDragLevel = activeDrawingLevel[currentDrawingAxis];
+            }
+            rebuildHelpers(); // Update grid helper to show the fixed plane
+        } else {
+            // Reset fixed level and axis if not shift-dragging
+            currentShiftDragLevel = null;
+            // currentDrawingAxis remains as set by Alt+Mousewheel
+        }
+
+
+        // NEW: Handle start of rectangle drawing
+        if (currentMode === Modes.RECTANGLE_ADD) {
+            const clickedVoxel = calculateTargetVoxelCoords(e.clientX, e.clientY, currentMode, false, false);
+            if (clickedVoxel) {
+                isDrawingRectangle = true;
+                rectangleStartCoords = { ...clickedVoxel };
+                lastActionVoxelCoords = { ...clickedVoxel }; // Set initial anchor for line drawing
+                rectanglePreviewMesh.visible = true; // Show preview
+            }
+        }
+
+        if (e.pointerType === 'touch') {
+            activePointers.set(e.pointerId, { x: e.clientX, y: e.clientY });
+            handleGesture(); // Process gesture immediately for touch
+        } else {
+            // For mouse, do NOT do a single action on click here. It's handled by onPointerUp.
+            // This prevents the "draws two" issue when a click is followed by a tiny drag.
+        }
+    }
+}
+
+function onPointerMove(e) {
+    // Update pointer position for multi-touch gestures
+    if (e.pointerType === 'touch') {
+        activePointers.set(e.pointerId, { x: e.clientX, y: e.clientY });
+        handleGesture();
+    } else if (isPointerLocked) { // Mouse right-click rotation (Unreal Engine style)
+        // Use movementX/Y for rotation when pointer is locked
+        const dx = e.movementX || 0;
+        const dy = e.movementY || 0;
+
+        // Rotation
+        euler.y -= dx * rotSpeed; // Invert X-axis rotation for more intuitive feel
+        euler.x -= dy * rotSpeed;
+        euler.x = Math.max(-Math.PI / 2, Math.min(Math.PI / 2, euler.x)); // Clamp vertical rotation
+        cam.quaternion.setFromEuler(euler);
+
+        // No direct camera position update here; it's handled in animate() loop via keyboard input
+    } else { // Not pointer locked
+        const currentTargetVoxel = calculateTargetVoxelCoords(e.clientX, e.clientY, currentMode, true, isControlDragging, currentShiftDragLevel, currentDrawingAxis);
+
+        if (currentTargetVoxel) {
+            // Update preview voxel for single-voxel modes, hide if drawing rectangle
+            let shouldShowPreview = false;
+            if (currentMode !== Modes.RECTANGLE_ADD) {
+                if (currentMode === Modes.ADD && !voxels.has(key(currentTargetVoxel.gx, currentTargetVoxel.gy, currentTargetVoxel.gz))) {
+                    shouldShowPreview = true;
+                } else if ((currentMode === Modes.DELETE || currentMode === Modes.DRAW) && voxels.has(key(currentTargetVoxel.gx, currentTargetVoxel.gy, currentTargetVoxel.gz))) {
+                    shouldShowPreview = true;
+                }
+            }
+            updatePreviewVoxel(currentTargetVoxel.gx, currentTargetVoxel.gy, currentTargetVoxel.gz, shouldShowPreview && !isDrawingRectangle);
+        } else {
+            updatePreviewVoxel(0, 0, 0, false); // Hide single preview
+        }
+
+        if (pointerIsDown) { // LMB is held down (drag or long-press drag)
+            // Check if it's a drag (moved more than a few pixels from initial click)
+            const movedDistance = initialClickPos ? Math.hypot(e.clientX - initialClickPos.x, e.clientY - initialClickPos.y) : 0;
+            const isActualDrag = movedDistance > MOVE_PX; // MOVE_PX is already defined (6px)
+
+            if (isActualDrag || isHoldDrawingActive || isDblTapDragActive) { // If it's a drag, or a special drag mode
+                if (currentTargetVoxel) {
+                    if (currentMode === Modes.RECTANGLE_ADD && isDrawingRectangle) {
+                        // Update rectangle preview
+                        updateRectanglePreview(rectangleStartCoords, currentTargetVoxel);
+                    } else { // For other modes (ADD, DELETE, DRAW)
+                        // If this is a shift-drag or control-drag or dblTapDrag, draw a line segment
+                        if (shiftActive() || isControlDragging || isDblTapDragActive) {
+                            // Only draw if the target voxel has changed from the last action voxel
+                            if (!lastActionVoxelCoords ||
+                                lastActionVoxelCoords.gx !== currentTargetVoxel.gx ||
+                                lastActionVoxelCoords.gy !== currentTargetVoxel.gy ||
+                                lastActionVoxelCoords.gz !== currentTargetVoxel.gz) {
+
+                                if (lastActionVoxelCoords) { // Draw line from last acted-upon to current
+                                    drawLineOfVoxels(lastActionVoxelCoords, currentTargetVoxel, currentMode, currentColor);
+                                } else { // First point of the drag, just act on it
+                                    performVoxelModification(currentTargetVoxel.gx, currentTargetVoxel.gy, currentTargetVoxel.gz, currentMode, currentColor);
+                                }
+                                lastActionVoxelCoords = { ...currentTargetVoxel }; // Update last acted-upon voxel
+                            }
+                        } else { // Normal drag (not fixed plane, not stacking)
+                            // Only perform modification if the target voxel has changed
+                            if (!lastActionVoxelCoords ||
+                                lastActionVoxelCoords.gx !== currentTargetVoxel.gx ||
+                                lastActionVoxelCoords.gy !== currentTargetVoxel.gy ||
+                                lastActionVoxelCoords.gz !== currentTargetVoxel.gz) {
+                                performVoxelModification(currentTargetVoxel.gx, currentTargetVoxel.gy, currentTargetVoxel.gz, currentMode, currentColor);
+                                lastActionVoxelCoords = { ...currentTargetVoxel };
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+function onPointerUp(e) {
+    if (longPressTimer) {
+        clearTimeout(longPressTimer);
+        longPressTimer = null;
+    }
+    isHoldDrawingActive = false;
+
+    if (e.pointerType === 'mouse' && e.button === 2) { // Right-click up
+        rotate = false;
+        document.exitPointerLock();
+    }
+
+    if (e.pointerType === 'touch') {
+        releasePointer(e.pointerId);
+    } else {
+        // Handle single click (no drag occurred)
+        const movedDistance = initialClickPos ? Math.hypot(e.clientX - initialClickPos.x, e.clientY - initialClickPos.y) : 0;
+        const wasSingleClick = movedDistance <= MOVE_PX; // Use MOVE_PX for click threshold
+
+        if (pointerIsDown && !isPointerLocked) { // Ensure pointer was down and not in fly mode
+            if (currentMode === Modes.RECTANGLE_ADD && isDrawingRectangle) {
+                const finalTargetVoxel = calculateTargetVoxelCoords(e.clientX, e.clientY, currentMode, false, false);
+                if (rectangleStartCoords && finalTargetVoxel) {
+                    fillRectangle(rectangleStartCoords, finalTargetVoxel, currentColor);
+                }
+                isDrawingRectangle = false;
+                rectangleStartCoords = null;
+                rectanglePreviewMesh.visible = false; // Hide preview
+                if (rectanglePreviewMesh.geometry) {
+                    rectanglePreviewMesh.geometry.dispose(); // Dispose old geometry
+                }
+                rectanglePreviewMesh.geometry = new THREE.BufferGeometry(); // Reset to empty
+            } else if (wasSingleClick) { // Single click for other modes
+                const clickedVoxel = calculateTargetVoxelCoords(e.clientX, e.clientY, currentMode, false, false);
+                if (clickedVoxel) {
+                    performVoxelModification(clickedVoxel.gx, clickedVoxel.gy, clickedVoxel.gz, currentMode, currentColor);
+                }
+            }
+        }
+
+        pointerIsDown = false;
+        updatePreviewVoxel(0, 0, 0, false);
+    }
+    isControlDragging = false;
+    isShiftDragging = false;
+    dblTapDrag = false;
+    isDblTapDragActive = false;
+    activeGestureMode = 'none';
+    lastActionVoxelCoords = null; // Reset for next click/drag
+    initialClickPos = null; // Reset initial click position
+
+    lastTap = performance.now();
+}
+
+function onPointerLockChange() {
+    if (document.pointerLockElement === cvs) {
+        isPointerLocked = true;
+        // When pointer is locked, hide the preview voxel
+        updatePreviewVoxel(0,0,0,false);
+        rectanglePreviewMesh.visible = false; // Hide rectangle preview too
+    } else {
+        isPointerLocked = false;
+        rotate = false; // Ensure rotate is false if pointer lock is lost
+    }
+}
+
+function onMouseWheel(e) {
+    e.preventDefault(); // Prevent page scrolling
+
+    const sensitivity = 0.005; // Adjust as needed for desired speed
+    let zoomAmount = e.deltaY * sensitivity;
+
+    if (e.altKey) {
+        // Alt + Scroll for activeDrawingLevel on Y-axis
+        if (e.shiftKey) { // Alt + Shift + Scroll for Z-axis
+            activeDrawingLevel.z = Math.max(0, Math.min(GRID - 1, activeDrawingLevel.z - Math.sign(e.deltaY)));
+            currentDrawingAxis = 'z';
+        } else if (e.ctrlKey) { // Alt + Ctrl + Scroll for X-axis
+            activeDrawingLevel.x = Math.max(0, Math.min(GRID - 1, activeDrawingLevel.x - Math.sign(e.deltaY)));
+            currentDrawingAxis = 'x';
+        } else { // Alt + Scroll for Y-axis
+            activeDrawingLevel.y = Math.max(0, Math.min(GRID - 1, activeDrawingLevel.y - Math.sign(e.deltaY)));
+            currentDrawingAxis = 'y';
+        }
+        updateGridHelperPosition(); // Rebuild grid helper to reflect new level/axis
+    } else {
+        // NEW: Adjust fly speed with mouse wheel when not holding Alt
+        const speedChange = -Math.sign(e.deltaY) * 0.01; // Adjust speed by 0.01 per scroll tick
+        moveSpeed = Math.max(0.01, Math.min(2.0, moveSpeed + speedChange)); // Clamp speed
+        document.getElementById('fly-speed-slider').value = moveSpeed;
+        document.getElementById('fly-speed-display').textContent = moveSpeed.toFixed(2);
+        localStorage.setItem('voxelEditorFlySpeed', moveSpeed);
+
+        // Existing regular scroll for camera zoom (moving along camera's look direction)
+        cam.position.addScaledVector(
+            cam.getWorldDirection(new THREE.Vector3()),
+            zoomAmount * moveSpeed * 5 // Faster zoom for mouse wheel
+        );
+    }
+}
+
+// NEW: Function to update the rectangle preview mesh
+function updateRectanglePreview(start, end) {
+    if (!rectanglePreviewMesh) return;
+
+    const minX = Math.min(start.gx, end.gx);
+    const minY = Math.min(start.gy, end.gy);
+    const minZ = Math.min(start.gz, end.gz);
+    const maxX = Math.max(start.gx, end.gx);
+    const maxY = Math.max(start.gy, end.gy);
+    const maxZ = Math.max(start.gz, end.gz);
+
+    // Calculate dimensions of the bounding box
+    const width = maxX - minX + 1;
+    const height = maxY - minY + 1;
+    const depth = maxZ - minZ + 1;
+
+    // Create a temporary BoxGeometry for the preview
+    const tempGeometry = new THREE.BoxGeometry(width * VS, height * VS, depth * VS);
+
+    // Position the geometry correctly: center of the bounding box
+    tempGeometry.translate(
+        (minX + maxX) * HALF * VS,
+        (minY + maxY) * HALF * VS,
+        (minZ + maxZ) * HALF * VS
+    );
+
+    // Dispose old geometry and assign new one
+    if (rectanglePreviewMesh.geometry) {
+        rectanglePreviewMesh.geometry.dispose();
+    }
+    rectanglePreviewMesh.geometry = tempGeometry;
+    rectanglePreviewMesh.visible = true;
+    rectanglePreviewMaterial.color.set(currentColor); // Set preview color to current color
+}
+
+// NEW: Function to fill a rectangle of voxels
+function fillRectangle(start, end, color) {
+    const oldState = [];
+    const newState = [];
+
+    const minX = Math.min(start.gx, end.gx);
+    const minY = Math.min(start.gy, end.gy);
+    const minZ = Math.min(start.gz, end.gz);
+    const maxX = Math.max(start.gx, end.gx);
+    const maxY = Math.max(start.gy, end.gy);
+    const maxZ = Math.max(start.gz, end.gz);
+
+    for (let x = minX; x <= maxX; x++) {
+        for (let y = minY; y <= maxY; y++) {
+            for (let z = minZ; z <= maxZ; z++) {
+                const k = key(x, y, z);
+                // Capture old state if voxel exists before modification
+                if (voxels.has(k)) {
+                    oldState.push({ gx: x, gy: y, gz: z, color: voxels.get(k).color });
+                }
+                // Add new state for the filled voxel
+                newState.push({ gx: x, gy: y, gz: z, color: color });
+                // Directly set voxel in the map
+                voxels.set(k, { color: color });
+            }
+        }
+    }
+    updateVoxelGeometry(); // Update geometry once after all changes
+
+    // Add a custom command type for rectangle fill to history
+    addCommand('fillRectangle', null, null, null, null, null, oldState, newState, { start, end, color });
+}
+
+
+/* ---------- Keyboard Input ---------- */
+const keyboard = {};
+function onKeyDown(e) {
+    keyboard[e.key] = true;
+
+    // Modifier keys for dragging (Shift and Control)
+    if (e.key === 'Shift') {
+        isShiftDragging = true;
+    }
+    if (e.key === 'Control' || e.key === 'Meta') { // Meta for Mac Command key
+        isControlDragging = true;
+    }
+
+    // Undo/Redo
+    if ((e.ctrlKey || e.metaKey) && e.key === 'z') { // Ctrl+Z or Cmd+Z
+        e.preventDefault(); // Prevent browser undo
+        undo();
+    }
+    if (((e.ctrlKey || e.metaKey) && e.key === 'y') || ((e.ctrlKey || e.metaKey) && e.shiftKey && e.key === 'Z')) { // Ctrl+Y or Cmd+Y, or Ctrl+Shift+Z / Cmd+Shift+Z
+        e.preventDefault(); // Prevent browser redo
+        redo();
+    }
+
+    // Other Shortcuts
+    switch (e.key) {
+        case 'Tab':
+            e.preventDefault(); // Prevent tabbing through elements
+            cycleMode();
+            break; // Text content updated in cycleMode function
+        case '1': setActivePreset(0); break;
+        case '2': setActivePreset(1); break;
+        case '3': setActivePreset(2); break;
+    }
+}
+
+function onKeyUp(e) {
+    keyboard[e.key] = false;
+
+    if (e.key === 'Shift') {
+        isShiftDragging = false;
+    }
+    if (e.key === 'Control' || e.key === 'Meta') {
+        isControlDragging = false;
+    }
+}
 </script>
 </body>
 </html>
