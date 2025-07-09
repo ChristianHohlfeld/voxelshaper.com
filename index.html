@@ -427,6 +427,8 @@ const LONG_PRESS_DELAY_MS = 500;   // NEU: Wartezeit (in Millisekunden) für Lon
 /* ----------------------------------------------
    GLOBAL – neue Hilfs-Variablen
 ---------------------------------------------- */
+let initialTouchDrawingLevelY = null; // Speichert die Y-Ebene für den Beginn eines Touch-Drag-Zeichnens
+
 const PINCH_ZOOM_MULT = 12;     // Zoom-Geschwindigkeit ↑  (vorher 3-5)
 /* ---------- Double-Tap-State ---------- */
 let tapCandidate   = null;   // {x,y,time}
@@ -647,6 +649,8 @@ cvs.addEventListener('pointerdown', e => {
             } else {
                 /* Neuer Kandidat für einen Double-Tap */
                 tapCandidate = {x: e.clientX, y: e.clientY, time: e.timeStamp};
+initialTouchDrawingLevelY = activeDrawingLevel.y; // Erfasse die anfängliche Y-Ebene für jegliches Single-Touch-Zeichnen
+
                 dblTapActive = false;
                 isDblTapDragActive = false;
             }
@@ -672,8 +676,8 @@ cvs.addEventListener('pointerdown', e => {
                         handleVoxelAction(
                             e.clientX, e.clientY,
                             currentMode,
-                            /* drag  */ false, // Dies ist der initiale Klick, noch kein Drag
-                            /* stack */ false
+                            false,
+                            false
                         );
                     }
                     longPressTimer = null; // Der Timer ist nun entweder ausgelöst oder abgebrochen
@@ -898,12 +902,14 @@ cvs.addEventListener('pointermove', e => {
         }
 
         if (activeGestureMode === 'longPressDraw' && activePointers.size === 1) {
-            handleVoxelAction(
-                e.clientX, e.clientY,
-                currentMode,
-                /* drag  */ true,
-                /* stack */ false
-            );
+handleVoxelAction(
+    e.clientX, e.clientY,
+    currentMode,
+    /* isDragging    */ true,
+    /* isStackingAdd */ false,
+    /* fixedLevel    */ initialTouchDrawingLevelY, // Verwende die gespeicherte initiale Y-Ebene
+    /* fixedAxis     */ 'y' // Lege die feste Achse auf Y fest
+);
             return;
         }
 
@@ -968,6 +974,8 @@ cvs.addEventListener('pointerup', e => {
     // --- TOUCH-SPEZIFISCHE LOGIK ---
     else if (e.pointerType === 'touch') {
         if (activePointers.size === 0) {
+initialTouchDrawingLevelY = null; // Setze die Variable zurück, wenn der Touch-Vorgang beendet ist
+
             /* -------- Single Tap -------- */
             // Nur ausführen, wenn kein Double-Tap aktiv war und es ein kurzer Tap war
             if (!dblTapActive && activeGestureMode === 'voxelAction' && moved < TAP_DIST_TH) {
