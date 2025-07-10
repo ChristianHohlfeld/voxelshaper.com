@@ -580,7 +580,8 @@ let noise2D;
 
 // NEW: Global variables for image template
 let templateImageMesh = null;
-let templateImageData = null; // { src: base64, position: [], rotation: [], scale: [], locked: boolean, originalWidth: number, originalHeight: number }
+// Updated templateImageData structure to store scaled dimensions
+let templateImageData = null; // { src: base64, position: [], rotation: [], scale: [], locked: boolean, scaledWidth: number, scaledHeight: number }
 
 
 // Custom ValueNoise2D as a function constructor to avoid lexical declaration issues
@@ -1794,10 +1795,12 @@ function loadJSON(event) {
                 // NEW: Load template image data
                 if (loadedSettings.templateImageData) {
                     templateImageData = loadedSettings.templateImageData;
+                    console.log("Loading template image data:", templateImageData); // Debugging
                     const loader = new THREE.TextureLoader();
                     loader.load(templateImageData.src, (texture) => {
                         const material = new THREE.MeshBasicMaterial({ map: texture, side: THREE.DoubleSide, transparent: true, depthWrite: false });
-                        const geometry = new THREE.PlaneGeometry(templateImageData.originalWidth, templateImageData.originalHeight);
+                        // FIX: Use scaledWidth and scaledHeight from saved data
+                        const geometry = new THREE.PlaneGeometry(templateImageData.scaledWidth, templateImageData.scaledHeight);
                         if (templateImageMesh) {
                             scene.remove(templateImageMesh);
                             templateImageMesh.geometry.dispose();
@@ -1806,7 +1809,7 @@ function loadJSON(event) {
                         templateImageMesh = new THREE.Mesh(geometry, material);
                         templateImageMesh.position.fromArray(templateImageData.position);
                         templateImageMesh.rotation.fromArray(templateImageData.rotation);
-                        templateImageMesh.scale.fromArray(templateImageData.scale);
+                        templateImageMesh.scale.fromArray(templateImageData.scale); // This should now be [1,1,1] if scaledWidth/Height are used
                         templateImageMesh.renderOrder = -1; // Render behind other objects
                         scene.add(templateImageMesh);
                         document.getElementById('removeImageTemplateBtn').style.display = 'inline-block';
@@ -2284,9 +2287,11 @@ function handleImageFileSelect(event) {
                 rotation: templateImageMesh.rotation.toArray(),
                 scale: templateImageMesh.scale.toArray(),
                 locked: false, // Default to unlocked
-                originalWidth: img.width, // Store original dimensions for aspect ratio
-                originalHeight: img.height
+                // Store the calculated scaled dimensions directly
+                scaledWidth: planeWidth,
+                scaledHeight: planeHeight
             };
+            console.log("Saving template image data:", templateImageData); // Debugging
 
             // Update UI
             document.getElementById('removeImageTemplateBtn').style.display = 'inline-block';
