@@ -2117,6 +2117,31 @@ function importVOX(event) {
             const arrayBuffer = e.target.result;
             const voxModel = VoxelShaperIO.parseVox(arrayBuffer);
 
+            console.log("VOX Model parsed:", voxModel);
+            console.log("VOX Model dimensions (sizeX, sizeY, sizeZ):", voxModel.sizeX, voxModel.sizeY, voxModel.sizeZ);
+            console.log("Number of voxels in VOX Model:", voxModel.voxels.length);
+
+            let offsetX = 0, offsetY = 0, offsetZ = 0;
+            if (voxModel.voxels.length > 0) {
+                const minX = Math.min(...voxModel.voxels.map(v => v.x));
+                const minY = Math.min(...voxModel.voxels.map(v => v.y));
+                const minZ = Math.min(...voxModel.voxels.map(v => v.z));
+                console.log(`Original Min Voxel Coords: X=${minX}, Y=${minY}, Z=${minZ}`);
+
+                // Calculate offsets to make all coordinates non-negative
+                if (minX < 0) offsetX = -minX;
+                if (minY < 0) offsetY = -minY;
+                if (minZ < 0) offsetZ = -minZ;
+
+                if (offsetX > 0 || offsetY > 0 || offsetZ > 0) {
+                    console.log(`Applying offset: X+${offsetX}, Y+${offsetY}, Z+${offsetZ}`);
+                }
+            } else {
+                console.warn("No voxels found in the parsed VOX model.");
+                showMessageModal('Import fehlgeschlagen', 'Die geladene VOX-Datei enthält keine Voxel.');
+                return; // Exit if no voxels found
+            }
+
             // Clear current voxels before importing
             clearAllInternal(true);
 
@@ -2125,11 +2150,74 @@ function importVOX(event) {
                 return { gx: parts[0], gy: parts[1], gz: parts[2], color: data.color };
             });
 
-            // Update GRID size based on imported model
-            GRID = Math.max(voxModel.sizeX, voxModel.sizeY, voxModel.sizeZ);
+            // Update GRID size based on imported model, considering the new max dimensions after offset
+            const newMaxX = voxModel.sizeX + offsetX;
+            const newMaxY = voxModel.sizeY + offsetY;
+            const newMaxZ = voxModel.sizeZ + offsetZ;
+            GRID = Math.max(newMaxX, newMaxY, newMaxZ, 10); // Ensure minimum GRID size
             document.getElementById('grid-size-slider').value = GRID;
             document.getElementById('grid-size-display').textContent = `${GRID}×${GRID}×${GRID}`;
             localStorage.setItem('voxelEditorGridSize', GRID);
+            console.log("Updated GRID size to:", GRID);
+
+
+            // Dispose old InstancedMesh if it exists
+            if (instancedMesh) {
+                scene.remove(instancedMesh);
+                instancedMesh.geometry.dispose();
+                instancedMesh.material.dispose();
+            }
+
+            // Re-initialize InstancedMesh with potentially new GRID size
+            const voxelBaseGeometry = new THREE.BoxGeometry(VS, VS, VS);
+            meshMaterial = new THREE.MeshLambertMaterial();
+            meshMaterial.onBeforeCompile = (shader) => {
+                shader.vertexShader = `
+                    varying vec3 vInstanceColor;
+                    ${shader.vertexShader}
+                `.replace(
+                    'void main() {',
+                    `
+                    void main() {
+                    `
+                );
+                shader.vertexShader = shader.vertexShader.replace(
+                    '#include <color_vertex>',
+                    `
+                    #include <color_vertex>
+                    #ifdef USE_INSTANCING_COLOR
+                        vInstanceColor = instanceColor;
+                    #else
+                        vInstanceColor = vec3(1.0);
+                    #endif
+                    `
+                );
+                shader.fragmentShader = `
+                    varying vec3 vInstanceColor;
+                    ${shader.fragmentShader}
+                `.replace(
+                    'vec4 diffuseColor = vec4( diffuse, opacity );',
+                    'vec4 diffuseColor = vec4( diffuse * vInstanceColor, opacity );'
+                );
+            };
+
+            const maxVoxelsForLoadedGrid = GRID * GRID * GRID;
+            instancedMesh = new THREE.InstancedMesh(voxelBaseGeometry, meshMaterial, maxVoxelsForLoadedGrid);
+            if (!instancedMesh.instanceMatrix) {
+                instancedMesh.instanceMatrix = new THREE.InstancedBufferAttribute(new Float32Array(maxVoxelsForLoadedGrid * 16), 16);
+                instancedMesh.geometry.setAttribute('instanceMatrix', instancedMesh.instanceMatrix);
+            }
+            if (!instancedMesh.instanceColor) {
+                instancedMesh.instanceColor = new THREE.InstancedBufferAttribute(new Float32Array(maxVoxelsForLoadedGrid * 3), 3);
+                instancedMesh.geometry.setAttribute('instanceColor', instancedMesh.instanceColor);
+            }
+            instancedMesh.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
+            instancedMesh.instanceColor.setUsage(THREE.DynamicDrawUsage);
+            instancedMesh.castShadow = true;
+            instancedMesh.receiveShadow = true;
+            scene.add(instancedMesh);
+            instancedMesh.count = 0; // Reset instance count
+
 
             const newVoxels = [];
             voxModel.voxels.forEach(v => {
@@ -2145,12 +2233,21 @@ function importVOX(event) {
                     colorHex = `#${((1 << 24) + (r << 16) + (g << 8) + b).toString(16).slice(1).toUpperCase()}`;
                 }
 
+                // Apply offset
+                const gx = v.x + offsetX;
+                const gy = v.y + offsetY;
+                const gz = v.z + offsetZ;
+
                 // Ensure imported voxels are within new GRID bounds
-                if (v.x < GRID && v.y < GRID && v.z < GRID) {
-                    addVoxel(v.x, v.y, v.z, colorHex, true);
-                    newVoxels.push({ gx: v.x, gy: v.y, gz: v.z, color: colorHex });
+                if (gx >= 0 && gx < GRID && gy >= 0 && gy < GRID && gz >= 0 && gz < GRID) {
+                    addVoxel(gx, gy, gz, colorHex, true);
+                    newVoxels.push({ gx, gy, gz, color: colorHex });
+                } else {
+                    console.warn(`Voxel at (${v.x}, ${v.y}, ${v.z}) (offsetted to ${gx},${gy},${gz}) is out of new grid bounds [0, ${GRID-1}]. Skipping.`);
                 }
             });
+            console.log("Total voxels added to scene:", instancedMesh.count);
+
 
             updateVoxelGeometry();
             rebuildHelpers();
