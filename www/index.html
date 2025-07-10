@@ -452,11 +452,10 @@ input[type="color"]::-moz-color-swatch {
 <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/build/three.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/utils/BufferGeometryUtils.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/exporters/STLExporter.js"></script>
-<script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/loaders/STLLoader.js"></script> <!-- NEW: STLLoader -->
-<script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/loaders/OBJLoader.js"></script> <!-- NEW: OBJLoader -->
-<script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/exporters/OBJExporter.js"></script> <!-- NEW: OBJExporter -->
+<script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/loaders/STLLoader.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/seedrandom/3.0.5/seedrandom.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/noisejs/2.1.0/perlin.js"></script>
+<script src="lib/voxelshaper_io.js"></script> <!-- NEW: VoxelShaperIO library -->
 
 
 <script>
@@ -863,6 +862,7 @@ function setActivePreset(index) {
 // New function to save current color to a preset slot
 function saveCurrentColorToPreset(index) {
     if (index >= 0 && index < presetColors.length) {
+        currentColor = document.getElementById('color-picker').value; // Ensure we get the latest color from picker
         presetColors[index] = currentColor; // Update the array with the current color picker value
         localStorage.setItem(`voxelPresetColor${index + 1}`, currentColor); // Persist to local storage
         presetBoxes[index].style.backgroundColor = currentColor; // Update visual of the preset box
@@ -1616,6 +1616,7 @@ function loadJSON(event) {
                 document.getElementById('grid-size-slider').value = GRID;
                 document.getElementById('grid-size-display').textContent = `${GRID}×${GRID}×${GRID}`;
                 localStorage.setItem('voxelEditorGridSize', GRID); // Ensure it's saved back
+                console.log("Loaded GRID size from JSON:", GRID);
                 // Rebuild helpers and reset camera will happen after all settings are loaded
             }
 
@@ -1985,39 +1986,21 @@ function exportOBJ() {
         return;
     }
 
-    const exporter = new THREE.OBJExporter();
-    
-    // Create a group to hold all individual voxel meshes for export
-    const exportGroup = new THREE.Group();
-    const tempBoxGeometry = new THREE.BoxGeometry(VS, VS, VS);
-    const tempMatrix = new THREE.Matrix4();
-    const tempColorExport = new THREE.Color();
+    const voxelsToExport = [];
+    let maxX = 0, maxY = 0, maxZ = 0;
 
-    for (let i = 0; i < instancedMesh.count; i++) {
-        instancedMesh.getMatrixAt(i, tempMatrix);
-        instancedMesh.getColorAt(i, tempColorExport);
+    voxels.forEach((data, k) => {
+        const [x, y, z] = parseKey(k);
+        voxelsToExport.push({ x, y, z, c: 1 }); // VoxelShaperIO.voxToOBJ doesn't use color index directly for OBJ
+        maxX = Math.max(maxX, x);
+        maxY = Math.max(maxY, y);
+        maxZ = Math.max(maxZ, z);
+    });
 
-        const mesh = new THREE.Mesh(tempBoxGeometry, new THREE.MeshLambertMaterial({ color: tempColorExport.getHex() }));
-        mesh.applyMatrix4(tempMatrix);
-        exportGroup.add(mesh);
-    }
+    const voxModel = new VoxelShaperIO.VoxModel(maxX + 1, maxY + 1, maxZ + 1, voxelsToExport);
+    const objText = VoxelShaperIO.voxToOBJ(voxModel, VS); // Use VS (1) as cubeSize
 
-    const result = exporter.parse(exportGroup);
-
-    const blob = new Blob([result], { type: 'text/plain' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = 'voxel_model.obj';
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
-    URL.revokeObjectURL(url);
-
-    tempBoxGeometry.dispose(); // Dispose temporary geometry
-    // No need to dispose materials created inside loop, as they are part of the exported scene graph.
-    // The exportGroup and its children will be garbage collected.
-
+    VoxelShaperIO.saveBlob(objText, 'voxel_model.obj');
     showMessageModal('Export erfolgreich', 'OBJ-Modell erfolgreich exportiert!');
 }
 
@@ -2028,9 +2011,9 @@ function importOBJ(event) {
 
     const reader = new FileReader();
     reader.onload = (e) => {
-        const loader = new THREE.OBJLoader();
         try {
-            const object = loader.parse(e.target.result);
+            const objText = e.target.result;
+            const voxModel = VoxelShaperIO.objToVox(objText, VS); // Use VS (1) as voxelSize
 
             // Clear current voxels before importing
             clearAllInternal(true);
@@ -2040,56 +2023,21 @@ function importOBJ(event) {
                 return { gx: parts[0], gy: parts[1], gz: parts[2], color: data.color };
             });
 
+            // Update GRID size based on imported model
+            GRID = Math.max(voxModel.sizeX, voxModel.sizeY, voxModel.sizeZ);
+            document.getElementById('grid-size-slider').value = GRID;
+            document.getElementById('grid-size-display').textContent = `${GRID}×${GRID}×${GRID}`;
+            localStorage.setItem('voxelEditorGridSize', GRID);
+
             const newVoxels = [];
-            const defaultColor = new THREE.Color(currentColor); // Default color if OBJ has no vertex colors
+            // Use current color for imported voxels as OBJ has no inherent palette in this context
+            const importColor = currentColor;
 
-            // Iterate through all meshes in the loaded OBJ object
-            object.traverse((child) => {
-                if (child instanceof THREE.Mesh) {
-                    const geometry = child.geometry;
-                    geometry.computeBoundingBox();
-                    const bbox = geometry.boundingBox;
-                    const size = new THREE.Vector3();
-                    bbox.getSize(size);
-
-                    const scaleFactor = Math.min(GRID / size.x, GRID / size.y, GRID / size.z);
-                    const offset = new THREE.Vector3(
-                        -bbox.min.x * scaleFactor,
-                        -bbox.min.y * scaleFactor,
-                        -bbox.min.z * scaleFactor
-                    );
-
-                    const tempMesh = child.clone(); // Clone to apply transformations without affecting original
-                    tempMesh.scale.set(scaleFactor, scaleFactor, scaleFactor);
-                    tempMesh.position.copy(offset);
-                    tempMesh.updateMatrixWorld(true);
-
-                    // Voxelization logic (similar to STL import, still a simple approximation)
-                    // For more accurate voxelization, consider dedicated libraries or algorithms.
-                    for (let x = 0; x < GRID; x++) {
-                        for (let y = 0; y < GRID; y++) {
-                            for (let z = 0; z < GRID; z++) {
-                                const worldX = x * VS + HALF;
-                                const worldY = y * VS + HALF;
-                                const worldZ = z * VS + HALF;
-
-                                const point = new THREE.Vector3(worldX, worldY, worldZ);
-                                const localPoint = point.clone().applyMatrix4(tempMesh.matrixWorld.clone().invert());
-
-                                if (geometry.boundingBox.containsPoint(localPoint)) {
-                                    // If OBJ has vertex colors, try to use them. Otherwise, use default.
-                                    let voxelColorHex = defaultColor.getHex();
-                                    if (child.material && child.material.color) {
-                                        voxelColorHex = child.material.color.getHex();
-                                    }
-                                    // More advanced: sample color from texture or vertex attributes if available.
-                                    
-                                    addVoxel(x, y, z, voxelColorHex, true);
-                                    newVoxels.push({ gx: x, gy: y, gz: z, color: voxelColorHex });
-                                }
-                            }
-                        }
-                    }
+            voxModel.voxels.forEach(v => {
+                // Ensure imported voxels are within new GRID bounds
+                if (v.x < GRID && v.y < GRID && v.z < GRID) {
+                    addVoxel(v.x, v.y, v.z, importColor, true);
+                    newVoxels.push({ gx: v.x, gy: v.y, gz: v.z, color: importColor });
                 }
             });
 
@@ -2108,14 +2056,112 @@ function importOBJ(event) {
     reader.readAsText(file);
 }
 
-// NEW: Function to export VOX (placeholder)
+// NEW: Function to export VOX
 function exportVOX() {
-    showMessageModal('VOX Export', 'Die Implementierung des VOX-Exports ist komplex und erfordert eine spezielle Parser-Bibliothek, die in dieser einfachen HTML-Datei nicht enthalten ist. Dies ist eine zukünftige Funktion.');
+    if (instancedMesh.count === 0) {
+        showMessageModal('Export fehlgeschlagen', 'Keine Voxel zum Exportieren vorhanden!');
+        return;
+    }
+
+    const voxelsToExport = [];
+    const uniqueColors = new Map(); // Map<hexColor, paletteIndex>
+    let paletteIndexCounter = 1; // MagicaVoxel palette indices are 1-based (0 is empty)
+    const palette = new Uint32Array(256);
+    palette[0] = 0x00000000; // Transparent black for index 0
+
+    let maxX = 0, maxY = 0, maxZ = 0;
+
+    voxels.forEach((data, k) => {
+        const [x, y, z] = parseKey(k);
+        let paletteIndex;
+
+        if (uniqueColors.has(data.color)) {
+            paletteIndex = uniqueColors.get(data.color);
+        } else {
+            if (paletteIndexCounter < 256) {
+                paletteIndex = paletteIndexCounter;
+                uniqueColors.set(data.color, paletteIndex);
+                // Convert hex string to integer and set to palette
+                palette[paletteIndex] = (parseInt(data.color.substring(1), 16) << 8) | 0xFF; // Add alpha FF
+                paletteIndexCounter++;
+            } else {
+                // Fallback if more than 255 unique colors (excluding index 0)
+                paletteIndex = 1; // Default to first color if palette is full
+                console.warn("More than 255 unique colors detected. Some colors may be lost during VOX export.");
+            }
+        }
+        voxelsToExport.push({ x, y, z, c: paletteIndex });
+        maxX = Math.max(maxX, x);
+        maxY = Math.max(maxY, y);
+        maxZ = Math.max(maxZ, z);
+    });
+
+    const voxModel = new VoxelShaperIO.VoxModel(maxX + 1, maxY + 1, maxZ + 1, voxelsToExport, palette);
+    const arrayBuffer = VoxelShaperIO.buildVox(voxModel);
+
+    VoxelShaperIO.saveBlob(arrayBuffer, 'voxel_model.vox');
+    showMessageModal('Export erfolgreich', 'VOX-Modell erfolgreich exportiert!');
 }
 
-// NEW: Function to import VOX (placeholder)
-function importVOX() {
-    showMessageModal('VOX Import', 'Die Implementierung des VOX-Imports ist komplex und erfordert eine spezielle Parser-Bibliothek, die in dieser einfachen HTML-Datei nicht enthalten ist. Dies ist eine zukünftige Funktion.');
+// NEW: Function to import VOX
+function importVOX(event) {
+    const file = event.target.files[0];
+    if (!file) return;
+
+    const reader = new FileReader();
+    reader.onload = (e) => {
+        try {
+            const arrayBuffer = e.target.result;
+            const voxModel = VoxelShaperIO.parseVox(arrayBuffer);
+
+            // Clear current voxels before importing
+            clearAllInternal(true);
+
+            const oldState = [...voxels.entries()].map(([id, data]) => {
+                const parts = parseKey(id);
+                return { gx: parts[0], gy: parts[1], gz: parts[2], color: data.color };
+            });
+
+            // Update GRID size based on imported model
+            GRID = Math.max(voxModel.sizeX, voxModel.sizeY, voxModel.sizeZ);
+            document.getElementById('grid-size-slider').value = GRID;
+            document.getElementById('grid-size-display').textContent = `${GRID}×${GRID}×${GRID}`;
+            localStorage.setItem('voxelEditorGridSize', GRID);
+
+            const newVoxels = [];
+            voxModel.voxels.forEach(v => {
+                // MagicaVoxel color indices are 1-based. Index 0 is transparent.
+                // Palette colors are RGBA, so we need to convert to hex string.
+                let colorHex = '#ffffff'; // Default fallback color
+                if (v.c > 0 && v.c <= 256 && voxModel.palette) {
+                    const rgba = voxModel.palette[v.c];
+                    // Extract RGB, ignore A for hex string
+                    const r = (rgba >> 24) & 0xFF;
+                    const g = (rgba >> 16) & 0xFF;
+                    const b = (rgba >> 8) & 0xFF;
+                    colorHex = `#${((1 << 24) + (r << 16) + (g << 8) + b).toString(16).slice(1).toUpperCase()}`;
+                }
+
+                // Ensure imported voxels are within new GRID bounds
+                if (v.x < GRID && v.y < GRID && v.z < GRID) {
+                    addVoxel(v.x, v.y, v.z, colorHex, true);
+                    newVoxels.push({ gx: v.x, gy: v.y, gz: v.z, color: colorHex });
+                }
+            });
+
+            updateVoxelGeometry();
+            rebuildHelpers();
+            resetCameraPosition();
+
+            addCommand('importVOX', null, null, null, null, null, oldState, newVoxels);
+            showMessageModal('Import erfolgreich', 'VOX-Modell erfolgreich importiert!');
+
+        } catch (error) {
+            console.error('Error loading VOX file:', error);
+            showMessageModal('Fehler', 'Fehler beim Laden der VOX-Datei. Stellen Sie sicher, dass es sich um eine gültige MagicaVoxel (.vox) Datei handelt.');
+        }
+    };
+    reader.readAsArrayBuffer(file);
 }
 
 // NEW: Generic message modal
