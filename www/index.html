@@ -359,6 +359,11 @@ input[type="color"]::-moz-color-swatch {
     <button id="saveBtn">Projekt speichern</button>
     <button id="loadBtn">Projekt laden</button>
     <button id="exportStlBtn">STL Export</button>
+    <button id="importStlBtn">STL Import</button> <!-- NEW: STL Import Button -->
+    <button id="exportObjBtn">OBJ Export</button> <!-- NEW: OBJ Export Button -->
+    <button id="importObjBtn">OBJ Import</button> <!-- NEW: OBJ Import Button -->
+    <button id="exportVoxBtn">VOX Export</button> <!-- NEW: VOX Export Button -->
+    <button id="importVoxBtn">VOX Import</button> <!-- NEW: VOX Import Button -->
 
     <label for="fly-speed-slider">Fluggeschwindigkeit:</label>
     <input type="range" id="fly-speed-slider" min="0.01" max="1.0" step="0.01" value="0.1">
@@ -368,11 +373,18 @@ input[type="color"]::-moz-color-swatch {
     <button id="block-size-1x1" class="block-size-btn active">1x1</button>
     <button id="block-size-4x4" class="block-size-btn">4x4</button>
     <button id="block-size-8x8" class="block-size-btn">8x8</button>
-    <button id="block-size-10x10" class="block-size-btn">10x10</button>
+    <button id="block-size-10x10" class="block-size-btn">10x10</button> <!-- NEW: 10x10 Block Size Button -->
 
     <button id="toggleTerrainControlsBtn">Gelände-Optionen</button>
     <button id="helpToggleBtn">Hilfe</button>
     <button id="resetCameraBtn">Zur Szene zurückkehren</button>
+
+    <!-- NEW: Image Template Controls -->
+    <button id="loadImageTemplateBtn">Bild als Vorlage laden</button>
+    <button id="removeImageTemplateBtn" style="display:none;">Bildvorlage entfernen</button>
+    <label for="lockImageTemplateCheckbox">Vorlage sperren:</label>
+    <input type="checkbox" id="lockImageTemplateCheckbox">
+    <input type="file" id="imageFileInput" accept="image/*" style="display:none;">
 </div>
 
 <div id="terrainControlsPanel" style="display:none;">
@@ -409,6 +421,9 @@ input[type="color"]::-moz-color-swatch {
     **Strg + Y oder Strg + Shift + Z → Wiederholen (Redo)**
     </div>
     <input type="file" id="fileInput" accept=".json">
+    <input type="file" id="stlFileInput" accept=".stl" style="display:none;"> <!-- NEW: STL File Input -->
+    <input type="file" id="objFileInput" accept=".obj" style="display:none;"> <!-- NEW: OBJ File Input -->
+    <input type="file" id="voxFileInput" accept=".vox" style="display:none;"> <!-- NEW: VOX File Input -->
 </div>
 
 <div id="clearConfirmationModal" class="modal">
@@ -423,13 +438,25 @@ input[type="color"]::-moz-color-swatch {
     </div>
 </div>
 
+<div id="messageModal" class="modal">
+    <div class="modal-content">
+        <h3 id="messageModalTitle">Nachricht</h3>
+        <p id="messageModalText"></p>
+        <div class="modal-buttons">
+            <button id="messageModalCloseBtn" class="cancel">Schließen</button>
+        </div>
+    </div>
+</div>
+
 
 <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/build/three.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/utils/BufferGeometryUtils.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/exporters/STLExporter.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/loaders/STLLoader.js"></script> <!-- NEW: STLLoader -->
+<script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/loaders/OBJLoader.js"></script> <!-- NEW: OBJLoader -->
+<script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/exporters/OBJExporter.js"></script> <!-- NEW: OBJExporter -->
 <script src="https://cdnjs.cloudflare.com/ajax/libs/seedrandom/3.0.5/seedrandom.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/noisejs/2.1.0/perlin.js"></script>
-
 
 
 <script>
@@ -551,6 +578,11 @@ let terrainSeed = ''; // Empty string means random seed
 let hasUserTypedSeed = false; // Flag to track if user has manually set the seed
 // Global instance of the noise generator
 let noise2D;
+
+// NEW: Global variables for image template
+let templateImageMesh = null;
+let templateImageData = null; // { src: base64, position: [], rotation: [], scale: [], locked: boolean, originalWidth: number, originalHeight: number }
+
 
 // Custom ValueNoise2D as a function constructor to avoid lexical declaration issues
 function ValueNoise2D(seed = '') {
@@ -835,6 +867,8 @@ function saveCurrentColorToPreset(index) {
         localStorage.setItem(`voxelPresetColor${index + 1}`, currentColor); // Persist to local storage
         presetBoxes[index].style.backgroundColor = currentColor; // Update visual of the preset box
         setActivePreset(index); // Make the newly saved preset the active one
+        console.log(`Saving preset color ${index + 1}: ${currentColor}`);
+        console.log(`localStorage 'voxelPresetColor${index + 1}' after save:`, localStorage.getItem(`voxelPresetColor${index + 1}`));
     }
 }
 
@@ -1279,11 +1313,18 @@ function calculateTargetVoxelCoords(clientX, clientY, mode, isDragging, isStacki
     const raycaster = new THREE.Raycaster();
     raycaster.setFromCamera(mouse, cam);
 
+    // Exclude templateImageMesh from raycasting for voxel operations if it's locked
+    const objectsToIntersect = [instancedMesh];
+    if (templateImageMesh && !templateImageData.locked) {
+        // If template is NOT locked, we still don't want to interact with it for VOXEL placement.
+        // It's purely a visual guide. So, we never add it to objectsToIntersect for voxel ops.
+    }
+
     let targetVoxelCoords = null;
 
     // Special case: Ctrl-drag for stacking
     if (isStackingAdd) {
-        const intersects = raycaster.intersectObject(instancedMesh);
+        const intersects = raycaster.intersectObjects(objectsToIntersect); // Use objectsToIntersect
         if (intersects.length > 0) {
             const hit = intersects[0];
             const instanceMatrix = new THREE.Matrix4();
@@ -1342,7 +1383,7 @@ function calculateTargetVoxelCoords(clientX, clientY, mode, isDragging, isStacki
     }
     // Single click or initial point of drag (non-stacking, non-fixed-plane drag)
     else {
-        const intersects = raycaster.intersectObject(instancedMesh);
+        const intersects = raycaster.intersectObjects(objectsToIntersect); // Use objectsToIntersect
         if (intersects.length > 0) {
             const hit = intersects[0];
             const hitNormal = hit.face.normal;
@@ -1531,7 +1572,8 @@ function saveJSON() {
         terrainGain: terrainGain,
         terrainSeed: terrainSeed,
         moveSpeed: moveSpeed, // Save fly speed
-        currentBlockSize: currentBlockSize // Save current block size
+        currentBlockSize: currentBlockSize, // Save current block size
+        templateImageData: templateImageData // NEW: Save template image data
     };
 
     const projectData = {
@@ -1565,6 +1607,9 @@ function loadJSON(event) {
             // Clear current state and history before loading new project
             clearAllInternal(true); // Clear without adding to history
 
+            // Remove existing template image if any
+            removeImageTemplate(true); // true to prevent history logging for this internal operation
+
             // Load settings first to get the correct GRID size
             if (loadedSettings) {
                 GRID = loadedSettings.gridSize !== undefined ? loadedSettings.gridSize : 10;
@@ -1588,11 +1633,13 @@ function loadJSON(event) {
             
             // Apply shader patch for instance colors with Lambert material
             meshMaterial.onBeforeCompile = (shader) => {
-                // Add varying declaration to vertex shader (no re-declaration of attribute)
-                shader.vertexShader = shader.vertexShader.replace(
+                // Add varying declaration to vertex shader (at the top, before main)
+                shader.vertexShader = `
+                    varying vec3 vInstanceColor; // Declare varying here
+                    ${shader.vertexShader}
+                `.replace(
                     'void main() {',
                     `
-                    varying vec3 vInstanceColor; // Declare varying here
                     void main() {
                     `
                 );
@@ -1706,6 +1753,8 @@ function loadJSON(event) {
                     for(let i = 0; i < loadedSettings.presetColors.length && i < presetColors.length; i++) {
                         presetColors[i] = loadedSettings.presetColors[i];
                         document.getElementById(`color-preset-${i + 1}`).style.backgroundColor = presetColors[i];
+                        // Persist loaded preset colors to local storage
+                        localStorage.setItem(`voxelPresetColor${i + 1}`, presetColors[i]);
                     }
                 }
                 // Re-apply active preset status
@@ -1741,6 +1790,36 @@ function loadJSON(event) {
                     setBlockSize(loadedSettings.currentBlockSize); // Use the setter to update UI
                 }
 
+                // NEW: Load template image data
+                if (loadedSettings.templateImageData) {
+                    templateImageData = loadedSettings.templateImageData;
+                    const loader = new THREE.TextureLoader();
+                    loader.load(templateImageData.src, (texture) => {
+                        const material = new THREE.MeshBasicMaterial({ map: texture, side: THREE.DoubleSide, transparent: true, depthWrite: false });
+                        const geometry = new THREE.PlaneGeometry(templateImageData.originalWidth, templateImageData.originalHeight);
+                        if (templateImageMesh) {
+                            scene.remove(templateImageMesh);
+                            templateImageMesh.geometry.dispose();
+                            templateImageMesh.material.dispose();
+                        }
+                        templateImageMesh = new THREE.Mesh(geometry, material);
+                        templateImageMesh.position.fromArray(templateImageData.position);
+                        templateImageMesh.rotation.fromArray(templateImageData.rotation);
+                        templateImageMesh.scale.fromArray(templateImageData.scale);
+                        templateImageMesh.renderOrder = -1; // Render behind other objects
+                        scene.add(templateImageMesh);
+                        document.getElementById('removeImageTemplateBtn').style.display = 'inline-block';
+                        document.getElementById('lockImageTemplateCheckbox').checked = templateImageData.locked;
+                        toggleLockImageTemplate(true); // Apply locked state
+                    }, undefined, (err) => {
+                        console.error('Error loading template image texture:', err);
+                        templateImageMesh = null; // Clear mesh if loading fails
+                        templateImageData = null;
+                        document.getElementById('removeImageTemplateBtn').style.display = 'none';
+                        document.getElementById('lockImageTemplateCheckbox').checked = false;
+                    });
+                }
+
 
                 // Re-initialize noise generator with loaded seed
                 noise2D = new ValueNoise2D(terrainSeed);
@@ -1754,7 +1833,7 @@ function loadJSON(event) {
             resetCameraPosition(); // Reset camera to view loaded terrain/voxels
         } catch (error) {
             console.error('Error loading JSON file:', error);
-            alert('Fehler beim Laden der Datei. Stellen Sie sicher, dass es sich um eine gültige Voxel-Projekt-JSON-Datei handelt.');
+            showMessageModal('Fehler', 'Fehler beim Laden der Datei. Stellen Sie sicher, dass es sich um eine gültige Voxel-Projekt-JSON-Datei handelt.');
         }
     };
     reader.readAsText(file);
@@ -1763,7 +1842,7 @@ function loadJSON(event) {
 
 function exportSTL() {
     if (instancedMesh.count === 0) {
-        alert('Keine Voxel zum Exportieren vorhanden!');
+        showMessageModal('Export fehlgeschlagen', 'Keine Voxel zum Exportieren vorhanden!');
         return;
     }
 
@@ -1814,7 +1893,239 @@ function exportSTL() {
     // Dispose temporary geometries to free memory
     tempBoxGeometry.dispose();
     if (mergedGeometry) mergedGeometry.dispose();
+    showMessageModal('Export erfolgreich', 'STL-Modell erfolgreich exportiert!');
 }
+
+// NEW: Function to import STL
+function importSTL(event) {
+    const file = event.target.files[0];
+    if (!file) return;
+
+    const reader = new FileReader();
+    reader.onload = (e) => {
+        const loader = new THREE.STLLoader();
+        try {
+            const geometry = loader.parse(e.target.result);
+            geometry.computeBoundingBox();
+            const bbox = geometry.boundingBox;
+            const size = new THREE.Vector3();
+            bbox.getSize(size);
+
+            // Clear current voxels before importing
+            clearAllInternal(true);
+
+            const oldState = [...voxels.entries()].map(([id, data]) => {
+                const parts = parseKey(id);
+                return { gx: parts[0], gy: parts[1], gz: parts[2], color: data.color };
+            });
+
+            // Simple voxelization: Iterate through the bounding box and sample points
+            // This is a basic approach and might not capture all details or handle complex meshes perfectly.
+            const scaleFactor = Math.min(GRID / size.x, GRID / size.y, GRID / size.z);
+            const offset = new THREE.Vector3(
+                -bbox.min.x * scaleFactor,
+                -bbox.min.y * scaleFactor,
+                -bbox.min.z * scaleFactor
+            );
+
+            const tempMesh = new THREE.Mesh(geometry); // Create a temporary mesh for raycasting
+            tempMesh.scale.set(scaleFactor, scaleFactor, scaleFactor);
+            tempMesh.position.copy(offset);
+            tempMesh.updateMatrixWorld(true); // Ensure world matrix is updated
+
+            const newVoxels = [];
+            const color = new THREE.Color(currentColor); // Use current color for imported voxels
+
+            // A simple voxelization approach: iterate through grid cells and check if center is inside mesh
+            // This is computationally intensive and may not be accurate for complex shapes
+            // A more advanced approach would involve raycasting or signed distance fields.
+            for (let x = 0; x < GRID; x++) {
+                for (let y = 0; y < GRID; y++) {
+                    for (let z = 0; z < GRID; z++) {
+                        const worldX = x * VS + HALF;
+                        const worldY = y * VS + HALF;
+                        const worldZ = z * VS + HALF;
+
+                        // Check if this point is "inside" the mesh. This is a very rough check.
+                        // A proper "point in mesh" test is complex. For simplicity, we'll just
+                        // check if the mesh's bounding box contains the voxel center.
+                        // For more accurate voxelization, consider libraries or more advanced algorithms.
+                        const point = new THREE.Vector3(worldX, worldY, worldZ);
+                        // Convert point to local space of the imported mesh for bounding box check
+                        const localPoint = point.clone().applyMatrix4(tempMesh.matrixWorld.clone().invert());
+
+                        if (geometry.boundingBox.containsPoint(localPoint)) {
+                            // If the point is within the bounding box, add the voxel.
+                            // This is not a true voxelization, but a quick approximation.
+                            addVoxel(x, y, z, color.getHex(), true);
+                            newVoxels.push({ gx: x, gy: y, gz: z, color: color.getHex() });
+                        }
+                    }
+                }
+            }
+            updateVoxelGeometry();
+            rebuildHelpers();
+            resetCameraPosition();
+
+            addCommand('importSTL', null, null, null, null, null, oldState, newVoxels);
+            showMessageModal('Import erfolgreich', 'STL-Modell erfolgreich importiert und in Voxel umgewandelt. Beachten Sie, dass die Voxelisierung eine Annäherung ist und bei komplexen Modellen zu Detailverlust führen kann.');
+
+        } catch (error) {
+            console.error('Error loading STL file:', error);
+            showMessageModal('Fehler', 'Fehler beim Laden der STL-Datei. Stellen Sie sicher, dass es sich um eine gültige STL-Datei handelt.');
+        }
+    };
+    reader.readAsArrayBuffer(file);
+}
+
+// NEW: Function to export OBJ
+function exportOBJ() {
+    if (instancedMesh.count === 0) {
+        showMessageModal('Export fehlgeschlagen', 'Keine Voxel zum Exportieren vorhanden!');
+        return;
+    }
+
+    const exporter = new THREE.OBJExporter();
+    
+    // Create a group to hold all individual voxel meshes for export
+    const exportGroup = new THREE.Group();
+    const tempBoxGeometry = new THREE.BoxGeometry(VS, VS, VS);
+    const tempMatrix = new THREE.Matrix4();
+    const tempColorExport = new THREE.Color();
+
+    for (let i = 0; i < instancedMesh.count; i++) {
+        instancedMesh.getMatrixAt(i, tempMatrix);
+        instancedMesh.getColorAt(i, tempColorExport);
+
+        const mesh = new THREE.Mesh(tempBoxGeometry, new THREE.MeshLambertMaterial({ color: tempColorExport.getHex() }));
+        mesh.applyMatrix4(tempMatrix);
+        exportGroup.add(mesh);
+    }
+
+    const result = exporter.parse(exportGroup);
+
+    const blob = new Blob([result], { type: 'text/plain' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = 'voxel_model.obj';
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+
+    tempBoxGeometry.dispose(); // Dispose temporary geometry
+    // No need to dispose materials created inside loop, as they are part of the exported scene graph.
+    // The exportGroup and its children will be garbage collected.
+
+    showMessageModal('Export erfolgreich', 'OBJ-Modell erfolgreich exportiert!');
+}
+
+// NEW: Function to import OBJ
+function importOBJ(event) {
+    const file = event.target.files[0];
+    if (!file) return;
+
+    const reader = new FileReader();
+    reader.onload = (e) => {
+        const loader = new THREE.OBJLoader();
+        try {
+            const object = loader.parse(e.target.result);
+
+            // Clear current voxels before importing
+            clearAllInternal(true);
+
+            const oldState = [...voxels.entries()].map(([id, data]) => {
+                const parts = parseKey(id);
+                return { gx: parts[0], gy: parts[1], gz: parts[2], color: data.color };
+            });
+
+            const newVoxels = [];
+            const defaultColor = new THREE.Color(currentColor); // Default color if OBJ has no vertex colors
+
+            // Iterate through all meshes in the loaded OBJ object
+            object.traverse((child) => {
+                if (child instanceof THREE.Mesh) {
+                    const geometry = child.geometry;
+                    geometry.computeBoundingBox();
+                    const bbox = geometry.boundingBox;
+                    const size = new THREE.Vector3();
+                    bbox.getSize(size);
+
+                    const scaleFactor = Math.min(GRID / size.x, GRID / size.y, GRID / size.z);
+                    const offset = new THREE.Vector3(
+                        -bbox.min.x * scaleFactor,
+                        -bbox.min.y * scaleFactor,
+                        -bbox.min.z * scaleFactor
+                    );
+
+                    const tempMesh = child.clone(); // Clone to apply transformations without affecting original
+                    tempMesh.scale.set(scaleFactor, scaleFactor, scaleFactor);
+                    tempMesh.position.copy(offset);
+                    tempMesh.updateMatrixWorld(true);
+
+                    // Voxelization logic (similar to STL import, still a simple approximation)
+                    // For more accurate voxelization, consider dedicated libraries or algorithms.
+                    for (let x = 0; x < GRID; x++) {
+                        for (let y = 0; y < GRID; y++) {
+                            for (let z = 0; z < GRID; z++) {
+                                const worldX = x * VS + HALF;
+                                const worldY = y * VS + HALF;
+                                const worldZ = z * VS + HALF;
+
+                                const point = new THREE.Vector3(worldX, worldY, worldZ);
+                                const localPoint = point.clone().applyMatrix4(tempMesh.matrixWorld.clone().invert());
+
+                                if (geometry.boundingBox.containsPoint(localPoint)) {
+                                    // If OBJ has vertex colors, try to use them. Otherwise, use default.
+                                    let voxelColorHex = defaultColor.getHex();
+                                    if (child.material && child.material.color) {
+                                        voxelColorHex = child.material.color.getHex();
+                                    }
+                                    // More advanced: sample color from texture or vertex attributes if available.
+                                    
+                                    addVoxel(x, y, z, voxelColorHex, true);
+                                    newVoxels.push({ gx: x, gy: y, gz: z, color: voxelColorHex });
+                                }
+                            }
+                        }
+                    }
+                }
+            });
+
+            updateVoxelGeometry();
+            rebuildHelpers();
+            resetCameraPosition();
+
+            addCommand('importOBJ', null, null, null, null, null, oldState, newVoxels);
+            showMessageModal('Import erfolgreich', 'OBJ-Modell erfolgreich importiert und in Voxel umgewandelt. Beachten Sie, dass die Voxelisierung eine Annäherung ist und bei komplexen Modellen zu Detailverlust führen kann.');
+
+        } catch (error) {
+            console.error('Error loading OBJ file:', error);
+            showMessageModal('Fehler', 'Fehler beim Laden der OBJ-Datei. Stellen Sie sicher, dass es sich um eine gültige OBJ-Datei handelt.');
+        }
+    };
+    reader.readAsText(file);
+}
+
+// NEW: Function to export VOX (placeholder)
+function exportVOX() {
+    showMessageModal('VOX Export', 'Die Implementierung des VOX-Exports ist komplex und erfordert eine spezielle Parser-Bibliothek, die in dieser einfachen HTML-Datei nicht enthalten ist. Dies ist eine zukünftige Funktion.');
+}
+
+// NEW: Function to import VOX (placeholder)
+function importVOX() {
+    showMessageModal('VOX Import', 'Die Implementierung des VOX-Imports ist komplex und erfordert eine spezielle Parser-Bibliothek, die in dieser einfachen HTML-Datei nicht enthalten ist. Dies ist eine zukünftige Funktion.');
+}
+
+// NEW: Generic message modal
+function showMessageModal(title, message) {
+    const modal = document.getElementById('messageModal');
+    document.getElementById('messageModalTitle').textContent = title;
+    document.getElementById('messageModalText').textContent = message;
+    modal.style.display = 'flex';
+}
+
 
 function generateTerrain() {
     const oldState = [...voxels.entries()].map(([id, data]) => {
@@ -1875,6 +2186,111 @@ function resetCameraPosition() {
     }
 }
 
+// NEW: Function to load image as template
+function loadImageTemplate() {
+    document.getElementById('imageFileInput').click();
+}
+
+// NEW: Handle image file selection
+function handleImageFileSelect(event) {
+    const file = event.target.files[0];
+    if (!file) return;
+
+    const reader = new FileReader();
+    reader.onload = (e) => {
+        const base64Image = e.target.result;
+
+        // Create a temporary image element to get dimensions
+        const img = new Image();
+        img.onload = () => {
+            const aspectRatio = img.width / img.height;
+            const planeWidth = GRID * VS; // Make template width match grid width
+            const planeHeight = planeWidth / aspectRatio;
+
+            // Dispose old template mesh if it exists
+            if (templateImageMesh) {
+                scene.remove(templateImageMesh);
+                templateImageMesh.geometry.dispose();
+                templateImageMesh.material.dispose();
+            }
+
+            const texture = new THREE.TextureLoader().load(base64Image);
+            const material = new THREE.MeshBasicMaterial({ map: texture, side: THREE.DoubleSide, transparent: true, depthWrite: false });
+            const geometry = new THREE.PlaneGeometry(planeWidth, planeHeight); // Use calculated dimensions
+
+            templateImageMesh = new THREE.Mesh(geometry, material);
+
+            // Position the plane at the back of the grid, centered
+            templateImageMesh.position.set(
+                (GRID * VS) / 2, // Centered horizontally
+                (GRID * VS) / 2, // Centered vertically
+                -0.5 * VS // Slightly behind the z=0 grid plane
+            );
+            templateImageMesh.rotation.y = Math.PI; // Face towards the camera
+
+            templateImageMesh.renderOrder = -1; // Render behind other objects
+            scene.add(templateImageMesh);
+
+            // Store template data for persistence
+            templateImageData = {
+                src: base64Image,
+                position: templateImageMesh.position.toArray(),
+                rotation: templateImageMesh.rotation.toArray(),
+                scale: templateImageMesh.scale.toArray(),
+                locked: false, // Default to unlocked
+                originalWidth: img.width, // Store original dimensions for aspect ratio
+                originalHeight: img.height
+            };
+
+            // Update UI
+            document.getElementById('removeImageTemplateBtn').style.display = 'inline-block';
+            document.getElementById('lockImageTemplateCheckbox').checked = false; // Ensure checkbox is unchecked initially
+            toggleLockImageTemplate(false); // Apply unlocked state
+        };
+        img.src = base64Image;
+    };
+    reader.readAsDataURL(file);
+}
+
+// NEW: Function to remove the image template
+function removeImageTemplate(fromLoad = false) {
+    if (templateImageMesh) {
+        scene.remove(templateImageMesh);
+        templateImageMesh.geometry.dispose();
+        templateImageMesh.material.dispose();
+        templateImageMesh = null;
+        templateImageData = null;
+        document.getElementById('removeImageTemplateBtn').style.display = 'none';
+        document.getElementById('lockImageTemplateCheckbox').checked = false;
+        if (!fromLoad) {
+            // No history command needed for removal, as it's part of the project state
+            // and handled by save/load.
+        }
+    }
+}
+
+// NEW: Function to toggle image template lock
+function toggleLockImageTemplate(initialLoad = false) {
+    const isLocked = document.getElementById('lockImageTemplateCheckbox').checked;
+    if (templateImageData) {
+        templateImageData.locked = isLocked;
+    }
+
+    if (templateImageMesh) {
+        if (isLocked) {
+            // Override raycast method to make it non-interactive
+            templateImageMesh.raycast = function() {};
+        } else {
+            // Restore default raycast method
+            delete templateImageMesh.raycast;
+        }
+    }
+    if (!initialLoad) {
+        // No history command needed for lock state, as it's part of the project state
+        // and handled by save/load.
+    }
+}
+
 
 /* ---------- Initialisierung bei Fensterladung ---------- */
 window.onload = function() {
@@ -1922,11 +2338,13 @@ window.onload = function() {
     
     // Apply shader patch for instance colors with Lambert material
     meshMaterial.onBeforeCompile = (shader) => {
-        // Add varying declaration to vertex shader (no re-declaration of attribute)
-        shader.vertexShader = shader.vertexShader.replace(
+        // Add varying declaration to vertex shader (at the top, before main)
+        shader.vertexShader = `
+            varying vec3 vInstanceColor; // Declare varying here
+            ${shader.vertexShader}
+        `.replace(
             'void main() {',
             `
-            varying vec3 vInstanceColor; // Declare varying here
             void main() {
             `
         );
@@ -2009,7 +2427,8 @@ window.onload = function() {
         GRID = parseInt(e.target.value);
         document.getElementById('grid-size-display').textContent = `${GRID}×${GRID}×${GRID}`;
         localStorage.setItem('voxelEditorGridSize', GRID);
-        console.log("GRID size set to:", GRID); // Debugging line
+        console.log("Grid size changed to:", GRID);
+        console.log("Saving 'voxelEditorGridSize' to localStorage:", localStorage.getItem('voxelEditorGridSize'));
 
         // Capture current voxel state before clear for history
         const oldVoxelState = [...voxels.entries()].map(([id, data]) => {
@@ -2115,6 +2534,11 @@ window.onload = function() {
         clearConfirmationModal.style.display = 'none';
     });
 
+    // NEW: Message Modal Close Button
+    document.getElementById('messageModalCloseBtn').addEventListener('click', () => {
+        document.getElementById('messageModal').style.display = 'none';
+    });
+
 
     document.getElementById('fillLevelBtn').addEventListener('click', fillActiveLevel);
     document.getElementById('saveBtn').addEventListener('click', saveJSON);
@@ -2123,6 +2547,23 @@ window.onload = function() {
     });
     document.getElementById('fileInput').addEventListener('change', loadJSON);
     document.getElementById('exportStlBtn').addEventListener('click', exportSTL);
+    document.getElementById('importStlBtn').addEventListener('click', () => { // NEW: STL Import Button Listener
+        document.getElementById('stlFileInput').click();
+    });
+    document.getElementById('stlFileInput').addEventListener('change', importSTL); // NEW: STL File Input Listener
+
+    document.getElementById('exportObjBtn').addEventListener('click', exportOBJ); // NEW: OBJ Export Button Listener
+    document.getElementById('importObjBtn').addEventListener('click', () => { // NEW: OBJ Import Button Listener
+        document.getElementById('objFileInput').click();
+    });
+    document.getElementById('objFileInput').addEventListener('change', importOBJ); // NEW: OBJ File Input Listener
+
+    document.getElementById('exportVoxBtn').addEventListener('click', exportVOX); // NEW: VOX Export Button Listener
+    document.getElementById('importVoxBtn').addEventListener('click', () => { // NEW: VOX Import Button Listener
+        document.getElementById('voxFileInput').click();
+    });
+    document.getElementById('voxFileInput').addEventListener('change', importVOX); // NEW: VOX File Input Listener
+
 
     document.getElementById('fly-speed-slider').addEventListener('input', (e) => {
         moveSpeed = parseFloat(e.target.value);
@@ -2133,8 +2574,8 @@ window.onload = function() {
     // Block Size buttons
     document.getElementById('block-size-1x1').addEventListener('click', () => setBlockSize(1));
     document.getElementById('block-size-4x4').addEventListener('click', () => setBlockSize(4));
-    document.getElementById('block-size-8x8').addEventListener('click', () => setBlockSize(8));    
-    document.getElementById('block-size-10x10').addEventListener('click', () => setBlockSize(10));
+    document.getElementById('block-size-8x8').addEventListener('click', () => setBlockSize(8));
+    document.getElementById('block-size-10x10').addEventListener('click', () => setBlockSize(10)); // NEW: 10x10 Block Size
 
 
     // Info Box (Help) Toggle Logic
@@ -2184,6 +2625,12 @@ window.onload = function() {
 
     // NEW: Add event listener for the "Return to Scene" button
     document.getElementById('resetCameraBtn').addEventListener('click', resetCameraPosition);
+
+    // NEW: Image Template Event Listeners
+    document.getElementById('loadImageTemplateBtn').addEventListener('click', loadImageTemplate);
+    document.getElementById('imageFileInput').addEventListener('change', handleImageFileSelect);
+    document.getElementById('removeImageTemplateBtn').addEventListener('click', removeImageTemplate);
+    document.getElementById('lockImageTemplateCheckbox').addEventListener('change', toggleLockImageTemplate);
 
 
     // Hamburger menu toggle for mobile
