@@ -1782,7 +1782,8 @@ function loadJSON(event) {
 
                 // Load fly speed
                 if (loadedSettings.moveSpeed !== undefined) {
-                    moveSpeed = loadedSettings.moveSpeed;
+                    moveSpeed = loadedSetti
+ngs.moveSpeed;
                     document.getElementById('fly-speed-slider').value = moveSpeed;
                     document.getElementById('fly-speed-display').textContent = moveSpeed.toFixed(2);
                 }
@@ -2118,29 +2119,33 @@ function importVOX(event) {
             const voxModel = VoxelShaperIO.parseVox(arrayBuffer);
 
             console.log("VOX Model parsed:", voxModel);
-            console.log("VOX Model dimensions (sizeX, sizeY, sizeZ):", voxModel.sizeX, voxModel.sizeY, voxModel.sizeZ);
-            console.log("Number of voxels in VOX Model:", voxModel.voxels.length);
+            console.log("VOX Model dimensions (sizeX, sizeY, sizeZ):", voxModel ? voxModel.sizeX : 'N/A', voxModel ? voxModel.sizeY : 'N/A', voxModel ? voxModel.sizeZ : 'N/A');
+            console.log("Number of voxels in VOX Model:", voxModel && Array.isArray(voxModel.voxels) ? voxModel.voxels.length : 'voxels property missing or not an array');
+
+            // --- NEU: Umfassendere Validierung des geparsten Modells ---
+            if (!voxModel || !Array.isArray(voxModel.voxels) || voxModel.voxels.length === 0) {
+                console.warn("No voxels found in the parsed VOX model or invalid model structure.");
+                showMessageModal('Import fehlgeschlagen', 'Die geladene VOX-Datei enthält keine Voxel oder hat eine ungültige Struktur. Bitte stellen Sie sicher, dass es sich um eine gültige MagicaVoxel (.vox) Datei handelt und dass die `voxelshaper_io.js` Bibliothek diese Version unterstützt. Überprüfen Sie die Konsole für weitere Details.');
+                return; // Exit if no voxels found or invalid structure
+            }
+            // --- ENDE NEU ---
 
             let offsetX = 0, offsetY = 0, offsetZ = 0;
-            if (voxModel.voxels.length > 0) {
-                const minX = Math.min(...voxModel.voxels.map(v => v.x));
-                const minY = Math.min(...voxModel.voxels.map(v => v.y));
-                const minZ = Math.min(...voxModel.voxels.map(v => v.z));
-                console.log(`Original Min Voxel Coords: X=${minX}, Y=${minY}, Z=${minZ}`);
+            
+            const minX = Math.min(...voxModel.voxels.map(v => v.x));
+            const minY = Math.min(...voxModel.voxels.map(v => v.y));
+            const minZ = Math.min(...voxModel.voxels.map(v => v.z));
+            console.log(`Original Min Voxel Coords: X=${minX}, Y=${minY}, Z=${minZ}`);
 
-                // Calculate offsets to make all coordinates non-negative
-                if (minX < 0) offsetX = -minX;
-                if (minY < 0) offsetY = -minY;
-                if (minZ < 0) offsetZ = -minZ;
+            // Calculate offsets to make all coordinates non-negative
+            if (minX < 0) offsetX = -minX;
+            if (minY < 0) offsetY = -minY;
+            if (minZ < 0) offsetZ = -minZ;
 
-                if (offsetX > 0 || offsetY > 0 || offsetZ > 0) {
-                    console.log(`Applying offset: X+${offsetX}, Y+${offsetY}, Z+${offsetZ}`);
-                }
-            } else {
-                console.warn("No voxels found in the parsed VOX model.");
-                showMessageModal('Import fehlgeschlagen', 'Die geladene VOX-Datei enthält keine Voxel.');
-                return; // Exit if no voxels found
+            if (offsetX > 0 || offsetY > 0 || offsetZ > 0) {
+                console.log(`Applying offset: X+${offsetX}, Y+${offsetY}, Z+${offsetZ}`);
             }
+            
 
             // Clear current voxels before importing
             clearAllInternal(true);
