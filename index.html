@@ -464,7 +464,7 @@ const VS = 1, HALF = VS * 0.5;
 
 /* ---------- globale Variablen ---------- */
 let isDblTapDragActive= false; // Controls if a double-tap-drag should activate drawing
-let activeGestureMode = 'none'; // NEW: Verfolgt den aktuell aktiven Gestenmodus
+let activeGestureMode = 'none'; // NEW: Verfolgt den aktuell aktiven Gestenmodus ('none', 'singleTouchCamera', 'multiTouchCamera', 'dblTapDragDraw')
 let isHoldDrawingActive = false;   // NEW: Verfolgt, ob ein Long-Press-Zeichnen aktiv ist
 const LONG_PRESS_DELAY_MS = 500;   // NEW: Wartezeit (in Millisekunden) für Long-Press-Erkennung
 
@@ -658,16 +658,15 @@ function handleGesture () {
   if (pts.length === 1){
     const p = pts[0];
 
-    if (dblTapActive){
+    // If double-tap-drag is active, handle drawing, not camera movement
+    if (activeGestureMode === 'dblTapDragDraw'){
       if (!dblTapDrag){
         const moved = Math.hypot(p.x - touchStartPos.x,
                                  p.y - touchStartPos.y);
         if (moved > MOVE_PX){
           dblTapDrag      = true;
-          isShiftDragging = true;
-
-          // Set fixed plane for dblTapDrag based on hit or current drawing level
-          setFixedDragPlane(p.x, p.y, currentMode);
+          isShiftDragging = true; // Enable line drawing
+          // Fixed plane for dblTapDrag is already set in onPointerDown
         }
       }
 
@@ -689,11 +688,11 @@ function handleGesture () {
             }
         }
       }
-
       prevTouch = {x:p.x, y:p.y};
-      return;
+      return; // Exit, as we are in a drawing gesture
     }
 
+    // Single-finger camera look
     if (prevTouch === null){
         prevTouch = {x:p.x, y:p.y};
         return;
@@ -711,6 +710,7 @@ function handleGesture () {
     return;
   }
 
+  // Multi-touch gestures (pan/pinch)
   if (pts.length !== 2) return;
 
   const [p0, p1] = pts;
@@ -767,6 +767,11 @@ function releasePointer(id){
         prevTouch   = { x:last.x, y:last.y };
         gestureMid  = gestureDist = null;
         gestureMode = null;
+        // If one pointer remains, and it was a double-tap-drag, keep that mode active
+        // Otherwise, revert to single-touch camera mode
+        if (!isDblTapDragActive) { // Only change mode if not already in dblTapDragDraw
+             activeGestureMode = 'singleTouchCamera';
+        }
         return;
     }
 
@@ -780,6 +785,7 @@ function releasePointer(id){
         gestureMode = null;
         prevTouch   = null;
         lastActionVoxelCoords = null; // Reset for next touch interaction
+        activeGestureMode = 'none'; // Reset general gesture mode
     }
 }
 
@@ -2488,7 +2494,7 @@ window.onload = function() {
     ren.setPixelRatio(window.devicePixelRatio);
     ren.shadowMap.enabled = true; // Enable shadow maps
     ren.shadowMap.type = THREE.PCFSoftShadowMap; // Softer shadows
-
+  
     // Lights
     const ambientLight = new THREE.AmbientLight(0x404040); // Soft white light
     scene.add(ambientLight);
@@ -2907,30 +2913,36 @@ function onPointerDown(e) {
         fixedDragPlaneParams.level = null;
         fixedDragPlaneParams.axis = null;
 
-        // Check for double-tap start (for dblTapDragDraw)
-        const now = performance.now();
-        if (now - lastTap < DT_MS && tapCandidate && Math.hypot(e.clientX - tapCandidate.x, e.clientY - tapCandidate.y) < TAP_DIST_TH) {
-            dblTapActive = true;
-            isDblTapDragActive = true; // Activate double-tap-drag mode
-            activeGestureMode = 'dblTapDragDraw';
-            // Set fixed plane for dblTapDrag based on hit or current drawing level
-            setFixedDragPlane(e.clientX, e.clientY, currentMode);
-        } else {
-            dblTapActive = false;
-            isDblTapDragActive = false;
-            activeGestureMode = 'none';
-            tapCandidate = { x: e.clientX, y: e.clientY, time: now };
-        }
-
-        // Determine fixed drawing plane for Shift-drag OR normal drag (if not stacking)
-        const isShiftOrNormalDrag = (shiftActive() || isDblTapDragActive) || (e.buttons === 1 && !e.ctrlKey);
-        if (isShiftOrNormalDrag) {
-            setFixedDragPlane(e.clientX, e.clientY, currentMode);
-        }
-
         if (e.pointerType === 'touch') {
             activePointers.set(e.pointerId, { x: e.clientX, y: e.clientY });
+
+            const now = performance.now();
+            if (activePointers.size === 1) { // Only check for double tap if it's the first finger down
+                if (now - lastTap < DT_MS && tapCandidate && Math.hypot(e.clientX - tapCandidate.x, e.clientY - tapCandidate.y) < TAP_DIST_TH) {
+                    dblTapActive = true;
+                    isDblTapDragActive = true; // Activate double-tap-drag mode
+                    activeGestureMode = 'dblTapDragDraw';
+                    // Set fixed plane for dblTapDrag based on hit or current drawing level
+                    setFixedDragPlane(e.clientX, e.clientY, currentMode);
+                } else {
+                    dblTapActive = false;
+                    isDblTapDragActive = false;
+                    activeGestureMode = 'singleTouchCamera'; // Assume single touch is for camera initially
+                    tapCandidate = { x: e.clientX, y: e.clientY, time: now };
+                }
+            } else if (activePointers.size > 1) {
+                // If a second finger comes down, it's a multi-touch camera gesture
+                activeGestureMode = 'multiTouchCamera';
+                dblTapActive = false; // Cancel any pending double tap
+                isDblTapDragActive = false;
+            }
             handleGesture(); // Process gesture immediately for touch
+        } else { // Mouse
+            // Determine fixed drawing plane for Shift-drag OR normal drag (if not stacking)
+            const isShiftOrNormalDrag = (shiftActive() || isDblTapDragActive) || (e.buttons === 1 && !e.ctrlKey);
+            if (isShiftOrNormalDrag) {
+                setFixedDragPlane(e.clientX, e.clientY, currentMode);
+            }
         }
     }
 }
@@ -2940,15 +2952,11 @@ function onPointerMove(e) {
     if (e.pointerType === 'touch') {
         activePointers.set(e.pointerId, { x: e.clientX, y: e.clientY });
         handleGesture(); // This handles camera movement (pan/pinch) and dblTapDrag drawing
-        // If a multi-touch gesture (pan/pinch) is active, prevent other drawing
-        if (activePointers.size > 1 && (gestureMode === 'pan' || gestureMode === 'pinch')) {
-            updatePreviewVoxel(0, 0, 0, false); // Hide preview during multi-touch camera gestures
+
+        // If in a camera gesture mode, hide preview and prevent drawing
+        if (activeGestureMode === 'singleTouchCamera' || activeGestureMode === 'multiTouchCamera') {
+            updatePreviewVoxel(0, 0, 0, false); // Hide preview during camera gestures
             return; // Exit early, no drawing during camera gestures
-        }
-        // NEW: If single-finger touch and NOT a dblTapDrag, it's a camera look. Prevent drawing.
-        if (activePointers.size === 1 && !isDblTapDragActive) {
-            updatePreviewVoxel(0, 0, 0, false); // Hide preview during single-finger camera look
-            return; // Exit early, no drawing during single-finger camera look
         }
     } else if (isPointerLocked) { // Mouse right-click rotation (Unreal Engine style)
         // Ignore the very first movement event after pointer lock to prevent initial jump
@@ -2971,6 +2979,7 @@ function onPointerMove(e) {
     // This part now only executes if not in pointer-locked mode (desktop right-click)
     // AND not in an active multi-touch camera gesture (for mobile)
     // AND not in a single-finger touch camera look mode (for mobile)
+    // AND not in a double-tap-drag drawing mode (which is handled by handleGesture)
 
     const currentTargetVoxel = calculateTargetVoxelCoords(e.clientX, e.clientY, currentMode, pointerIsDown, isControlDragging);
 
@@ -2987,11 +2996,12 @@ function onPointerMove(e) {
         const movedDistance = initialClickPos ? Math.hypot(e.clientX - initialClickPos.x, e.clientY - initialClickPos.y) : 0;
         const isActualDrag = movedDistance > MOVE_PX;
 
-        if (isActualDrag || isHoldDrawingActive || isDblTapDragActive) {
+        // Only proceed with drawing if it's an actual drag, or a hold-drawing, or a double-tap-drag
+        if (isActualDrag || isHoldDrawingActive || activeGestureMode === 'dblTapDragDraw') {
             if (currentTargetVoxel) {
                 // This condition now checks for ANY line drawing mode (Shift, Ctrl, DblTap, or the new normal drag fixed plane)
                 // The fixedDragPlaneParams.level !== null check ensures we are in a fixed-plane drag mode
-                if (shiftActive() || isControlDragging || isDblTapDragActive || (fixedDragPlaneParams.level !== null && fixedDragPlaneParams.axis !== null)) {
+                if (shiftActive() || isControlDragging || activeGestureMode === 'dblTapDragDraw' || (fixedDragPlaneParams.level !== null && fixedDragPlaneParams.axis !== null)) {
                     if (!lastActionVoxelCoords ||
                         lastActionVoxelCoords.gx !== currentTargetVoxel.gx ||
                         lastActionVoxelCoords.gy !== currentTargetVoxel.gy ||
@@ -3070,7 +3080,7 @@ function onPointerUp(e) {
     isShiftDragging = false;
     dblTapDrag = false;
     isDblTapDragActive = false;
-    activeGestureMode = 'none';
+    activeGestureMode = 'none'; // Reset active gesture mode
     lastActionVoxelCoords = null;
     initialClickPos = null;
 
