@@ -3421,8 +3421,9 @@ function animate() {
     requestAnimationFrame(animate);
 
     // Frustum Culling: Rebuild InstancedMesh buffers every frame with visible voxels
-    tempCameraMatrix.multiplyMatrices(cam.projectionMatrix, cam.matrixWorldInverse);
-    frustum.setFromProjectionMatrix(tempCameraMatrix);
+    // Original code:
+    // tempCameraMatrix.multiplyMatrices(cam.projectionMatrix, cam.matrixWorldInverse);
+    // frustum.setFromProjectionMatrix(tempCameraMatrix);
 
     let currentInstanceIndex = 0;
     const voxelBaseGeometry = new THREE.BoxGeometry(VS, VS, VS); // Re-use this
@@ -3431,7 +3432,8 @@ function animate() {
         const [x, y, z] = parseKey(k);
         tempVoxelPosition.set(x * VS + HALF, y * VS + HALF, z * VS + HALF);
 
-        if (frustum.containsPoint(tempVoxelPosition)) {
+        // Removed frustum culling condition to always render all voxels
+        // if (frustum.containsPoint(tempVoxelPosition)) {
             // Set matrix for the visible instance
             dummy.position.copy(tempVoxelPosition);
             dummy.updateMatrix();
@@ -3441,7 +3443,7 @@ function animate() {
             setInstanceColor(currentInstanceIndex, data.color);
 
             currentInstanceIndex++;
-        }
+        // } // End of removed frustum culling condition
     });
 
     instancedMesh.count = currentInstanceIndex; // Update total visible instances
