@@ -496,6 +496,7 @@ const DT_MS       = 250;      // max. Abstand Taps (ms)
 const MOVE_PX     = 10;        // ab hier gilt es als Drag (erhöht von 6)
 /* ---------- Touch-Gesten (NEU) ---------- */
 const activePointers = new Map();   // id → {x,y}
+let isMultiTouchGestureActive = false; // NEW: Flag to track if a multi-touch gesture was active
 
 let euler; // Declare euler globally
 // voxels Map stores { color: hex_color, instanceId: number }
@@ -526,6 +527,9 @@ let presetBoxes = []; // Global array to store references to preset color boxes
 
 // Referenzen für Lichter, die Schatten werfen, um sie später anpassen zu können
 let mainDirectionalLight;
+let fillDirectionalLight; // NEW: Zweites gerichtetes Licht
+let hemisphereLight;      // NEW: Hemisphärenlicht
+let groundPlane;          // NEW: Bodenplatte
 
 // Globale Variablen für Dragging-Status
 let isShiftDragging = false;   // physische Shift-Taste
@@ -1447,7 +1451,7 @@ function calculateTargetVoxelCoords(clientX, clientY, mode, isDragging, isStacki
         // Clamp coordinates to grid boundaries
         targetVoxelCoords.gx = Math.max(0, Math.min(GRID - 1, targetVoxelCoords.gx));
         targetVoxelCoords.gy = Math.max(0, Math.min(GRID - 1, targetVoxelCoords.gy));
-        targetVoxelCoords.gz = Math.max(0, Math.min(GRID - 1, targetVoxelCoords.gz));
+    targetVoxelCoords.gz = Math.max(0, Math.min(GRID - 1, targetVoxelCoords.gz));
         return targetVoxelCoords;
     }
     return null;
@@ -1841,6 +1845,7 @@ function loadJSON(event) {
 
             console.log('Project loaded successfully.');
             resetCameraPosition(); // Reset camera to view loaded terrain/voxels
+            // updateGroundPlaneSize(); // NEW: Update ground plane size after loading - REMOVED
         } catch (error) {
             console.error('Error loading JSON file:', error);
             showMessageModal('Fehler', 'Fehler beim Laden der Datei. Stellen Sie sicher, dass es sich um eine gültige Voxel-Projekt-JSON-Datei handelt.');
@@ -1976,6 +1981,7 @@ function importSTL(event) {
             updateVoxelGeometry();
             rebuildHelpers();
             resetCameraPosition();
+            // updateGroundPlaneSize(); // NEW: Update ground plane size after importing - REMOVED
 
             addCommand('importSTL', null, null, null, null, null, oldState, newVoxels);
             showMessageModal('Import erfolgreich', 'STL-Modell erfolgreich importiert und in Voxel umgewandelt. Beachten Sie, dass die Voxelisierung eine Annäherung ist und bei komplexen Modellen zu Detailverlust führen kann.');
@@ -2053,6 +2059,7 @@ function importOBJ(event) {
             updateVoxelGeometry();
             rebuildHelpers();
             resetCameraPosition();
+            // updateGroundPlaneSize(); // NEW: Update ground plane size after importing - REMOVED
 
             addCommand('importOBJ', null, null, null, null, null, oldState, newVoxels);
             showMessageModal('Import erfolgreich', 'OBJ-Modell erfolgreich importiert und in Voxel umgewandelt. Beachten Sie, dass die Voxelisierung eine Annäherung ist und bei komplexen Modellen zu Detailverlust führen kann.');
@@ -2150,6 +2157,7 @@ function importVOX(event) {
                 localStorage.setItem('voxelEditorGridSize', GRID);
                 rebuildHelpers();
                 resetCameraPosition();
+                // updateGroundPlaneSize(); // NEW: Update ground plane size for empty scene - REMOVED
                 showMessageModal('Import abgeschlossen', 'Die VOX-Datei wurde erfolgreich importiert, enthielt jedoch keine Voxel. Die Szene wurde auf eine leere Standardgröße zurückgesetzt.');
                 return; // Exit after handling empty model
             }
@@ -2285,6 +2293,7 @@ function importVOX(event) {
             updateVoxelGeometry();
             rebuildHelpers();
             resetCameraPosition();
+            // updateGroundPlaneSize(); // NEW: Update ground plane size after importing - REMOVED
 
             addCommand('importVOX', null, null, null, null, null, oldState, newVoxels);
             showMessageModal('Import erfolgreich', 'VOX-Modell erfolgreich importiert!');
@@ -2347,6 +2356,7 @@ function generateTerrain() {
     instancedMesh.instanceColor.needsUpdate = true;
     rebuildHelpers(); // Update helpers to new terrain size
     resetCameraPosition(); // Reset camera to view new terrain
+    // updateGroundPlaneSize(); // NEW: Update ground plane size after terrain generation - REMOVED
 
     // Capture the state after terrain generation
     const newState = [...voxels.entries()].map(([id, data]) => {
@@ -2472,6 +2482,21 @@ function toggleLockImageTemplate(initialLoad = false) {
     }
 }
 
+// NEW: Function to update the ground plane size based on current GRID
+function updateGroundPlaneSize() {
+    // Remove the ground plane if it exists
+    if (groundPlane) {
+        scene.remove(groundPlane);
+        groundPlane.geometry.dispose();
+        groundPlane.material.dispose();
+        groundPlane = null; // Ensure the reference is cleared
+    }
+
+    // No longer creating the ground plane
+    // If you want to re-add it with different sizing, this is where you would do it.
+    // For now, it's removed as per user request.
+}
+
 
 /* ---------- Initialisierung bei Fensterladung ---------- */
 window.onload = function() {
@@ -2496,10 +2521,10 @@ window.onload = function() {
     ren.shadowMap.type = THREE.PCFSoftShadowMap; // Softer shadows
   
     // Lights
-    const ambientLight = new THREE.AmbientLight(0x404040); // Soft white light
+    const ambientLight = new THREE.AmbientLight(0x202020); // Soft white light, slightly reduced
     scene.add(ambientLight);
 
-    mainDirectionalLight = new THREE.DirectionalLight(0xffffff, 0.8);
+    mainDirectionalLight = new THREE.DirectionalLight(0xffffff, 1.0); // Intensity increased to 1.0
     mainDirectionalLight.position.set(10, 20, 15);
     mainDirectionalLight.castShadow = true;
     mainDirectionalLight.shadow.mapSize.width = 2048; // Increased for better shadow quality
@@ -2510,7 +2535,21 @@ window.onload = function() {
     mainDirectionalLight.shadow.camera.right = 30;
     mainDirectionalLight.shadow.camera.top = 30;
     mainDirectionalLight.shadow.camera.bottom = -30;
+    mainDirectionalLight.shadow.bias = -0.0005; // NEW: Reduce shadow acne
+    mainDirectionalLight.shadow.normalBias = 0.02; // NEW: Reduce normal bias artifacts
     scene.add(mainDirectionalLight);
+
+    // NEW: Zweites gerichtetes Licht (Fülllicht)
+    fillDirectionalLight = new THREE.DirectionalLight(0xffffff, 0.3); // Lower intensity
+    fillDirectionalLight.position.set(-10, 10, -15); // From a different angle
+    scene.add(fillDirectionalLight);
+
+    // NEW: Hemisphärenlicht
+    hemisphereLight = new THREE.HemisphereLight(0xffffff, 0x444444, 0.6); // Sky color, ground color, intensity
+    scene.add(hemisphereLight);
+
+    // NEW: Bodenplatte
+    updateGroundPlaneSize(); // Call this here to ensure it's removed on initialization
 
     // Initialize InstancedMesh
     const voxelBaseGeometry = new THREE.BoxGeometry(VS, VS, VS);
@@ -2659,6 +2698,7 @@ window.onload = function() {
 
         rebuildHelpers();
         resetCameraPosition(); // Reset camera to new grid center
+        // updateGroundPlaneSize(); // NEW: Update ground plane size after grid resize - REMOVED
     });
 
     document.getElementById('color-picker').addEventListener('input', (e) => {
@@ -2919,6 +2959,10 @@ function onPointerDown(e) {
             if (activePointers.size === 1) {
                 prevTouch = { x: e.clientX, y: e.clientY };
             }
+            // NEW: Set isMultiTouchGestureActive if two or more fingers are down
+            if (activePointers.size >= 2) {
+                isMultiTouchGestureActive = true;
+            }
 
 
             const now = performance.now();
@@ -3040,6 +3084,8 @@ function onPointerUp(e) {
     }
     isHoldDrawingActive = false;
 
+    let wasMultiTouchGesture = isMultiTouchGestureActive; // Capture state before releasing pointer
+
     if (e.pointerType === 'mouse') {
         if (e.button === 2) { // Right-click up
             rotate = false;
@@ -3071,7 +3117,8 @@ function onPointerUp(e) {
         const wasSingleTap = movedDistance <= TAP_DIST_TH; // Use TAP_DIST_TH for touch tap threshold
 
         if (!isPointerLocked && activePointers.size === 0) { // Ensure not in fly mode and all fingers are lifted
-            if (wasSingleTap && !dblTapActive && !dblTapDrag) { // Ensure it's a single tap, not part of a double-tap sequence
+            // NEW: Prevent single tap cube placement if a multi-touch gesture was active
+            if (wasSingleTap && !dblTapActive && !dblTapDrag && !wasMultiTouchGesture) {
                 const clickedVoxel = calculateTargetVoxelCoords(e.clientX, e.clientY, currentMode, false, false);
                 if (clickedVoxel) {
                     performVoxelModification(clickedVoxel.gx, clickedVoxel.gy, clickedVoxel.gz, currentMode, currentColor, currentBlockSize);
@@ -3089,6 +3136,7 @@ function onPointerUp(e) {
     activeGestureMode = 'none'; // Reset active gesture mode
     lastActionVoxelCoords = null;
     initialClickPos = null;
+    isMultiTouchGestureActive = false; // NEW: Reset multi-touch gesture flag
 
     // Reset fixed drag plane parameters
     fixedDragPlaneParams.level = null;
