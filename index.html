@@ -455,7 +455,337 @@ input[type="color"]::-moz-color-swatch {
 <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/loaders/STLLoader.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/seedrandom/3.0.5/seedrandom.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/noisejs/2.1.0/perlin.js"></script>
-<script src="lib/voxelshaper_io.js"></script> <!-- NEW: VoxelShaperIO library -->
+
+<!-- VoxelShaperIO Library (embedded) -->
+<script>
+var VoxelShaperIO = (function() {
+    // Helper to convert hex to RGBA for VOX palette
+    function hexToRgba(hex) {
+        if (!hex || hex.length !== 7) return 0x00000000; // Default to transparent black
+        const r = parseInt(hex.substring(1, 3), 16);
+        const g = parseInt(hex.substring(3, 5), 16);
+        const b = parseInt(hex.substring(5, 7), 16);
+        return (r << 24) | (g << 16) | (b << 8) | 0xFF; // RGBA
+    }
+
+    // Helper to convert RGBA to hex
+    function rgbaToHex(rgba) {
+        const r = (rgba >>> 24) & 0xFF;
+        const g = (rgba >>> 16) & 0xFF;
+        const b = (rgba >>> 8) & 0xFF;
+        return `#${((1 << 24) + (r << 16) + (g << 8) + b).toString(16).slice(1).toUpperCase()}`;
+    }
+
+    class VoxModel {
+        constructor(sizeX, sizeY, sizeZ, voxels = [], palette = new Uint32Array(256)) {
+            this.sizeX = sizeX;
+            this.sizeY = sizeY;
+            this.sizeZ = sizeZ;
+            this.voxels = voxels; // Array of {x, y, z, c} where c is palette index
+            this.palette = palette; // Uint32Array of RGBA colors
+            // Initialize default palette if not provided
+            if (this.palette.every(val => val === 0)) {
+                this.palette[1] = hexToRgba("#FF0000"); // Red
+                this.palette[2] = hexToRgba("#00FF00"); // Green
+                this.palette[3] = hexToRgba("#0000FF"); // Blue
+                // ... add more default colors as needed
+            }
+        }
+    }
+
+    // Basic OBJ exporter (simplified, no materials)
+    function voxToOBJ(voxModel, cubeSize = 1) {
+        let obj = `# VoxelShaper OBJ Export\n`;
+        let vertexCount = 0;
+
+        voxModel.voxels.forEach(v => {
+            const x = v.x * cubeSize;
+            const y = v.y * cubeSize;
+            const z = v.z * cubeSize;
+
+            // Vertices for a cube
+            obj += `v ${x} ${y} ${z}\n`;
+            obj += `v ${x + cubeSize} ${y} ${z}\n`;
+            obj += `v ${x + cubeSize} ${y + cubeSize} ${z}\n`;
+            obj += `v ${x} ${y + cubeSize} ${z}\n`;
+            obj += `v ${x} ${y} ${z + cubeSize}\n`;
+            obj += `v ${x + cubeSize} ${y} ${z + cubeSize}\n`;
+            obj += `v ${x + cubeSize} ${y + cubeSize} ${z + cubeSize}\n`;
+            obj += `v ${x} ${y + cubeSize} ${z + cubeSize}\n`;
+
+            // Faces (simplified, assuming no normals/texture coords for now)
+            // Front face
+            obj += `f ${vertexCount + 1} ${vertexCount + 2} ${vertexCount + 3} ${vertexCount + 4}\n`;
+            // Back face
+            obj += `f ${vertexCount + 5} ${vertexCount + 8} ${vertexCount + 7} ${vertexCount + 6}\n`;
+            // Top face
+            obj += `f ${vertexCount + 4} ${vertexCount + 3} ${vertexCount + 7} ${vertexCount + 8}\n`;
+            // Bottom face
+            obj += `f ${vertexCount + 1} ${vertexCount + 5} ${vertexCount + 6} ${vertexCount + 2}\n`;
+            // Right face
+            obj += `f ${vertexCount + 2} ${vertexCount + 6} ${vertexCount + 7} ${vertexCount + 3}\n`;
+            // Left face
+            obj += `f ${vertexCount + 5} ${vertexCount + 1} ${vertexCount + 4} ${vertexCount + 8}\n`;
+
+            vertexCount += 8;
+        });
+        return obj;
+    }
+
+    // Basic OBJ importer (very simplified, only parses vertices and creates voxels at those points)
+    function objToVox(objText, voxelSize = 1) {
+        const lines = objText.split('\n');
+        const vertices = [];
+        const voxels = new Map(); // Use a map to avoid duplicate voxels
+        let maxX = 0, maxY = 0, maxZ = 0;
+        let minX = Infinity, minY = Infinity, minZ = Infinity;
+
+        lines.forEach(line => {
+            const parts = line.trim().split(/\s+/);
+            if (parts[0] === 'v') {
+                const x = parseFloat(parts[1]);
+                const y = parseFloat(parts[2]);
+                const z = parseFloat(parts[3]);
+                vertices.push({ x, y, z });
+
+                minX = Math.min(minX, x);
+                minY = Math.min(minY, y);
+                minZ = Math.min(minZ, z);
+                maxX = Math.max(maxX, x);
+                maxY = Math.max(maxY, y);
+                maxZ = Math.max(maxZ, z);
+            }
+        });
+
+        // Simple voxelization: place a voxel at the rounded grid coordinates of each vertex
+        vertices.forEach(v => {
+            const gx = Math.round(v.x / voxelSize);
+            const gy = Math.round(v.y / voxelSize);
+            const gz = Math.round(v.z / voxelSize);
+            // Using a string key for the map
+            voxels.set(`${gx},${gy},${gz}`, { x: gx, y: gy, z: gz, c: 1 }); // c:1 is a dummy palette index
+        });
+
+        const voxelArray = Array.from(voxels.values());
+
+        // Calculate size based on min/max voxel coordinates
+        const sizeX = (maxX === -Infinity) ? 0 : Math.ceil(maxX / voxelSize) - Math.floor(minX / voxelSize);
+        const sizeY = (maxY === -Infinity) ? 0 : Math.ceil(maxY / voxelSize) - Math.floor(minY / voxelSize);
+        const sizeZ = (maxZ === -Infinity) ? 0 : Math.ceil(maxZ / voxelSize) - Math.floor(minZ / voxelSize);
+
+        return new VoxModel(sizeX, sizeY, sizeZ, voxelArray);
+    }
+
+    // Basic VOX builder (simplified, only supports SIZE and XYZI chunks)
+    function buildVox(voxModel) {
+        const writer = new DataViewWriter();
+
+        // RIFF header
+        writer.writeString('VOX ');
+        writer.writeInt32(200); // Version
+
+        // MAIN chunk
+        writer.writeString('MAIN');
+        writer.writeInt32(0); // Content size (will be updated)
+        writer.writeInt32(0); // Children size (will be updated)
+        const mainContentStart = writer.position;
+
+        // SIZE chunk
+        writer.writeString('SIZE');
+        writer.writeInt32(12); // Content size (3 * 4 bytes for x, y, z)
+        writer.writeInt32(0); // Children size
+        writer.writeInt32(voxModel.sizeX);
+        writer.writeInt32(voxModel.sizeY);
+        writer.writeInt32(voxModel.sizeZ);
+
+        // XYZI chunk
+        writer.writeString('XYZI');
+        writer.writeInt32(4 + voxModel.voxels.length * 4); // Content size (4 bytes for numVoxels + numVoxels * 4 bytes for x,y,z,c)
+        writer.writeInt32(0); // Children size
+        writer.writeInt32(voxModel.voxels.length);
+        voxModel.voxels.forEach(v => {
+            writer.writeUint8(v.x);
+            writer.writeUint8(v.y);
+            writer.writeUint8(v.z);
+            writer.writeUint8(v.c); // Palette index
+        });
+
+        // RGBA chunk (palette)
+        writer.writeString('RGBA');
+        writer.writeInt32(256 * 4); // Content size (256 colors * 4 bytes/color)
+        writer.writeInt32(0); // Children size
+        for (let i = 0; i < 256; i++) {
+            writer.writeUint32(voxModel.palette[i]);
+        }
+
+        // Update MAIN chunk sizes
+        const mainContentEnd = writer.position;
+        writer.position = mainContentStart - 8; // Go back to MAIN chunk content size
+        writer.writeInt32(mainContentEnd - mainContentStart); // Actual content size
+        writer.writeInt32(0); // No explicit children chunks for simplicity, included in main content
+
+        return writer.getBuffer();
+    }
+
+    // Basic VOX parser (simplified, only extracts SIZE, XYZI, and RGBA chunks)
+    function parseVox(arrayBuffer) {
+        const reader = new DataViewReader(arrayBuffer);
+
+        if (reader.readString(4) !== 'VOX ') {
+            throw new Error('Not a valid VOX file');
+        }
+        reader.readInt32(); // Version (ignored)
+
+        if (reader.readString(4) !== 'MAIN') {
+            throw new Error('Invalid VOX MAIN chunk');
+        }
+        reader.readInt32(); // Content size (ignored)
+        reader.readInt32(); // Children size (ignored)
+
+        let sizeX = 0, sizeY = 0, sizeZ = 0;
+        const voxels = [];
+        const palette = new Uint32Array(256); // Default empty palette
+
+        while (reader.position < reader.buffer.byteLength) {
+            const chunkId = reader.readString(4);
+            const contentSize = reader.readInt32();
+            const childrenSize = reader.readInt32();
+            const chunkEnd = reader.position + contentSize + childrenSize;
+
+            switch (chunkId) {
+                case 'SIZE':
+                    sizeX = reader.readInt32();
+                    sizeY = reader.readInt32();
+                    sizeZ = reader.readInt32();
+                    break;
+                case 'XYZI':
+                    const numVoxels = reader.readInt32();
+                    for (let i = 0; i < numVoxels; i++) {
+                        const x = reader.readUint8();
+                        const y = reader.readUint8();
+                        const z = reader.readUint8();
+                        const c = reader.readUint8(); // Palette index
+                        voxels.push({ x, y, z, c });
+                    }
+                    break;
+                case 'RGBA':
+                    for (let i = 0; i < 256; i++) {
+                        palette[i] = reader.readUint32();
+                    }
+                    break;
+                default:
+                    // Skip unknown chunks
+                    reader.position = chunkEnd;
+                    break;
+            }
+            reader.position = chunkEnd; // Ensure we move to the end of the chunk
+        }
+
+        return new VoxModel(sizeX, sizeY, sizeZ, voxels, palette);
+    }
+
+    // Helper for writing binary data
+    class DataViewWriter {
+        constructor(initialCapacity = 1024) {
+            this.buffer = new ArrayBuffer(initialCapacity);
+            this.dataView = new DataView(this.buffer);
+            this.position = 0;
+        }
+
+        _ensureCapacity(bytesNeeded) {
+            if (this.position + bytesNeeded > this.buffer.byteLength) {
+                const newCapacity = Math.max(this.buffer.byteLength * 2, this.position + bytesNeeded);
+                const newBuffer = new ArrayBuffer(newCapacity);
+                new Uint8Array(newBuffer).set(new Uint8Array(this.buffer));
+                this.buffer = newBuffer;
+                this.dataView = new DataView(this.buffer);
+            }
+        }
+
+        writeString(str) {
+            this._ensureCapacity(str.length);
+            for (let i = 0; i < str.length; i++) {
+                this.dataView.setUint8(this.position++, str.charCodeAt(i));
+            }
+        }
+
+        writeInt32(value) {
+            this._ensureCapacity(4);
+            this.dataView.setInt32(this.position, value, true); // Little-endian
+            this.position += 4;
+        }
+
+        writeUint32(value) {
+            this._ensureCapacity(4);
+            this.dataView.setUint32(this.position, value, true); // Little-endian
+            this.position += 4;
+        }
+
+        writeUint8(value) {
+            this._ensureCapacity(1);
+            this.dataView.setUint8(this.position++, value);
+        }
+
+        getBuffer() {
+            return this.buffer.slice(0, this.position);
+        }
+    }
+
+    // Helper for reading binary data
+    class DataViewReader {
+        constructor(arrayBuffer) {
+            this.buffer = arrayBuffer;
+            this.dataView = new DataView(arrayBuffer);
+            this.position = 0;
+        }
+
+        readString(length) {
+            let str = '';
+            for (let i = 0; i < length; i++) {
+                str += String.fromCharCode(this.dataView.getUint8(this.position++));
+            }
+            return str;
+        }
+
+        readInt32() {
+            const value = this.dataView.getInt32(this.position, true); // Little-endian
+            this.position += 4;
+            return value;
+        }
+
+        readUint32() {
+            const value = this.dataView.getUint32(this.position, true); // Little-endian
+            this.position += 4;
+            return value;
+        }
+
+        readUint8() {
+            return this.dataView.getUint8(this.position++);
+        }
+    }
+
+    function saveBlob(data, filename) {
+        const blob = new Blob([data], { type: 'application/octet-stream' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = filename;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        URL.revokeObjectURL(url);
+    }
+
+    return {
+        VoxModel,
+        voxToOBJ,
+        objToVox,
+        buildVox,
+        parseVox,
+        saveBlob
+    };
+})();
+</script>
 
 
 <script>
@@ -566,6 +896,21 @@ let moveSpeed = parseFloat(localStorage.getItem('voxelEditorFlySpeed')) || 0.1;
 let GRID = parseInt(localStorage.getItem('voxelEditorGridSize')) || 10;
 console.log("Initial GRID size loaded:", GRID); // Debugging line for initial load
 
+// Load other settings from local storage or set defaults
+activeDrawingLevel.x = parseInt(localStorage.getItem('voxelEditorActiveDrawingLevelX') || '0');
+activeDrawingLevel.y = parseInt(localStorage.getItem('voxelEditorActiveDrawingLevelY') || '0');
+activeDrawingLevel.z = parseInt(localStorage.getItem('voxelEditorActiveDrawingLevelZ') || '0');
+currentDrawingAxis = localStorage.getItem('voxelEditorCurrentDrawingAxis') || 'y';
+let currentBlockSize = parseInt(localStorage.getItem('voxelEditorCurrentBlockSize') || '1'); // Declared here
+let terrainHeightScale = parseInt(localStorage.getItem('voxelEditorTerrainHeightScale') || '10'); // Declared here
+let terrainFrequency = parseFloat(localStorage.getItem('voxelEditorTerrainFrequency') || '0.05'); // Declared here
+let terrainOctaves = parseInt(localStorage.getItem('voxelEditorTerrainOctaves') || '4'); // Declared here
+let terrainLacunarity = parseFloat(localStorage.getItem('voxelEditorTerrainLacunarity') || '2.0'); // Declared here
+let terrainGain = parseFloat(localStorage.getItem('voxelEditorTerrainGain') || '0.5'); // Declared here
+let terrainSeed = localStorage.getItem('voxelEditorTerrainSeed') || ''; // Declared here
+let hasUserTypedSeed = (terrainSeed !== '');
+
+
 // Preset colors - NEW, more natural colors
 const presetColors = [
     localStorage.getItem('voxelPresetColor1') || '#8B4513', // Erdton (SaddleBrown)
@@ -613,22 +958,11 @@ const Modes = {
 };
 let currentMode = Modes.ADD; // Standardmodus
 
-// Block Size
-let currentBlockSize = 1; // Default to 1x1
-
 // Undo/Redo History
-const history = [];
-let historyPointer = -1;
+const history = []; // Declared globally
+let historyPointer = -1; // Declared globally
 const MAX_HISTORY_SIZE = 100; // Limit history to prevent excessive memory usage
 
-// Global terrain parameters (can be adjusted by UI)
-let terrainHeightScale = 10;
-let terrainFrequency = 0.05;
-let terrainOctaves = 4;
-let terrainLacunarity = 2.0;
-let terrainGain = 0.5;
-let terrainSeed = ''; // Empty string means random seed
-let hasUserTypedSeed = false; // Flag to track if user has manually set the seed
 // Global instance of the noise generator
 let noise2D;
 
@@ -735,21 +1069,24 @@ function handleGesture () {
     }
 
     // Single-finger camera look
-    if (prevTouch === null){
-        prevTouch = {x:p.x, y:p.y}; // This should already be set in onPointerDown now
+    // Only apply if in SINGLE_TOUCH_CAMERA state
+    if (touchState === TouchState.SINGLE_TOUCH_CAMERA) {
+        if (prevTouch === null){
+            prevTouch = {x:p.x, y:p.y};
+            return;
+        }
+
+        const dx = p.x - prevTouch.x;
+        const dy = p.y - prevTouch.y;
+
+        euler.y +=  dx * rotSpeed;
+        euler.x +=  dy * rotSpeed;
+        euler.x  =  Math.max(-Math.PI/2, Math.min(Math.PI/2, euler.x));
+        cam.quaternion.setFromEuler(euler);
+
+        prevTouch = {x:p.x, y:p.y};
         return;
     }
-
-    const dx = p.x - prevTouch.x;
-    const dy = p.y - prevTouch.y;
-
-    euler.y +=  dx * rotSpeed;
-    euler.x +=  dy * rotSpeed;
-    euler.x  =  Math.max(-Math.PI/2, Math.min(Math.PI/2, euler.x));
-    cam.quaternion.setFromEuler(euler);
-
-    prevTouch = {x:p.x, y:p.y};
-    return;
   }
 
   // Multi-touch gestures (pan/pinch)
@@ -818,11 +1155,6 @@ function releasePointer(id){
 
     if (activePointers.size === 0){
         tapCandidate   = null;
-        // All flags related to old double-tap logic and gestures are now managed by touchState
-        // dblTapActive   = false;
-        // dblTapDrag     = false;
-        // isShiftDragging = false; // This is handled by touchState DRAW
-        // isDblTapDragActive= false;
         
         gestureMid  = gestureDist = null;
         gestureMode = null; // Reset old gestureMode
@@ -864,6 +1196,10 @@ function rebuildHelpers() {
 
 function updateGridHelperPosition() {
     rebuildHelpers();
+    localStorage.setItem('voxelEditorActiveDrawingLevelX', activeDrawingLevel.x);
+    localStorage.setItem('voxelEditorActiveDrawingLevelY', activeDrawingLevel.y);
+    localStorage.setItem('voxelEditorActiveDrawingLevelZ', activeDrawingLevel.z);
+    localStorage.setItem('voxelEditorCurrentDrawingAxis', currentDrawingAxis);
 }
 
 function cycleMode() {
@@ -1810,9 +2146,13 @@ function loadJSON(event) {
                 }
                 if (loadedSettings.activeDrawingLevel) {
                     activeDrawingLevel = { ...loadedSettings.activeDrawingLevel };
+                    localStorage.setItem('voxelEditorActiveDrawingLevelX', activeDrawingLevel.x);
+                    localStorage.setItem('voxelEditorActiveDrawingLevelY', activeDrawingLevel.y);
+                    localStorage.setItem('voxelEditorActiveDrawingLevelZ', activeDrawingLevel.z);
                 }
                 if (loadedSettings.currentDrawingAxis) {
                     currentDrawingAxis = loadedSettings.currentDrawingAxis;
+                    localStorage.setItem('voxelEditorCurrentDrawingAxis', currentDrawingAxis);
                 }
                 updateGridHelperPosition(); // Rebuild with correct drawing axis
 
@@ -1846,6 +2186,12 @@ function loadJSON(event) {
                 document.getElementById('terrain-seed').value = terrainSeed;
                 // Update hasUserTypedSeed based on loaded terrainSeed
                 hasUserTypedSeed = (terrainSeed !== '');
+                localStorage.setItem('voxelEditorTerrainHeightScale', terrainHeightScale);
+                localStorage.setItem('voxelEditorTerrainFrequency', terrainFrequency);
+                localStorage.setItem('voxelEditorTerrainOctaves', terrainOctaves);
+                localStorage.setItem('voxelEditorTerrainLacunarity', terrainLacunarity);
+                localStorage.setItem('voxelEditorTerrainGain', terrainGain);
+                localStorage.setItem('voxelEditorTerrainSeed', terrainSeed);
 
 
                 // Load fly speed
@@ -1853,11 +2199,13 @@ function loadJSON(event) {
                     moveSpeed = loadedSettings.moveSpeed;
                     document.getElementById('fly-speed-slider').value = moveSpeed;
                     document.getElementById('fly-speed-display').textContent = moveSpeed.toFixed(2);
+                    localStorage.setItem('voxelEditorFlySpeed', moveSpeed);
                 }
 
                 // Load block size
                 if (loadedSettings.currentBlockSize !== undefined) {
                     setBlockSize(loadedSettings.currentBlockSize); // Use the setter to update UI
+                    localStorage.setItem('voxelEditorCurrentBlockSize', currentBlockSize);
                 }
 
                 // NEW: Load template image data
@@ -2436,6 +2784,14 @@ function generateTerrain() {
         return { gx: parts[0], gy: parts[1], gz: parts[2], color: data.color };
     });
     addCommand('terrainGenerate', null, null, null, null, null, oldState, newState);
+
+    // Persist terrain settings
+    localStorage.setItem('voxelEditorTerrainHeightScale', terrainHeightScale);
+    localStorage.setItem('voxelEditorTerrainFrequency', terrainFrequency);
+    localStorage.setItem('voxelEditorTerrainOctaves', terrainOctaves);
+    localStorage.setItem('voxelEditorTerrainLacunarity', terrainLacunarity);
+    localStorage.setItem('voxelEditorTerrainGain', terrainGain);
+    localStorage.setItem('voxelEditorTerrainSeed', terrainSeed);
 }
 
 function resetCameraPosition() {
@@ -2631,7 +2987,6 @@ window.onload = function() {
     
     // Apply shader patch for instance colors with Lambert material
     meshMaterial.onBeforeCompile = (shader) => {
-        // Add varying declaration to vertex shader (at the top, before main)
         shader.vertexShader = `
             varying vec3 vInstanceColor; // Declare varying here
             ${shader.vertexShader}
@@ -2906,14 +3261,30 @@ window.onload = function() {
     updateTerrainControlsVisibility();
 
     // Terrain parameter input event listeners
-    document.getElementById('terrain-height-scale').addEventListener('input', (e) => terrainHeightScale = parseInt(e.target.value));
-    document.getElementById('terrain-frequency').addEventListener('input', (e) => terrainFrequency = parseFloat(e.target.value));
-    document.getElementById('terrain-octaves').addEventListener('input', (e) => terrainOctaves = parseInt(e.target.value));
-    document.getElementById('terrain-lacunarity').addEventListener('input', (e) => terrainLacunarity = parseFloat(e.target.value));
-    document.getElementById('terrain-gain').addEventListener('input', (e) => terrainGain = parseFloat(e.target.value));
+    document.getElementById('terrain-height-scale').addEventListener('input', (e) => {
+        terrainHeightScale = parseInt(e.target.value);
+        localStorage.setItem('voxelEditorTerrainHeightScale', terrainHeightScale);
+    });
+    document.getElementById('terrain-frequency').addEventListener('input', (e) => {
+        terrainFrequency = parseFloat(e.target.value);
+        localStorage.setItem('voxelEditorTerrainFrequency', terrainFrequency);
+    });
+    document.getElementById('terrain-octaves').addEventListener('input', (e) => {
+        terrainOctaves = parseInt(e.target.value);
+        localStorage.setItem('voxelEditorTerrainOctaves', terrainOctaves);
+    });
+    document.getElementById('terrain-lacunarity').addEventListener('input', (e) => {
+        terrainLacunarity = parseFloat(e.target.value);
+        localStorage.setItem('voxelEditorTerrainLacunarity', terrainLacunarity);
+    });
+    document.getElementById('terrain-gain').addEventListener('input', (e) => {
+        terrainGain = parseFloat(e.target.value);
+        localStorage.setItem('voxelEditorTerrainGain', terrainGain);
+    });
     document.getElementById('terrain-seed').addEventListener('input', (e) => {
         terrainSeed = e.target.value;
         hasUserTypedSeed = (terrainSeed !== '');
+        localStorage.setItem('voxelEditorTerrainSeed', terrainSeed);
     });
 
     document.getElementById('generateTerrainBtn').addEventListener('click', generateTerrain);
@@ -2958,6 +3329,21 @@ window.onload = function() {
 
     // Initialisiere noise2D mit dem aktuellen Seed
     noise2D = new ValueNoise2D(terrainSeed);
+
+    // Set initial UI values from loaded local storage
+    document.getElementById('grid-size-slider').value = GRID;
+    document.getElementById('grid-size-display').textContent = `${GRID}×${GRID}×${GRID}`;
+    document.getElementById('color-picker').value = currentColor;
+    document.getElementById('fly-speed-slider').value = moveSpeed;
+    document.getElementById('fly-speed-display').textContent = moveSpeed.toFixed(2);
+    setBlockSize(currentBlockSize); // Update block size button active state
+    document.getElementById('terrain-height-scale').value = terrainHeightScale;
+    document.getElementById('terrain-frequency').value = terrainFrequency;
+    document.getElementById('terrain-octaves').value = terrainOctaves;
+    document.getElementById('terrain-lacunarity').value = terrainLacunarity;
+    document.getElementById('terrain-gain').value = terrainGain;
+    document.getElementById('terrain-seed').value = terrainSeed;
+
 
     // Start animation loop
     animate();
@@ -3056,14 +3442,14 @@ function onPointerDown(e) {
         activePointers.set(e.pointerId, { x: e.clientX, y: e.clientY });
         
         if (activePointers.size === 1) {
-            prevTouch = { x: e.clientX, y: e.clientY };
+            prevTouch = { x: e.clientX, y: e.clientY }; // Set prevTouch for single-finger camera
             const now = performance.now();
-            if (touchState === TouchState.TAP1 && (now - tapCandidate.time < DT_MS) && (Math.hypot(e.clientX - tapCandidate.x, e.clientY - tapCandidate.y) < TAP_DIST_TH)) {
-                touchState = TouchState.TAP2_WAITMOVE;
-                setFixedDragPlane(e.clientX, e.clientY, currentMode);
+            if (tapCandidate && (now - tapCandidate.time < DT_MS) && (Math.hypot(e.clientX - tapCandidate.x, e.clientY - tapCandidate.y) < TAP_DIST_TH)) {
+                touchState = TouchState.TAP2_WAITMOVE; // Double-tap detected
+                setFixedDragPlane(e.clientX, e.clientY, currentMode); // Prepare for drawing
                 isShiftDragging = true; // This is for touch-based line drawing
             } else {
-                touchState = TouchState.TAP1;
+                touchState = TouchState.SINGLE_TOUCH_CAMERA; // Single tap, assume camera movement initially
                 tapCandidate = { x: e.clientX, y: e.clientY, time: now };
             }
         } else if (activePointers.size >= 2) {
@@ -3123,25 +3509,30 @@ function onPointerMove(e) {
     }
 
     // This part now only executes if NOT in pointer-locked mode (desktop right-click)
-    // AND NOT in a camera gesture mode (for mobile)
-    // AND NOT in TAP2_WAITMOVE state (for mobile)
+    // AND (for touch) only if touchState is DRAW (double-tap-drag)
+    // OR (for mouse) if pointerIsDown (left-click drag)
+    
+    if (e.pointerType === 'touch' && touchState !== TouchState.DRAW) {
+        // For touch, if not in DRAW state, we are in a camera movement state, so don't draw.
+        updatePreviewVoxel(0,0,0,false); // Ensure preview is hidden during camera movement
+        return;
+    }
 
+    // Proceed with drawing/preview logic only if it's a mouse event or a touch DRAW state
     const currentTargetVoxel = calculateTargetVoxelCoords(e.clientX, e.clientY, currentMode, pointerIsDown, isControlDragging);
 
-    // Update preview voxel for single-voxel modes, hide if drawing rectangle or in fly mode
-    if (currentTargetVoxel && !isPointerLocked && touchState !== TouchState.MULTI_TOUCH_CAMERA) {
+    // Update preview voxel
+    if (currentTargetVoxel && !isPointerLocked && (e.pointerType === 'mouse' || touchState === TouchState.DRAW)) {
         updatePreviewVoxel(currentTargetVoxel.gx, currentTargetVoxel.gy, currentTargetVoxel.gz, true);
     } else {
         updatePreviewVoxel(0, 0, 0, false); // Hide single preview
     }
 
     // Only draw if pointer is down AND it's a drag (or special drag mode)
-    // This ensures single clicks don't draw immediately on pointer down + move
-    if (pointerIsDown) {
+    if (pointerIsDown || touchState === TouchState.DRAW) { // pointerIsDown for mouse, touchState === DRAW for touch
         const movedDistance = initialClickPos ? Math.hypot(e.clientX - initialClickPos.x, e.clientY - initialClickPos.y) : 0;
         const isActualDrag = movedDistance > MOVE_PX;
 
-        // Only proceed with drawing if it's an actual drag, or a hold-drawing, or a double-tap-drag (touchState.DRAW)
         if (isActualDrag || isHoldDrawingActive || touchState === TouchState.DRAW) {
             if (currentTargetVoxel) {
                 // This condition now checks for ANY line drawing mode (Shift, Ctrl, DblTap, or the new normal drag fixed plane)
@@ -3159,11 +3550,16 @@ function onPointerMove(e) {
                         lastActionVoxelCoords = { ...currentTargetVoxel };
                     }
                 } else { // Normal drag for DELETE or DRAW modes, or ADD mode if not on a fixed plane
+                    // NEW: Use drawLineOfVoxels for continuous drawing/deletion in normal drag mode
                     if (!lastActionVoxelCoords ||
                         lastActionVoxelCoords.gx !== currentTargetVoxel.gx ||
                         lastActionVoxelCoords.gy !== currentTargetVoxel.gy ||
                         lastActionVoxelCoords.gz !== currentTargetVoxel.gz) {
-                        performVoxelModification(currentTargetVoxel.gx, currentTargetVoxel.gy, currentTargetVoxel.gz, currentMode, currentColor, currentBlockSize);
+                        if (lastActionVoxelCoords) {
+                            drawLineOfVoxels(lastActionVoxelCoords, currentTargetVoxel, currentMode, currentColor, currentBlockSize);
+                        } else {
+                            performVoxelModification(currentTargetVoxel.gx, currentTargetVoxel.gy, currentTargetVoxel.gz, currentMode, currentColor, currentBlockSize);
+                        }
                         lastActionVoxelCoords = { ...currentTargetVoxel };
                     }
                 }
@@ -3216,7 +3612,8 @@ function onPointerUp(e) {
 
         if (!isPointerLocked && activePointers.size === 0) { // Ensure not in fly mode and all fingers are lifted
             // Only perform voxel modification if it was a single tap AND not a double-tap-drag (DRAW state)
-            if (wasSingleTap && touchState !== TouchState.DRAW) {
+            // AND the touchState was SINGLE_TOUCH_CAMERA (meaning it didn't become a drag for camera)
+            if (wasSingleTap && touchState !== TouchState.DRAW && touchState === TouchState.SINGLE_TOUCH_CAMERA) {
                 const clickedVoxel = calculateTargetVoxelCoords(e.clientX, e.clientY, currentMode, false, false);
                 if (clickedVoxel) {
                     performVoxelModification(clickedVoxel.gx, clickedVoxel.gy, clickedVoxel.gz, currentMode, currentColor, currentBlockSize);
@@ -3224,6 +3621,7 @@ function onPointerUp(e) {
             }
             // Reset touchState to NONE when all pointers are up
             touchState = TouchState.NONE;
+            tapCandidate = null; // Reset tap candidate
         }
     }
 
@@ -3283,7 +3681,7 @@ function onMouseWheel(e) {
             activeDrawingLevel.y = Math.max(0, Math.min(GRID - 1, activeDrawingLevel.y - Math.sign(e.deltaY)));
             currentDrawingAxis = 'y';
         }
-        updateGridHelperPosition(); // Rebuild grid helper to reflect new level/axis
+        updateGridHelperPosition(); // Rebuild grid helper to reflect new level/axis and save to local storage
     } else {
         // NEW: Adjust fly speed with mouse wheel when not holding Alt
         const speedChange = -Math.sign(e.deltaY) * 0.01; // Adjust speed by 0.01 per scroll tick
@@ -3340,6 +3738,7 @@ function getPointOnFixedPlane(clientX, clientY, axis, level) {
 // Function to set the current block size
 function setBlockSize(size) {
     currentBlockSize = size;
+    localStorage.setItem('voxelEditorCurrentBlockSize', currentBlockSize);
     // Update active class for buttons
     document.querySelectorAll('.block-size-btn').forEach(btn => btn.classList.remove('active'));
     document.getElementById(`block-size-${size}x${size}`).classList.add('active');
@@ -3381,6 +3780,10 @@ function onKeyDown(e) {
     if (((e.ctrlKey || e.metaKey) && e.key === 'y') || ((e.ctrlKey || e.metaKey) && e.shiftKey && e.key === 'Z')) { // Ctrl+Y or Cmd+Y, or Ctrl+Shift+Z / Cmd+Shift+Z
         e.preventDefault(); // Prevent browser redo
         redo();
+    }
+    // NEW: Prevent Ctrl+D for bookmark
+    if ((e.ctrlKey || e.metaKey) && e.key === 'd') {
+        e.preventDefault(); // Prevent browser bookmark dialog
     }
 
     // Other Shortcuts
