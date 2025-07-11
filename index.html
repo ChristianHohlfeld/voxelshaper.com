@@ -694,7 +694,7 @@ function handleGesture () {
 
     // Single-finger camera look
     if (prevTouch === null){
-        prevTouch = {x:p.x, y:p.y};
+        prevTouch = {x:p.x, y:p.y}; // This should already be set in onPointerDown now
         return;
     }
 
@@ -2915,6 +2915,11 @@ function onPointerDown(e) {
 
         if (e.pointerType === 'touch') {
             activePointers.set(e.pointerId, { x: e.clientX, y: e.clientY });
+            // Initialize prevTouch for single touch camera movement immediately
+            if (activePointers.size === 1) {
+                prevTouch = { x: e.clientX, y: e.clientY };
+            }
+
 
             const now = performance.now();
             if (activePointers.size === 1) { // Only check for double tap if it's the first finger down
@@ -2936,7 +2941,8 @@ function onPointerDown(e) {
                 dblTapActive = false; // Cancel any pending double tap
                 isDblTapDragActive = false;
             }
-            handleGesture(); // Process gesture immediately for touch
+            // handleGesture() is now called at the beginning of onPointerMove for touch
+            // to ensure gesture state is updated before drawing logic.
         } else { // Mouse
             // Determine fixed drawing plane for Shift-drag OR normal drag (if not stacking)
             const isShiftOrNormalDrag = (shiftActive() || isDblTapDragActive) || (e.buttons === 1 && !e.ctrlKey);
