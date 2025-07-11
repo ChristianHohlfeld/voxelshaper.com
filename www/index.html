@@ -463,10 +463,10 @@ input[type="color"]::-moz-color-swatch {
 const VS = 1, HALF = VS * 0.5;
 
 /* ---------- globale Variablen ---------- */
-let isDblTapDragActive= false; // Controls if a double-tap-drag should activate drawing
-let activeGestureMode = 'none'; // NEW: Verfolgt den aktuell aktiven Gestenmodus ('none', 'singleTouchCamera', 'multiTouchCamera', 'dblTapDragDraw')
-let isHoldDrawingActive = false;   // NEW: Verfolgt, ob ein Long-Press-Zeichnen aktiv ist
-const LONG_PRESS_DELAY_MS = 500;   // NEW: Wartezeit (in Millisekunden) für Long-Press-Erkennung
+let isDblTapDragActive= false; // Steuert, ob ein Doppeltippen-Ziehen das Zeichnen aktivieren soll
+let activeGestureMode = 'none'; // Verfolgt den aktuell aktiven Gestenmodus ('none', 'singleTouchCamera', 'multiTouchCamera', 'dblTapDragDraw')
+let isHoldDrawingActive = false;   // Verfolgt, ob ein Long-Press-Zeichnen aktiv ist
+const LONG_PRESS_DELAY_MS = 500;   // Wartezeit (in Millisekunden) für Long-Press-Erkennung
 
 /* ----------------------------------------------
    GLOBAL – neue Hilfs-Variablen
@@ -487,16 +487,16 @@ const PINCH_REL_TH = 0.08;  // ≥6 % Distanzänderung → Pinch
 let prevTouch = null;
 let touchStartPos = null; // merkt Position für Tap-Erkennung
 let scene, cam, ren, gridHelper, boxHelper;
-let rotSpeed = 0.004;   // Globale Drehgeschwindigkeit    (NEU)
+let rotSpeed = 0.004;   // Globale Drehgeschwindigkeit
 /* --- Double-Tap Gesten ---------------------------------------- */
 let lastTap       = 0;        // Zeitstempel des letzten pointerup
 let dblTapActive  = false;    // true während des 2. Taps
 let dblTapDrag    = false;    // wird true, sobald Finger > MOVE_PX zieht
 const DT_MS       = 250;      // max. Abstand Taps (ms)
 const MOVE_PX     = 10;        // ab hier gilt es als Drag (erhöht von 6)
-/* ---------- Touch-Gesten (NEU) ---------- */
+/* ---------- Touch-Gesten ---------- */
 const activePointers = new Map();   // id → {x,y}
-let isMultiTouchGestureActive = false; // NEW: Flag to track if a multi-touch gesture was active
+let isMultiTouchGestureActive = false; // Flag to track if a multi-touch gesture was active
 
 let euler; // Declare euler globally
 // voxels Map stores { color: hex_color, instanceId: number }
@@ -506,7 +506,7 @@ let containerDiv; // Reference to the container div
 let activeDrawingLevel = { x: 0, y: 0, z: 0 }; // Objekt für aktive Ebenen
 let currentDrawingAxis = 'y'; // Aktuelle Achse für Alt+Mausrad
 
-// NEW: Global object to store fixed plane parameters for drag operations
+// Global object to store fixed plane parameters for drag operations
 let fixedDragPlaneParams = { level: null, axis: null };
 
 // Lade die Farbe aus dem Local Storage oder nutze Weiß als Standard
@@ -527,9 +527,9 @@ let presetBoxes = []; // Global array to store references to preset color boxes
 
 // Referenzen für Lichter, die Schatten werfen, um sie später anpassen zu können
 let mainDirectionalLight;
-let fillDirectionalLight; // NEW: Zweites gerichtetes Licht
-let hemisphereLight;      // NEW: Hemisphärenlicht
-let groundPlane;          // NEW: Bodenplatte
+let fillDirectionalLight; // Zweites gerichtetes Licht
+let hemisphereLight;      // Hemisphärenlicht
+let groundPlane;          // Bodenplatte
 
 // Globale Variablen für Dragging-Status
 let isShiftDragging = false;   // physische Shift-Taste
@@ -539,21 +539,20 @@ function shiftActive(){        // true, wenn Shift an
 }
 let isControlDragging = false;
 let rotate = false; // Moved to global as it's used across handlers
-let isPointerLocked = false; // NEW: Track pointer lock status
-let lastActionVoxelCoords = null; // NEW: Tracks the last voxel acted upon for drag drawing
+let isPointerLocked = false; // Track pointer lock status
+let lastActionVoxelCoords = null; // Tracks the last voxel acted upon for drag drawing
 let initialClickPos = null; // To differentiate click from drag
-let firstMoveAfterLock = true; // NEW: Flag to ignore first movement after pointer lock
+let firstMoveAfterLock = true; // Flag to ignore first movement after pointer lock
 
 // Performance optimization: InstancedMesh
 let instancedMesh; // Replaces voxelMesh and voxelGeometry
 const dummy = new THREE.Object3D(); // For setting instance matrices
 const tempColor = new THREE.Color(); // For setting instance colors
 
-// NEU: Globale Variable für den Vorschau-Voxel
+// Globale Variable für den Vorschau-Voxel
 const previewVoxelGeometry = new THREE.BoxGeometry(VS, VS, VS);
 const previewVoxelMaterial = new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.5, depthTest: false }); // depthTest: false, damit er immer sichtbar ist
 let previewVoxelMesh = new THREE.Mesh(previewVoxelGeometry, previewVoxelMaterial); // Initialize here
-// ENDE NEU
 
 // Modus-Enum
 const Modes = {
@@ -582,7 +581,7 @@ let hasUserTypedSeed = false; // Flag to track if user has manually set the seed
 // Global instance of the noise generator
 let noise2D;
 
-// NEW: Global variables for image template
+// Global variables for image template
 let templateImageMesh = null;
 // Updated templateImageData structure to store scaled dimensions
 let templateImageData = null; // { src: base64, position: [], rotation: [], scale: [], locked: boolean, scaledWidth: number, scaledHeight: number }
@@ -1107,7 +1106,7 @@ function recolorVoxel(gx, gy, gz, newColorHex, fromHistory = false) {
     voxels.set(k, { color: newColorHex, instanceId: instanceId });
 }
 
-// NEW: Helper function to perform the actual voxel modification for a block
+// Helper function to perform the actual voxel modification for a block
 function performVoxelModification(baseX, baseY, baseZ, mode, color, blockSize = 1) {
     // Determine the two axes along which the block will extend
     let axis1, axis2;
@@ -1169,7 +1168,7 @@ function performVoxelModification(baseX, baseY, baseZ, mode, color, blockSize = 
     }
 }
 
-// NEW: DDA (Digital Differential Analyzer) for 3D Line Drawing
+// DDA (Digital Differential Analyzer) for 3D Line Drawing
 function drawLineOfVoxels(start, end, mode, color, blockSize = 1) {
     let x = start.gx;
     let y = start.gy;
@@ -1203,7 +1202,7 @@ function drawLineOfVoxels(start, end, mode, color, blockSize = 1) {
 }
 
 
-// NEU: Hilfsfunktion zum Aktualisieren des Vorschau-Voxels
+// Hilfsfunktion zum Aktualisieren des Vorschau-Voxels
 function updatePreviewVoxel(x, y, z, visible) {
     if (previewVoxelMesh) {
         if (visible) {
@@ -1239,9 +1238,8 @@ function updatePreviewVoxel(x, y, z, visible) {
         }
     }
 }
-// ENDE NEU
 
-// NEW helper function to set the fixed drag plane parameters
+// Helper function to set the fixed drag plane parameters
 function setFixedDragPlane(clientX, clientY, mode) {
     const rect = cvs.getBoundingClientRect();
     const mouse = new THREE.Vector2(((clientX - rect.left) / rect.width) * 2 - 1,
@@ -1802,7 +1800,7 @@ function loadJSON(event) {
                     setBlockSize(loadedSettings.currentBlockSize); // Use the setter to update UI
                 }
 
-                // NEW: Load template image data
+                // Load template image data
                 if (loadedSettings.templateImageData) {
                     templateImageData = loadedSettings.templateImageData;
                     console.log("Loading template image data:", templateImageData); // Debugging
@@ -1845,7 +1843,7 @@ function loadJSON(event) {
 
             console.log('Project loaded successfully.');
             resetCameraPosition(); // Reset camera to view loaded terrain/voxels
-            // updateGroundPlaneSize(); // NEW: Update ground plane size after loading - REMOVED
+            // updateGroundPlaneSize(); // Update ground plane size after loading - REMOVED
         } catch (error) {
             console.error('Error loading JSON file:', error);
             showMessageModal('Fehler', 'Fehler beim Laden der Datei. Stellen Sie sicher, dass es sich um eine gültige Voxel-Projekt-JSON-Datei handelt.');
@@ -1911,7 +1909,7 @@ function exportSTL() {
     showMessageModal('Export erfolgreich', 'STL-Modell erfolgreich exportiert!');
 }
 
-// NEW: Function to import STL
+// Function to import STL
 function importSTL(event) {
     const file = event.target.files[0];
     if (!file) return;
@@ -1981,7 +1979,7 @@ function importSTL(event) {
             updateVoxelGeometry();
             rebuildHelpers();
             resetCameraPosition();
-            // updateGroundPlaneSize(); // NEW: Update ground plane size after importing - REMOVED
+            // updateGroundPlaneSize(); // Update ground plane size after importing - REMOVED
 
             addCommand('importSTL', null, null, null, null, null, oldState, newVoxels);
             showMessageModal('Import erfolgreich', 'STL-Modell erfolgreich importiert und in Voxel umgewandelt. Beachten Sie, dass die Voxelisierung eine Annäherung ist und bei komplexen Modellen zu Detailverlust führen kann.');
@@ -1994,7 +1992,7 @@ function importSTL(event) {
     reader.readAsArrayBuffer(file);
 }
 
-// NEW: Function to export OBJ
+// Function to export OBJ
 function exportOBJ() {
     if (instancedMesh.count === 0) {
         showMessageModal('Export fehlgeschlagen', 'Keine Voxel zum Exportieren vorhanden!');
@@ -2019,7 +2017,7 @@ function exportOBJ() {
     showMessageModal('Export erfolgreich', 'OBJ-Modell erfolgreich exportiert!');
 }
 
-// NEW: Function to import OBJ
+// Function to import OBJ
 function importOBJ(event) {
     const file = event.target.files[0];
     if (!file) return;
@@ -2059,7 +2057,7 @@ function importOBJ(event) {
             updateVoxelGeometry();
             rebuildHelpers();
             resetCameraPosition();
-            // updateGroundPlaneSize(); // NEW: Update ground plane size after importing - REMOVED
+            // updateGroundPlaneSize(); // Update ground plane size after importing - REMOVED
 
             addCommand('importOBJ', null, null, null, null, null, oldState, newVoxels);
             showMessageModal('Import erfolgreich', 'OBJ-Modell erfolgreich importiert und in Voxel umgewandelt. Beachten Sie, dass die Voxelisierung eine Annäherung ist und bei komplexen Modellen zu Detailverlust führen kann.');
@@ -2072,7 +2070,7 @@ function importOBJ(event) {
     reader.readAsText(file);
 }
 
-// NEW: Function to export VOX
+// Function to export VOX
 function exportVOX() {
     if (instancedMesh.count === 0) {
         showMessageModal('Export fehlgeschlagen', 'Keine Voxel zum Exportieren vorhanden!');
@@ -2125,7 +2123,7 @@ function exportVOX() {
     showMessageModal('Export erfolgreich', 'VOX-Modell erfolgreich exportiert!');
 }
 
-// NEW: Function to import VOX
+// Function to import VOX
 function importVOX(event) {
     const file = event.target.files[0];
     if (!file) return;
@@ -2140,7 +2138,7 @@ function importVOX(event) {
             console.log("VOX Model dimensions (sizeX, sizeY, sizeZ):", voxModel ? voxModel.sizeX : 'N/A', voxModel ? voxModel.sizeY : 'N/A', voxModel ? voxModel.sizeZ : 'N/A');
             console.log("Number of voxels in VOX Model:", voxModel && Array.isArray(voxModel.voxels) ? voxModel.voxels.length : 'voxels property missing or not an array');
 
-            // --- NEU: Umfassendere Validierung des geparsten Modells ---
+            // Umfassendere Validierung des geparsten Modells
             // Check for fundamental structural validity first
             if (!voxModel || !Array.isArray(voxModel.voxels)) {
                 console.warn("Invalid VOX model structure received from parser.");
@@ -2157,11 +2155,10 @@ function importVOX(event) {
                 localStorage.setItem('voxelEditorGridSize', GRID);
                 rebuildHelpers();
                 resetCameraPosition();
-                // updateGroundPlaneSize(); // NEW: Update ground plane size for empty scene - REMOVED
+                // updateGroundPlaneSize(); // Update ground plane size for empty scene - REMOVED
                 showMessageModal('Import abgeschlossen', 'Die VOX-Datei wurde erfolgreich importiert, enthielt jedoch keine Voxel. Die Szene wurde auf eine leere Standardgröße zurückgesetzt.');
                 return; // Exit after handling empty model
             }
-            // --- ENDE NEU ---
 
             let offsetX = 0, offsetY = 0, offsetZ = 0;
             
@@ -2293,7 +2290,7 @@ function importVOX(event) {
             updateVoxelGeometry();
             rebuildHelpers();
             resetCameraPosition();
-            // updateGroundPlaneSize(); // NEW: Update ground plane size after importing - REMOVED
+            // updateGroundPlaneSize(); // Update ground plane size after importing - REMOVED
 
             addCommand('importVOX', null, null, null, null, null, oldState, newVoxels);
             showMessageModal('Import erfolgreich', 'VOX-Modell erfolgreich importiert!');
@@ -2306,7 +2303,7 @@ function importVOX(event) {
     reader.readAsArrayBuffer(file);
 }
 
-// NEW: Generic message modal
+// Generic message modal
 function showMessageModal(title, message) {
     const modal = document.getElementById('messageModal');
     document.getElementById('messageModalTitle').textContent = title;
@@ -2356,7 +2353,7 @@ function generateTerrain() {
     instancedMesh.instanceColor.needsUpdate = true;
     rebuildHelpers(); // Update helpers to new terrain size
     resetCameraPosition(); // Reset camera to view new terrain
-    // updateGroundPlaneSize(); // NEW: Update ground plane size after terrain generation - REMOVED
+    // updateGroundPlaneSize(); // Update ground plane size after terrain generation - REMOVED
 
     // Capture the state after terrain generation
     const newState = [...voxels.entries()].map(([id, data]) => {
@@ -2375,12 +2372,12 @@ function resetCameraPosition() {
     }
 }
 
-// NEW: Function to load image as template
+// Function to load image as template
 function loadImageTemplate() {
     document.getElementById('imageFileInput').click();
 }
 
-// NEW: Handle image file selection
+// Handle image file selection
 function handleImageFileSelect(event) {
     const file = event.target.files[0];
     if (!file) return;
@@ -2443,7 +2440,7 @@ function handleImageFileSelect(event) {
     reader.readAsDataURL(file);
 }
 
-// NEW: Function to remove the image template
+// Function to remove the image template
 function removeImageTemplate(fromLoad = false) {
     if (templateImageMesh) {
         scene.remove(templateImageMesh);
@@ -2460,7 +2457,7 @@ function removeImageTemplate(fromLoad = false) {
     }
 }
 
-// NEW: Function to toggle image template lock
+// Function to toggle image template lock
 function toggleLockImageTemplate(initialLoad = false) {
     const isLocked = document.getElementById('lockImageTemplateCheckbox').checked;
     if (templateImageData) {
@@ -2482,7 +2479,7 @@ function toggleLockImageTemplate(initialLoad = false) {
     }
 }
 
-// NEW: Function to update the ground plane size based on current GRID
+// Function to update the ground plane size based on current GRID
 function updateGroundPlaneSize() {
     // Remove the ground plane if it exists
     if (groundPlane) {
@@ -2535,20 +2532,20 @@ window.onload = function() {
     mainDirectionalLight.shadow.camera.right = 30;
     mainDirectionalLight.shadow.camera.top = 30;
     mainDirectionalLight.shadow.camera.bottom = -30;
-    mainDirectionalLight.shadow.bias = -0.0005; // NEW: Reduce shadow acne
-    mainDirectionalLight.shadow.normalBias = 0.02; // NEW: Reduce normal bias artifacts
+    mainDirectionalLight.shadow.bias = -0.0005; // Reduce shadow acne
+    mainDirectionalLight.shadow.normalBias = 0.02; // Reduce normal bias artifacts
     scene.add(mainDirectionalLight);
 
-    // NEW: Zweites gerichtetes Licht (Fülllicht)
+    // Zweites gerichtetes Licht (Fülllicht)
     fillDirectionalLight = new THREE.DirectionalLight(0xffffff, 0.3); // Lower intensity
     fillDirectionalLight.position.set(-10, 10, -15); // From a different angle
     scene.add(fillDirectionalLight);
 
-    // NEW: Hemisphärenlicht
+    // Hemisphärenlicht
     hemisphereLight = new THREE.HemisphereLight(0xffffff, 0x444444, 0.6); // Sky color, ground color, intensity
     scene.add(hemisphereLight);
 
-    // NEW: Bodenplatte
+    // Bodenplatte
     updateGroundPlaneSize(); // Call this here to ensure it's removed on initialization
 
     // Initialize InstancedMesh
@@ -2615,7 +2612,7 @@ window.onload = function() {
     scene.add(instancedMesh);
     instancedMesh.count = 0; // Initially no instances
 
-    // NEU: Vorschau-Voxel zur Szene hinzufügen
+    // Vorschau-Voxel zur Szene hinzufügen
     scene.add(previewVoxelMesh);
     updatePreviewVoxel(0,0,0,false); // Initial verstecken
 
@@ -2629,12 +2626,12 @@ window.onload = function() {
     containerDiv.addEventListener('pointermove', onPointerMove);
     containerDiv.addEventListener('pointerup', onPointerUp);
     containerDiv.addEventListener('pointercancel', onPointerUp); // Treat cancel as up
-    containerDiv.addEventListener('pointerleave', onPointerLeave); // NEW: Handle pointer leaving canvas
+    containerDiv.addEventListener('pointerleave', onPointerLeave); // Handle pointer leaving canvas
     containerDiv.addEventListener('wheel', onMouseWheel, { passive: false }); // Prevent default scroll
 
     document.addEventListener('keydown', onKeyDown);
     document.addEventListener('keyup', onKeyUp);
-    // NEW: Listen for pointer lock changes
+    // Listen for pointer lock changes
     document.addEventListener('pointerlockchange', onPointerLockChange, false);
 
 
@@ -2698,7 +2695,7 @@ window.onload = function() {
 
         rebuildHelpers();
         resetCameraPosition(); // Reset camera to new grid center
-        // updateGroundPlaneSize(); // NEW: Update ground plane size after grid resize - REMOVED
+        // updateGroundPlaneSize(); // Update ground plane size after grid resize - REMOVED
     });
 
     document.getElementById('color-picker').addEventListener('input', (e) => {
@@ -2755,7 +2752,7 @@ window.onload = function() {
         clearConfirmationModal.style.display = 'none';
     });
 
-    // NEW: Message Modal Close Button
+    // Message Modal Close Button
     document.getElementById('messageModalCloseBtn').addEventListener('click', () => {
         document.getElementById('messageModal').style.display = 'none';
     });
@@ -2768,22 +2765,22 @@ window.onload = function() {
     });
     document.getElementById('fileInput').addEventListener('change', loadJSON);
     document.getElementById('exportStlBtn').addEventListener('click', exportSTL);
-    document.getElementById('importStlBtn').addEventListener('click', () => { // NEW: STL Import Button Listener
+    document.getElementById('importStlBtn').addEventListener('click', () => { // STL Import Button Listener
         document.getElementById('stlFileInput').click();
     });
-    document.getElementById('stlFileInput').addEventListener('change', importSTL); // NEW: STL File Input Listener
+    document.getElementById('stlFileInput').addEventListener('change', importSTL); // STL File Input Listener
 
-    document.getElementById('exportObjBtn').addEventListener('click', exportOBJ); // NEW: OBJ Export Button Listener
-    document.getElementById('importObjBtn').addEventListener('click', () => { // NEW: OBJ Import Button Listener
+    document.getElementById('exportObjBtn').addEventListener('click', exportOBJ); // OBJ Export Button Listener
+    document.getElementById('importObjBtn').addEventListener('click', () => { // OBJ Import Button Listener
         document.getElementById('objFileInput').click();
     });
-    document.getElementById('objFileInput').addEventListener('change', importOBJ); // NEW: OBJ File Input Listener
+    document.getElementById('objFileInput').addEventListener('change', importOBJ); // OBJ File Input Listener
 
-    document.getElementById('exportVoxBtn').addEventListener('click', exportVOX); // NEW: VOX Export Button Listener
-    document.getElementById('importVoxBtn').addEventListener('click', () => { // NEW: VOX Import Button Listener
+    document.getElementById('exportVoxBtn').addEventListener('click', exportVOX); // VOX Export Button Listener
+    document.getElementById('importVoxBtn').addEventListener('click', () => { // VOX Import Button Listener
         document.getElementById('voxFileInput').click();
     });
-    document.getElementById('voxFileInput').addEventListener('change', importVOX); // NEW: VOX File Input Listener
+    document.getElementById('voxFileInput').addEventListener('change', importVOX); // VOX File Input Listener
 
 
     document.getElementById('fly-speed-slider').addEventListener('input', (e) => {
@@ -2796,7 +2793,7 @@ window.onload = function() {
     document.getElementById('block-size-1x1').addEventListener('click', () => setBlockSize(1));
     document.getElementById('block-size-4x4').addEventListener('click', () => setBlockSize(4));
     document.getElementById('block-size-8x8').addEventListener('click', () => setBlockSize(8));
-    document.getElementById('block-size-10x10').addEventListener('click', () => setBlockSize(10)); // NEW: 10x10 Block Size
+    document.getElementById('block-size-10x10').addEventListener('click', () => setBlockSize(10)); // 10x10 Block Size
 
 
     // Info Box (Help) Toggle Logic
@@ -2844,10 +2841,10 @@ window.onload = function() {
 
     document.getElementById('generateTerrainBtn').addEventListener('click', generateTerrain);
 
-    // NEW: Add event listener for the "Return to Scene" button
+    // Add event listener for the "Return to Scene" button
     document.getElementById('resetCameraBtn').addEventListener('click', resetCameraPosition);
 
-    // NEW: Image Template Event Listeners
+    // Image Template Event Listeners
     document.getElementById('loadImageTemplateBtn').addEventListener('click', loadImageTemplate);
     document.getElementById('imageFileInput').addEventListener('change', handleImageFileSelect);
     document.getElementById('removeImageTemplateBtn').addEventListener('click', removeImageTemplate);
@@ -2932,7 +2929,7 @@ function onPointerDown(e) {
         pointerIsDown = true;
         lastX = e.clientX;
         lastY = e.clientY;
-        lastActionVoxelCoords = null; // NEW: Reset last acted-upon voxel on pointer down
+        lastActionVoxelCoords = null; // Reset last acted-upon voxel on pointer down
 
         // Store initial position for drag detection (to differentiate click from drag)
         initialClickPos = { x: e.clientX, y: e.clientY };
@@ -2955,15 +2952,12 @@ function onPointerDown(e) {
 
         if (e.pointerType === 'touch') {
             activePointers.set(e.pointerId, { x: e.clientX, y: e.clientY });
-            // Initialize prevTouch for single touch camera movement immediately
-            if (activePointers.size === 1) {
-                prevTouch = { x: e.clientX, y: e.clientY };
-            }
-            // NEW: Set isMultiTouchGestureActive if two or more fingers are down
-            if (activePointers.size >= 2) {
-                isMultiTouchGestureActive = true;
-            }
 
+            // Always set touchStartPos and prevTouch for the first pointer down
+            if (activePointers.size === 1) {
+                touchStartPos = { x: e.clientX, y: e.clientY }; // For tap/drag detection
+                prevTouch = { x: e.clientX, y: e.clientY }; // For single-finger camera look
+            }
 
             const now = performance.now();
             if (activePointers.size === 1) { // Only check for double tap if it's the first finger down
@@ -2973,20 +2967,21 @@ function onPointerDown(e) {
                     activeGestureMode = 'dblTapDragDraw';
                     // Set fixed plane for dblTapDrag based on hit or current drawing level
                     setFixedDragPlane(e.clientX, e.clientY, currentMode);
+                    console.log("Double tap detected! Activating dblTapDragDraw mode.");
                 } else {
                     dblTapActive = false;
                     isDblTapDragActive = false;
                     activeGestureMode = 'singleTouchCamera'; // Assume single touch is for camera initially
                     tapCandidate = { x: e.clientX, y: e.clientY, time: now };
+                    console.log("Single tap candidate, setting singleTouchCamera mode.");
                 }
             } else if (activePointers.size > 1) {
                 // If a second finger comes down, it's a multi-touch camera gesture
                 activeGestureMode = 'multiTouchCamera';
                 dblTapActive = false; // Cancel any pending double tap
-                isDblTapDragActive = false;
+                isDblTapDragActive = false; // Ensure double-tap-drag is off if multi-touch starts
+                console.log("Multi-touch detected, setting multiTouchCamera mode.");
             }
-            // handleGesture() is now called at the beginning of onPointerMove for touch
-            // to ensure gesture state is updated before drawing logic.
         } else { // Mouse
             // Determine fixed drawing plane for Shift-drag OR normal drag (if not stacking)
             const isShiftOrNormalDrag = (shiftActive() || isDblTapDragActive) || (e.buttons === 1 && !e.ctrlKey);
@@ -3084,7 +3079,12 @@ function onPointerUp(e) {
     }
     isHoldDrawingActive = false;
 
-    let wasMultiTouchGesture = isMultiTouchGestureActive; // Capture state before releasing pointer
+    // Capture flags BEFORE calling releasePointer, as releasePointer might reset them
+    const currentActiveGestureMode = activeGestureMode;
+    const wasMultiTouchActiveBeforeRelease = isMultiTouchGestureActive;
+    const wasDblTapActiveBeforeRelease = dblTapActive;
+    const wasDblTapDragBeforeRelease = dblTapDrag;
+
 
     if (e.pointerType === 'mouse') {
         if (e.button === 2) { // Right-click up
@@ -3102,28 +3102,46 @@ function onPointerUp(e) {
                 const clickedVoxel = calculateTargetVoxelCoords(e.clientX, e.clientY, currentMode, false, false);
                 if (clickedVoxel) {
                     performVoxelModification(clickedVoxel.gx, clickedVoxel.gy, clickedVoxel.gz, currentMode, currentColor, currentBlockSize);
+                    console.log("Mouse single click, placing voxel.");
                 }
+            } else {
+                console.log("Mouse drag ended, no single voxel placement.");
             }
         }
         pointerIsDown = false; // Reset pointer down state for mouse
         lastTap = performance.now(); // Update lastTap for mouse
     } else if (e.pointerType === 'touch') {
-        // Touch Up: Determine if it was a single tap or end of a drag/gesture
+        console.log(`onPointerUp (Touch) - Pointer ID: ${e.pointerId}`);
+        console.log(`  Initial state: activeGestureMode=${currentActiveGestureMode}, wasMultiTouchActiveBeforeRelease=${wasMultiTouchActiveBeforeRelease}, wasDblTapActiveBeforeRelease=${wasDblTapActiveBeforeRelease}, wasDblTapDragBeforeRelease=${wasDblTapDragBeforeRelease}`);
+
         releasePointer(e.pointerId); // Remove pointer from active list
 
-        // Only process if no other active pointers (i.e., not part of a multi-touch gesture)
-        // and it was a single tap (not a drag)
-        const movedDistance = initialClickPos ? Math.hypot(e.clientX - initialClickPos.x, e.clientY - initialClickPos.y) : 0;
-        const wasSingleTap = movedDistance <= TAP_DIST_TH; // Use TAP_DIST_TH for touch tap threshold
+        console.log(`  After releasePointer: activePointers.size=${activePointers.size}, activeGestureMode=${activeGestureMode}`);
 
+        // If this was the last pointer lifted
         if (!isPointerLocked && activePointers.size === 0) { // Ensure not in fly mode and all fingers are lifted
-            // NEW: Prevent single tap cube placement if a multi-touch gesture was active
-            if (wasSingleTap && !dblTapActive && !dblTapDrag && !wasMultiTouchGesture) {
+            const movedDistance = initialClickPos ? Math.hypot(e.clientX - initialClickPos.x, e.clientY - initialClickPos.y) : 0;
+            const wasSingleTap = movedDistance <= TAP_DIST_TH;
+
+            console.log(`  Last pointer lifted. wasSingleTap=${wasSingleTap}`);
+
+            // If the gesture that just ended was a multi-touch camera gesture, prevent voxel placement.
+            // Or if it was a double-tap-drag gesture, drawing was already handled.
+            // The key is to use the *captured* state from before `releasePointer`
+            if (wasMultiTouchActiveBeforeRelease || wasDblTapDragBeforeRelease) {
+                console.log("  Preventing voxel placement: was a multi-touch or double-tap-drag gesture.");
+                // Do nothing, no voxel placement
+            } else if (wasSingleTap && !wasDblTapActiveBeforeRelease) { // Only place if it was a true single tap, not a double-tap attempt
                 const clickedVoxel = calculateTargetVoxelCoords(e.clientX, e.clientY, currentMode, false, false);
                 if (clickedVoxel) {
                     performVoxelModification(clickedVoxel.gx, clickedVoxel.gy, clickedVoxel.gz, currentMode, currentColor, currentBlockSize);
+                    console.log("  Single tap detected, placing voxel.");
                 }
+            } else {
+                console.log("  Not a single tap for placement (either a single-touch drag, or part of a double-tap attempt that didn't become a drag).");
             }
+        } else {
+            console.log("  Not the last pointer lifted, or pointer is locked. No voxel placement from here.");
         }
     }
 
@@ -3133,17 +3151,15 @@ function onPointerUp(e) {
     isShiftDragging = false;
     dblTapDrag = false;
     isDblTapDragActive = false;
-    activeGestureMode = 'none'; // Reset active gesture mode
+    activeGestureMode = 'none'; // Reset active gesture mode for the *next* gesture
     lastActionVoxelCoords = null;
     initialClickPos = null;
-    isMultiTouchGestureActive = false; // NEW: Reset multi-touch gesture flag
-
-    // Reset fixed drag plane parameters
+    isMultiTouchGestureActive = false; // Reset multi-touch gesture flag
     fixedDragPlaneParams.level = null;
     fixedDragPlaneParams.axis = null;
 }
 
-// NEW: Function to handle pointer leaving the canvas
+// Function to handle pointer leaving the canvas
 function onPointerLeave(e) {
     // Only reset if it's a mouse pointer (touch pointers might leave briefly during gestures)
     if (e.pointerType === 'mouse') {
@@ -3160,7 +3176,7 @@ function onPointerLockChange() {
         // When pointer is locked, hide the preview voxel
         updatePreviewVoxel(0,0,0,false);
 
-        // NEU: Synchronisiere Euler-Winkel mit der aktuellen Kameraausrichtung bei Zeigerfixierung
+        // Synchronisiere Euler-Winkel mit der aktuellen Kameraausrichtung bei Zeigerfixierung
         euler.setFromQuaternion(cam.quaternion, 'YXZ');
 
     } else {
@@ -3189,7 +3205,7 @@ function onMouseWheel(e) {
         }
         updateGridHelperPosition(); // Rebuild grid helper to reflect new level/axis
     } else {
-        // NEW: Adjust fly speed with mouse wheel when not holding Alt
+        // Adjust fly speed with mouse wheel when not holding Alt
         const speedChange = -Math.sign(e.deltaY) * 0.01; // Adjust speed by 0.01 per scroll tick
         moveSpeed = Math.max(0.01, Math.min(1.0, moveSpeed + speedChange)); // Clamp speed to new max 1.0
         document.getElementById('fly-speed-slider').value = moveSpeed;
