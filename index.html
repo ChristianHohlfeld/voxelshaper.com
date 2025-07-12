@@ -460,6 +460,7 @@ input[type="color"].color-preset-box::-moz-color-swatch {
     **NEU: Extrudieren (Modus "Extrudieren")**<br>
     **Linke MT auf Voxel-Fläche → Fläche für Extrusion auswählen**<br>
     **Linke MT gedrückt + von ausgewählter Fläche ziehen → Extrudieren**<br>
+    **Während des Extrudierens X, Y, Z drücken, um die Achse zu sperren**<br>
     Mausrad → Kamera Geschwindigkeit anpassen<<br>
     **Tab → Modus wechseln (Hinzufügen / Löschen / Zeichnen / Extrudieren)**<br>
     **1, 2, 3 → Voreingestellte Farbe wählen**<br>
@@ -859,6 +860,7 @@ let extrudeSelection = null; // { position: THREE.Vector3, normal: THREE.Vector3
 let isExtruding = false;
 let extrudePreviewMeshes = [];
 let extrudeHighlightMesh;
+let extrudeAxisLock = null; // NEW: For Blender-style axis lock during extrusion
 
 // NEW: Axis lock state
 let temporaryAxisLock = null; // 'x', 'y', 'z', or null
@@ -1005,7 +1007,12 @@ function rebuildHelpers() {
         gridHelper.rotation.x = Math.PI / 2;
         gridHelper.position.set(size / 2, size / 2, activeDrawingLevel.z * VS);
     }
-    scene.add(gridHelper);
+    // Do not add grid helper if in extrude mode and a selection is active
+    if (currentMode === Modes.EXTRUDE && extrudeSelection) {
+        // do nothing
+    } else {
+        scene.add(gridHelper);
+    }
 
     const edges = new THREE.EdgesGeometry(new THREE.BoxGeometry(size, size, size));
     boxHelper = new THREE.LineSegments(edges, new THREE.LineBasicMaterial({ color: 0x00ffff }));
@@ -2153,6 +2160,7 @@ function clearExtrudeSelection() {
     }
     extrudeSelection = null;
     isExtruding = false;
+    extrudeAxisLock = null; // Reset axis lock
     clearExtrusionPreview();
 }
 
@@ -2177,18 +2185,21 @@ function updateExtrusionPreview(endPoint) {
     if (!extrudeSelection) return;
 
     const startPoint = extrudeSelection.position.clone();
-    const direction = extrudeSelection.normal.clone();
+    let direction = extrudeSelection.normal.clone();
     
-    // Project the endPoint onto the line defined by the startPoint and direction
+    // If an axis is locked, use that axis vector instead
+    if (extrudeAxisLock) {
+        direction.set(0, 0, 0);
+        direction[extrudeAxisLock] = Math.sign(extrudeSelection.normal[extrudeAxisLock]) || 1;
+    }
+
     const line = new THREE.Line3(startPoint, startPoint.clone().add(direction));
     const projectedPoint = new THREE.Vector3();
     line.closestPointToPoint(endPoint, true, projectedPoint);
 
     const distanceVec = projectedPoint.sub(startPoint);
-    // Use dot product to get signed distance, then divide by voxel size (which is 1)
     let distance = distanceVec.dot(direction); 
     
-    // Snap to grid
     distance = Math.round(distance);
 
     if (distance === 0) return;
@@ -2712,18 +2723,17 @@ function onPointerDown(e) {
         if (currentMode === Modes.EXTRUDE) {
             const hitVoxel = calculateTargetVoxelCoords(e.clientX, e.clientY, Modes.EXTRUDE, false, false, 'mouse');
             if (hitVoxel && hitVoxel.normal) {
-                if (extrudeSelection && extrudeSelection.position.equals(new THREE.Vector3(hitVoxel.gx, hitVoxel.gy, hitVoxel.gz))) {
-                    // Clicked on the same voxel again, start extruding
-                    isExtruding = true;
-                } else {
-                    // New selection
+                // If a face is already selected, start dragging from there
+                if (extrudeSelection) {
+                     isExtruding = true;
+                } else { // Otherwise, make a new selection
                     const k = key(hitVoxel.gx, hitVoxel.gy, hitVoxel.gz);
                     extrudeSelection = {
                         position: new THREE.Vector3(hitVoxel.gx * VS + HALF, hitVoxel.gy * VS + HALF, hitVoxel.gz * VS + HALF),
                         normal: hitVoxel.normal.clone(),
                         color: voxels.get(k).color
                     };
-                    isExtruding = true; // Start extruding immediately on first click-and-drag
+                    isExtruding = true;
                     updateSelectionHighlight();
                 }
             } else {
@@ -3091,16 +3101,31 @@ function onKeyDown(e) {
         e.preventDefault();
     }
 
-    // NEW: Temporary axis lock on keydown
-    if (['x', 'y', 'z'].includes(key) && !temporaryAxisLock) {
-        temporaryAxisLock = key;
-        rebuildHelpers();
+    // NEW: Axis lock logic
+    if (['x', 'y', 'z'].includes(key)) {
+        if (currentMode === Modes.EXTRUDE && isExtruding) {
+            extrudeAxisLock = key; // Lock extrusion axis
+        } else if (!temporaryAxisLock) {
+            temporaryAxisLock = key; // Lock general drawing axis
+            rebuildHelpers();
+        }
     }
+
 
     switch (key) {
         case 'tab':
             e.preventDefault();
             cycleMode();
+            break;
+        case 'e': // Toggle extrude mode
+            e.preventDefault();
+            if (currentMode !== Modes.EXTRUDE) {
+                currentMode = Modes.EXTRUDE;
+            } else {
+                currentMode = Modes.ADD;
+            }
+            document.getElementById('current-mode').textContent = `Modus: ${currentMode}`;
+            clearExtrudeSelection();
             break;
         case '1': setActivePreset(0); break;
         case '2': setActivePreset(1); break;
@@ -3120,11 +3145,14 @@ function onKeyUp(e) {
     }
 
     // NEW: Release temporary axis lock on keyup
-    if (['x', 'y', 'z'].includes(key) && temporaryAxisLock === key) {
-        temporaryAxisLock = null;
-        rebuildHelpers();
-        // A drawing cycle is finished, release any lock
-        fixedDragPlaneParams = { level: null, axis: null };
+    if (['x', 'y', 'z'].includes(key)) {
+        if (temporaryAxisLock === key) {
+            temporaryAxisLock = null;
+            rebuildHelpers();
+            // A drawing cycle is finished, release any lock
+            fixedDragPlaneParams = { level: null, axis: null };
+        }
+        // Do not reset extrudeAxisLock on keyup, it persists until the extrusion is finished
     }
 }
 </script>
