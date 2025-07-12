@@ -372,6 +372,11 @@ input[type="color"].color-preset-box::-moz-color-swatch {
     .mobile-btn:hover {
         background: rgba(110, 110, 140, 0.9);
     }
+    /* NEW: Style for active axis lock mobile buttons */
+    .mobile-btn.axis-lock-btn.active {
+        border-color: #90caf9;
+        box-shadow: 0 0 8px rgba(144, 202, 249, 0.7);
+    }
 }
 
 /* NEW: Toast Notification Styles */
@@ -451,8 +456,10 @@ input[type="color"].color-preset-box::-moz-color-swatch {
     **Alt + Control + Mausrad → Zeichenebene X hoch/runter (Gitter folgt)**<br>
     **Shift + Linke MT gedrückt + Maus ziehen → Voxel Aktion auf aktiver Ebene (Hinzufügen / Löschen / Zeichnen)**<br>
     **Control + Linke MT gedrückt + Maus ziehen → Voxel ziehen zum Hinzufügen (Stapeln, nur im Hinzufügen-Modus)**<br>
+    **X, Y, Z gedrückt halten → Zeichenebene temporär sperren**<br>
     **NEU: Extrudieren (Modus "Extrudieren")**<br>
-    **Linke MT gedrückt + Maus ziehen auf existierendem Voxel → Voxel extrudieren/verlängern**<br>
+    **Linke MT auf Voxel-Fläche → Fläche für Extrusion auswählen**<br>
+    **Linke MT gedrückt + von ausgewählter Fläche ziehen → Extrudieren**<br>
     Mausrad → Kamera Geschwindigkeit anpassen<<br>
     **Tab → Modus wechseln (Hinzufügen / Löschen / Zeichnen / Extrudieren)**<br>
     **1, 2, 3 → Voreingestellte Farbe wählen**<br>
@@ -494,6 +501,10 @@ input[type="color"].color-preset-box::-moz-color-swatch {
     <button class="mobile-btn" id="mobile-redo" aria-label="Wiederholen">↻</button>
     <button class="mobile-btn" id="mobile-save" aria-label="Speichern">💾</button>
     <button class="mobile-btn" id="mobile-camera" aria-label="Kamera wechseln">📷</button>
+    <!-- NEW: Mobile Axis Lock Buttons -->
+    <button class="mobile-btn axis-lock-btn" id="mobile-lock-x" aria-label="Lock X Axis">X</button>
+    <button class="mobile-btn axis-lock-btn" id="mobile-lock-y" aria-label="Lock Y Axis">Y</button>
+    <button class="mobile-btn axis-lock-btn" id="mobile-lock-z" aria-label="Lock Z Axis">Z</button>
     <button class="mobile-btn" id="mobile-extrude-mode" aria-label="Extrude Modus">▤</button> <!-- NEW BUTTON -->
     <button class="mobile-btn" id="mobile-assist" aria-label="Touch-Assist umschalten">🧲</button>
 </div>
@@ -843,11 +854,15 @@ let templateImageData = null; // { src: base64, position: [], rotation: [], scal
 let isMobile = window.matchMedia('(max-width: 768px)').matches;
 let touchAssistEnabled = false; // For magnetic targeting
 
-// NEW: Extrude specific variables
-let initialExtrudeVoxel = null; // Stores {gx, gy, gz} of the voxel clicked to start extrusion
-let initialExtrudeColor = null; // Stores the color of the initialExtrudeVoxel
-let isExtruding = false; // Flag for extrusion drag in progress
-let voxelsAtExtrudeStart = null; // Map<key, {color}> snapshot of voxels before extrusion starts
+// --- REWORKED EXTRUDE ---
+let extrudeSelection = null; // { position: THREE.Vector3, normal: THREE.Vector3, color: string }
+let isExtruding = false;
+let extrudePreviewMeshes = [];
+let extrudeHighlightMesh;
+
+// NEW: Axis lock state
+let temporaryAxisLock = null; // 'x', 'y', 'z', or null
+let mobileAxisLock = null; // 'x', 'y', 'z', or null
 
 
 /* ---------- Hilfsfunktionen (alle vor window.onload verschoben) ---------- */
@@ -909,7 +924,7 @@ function handleGesture() {
         else if (gestureState.type === 'pinch') {
             const scale = dist / gestureState.lastDist;
             // Invert zoom for more intuitive pinch-to-zoom
-            const zoomDelta = (scale - 1) * PINCH_ZOOM_MULT * moveSpeed; // Changed (1 - scale) to (scale - 1)
+            const zoomDelta = (scale - 1) * PINCH_ZOOM_MULT * moveSpeed; // Changed from (1 - scale) to (scale - 1)
             cam.position.addScaledVector(
                 cam.getWorldDirection(new THREE.Vector3()),
                 zoomDelta
@@ -964,13 +979,6 @@ function releasePointer(id, eventType) { // Add eventType parameter
         touchIndicator.style.display = 'none';
         // Also reset fixed drag plane params for touch
         fixedDragPlaneParams = { level: null, axis: null };
-        // NEW: Reset extrude state on touch release
-        if (isExtruding) {
-            isExtruding = false;
-            initialExtrudeVoxel = null;
-            initialExtrudeColor = null;
-            voxelsAtExtrudeStart = null;
-        }
     }
 }
 
@@ -983,15 +991,16 @@ function rebuildHelpers() {
     if (boxHelper) scene.remove(boxHelper);
 
     const size = GRID * VS;
+    const activeAxis = temporaryAxisLock || (isMobile ? mobileAxisLock : null) || currentDrawingAxis;
 
-    if (currentDrawingAxis === 'y') {
+    if (activeAxis === 'y') {
         gridHelper = new THREE.GridHelper(size, GRID, 0x444444, 0x444444 );
         gridHelper.position.set(size / 2, activeDrawingLevel.y * VS, size / 2);
-    } else if (currentDrawingAxis === 'x') {
+    } else if (activeAxis === 'x') {
         gridHelper = new THREE.GridHelper(size, GRID, 0x444444, 0x444444);
         gridHelper.rotation.z = Math.PI / 2;
         gridHelper.position.set(activeDrawingLevel.x * VS, size / 2, size / 2);
-    } else if (currentDrawingAxis === 'z') {
+    } else if (activeAxis === 'z') {
         gridHelper = new THREE.GridHelper(size, GRID, 0x444444, 0x444444);
         gridHelper.rotation.x = Math.PI / 2;
         gridHelper.position.set(size / 2, size / 2, activeDrawingLevel.z * VS);
@@ -1031,10 +1040,7 @@ function cycleMode() {
     // When mode changes, reset fixed drag plane parameters
     fixedDragPlaneParams = { level: null, axis: null };
     // Also reset extrude state
-    isExtruding = false;
-    initialExtrudeVoxel = null;
-    initialExtrudeColor = null;
-    voxelsAtExtrudeStart = null;
+    clearExtrudeSelection();
     lastActionVoxelCoords = null; // Reset this too
 }
 
@@ -1249,61 +1255,53 @@ function recolorVoxel(gx, gy, gz, newColorHex, fromHistory = false) {
 
 // NEW: Helper function to perform the actual voxel modification for a block
 function performVoxelModification(baseX, baseY, baseZ, mode, color, blockSize = 1) {
-    // Determine the two axes along which the block will extend
-    let axis1, axis2;
-    if (currentDrawingAxis === 'y') {
-        axis1 = 'x';
-        axis2 = 'z';
-    } else if (currentDrawingAxis === 'x') {
-        axis1 = 'y';
-        axis2 = 'z';
-    } else { // currentDrawingAxis === 'z'
-        axis1 = 'x';
-        axis2 = 'y';
-    }
-
+    const activeAxis = temporaryAxisLock || (isMobile ? mobileAxisLock : null) || currentDrawingAxis;
+    
     for (let i = 0; i < blockSize; i++) {
         for (let j = 0; j < blockSize; j++) {
-            let x = baseX, y = baseY, z = baseZ;
+            for (let k = 0; k < blockSize; k++) { // NEW: Loop for the third dimension
+                let x = baseX, y = baseY, z = baseZ;
 
-            // Adjust coordinates based on block size and current drawing axis
-            if (axis1 === 'x') x = baseX + i;
-            else if (axis1 === 'y') y = baseY + i;
-            else if (axis1 === 'z') z = baseZ + i;
+                // Adjust coordinates based on block size and active axis
+                if (activeAxis === 'y') {
+                    x = baseX + i;
+                    z = baseZ + j;
+                    y = baseY + k;
+                } else if (activeAxis === 'x') {
+                    y = baseY + i;
+                    z = baseZ + j;
+                    x = baseX + k;
+                } else { // activeAxis === 'z'
+                    x = baseX + i;
+                    y = baseY + j;
+                    z = baseZ + k;
+                }
 
-            if (axis2 === 'x') x = baseX + j;
-            else if (axis2 === 'y') y = baseY + j;
-            else if (axis2 === 'z') z = baseZ + j;
+                // Clamp coordinates to grid boundaries
+                const clampedX = Math.max(0, Math.min(GRID - 1, x));
+                const clampedY = Math.max(0, Math.min(GRID - 1, y));
+                const clampedZ = Math.max(0, Math.min(GRID - 1, z));
 
-            // Ensure the fixed axis remains at its base coordinate
-            if (currentDrawingAxis === 'x') x = baseX;
-            else if (currentDrawingAxis === 'y') y = baseY;
-            else if (currentDrawingAxis === 'z') z = baseZ;
+                const voxelKey = key(clampedX, clampedY, clampedZ);
+                const actualHasVoxel = voxels.has(voxelKey);
 
-            // Clamp coordinates to grid boundaries
-            const clampedX = Math.max(0, Math.min(GRID - 1, x));
-            const clampedY = Math.max(0, Math.min(GRID - 1, y));
-            const clampedZ = Math.max(0, Math.min(GRID - 1, z));
-
-            const voxelKey = key(clampedX, clampedY, clampedZ);
-            const actualHasVoxel = voxels.has(voxelKey);
-
-            switch (mode) {
-                case Modes.ADD:
-                    if (!actualHasVoxel) {
-                        addVoxel(clampedX, clampedY, clampedZ, color);
-                    }
-                    break;
-                case Modes.DELETE:
-                    if (actualHasVoxel) {
-                        removeVoxel(clampedX, clampedY, clampedZ);
-                    }
-                    break;
-                case Modes.DRAW:
-                    if (actualHasVoxel && voxels.get(voxelKey).color !== color) {
-                        recolorVoxel(clampedX, clampedY, clampedZ, color);
-                    }
-                    break;
+                switch (mode) {
+                    case Modes.ADD:
+                        if (!actualHasVoxel) {
+                            addVoxel(clampedX, clampedY, clampedZ, color);
+                        }
+                        break;
+                    case Modes.DELETE:
+                        if (actualHasVoxel) {
+                            removeVoxel(clampedX, clampedY, clampedZ);
+                        }
+                        break;
+                    case Modes.DRAW:
+                        if (actualHasVoxel && voxels.get(voxelKey).color !== color) {
+                            recolorVoxel(clampedX, clampedY, clampedZ, color);
+                        }
+                        break;
+                }
             }
         }
     }
@@ -1352,17 +1350,14 @@ function updatePreviewVoxel(x, y, z, visible) {
                 previewVoxelMesh.geometry.dispose();
             }
 
-            const blockDimX = (currentDrawingAxis === 'y' || currentDrawingAxis === 'z') ? currentBlockSize * VS : VS;
-            const blockDimY = (currentDrawingAxis === 'x' || currentDrawingAxis === 'z') ? currentBlockSize * VS : VS;
-            const blockDimZ = (currentDrawingAxis === 'x' || currentDrawingAxis === 'y') ? currentBlockSize * VS : VS;
-
-            const tempGeometry = new THREE.BoxGeometry(blockDimX, blockDimY, blockDimZ);
+            const blockSize = currentBlockSize * VS;
+            const tempGeometry = new THREE.BoxGeometry(blockSize, blockSize, blockSize);
             previewVoxelMesh.geometry = tempGeometry;
 
             // Calculate the center of the block relative to its (x,y,z) base corner
-            const centerX = x * VS + blockDimX / 2;
-            const centerY = y * VS + blockDimY / 2;
-            const centerZ = z * VS + blockDimZ / 2;
+            const centerX = x * VS + blockSize / 2;
+            const centerY = y * VS + blockSize / 2;
+            const centerZ = z * VS + blockSize / 2;
 
             previewVoxelMesh.position.set(centerX, centerY, centerZ);
 
@@ -1383,6 +1378,8 @@ function updatePreviewVoxel(x, y, z, visible) {
 
 // NEW helper function to set the fixed drag plane parameters
 function setFixedDragPlane(clientX, clientY, mode) {
+    const activeAxis = temporaryAxisLock || (isMobile ? mobileAxisLock : null) || currentDrawingAxis;
+
     // Only set fixed drag plane for ADD mode. For DRAW mode, always reset.
     if (mode !== Modes.ADD) {
         fixedDragPlaneParams = { level: null, axis: null };
@@ -1435,8 +1432,8 @@ function setFixedDragPlane(clientX, clientY, mode) {
         fixedDragPlaneParams.axis = axis;
     } else {
         // If no voxel is hit, default to the current active drawing level and axis
-        fixedDragPlaneParams.axis = currentDrawingAxis;
-        fixedDragPlaneParams.level = activeDrawingLevel[currentDrawingAxis];
+        fixedDragPlaneParams.axis = activeAxis;
+        fixedDragPlaneParams.level = activeDrawingLevel[activeAxis];
     }
 }
 
@@ -1468,6 +1465,7 @@ function calculateTargetVoxelCoords(clientX, clientY, mode, isDragging, isStacki
     const objectsToIntersect = [instancedMesh];
     let targetVoxelCoords = null;
     let intersectionPoint = new THREE.Vector3();
+    const activeAxis = temporaryAxisLock || (isMobile ? mobileAxisLock : null) || currentDrawingAxis;
 
     // BUGFIX for Drag-Drawing: Use the fixed plane ONLY for ADD mode when dragging.
     // Ensure fixedDragPlaneParams is null for DRAW mode.
@@ -1517,25 +1515,25 @@ function calculateTargetVoxelCoords(clientX, clientY, mode, isDragging, isStacki
                 };
             } else { // DELETE, DRAW, or EXTRUDE
                 // Target the hit voxel itself
-                targetVoxelCoords = { gx: hitVoxelX, gy: hitVoxelY, gz: hitVoxelZ };
+                targetVoxelCoords = { gx: hitVoxelX, gy: hitVoxelY, gz: hitVoxelZ, normal: hit.face.normal };
             }
         } else if (mode === Modes.ADD) {
             // Fallback for ADD when nothing is hit, use activeDrawingLevel
             let planeNormal = new THREE.Vector3();
-            if (currentDrawingAxis === 'y') planeNormal.set(0, 1, 0);
-            else if (currentDrawingAxis === 'x') planeNormal.set(1, 0, 0);
+            if (activeAxis === 'y') planeNormal.set(0, 1, 0);
+            else if (activeAxis === 'x') planeNormal.set(1, 0, 0);
             else planeNormal.set(0, 0, 1);
             
-            const drawingPlane = new THREE.Plane(planeNormal, -(activeDrawingLevel[currentDrawingAxis] * VS));
+            const drawingPlane = new THREE.Plane(planeNormal, -(activeDrawingLevel[activeAxis] * VS));
 
             if (raycaster.ray.intersectPlane(drawingPlane, intersectionPoint)) {
                 let gx = Math.floor(intersectionPoint.x / VS);
                 let gy = Math.floor(intersectionPoint.y / VS);
                 let gz = Math.floor(intersectionPoint.z / VS);
 
-                if (currentDrawingAxis === 'y') gy = activeDrawingLevel.y;
-                else if (currentDrawingAxis === 'x') gx = activeDrawingLevel.x;
-                else if (currentDrawingAxis === 'z') gz = activeDrawingLevel.z;
+                if (activeAxis === 'y') gy = activeDrawingLevel.y;
+                else if (activeAxis === 'x') gx = activeDrawingLevel.x;
+                else if (activeAxis === 'z') gz = activeDrawingLevel.z;
 
                 targetVoxelCoords = { gx, gy, gz };
             } else {
@@ -1580,6 +1578,8 @@ function clearAll() {
 
 
 function fillActiveLevel() {
+    const activeAxis = temporaryAxisLock || (isMobile ? mobileAxisLock : null) || currentDrawingAxis;
+
     // Capture the current state before the fill for undo/redo
     const oldState = [...voxels.entries()].map(([id, data]) => {
         const parts = parseKey(id);
@@ -1588,21 +1588,21 @@ function fillActiveLevel() {
 
     // Clear existing voxels on the plane for fill, without adding to history
     const voxelsToRemove = [];
-    for (let x = 0; x < GRID; x++) {
-        for (let z = 0; z < GRID; z++) {
+    for (let i = 0; i < GRID; i++) {
+        for (let j = 0; j < GRID; j++) {
             let gx, gy, gz;
-            if (currentDrawingAxis === 'y') {
-                gx = x;
+            if (activeAxis === 'y') {
+                gx = i;
                 gy = activeDrawingLevel.y;
-                gz = z;
-            } else if (currentDrawingAxis === 'x') {
+                gz = j;
+            } else if (activeAxis === 'x') {
                 gx = activeDrawingLevel.x;
-                gy = x; // Use x as y-coordinate for horizontal plane
-                gz = z; // Use z as z-coordinate
+                gy = i; 
+                gz = j; 
             }
-            else if (currentDrawingAxis === 'z') {
-                gx = x;
-                gy = z; // Use z as y-coordinate for horizontal plane
+            else if (activeAxis === 'z') {
+                gx = i;
+                gy = j; 
                 gz = activeDrawingLevel.z;
             }
             const k = key(gx, gy, gz);
@@ -1620,21 +1620,21 @@ function fillActiveLevel() {
 
     // Add new voxels for the fill
     const newState = [];
-    for (let x = 0; x < GRID; x++) {
-        for (let z = 0; z < GRID; z++) {
+    for (let i = 0; i < GRID; i++) {
+        for (let j = 0; j < GRID; j++) {
             let gx, gy, gz;
-            if (currentDrawingAxis === 'y') {
-                gx = x;
+            if (activeAxis === 'y') {
+                gx = i;
                 gy = activeDrawingLevel.y;
-                gz = z;
-            } else if (currentDrawingAxis === 'x') {
+                gz = j;
+            } else if (activeAxis === 'x') {
                 gx = activeDrawingLevel.x;
-                gy = x;
-                gz = z;
+                gy = i;
+                gz = j;
             }
-            else if (currentDrawingAxis === 'z') {
-                gx = x;
-                gy = z;
+            else if (activeAxis === 'z') {
+                gx = i;
+                gy = j;
                 gz = activeDrawingLevel.z;
             }
             addVoxel(gx, gy, gz, currentColor, true); // true for fromHistory, to avoid adding individual add commands
@@ -2146,6 +2146,68 @@ function updateGroundPlaneSize() {
     }
 }
 
+// --- REWORKED EXTRUDE HELPERS ---
+function clearExtrudeSelection() {
+    if (extrudeHighlightMesh) {
+        extrudeHighlightMesh.visible = false;
+    }
+    extrudeSelection = null;
+    isExtruding = false;
+    clearExtrusionPreview();
+}
+
+function updateSelectionHighlight() {
+    if (extrudeSelection) {
+        extrudeHighlightMesh.position.copy(extrudeSelection.position);
+        extrudeHighlightMesh.lookAt(extrudeSelection.position.clone().add(extrudeSelection.normal));
+        extrudeHighlightMesh.visible = true;
+    } else {
+        extrudeHighlightMesh.visible = false;
+    }
+}
+
+function clearExtrusionPreview() {
+    extrudePreviewMeshes.forEach(mesh => scene.remove(mesh));
+    extrudePreviewMeshes = [];
+}
+
+function updateExtrusionPreview(endPoint) {
+    clearExtrusionPreview();
+
+    if (!extrudeSelection) return;
+
+    const startPoint = extrudeSelection.position.clone();
+    const direction = extrudeSelection.normal.clone();
+    
+    // Project the endPoint onto the line defined by the startPoint and direction
+    const line = new THREE.Line3(startPoint, startPoint.clone().add(direction));
+    const projectedPoint = new THREE.Vector3();
+    line.closestPointToPoint(endPoint, true, projectedPoint);
+
+    const distanceVec = projectedPoint.sub(startPoint);
+    // Use dot product to get signed distance, then divide by voxel size (which is 1)
+    let distance = distanceVec.dot(direction); 
+    
+    // Snap to grid
+    distance = Math.round(distance);
+
+    if (distance === 0) return;
+
+    const color = new THREE.Color(extrudeSelection.color);
+    const material = new THREE.MeshBasicMaterial({ color: color, transparent: true, opacity: 0.5 });
+    const geometry = new THREE.BoxGeometry(VS, VS, VS);
+
+    for (let i = 1; i <= Math.abs(distance); i++) {
+        const offset = direction.clone().multiplyScalar(i * Math.sign(distance));
+        const pos = startPoint.clone().add(offset);
+        
+        const previewMesh = new THREE.Mesh(geometry, material);
+        previewMesh.position.copy(pos);
+        scene.add(previewMesh);
+        extrudePreviewMeshes.push(previewMesh);
+    }
+}
+
 
 /* ---------- Initialisierung bei Fensterladung ---------- */
 window.onload = function() {
@@ -2259,6 +2321,13 @@ window.onload = function() {
 
     scene.add(previewVoxelMesh);
     updatePreviewVoxel(0,0,0,false);
+
+    // NEW: Initialize Extrude Highlight Mesh
+    const highlightGeometry = new THREE.PlaneGeometry(VS, VS);
+    const highlightMaterial = new THREE.MeshBasicMaterial({ color: 0xffff00, transparent: true, opacity: 0.7, side: THREE.DoubleSide });
+    extrudeHighlightMesh = new THREE.Mesh(highlightGeometry, highlightMaterial);
+    extrudeHighlightMesh.visible = false;
+    scene.add(extrudeHighlightMesh);
 
     // Helpers
     rebuildHelpers();
@@ -2463,12 +2532,16 @@ window.onload = function() {
         // Toggle between camera modes or reset camera view
         resetCameraPosition(); // Simple reset for now
     });
+    // NEW: Mobile Axis Lock Button Listeners
+    document.getElementById('mobile-lock-x').addEventListener('click', () => toggleMobileAxisLock('x'));
+    document.getElementById('mobile-lock-y').addEventListener('click', () => toggleMobileAxisLock('y'));
+    document.getElementById('mobile-lock-z').addEventListener('click', () => toggleMobileAxisLock('z'));
+
     // NEW: Mobile Extrude Mode button listener
     document.getElementById('mobile-extrude-mode').addEventListener('click', () => {
         currentMode = Modes.EXTRUDE;
         document.getElementById('current-mode').textContent = `Modus: ${currentMode}`;
-        fixedDragPlaneParams = { level: null, axis: null }; // Reset fixed plane
-        // Optionally, provide visual feedback for active mode on mobile buttons
+        clearExtrudeSelection();
     });
     document.getElementById('mobile-assist').addEventListener('click', () => {
         touchAssistEnabled = !touchAssistEnabled;
@@ -2609,32 +2682,6 @@ function onPointerDown(e) {
         const pointers = [...activePointers.values()];
         gestureState.initialPointerCount = pointers.length;
 
-        // NEW: Handle Extrude mode for touch
-        if (currentMode === Modes.EXTRUDE && pointers.length === 1) {
-            const hitVoxel = calculateTargetVoxelCoords(e.clientX, e.clientY, Modes.DELETE, false, false, 'touch');
-            if (hitVoxel && voxels.has(key(hitVoxel.gx, hitVoxel.gy, hitVoxel.gz))) {
-                initialExtrudeVoxel = { ...hitVoxel };
-                initialExtrudeColor = voxels.get(key(hitVoxel.gx, hitVoxel.gy, hitVoxel.gz)).color;
-                isExtruding = true;
-                voxelsAtExtrudeStart = new Map(voxels); // Snapshot for undo
-                lastActionVoxelCoords = { ...hitVoxel }; // For DDA start point
-                gestureState.type = 'none'; // Prevent camera rotation in extrude mode
-            } else {
-                // Cannot extrude from empty space
-                initialExtrudeVoxel = null;
-                initialExtrudeColor = null;
-                isExtruding = false;
-                voxelsAtExtrudeStart = null;
-                lastActionVoxelCoords = null;
-                // If no voxel hit, allow camera rotation for single finger
-                gestureState.type = 'rotate';
-                gestureState.lastMid = { x: e.clientX, y: e.clientY };
-            }
-            updatePreviewVoxel(0, 0, 0, false); // Hide preview until drag starts
-            return; // Exit to prevent other touch logic from interfering
-        }
-
-
         if (pointers.length === 1) {
             gestureState.type = 'rotate'; // Single-finger drag for rotation
             gestureState.lastMid = { x: e.clientX, y: e.clientY };
@@ -2661,25 +2708,29 @@ function onPointerDown(e) {
         lastY = e.clientY; // Store for preview updates
         initialClickPos = { x: e.clientX, y: e.clientY }; // For click vs. drag distinction
 
-        // NEW: Handle Extrude mode for desktop
+        // --- REWORKED EXTRUDE LOGIC ---
         if (currentMode === Modes.EXTRUDE) {
-            const hitVoxel = calculateTargetVoxelCoords(e.clientX, e.clientY, Modes.DELETE, false, false, 'mouse'); // Use DELETE logic to hit existing voxel
-            if (hitVoxel && voxels.has(key(hitVoxel.gx, hitVoxel.gy, hitVoxel.gz))) {
-                initialExtrudeVoxel = { ...hitVoxel };
-                initialExtrudeColor = voxels.get(key(hitVoxel.gx, hitVoxel.gy, hitVoxel.gz)).color;
-                isExtruding = true;
-                voxelsAtExtrudeStart = new Map(voxels); // Snapshot for undo
-                lastActionVoxelCoords = { ...hitVoxel }; // For DDA start point
+            const hitVoxel = calculateTargetVoxelCoords(e.clientX, e.clientY, Modes.EXTRUDE, false, false, 'mouse');
+            if (hitVoxel && hitVoxel.normal) {
+                if (extrudeSelection && extrudeSelection.position.equals(new THREE.Vector3(hitVoxel.gx, hitVoxel.gy, hitVoxel.gz))) {
+                    // Clicked on the same voxel again, start extruding
+                    isExtruding = true;
+                } else {
+                    // New selection
+                    const k = key(hitVoxel.gx, hitVoxel.gy, hitVoxel.gz);
+                    extrudeSelection = {
+                        position: new THREE.Vector3(hitVoxel.gx * VS + HALF, hitVoxel.gy * VS + HALF, hitVoxel.gz * VS + HALF),
+                        normal: hitVoxel.normal.clone(),
+                        color: voxels.get(k).color
+                    };
+                    isExtruding = true; // Start extruding immediately on first click-and-drag
+                    updateSelectionHighlight();
+                }
             } else {
-                // Cannot extrude from empty space, reset state
-                initialExtrudeVoxel = null;
-                initialExtrudeColor = null;
-                isExtruding = false;
-                voxelsAtExtrudeStart = null;
-                lastActionVoxelCoords = null;
+                // Clicked empty space, clear selection
+                clearExtrudeSelection();
             }
-            updatePreviewVoxel(0, 0, 0, false); // Hide preview until drag starts
-            return; // Prevent other modes from activating
+            return;
         }
 
         // Determine the fixed drawing plane based on modifier keys (Shift/Control) ONLY IF IN ADD mode
@@ -2727,67 +2778,6 @@ function onPointerMove(e) {
         touchIndicator.style.left = `${e.clientX}px`;
         touchIndicator.style.top = `${e.clientY}px`;
 
-        // NEW: Handle Extrude mode drag for touch
-        if (isExtruding && initialExtrudeVoxel) {
-            const currentTargetVoxel = calculateTargetVoxelCoords(e.clientX, e.clientY, Modes.DELETE, true, false, e.pointerType);
-            if (currentTargetVoxel && (
-                !lastActionVoxelCoords ||
-                currentTargetVoxel.gx !== lastActionVoxelCoords.gx ||
-                currentTargetVoxel.gy !== lastActionVoxelCoords.gy ||
-                currentTargetVoxel.gz !== lastActionVoxelCoords.gz
-            )) {
-                // Restore the state to `voxelsAtExtrudeStart`
-                voxels.clear();
-                voxelsAtExtrudeStart.forEach((data, k) => voxels.set(k, data));
-
-                // Generate the new extrusion path and apply it to the `voxels` map
-                const { gx: x1, gy: y1, gz: z1 } = initialExtrudeVoxel;
-                const { gx: x2, gy: y2, gz: z2 } = currentTargetVoxel;
-
-                const dx = x2 - x1;
-                const dy = y2 - y1;
-                const dz = z2 - z1;
-
-                const steps = Math.max(Math.abs(dx), Math.abs(dy), Math.abs(dz));
-
-                if (steps === 0) {
-                    // Single voxel, only add if not already present or recolor if different
-                    const k = key(x1, y1, z1);
-                    if (!voxels.has(k)) {
-                        voxels.set(k, { color: initialExtrudeColor });
-                    } else if (voxels.get(k).color !== initialExtrudeColor) {
-                        voxels.set(k, { color: initialExtrudeColor });
-                    }
-                } else {
-                    const x_inc = dx / steps;
-                    const y_inc = dy / steps;
-                    const z_inc = dz / steps;
-
-                    for (let i = 0; i <= steps; i++) {
-                        const currentX = Math.round(x1 + i * x_inc);
-                        const currentY = Math.round(y1 + i * y_inc);
-                        const currentZ = Math.round(z1 + i * z_inc);
-                        const k = key(currentX, currentY, currentZ);
-
-                        // Check if within grid bounds
-                        if (currentX >= 0 && currentX < GRID &&
-                            currentY >= 0 && currentY < GRID &&
-                            currentZ >= 0 && currentZ < GRID) {
-                            
-                            if (!voxels.has(k)) {
-                                voxels.set(k, { color: initialExtrudeColor });
-                            } else if (voxels.get(k).color !== initialExtrudeColor) {
-                                voxels.set(k, { color: initialExtrudeColor });
-                            }
-                        }
-                    }
-                }
-                lastActionVoxelCoords = { ...currentTargetVoxel };
-            }
-            updatePreviewVoxel(currentTargetVoxel ? currentTargetVoxel.gx : 0, currentTargetVoxel ? currentTargetVoxel.gy : 0, currentTargetVoxel ? currentTargetVoxel.gz : 0, currentTargetVoxel !== null);
-            return; // Exit to prevent other touch logic from interfering
-        }
-
         if (doubleTapDragActive) {
             // Touch-based drag drawing (for ADD/DELETE/DRAW modes)
             const targetVoxel = calculateTargetVoxelCoords(e.clientX, e.clientY, currentMode, true, false, 'touch');
@@ -2817,77 +2807,32 @@ function onPointerMove(e) {
     lastY = e.clientY;
 
     const movedDistance = initialClickPos ? Math.hypot(e.clientX - initialClickPos.x, e.clientY - initialClickPos.y) : 0;
-    // isDraggingVoxelAction is true if LMB is down AND (mouse has moved beyond click threshold OR Shift/Ctrl is held OR long press is active)
-    const isDraggingVoxelAction = pointerIsDown && (movedDistance > MOVE_PX || isShiftDragging || isControlDragging || isHoldDrawingActive);
+    const isDraggingVoxelAction = pointerIsDown && (movedDistance > MOVE_PX || isShiftDragging || isControlDragging || isHoldDrawingActive || temporaryAxisLock);
 
-    // NEW: Handle Extrude mode drag for desktop
-    if (isExtruding && initialExtrudeVoxel) {
-        const currentTargetVoxel = calculateTargetVoxelCoords(e.clientX, e.clientY, Modes.DELETE, true, false, e.pointerType);
-        if (currentTargetVoxel && (
-            !lastActionVoxelCoords ||
-            currentTargetVoxel.gx !== lastActionVoxelCoords.gx ||
-            currentTargetVoxel.gy !== lastActionVoxelCoords.gy ||
-            currentTargetVoxel.gz !== lastActionVoxelCoords.gz
-        )) {
-            // Restore the state to `voxelsAtExtrudeStart`
-            voxels.clear();
-            voxelsAtExtrudeStart.forEach((data, k) => voxels.set(k, data));
+    // --- REWORKED EXTRUDE DRAG LOGIC ---
+    if (currentMode === Modes.EXTRUDE && isExtruding && extrudeSelection) {
+        const raycaster = new THREE.Raycaster();
+        const mouse = new THREE.Vector2(((e.clientX - cvs.getBoundingClientRect().left) / cvs.clientWidth) * 2 - 1, -((e.clientY - cvs.getBoundingClientRect().top) / cvs.clientHeight) * 2 + 1);
+        raycaster.setFromCamera(mouse, cam);
 
-            // Generate the new extrusion path and apply it to the `voxels` map
-            const { gx: x1, gy: y1, gz: z1 } = initialExtrudeVoxel;
-            const { gx: x2, gy: y2, gz: z2 } = currentTargetVoxel;
-
-            const dx = x2 - x1;
-            const dy = y2 - y1;
-            const dz = z2 - z1;
-
-            const steps = Math.max(Math.abs(dx), Math.abs(dy), Math.abs(dz));
-
-            if (steps === 0) {
-                // Single voxel, only add if not already present or recolor if different
-                const k = key(x1, y1, z1);
-                if (!voxels.has(k)) {
-                    voxels.set(k, { color: initialExtrudeColor });
-                } else if (voxels.get(k).color !== initialExtrudeColor) {
-                    voxels.set(k, { color: initialExtrudeColor });
-                }
-            } else {
-                const x_inc = dx / steps;
-                const y_inc = dy / steps;
-                const z_inc = dz / steps;
-
-                for (let i = 0; i <= steps; i++) {
-                    const currentX = Math.round(x1 + i * x_inc);
-                    const currentY = Math.round(y1 + i * y_inc);
-                    const currentZ = Math.round(z1 + i * z_inc);
-                    const k = key(currentX, currentY, currentZ);
-
-                    // Check if within grid bounds
-                    if (currentX >= 0 && currentX < GRID &&
-                        currentY >= 0 && currentY < GRID &&
-                        currentZ >= 0 && currentZ < GRID) {
-                        
-                        if (!voxels.has(k)) {
-                            voxels.set(k, { color: initialExtrudeColor });
-                        } else if (voxels.get(k).color !== initialExtrudeColor) {
-                            voxels.set(k, { color: initialExtrudeColor });
-                        }
-                    }
-                }
-            }
-            lastActionVoxelCoords = { ...currentTargetVoxel };
+        const plane = new THREE.Plane(extrudeSelection.normal, -extrudeSelection.position.dot(extrudeSelection.normal));
+        const intersectionPoint = new THREE.Vector3();
+        if (raycaster.ray.intersectPlane(plane, intersectionPoint)) {
+            updateExtrusionPreview(intersectionPoint);
         }
-        updatePreviewVoxel(currentTargetVoxel ? currentTargetVoxel.gx : 0, currentTargetVoxel ? currentTargetVoxel.gy : 0, currentTargetVoxel ? currentTargetVoxel.gz : 0, currentTargetVoxel !== null);
-        return; // Exit to prevent other modes from acting
+        return;
     }
 
     const currentTargetVoxel = calculateTargetVoxelCoords(e.clientX, e.clientY, currentMode, isDraggingVoxelAction, isControlDragging, 'mouse');
 
-    if (currentTargetVoxel) {
-        updatePreviewVoxel(currentTargetVoxel.gx, currentTargetVoxel.gy, currentTargetVoxel.gz, true);
-    } else {
-        updatePreviewVoxel(0, 0, 0, false);
+    if (currentMode !== Modes.EXTRUDE) {
+        if (currentTargetVoxel) {
+            updatePreviewVoxel(currentTargetVoxel.gx, currentTargetVoxel.gy, currentTargetVoxel.gz, true);
+        } else {
+            updatePreviewVoxel(0, 0, 0, false);
+        }
     }
+
 
     if (isDraggingVoxelAction) {
         if (currentTargetVoxel) {
@@ -2919,15 +2864,6 @@ function onPointerUp(e) {
                  }
             }
         }
-        // NEW: Handle Extrude mode release for touch
-        if (isExtruding) {
-            isExtruding = false;
-            // Add the command to history
-            addCommand('extrude', null, null, null, null, null, voxelsAtExtrudeStart, new Map(voxels));
-            initialExtrudeVoxel = null;
-            initialExtrudeColor = null;
-            voxelsAtExtrudeStart = null;
-        }
         releasePointer(e.pointerId, e);
         return;
     }
@@ -2939,18 +2875,31 @@ function onPointerUp(e) {
             return;
         }
 
+        // --- REWORKED EXTRUDE RELEASE LOGIC ---
+        if (currentMode === Modes.EXTRUDE && isExtruding) {
+            const voxelsBeforeExtrude = new Map(voxels);
+            const addedVoxels = [];
+
+            extrudePreviewMeshes.forEach(mesh => {
+                const gx = Math.round(mesh.position.x - HALF);
+                const gy = Math.round(mesh.position.y - HALF);
+                const gz = Math.round(mesh.position.z - HALF);
+                addVoxel(gx, gy, gz, extrudeSelection.color, true);
+                addedVoxels.push({gx, gy, gz, color: extrudeSelection.color});
+            });
+            
+            if (addedVoxels.length > 0) {
+                 const voxelsAfterExtrude = new Map(voxels);
+                 addCommand('extrude', null, null, null, null, null, voxelsBeforeExtrude, voxelsAfterExtrude);
+            }
+
+            clearExtrudeSelection();
+        }
+
         const movedDistance = initialClickPos ? Math.hypot(e.clientX - initialClickPos.x, e.clientY - initialClickPos.y) : 0;
         const wasSingleClick = movedDistance <= MOVE_PX;
 
-        // NEW: Handle Extrude mode release for desktop
-        if (isExtruding) {
-            isExtruding = false;
-            // Add the command to history
-            addCommand('extrude', null, null, null, null, null, voxelsAtExtrudeStart, new Map(voxels));
-            initialExtrudeVoxel = null;
-            initialExtrudeColor = null;
-            voxelsAtExtrudeStart = null;
-        } else if (pointerIsDown && !isPointerLocked && wasSingleClick) {
+        if (pointerIsDown && !isPointerLocked && wasSingleClick) {
             // For desktop, the initial voxel action is already performed on pointerDown.
             // This ensures that a simple click registers the voxel immediately.
             // No need to re-calculate and perform modification here unless it's a drag.
@@ -2965,7 +2914,9 @@ function onPointerUp(e) {
     lastActionVoxelCoords = null;
     initialClickPos = null;
     fixedDragPlaneParams = { level: null, axis: null }; // Always reset on pointer up
-    updatePreviewVoxel(0, 0, 0, false);
+    if (currentMode !== Modes.EXTRUDE) {
+        updatePreviewVoxel(0, 0, 0, false);
+    }
 }
 
 
@@ -2974,12 +2925,9 @@ function onPointerLeave(e) {
         pointerIsDown = false;
         lastActionVoxelCoords = null;
         updatePreviewVoxel(0, 0, 0, false);
-        // NEW: Reset extrude state on mouse leave
+        
         if (isExtruding) {
-            isExtruding = false;
-            initialExtrudeVoxel = null;
-            initialExtrudeColor = null;
-            voxelsAtExtrudeStart = null;
+            clearExtrudeSelection();
         }
     }
 }
@@ -3002,9 +2950,10 @@ function onMouseWheel(e) {
     const sensitivity = 0.005;
     // Invert zoom direction for mouse wheel
     let zoomAmount = -e.deltaY * sensitivity; // Changed from e.deltaY to -e.deltaY
+    const activeAxis = temporaryAxisLock || (isMobile ? mobileAxisLock : null) || currentDrawingAxis;
 
     if (e.altKey) {
-        // Only allow axis lock changes in ADD mode
+        // Only allow axis level changes in ADD mode
         if (currentMode === Modes.ADD) {
             if (e.shiftKey) {
                 activeDrawingLevel.z = Math.max(0, Math.min(GRID - 1, activeDrawingLevel.z - Math.sign(e.deltaY)));
@@ -3094,33 +3043,62 @@ function setBlockSize(size) {
     }
 }
 
+// NEW: Function to toggle the mobile axis lock
+function toggleMobileAxisLock(axis) {
+    if (mobileAxisLock === axis) {
+        mobileAxisLock = null; // Toggle off if it's already active
+    } else {
+        mobileAxisLock = axis; // Set to the new axis
+    }
+    
+    // Update the UI to reflect the change
+    document.querySelectorAll('.axis-lock-btn').forEach(btn => {
+        btn.classList.toggle('active', btn.id === `mobile-lock-${mobileAxisLock}`);
+    });
+    
+    rebuildHelpers(); // Update the grid helper to match the new lock
+}
+
 
 /* ---------- Keyboard Input ---------- */
 const keyboard = {};
 function onKeyDown(e) {
-    keyboard[e.key] = true;
+    // NEW: Check if focus is on an input element
+    const targetEl = e.target.tagName.toLowerCase();
+    if (targetEl === 'input' || targetEl === 'textarea' || e.target.isContentEditable) {
+        return;
+    }
 
-    if (e.key === 'Shift') {
+    const key = e.key.toLowerCase();
+    keyboard[key] = true;
+
+    if (key === 'shift') {
         isShiftDragging = true;
     }
-    if (e.key === 'Control' || e.key === 'Meta') {
+    if (key === 'control' || key === 'meta') {
         isControlDragging = true;
     }
 
-    if ((e.ctrlKey || e.metaKey) && e.key === 'z') {
+    if ((e.ctrlKey || e.metaKey) && key === 'z') {
         e.preventDefault();
         undo();
     }
-    if (((e.ctrlKey || e.metaKey) && e.key === 'y') || ((e.ctrlKey || e.metaKey) && e.shiftKey && e.key === 'Z')) {
+    if (((e.ctrlKey || e.metaKey) && key === 'y') || ((e.ctrlKey || e.metaKey) && e.shiftKey && key === 'z')) {
         e.preventDefault();
         redo();
     }
-    if ((e.ctrlKey || e.metaKey) && e.key === 'd') {
+    if ((e.ctrlKey || e.metaKey) && key === 'd') {
         e.preventDefault();
     }
 
-    switch (e.key) {
-        case 'Tab':
+    // NEW: Temporary axis lock on keydown
+    if (['x', 'y', 'z'].includes(key) && !temporaryAxisLock) {
+        temporaryAxisLock = key;
+        rebuildHelpers();
+    }
+
+    switch (key) {
+        case 'tab':
             e.preventDefault();
             cycleMode();
             break;
@@ -3131,13 +3109,22 @@ function onKeyDown(e) {
 }
 
 function onKeyUp(e) {
-    keyboard[e.key] = false;
+    const key = e.key.toLowerCase();
+    keyboard[key] = false;
 
-    if (e.key === 'Shift') {
+    if (key === 'shift') {
         isShiftDragging = false;
     }
-    if (e.key === 'Control' || e.key === 'Meta') {
+    if (key === 'control' || key === 'meta') {
         isControlDragging = false;
+    }
+
+    // NEW: Release temporary axis lock on keyup
+    if (['x', 'y', 'z'].includes(key) && temporaryAxisLock === key) {
+        temporaryAxisLock = null;
+        rebuildHelpers();
+        // A drawing cycle is finished, release any lock
+        fixedDragPlaneParams = { level: null, axis: null };
     }
 }
 </script>
