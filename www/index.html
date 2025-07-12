@@ -373,6 +373,29 @@ input[type="color"].color-preset-box::-moz-color-swatch {
         background: rgba(110, 110, 140, 0.9);
     }
 }
+
+/* NEW: Toast Notification Styles */
+#toast-notification {
+    display: none; /* Hidden by default */
+    position: fixed;
+    bottom: 30px;
+    left: 50%;
+    transform: translateX(-50%);
+    background-color: rgba(58, 63, 71, 0.9); /* #3a3f47 with opacity */
+    color: #e0e0e0;
+    padding: 12px 20px;
+    border-radius: 8px;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+    z-index: 1100; /* Above modals */
+    opacity: 0;
+    transition: opacity 0.3s ease-in-out;
+    text-align: center;
+    max-width: 80%;
+}
+
+#toast-notification.show {
+    opacity: 1;
+}
 </style>
 </head>
 <body>
@@ -461,6 +484,9 @@ input[type="color"].color-preset-box::-moz-color-swatch {
         </div>
     </div>
 </div>
+
+<!-- NEW: Toast Notification -->
+<div id="toast-notification"></div>
 
 <!-- NEW: Mobile controls -->
 <div id="mobile-controls" class="mobile-only">
@@ -701,7 +727,7 @@ const LONG_PRESS_DELAY_MS = 500;   // NEW: Wartezeit (in Millisekunden) für Lon
    GLOBAL – neue Hilfs-Variablen
 ---------------------------------------------- */
 // --- Touch Gesture Constants ---
-const PINCH_ZOOM_MULT = 40;     // Zoom-Geschwindigkeit ↑
+const PINCH_ZOOM_MULT = 80;     // Zoom-Geschwindigkeit ↑ (Increased for mobile)
 const TAP_DIST_TH = 10;         // max. Bewegung (px) für 'Tap'
 const MOVE_PX = 10;             // ab hier gilt es als Drag
 const DT_MS = 250;              // max. Abstand Taps (ms)
@@ -849,8 +875,9 @@ function handleGesture() {
         const dx = p.x - gestureState.lastMid.x;
         const dy = p.y - gestureState.lastMid.y;
 
-        euler.y -= dx * ROTATE_SPEED_TOUCH;
-        euler.x -= dy * ROTATE_SPEED_TOUCH;
+        // Invert rotation for more intuitive drag
+        euler.y += dx * ROTATE_SPEED_TOUCH; // Changed from -= to +=
+        euler.x += dy * ROTATE_SPEED_TOUCH; // Changed from -= to +=
         euler.x = Math.max(-Math.PI / 2, Math.min(Math.PI / 2, euler.x));
         cam.quaternion.setFromEuler(euler);
 
@@ -881,7 +908,8 @@ function handleGesture() {
         // --- Execute Pinch (Zoom) ---
         else if (gestureState.type === 'pinch') {
             const scale = dist / gestureState.lastDist;
-            const zoomDelta = (1 - scale) * PINCH_ZOOM_MULT * moveSpeed;
+            // Invert zoom for more intuitive pinch-to-zoom
+            const zoomDelta = (scale - 1) * PINCH_ZOOM_MULT * moveSpeed; // Changed (1 - scale) to (scale - 1)
             cam.position.addScaledVector(
                 cam.getWorldDirection(new THREE.Vector3()),
                 zoomDelta
@@ -1355,7 +1383,7 @@ function updatePreviewVoxel(x, y, z, visible) {
 
 // NEW helper function to set the fixed drag plane parameters
 function setFixedDragPlane(clientX, clientY, mode) {
-    // Only set fixed drag plane for ADD mode
+    // Only set fixed drag plane for ADD mode. For DRAW mode, always reset.
     if (mode !== Modes.ADD) {
         fixedDragPlaneParams = { level: null, axis: null };
         return;
@@ -1442,6 +1470,7 @@ function calculateTargetVoxelCoords(clientX, clientY, mode, isDragging, isStacki
     let intersectionPoint = new THREE.Vector3();
 
     // BUGFIX for Drag-Drawing: Use the fixed plane ONLY for ADD mode when dragging.
+    // Ensure fixedDragPlaneParams is null for DRAW mode.
     if (isDragging && mode === Modes.ADD && fixedDragPlaneParams.level !== null && fixedDragPlaneParams.axis !== null) {
         let planeNormal = new THREE.Vector3();
         if (fixedDragPlaneParams.axis === 'y') planeNormal.set(0, 1, 0);
@@ -1902,7 +1931,7 @@ function loadJSON(event) {
             resetCameraPosition();
         } catch (error) {
             console.error('Error loading JSON file:', error);
-            showMessageModal('Fehler', 'Fehler beim Laden der Datei. Stellen Sie sicher, dass es sich um eine gültige Voxel-Projekt-JSON-Datei handelt. Fehler: ' + error.message);
+            showModalMessage('Fehler', 'Fehler beim Laden der Datei. Stellen Sie sicher, dass es sich um eine gültige Voxel-Projekt-JSON-Datei handelt. Fehler: ' + error.message);
             resetToDefaultProject(); // Reset to safe state on error
         }
     };
@@ -1912,7 +1941,7 @@ function loadJSON(event) {
 
 function exportSTL() {
     if (voxels.size === 0) {
-        showMessageModal('Export fehlgeschlagen', 'Keine Voxel zum Exportieren vorhanden!');
+        showToast('Keine Voxel zum Exportieren vorhanden!');
         return;
     }
 
@@ -1965,13 +1994,13 @@ function exportSTL() {
 
     tempBoxGeometry.dispose();
     if (mergedGeometry) mergedGeometry.dispose();
-    showMessageModal('Export erfolgreich', 'STL-Modell erfolgreich exportiert!');
+    showToast('STL-Modell erfolgreich exportiert!');
 }
 
 // NEW: Function to export OBJ
 function exportOBJ() {
     if (voxels.size === 0) {
-        showMessageModal('Export fehlgeschlagen', 'Keine Voxel zum Exportieren vorhanden!');
+        showToast('Keine Voxel zum Exportieren vorhanden!');
         return;
     }
 
@@ -1990,15 +2019,37 @@ function exportOBJ() {
     const objText = VoxelShaperIO.voxToOBJ(voxModel, VS); // Use VS (1) as cubeSize
 
     VoxelShaperIO.saveBlob(objText, 'voxel_model.obj');
-    showMessageModal('Export erfolgreich', 'OBJ-Modell erfolgreich exportiert!');
+    showToast('OBJ-Modell erfolgreich exportiert!');
 }
 
 // NEW: Generic message modal
-function showMessageModal(title, message) {
+function showModalMessage(title, message) { // Renamed from showMessageModal
     const modal = document.getElementById('messageModal');
     document.getElementById('messageModalTitle').textContent = title;
     document.getElementById('messageModalText').textContent = message;
     modal.style.display = 'flex';
+}
+
+// NEW: Toast Notification Function
+let toastTimeout;
+function showToast(message, duration = 3000) {
+    const toast = document.getElementById('toast-notification');
+    toast.textContent = message;
+    toast.style.display = 'block';
+    // Force reflow to ensure transition plays
+    void toast.offsetWidth;
+    toast.classList.add('show');
+
+    if (toastTimeout) {
+        clearTimeout(toastTimeout);
+    }
+    toastTimeout = setTimeout(() => {
+        toast.classList.remove('show');
+        toast.addEventListener('transitionend', function handler() {
+            toast.style.display = 'none';
+            toast.removeEventListener('transitionend', handler);
+        }, { once: true });
+    }, duration);
 }
 
 function resetCameraPosition() {
@@ -2423,7 +2474,7 @@ window.onload = function() {
         touchAssistEnabled = !touchAssistEnabled;
         const assistButton = document.getElementById('mobile-assist');
         assistButton.style.borderColor = touchAssistEnabled ? '#90caf9' : 'white';
-        showMessageModal('Touch Assist', `Magnetisches Zielen ist jetzt ${touchAssistEnabled ? 'aktiviert' : 'deaktiviert'}.`);
+        showToast(`Magnetisches Zielen ist jetzt ${touchAssistEnabled ? 'aktiviert' : 'deaktiviert'}.`);
     });
 
     document.getElementById('grid-size-slider').value = GRID;
@@ -2949,7 +3000,8 @@ function onMouseWheel(e) {
     e.preventDefault();
 
     const sensitivity = 0.005;
-    let zoomAmount = e.deltaY * sensitivity;
+    // Invert zoom direction for mouse wheel
+    let zoomAmount = -e.deltaY * sensitivity; // Changed from e.deltaY to -e.deltaY
 
     if (e.altKey) {
         // Only allow axis lock changes in ADD mode
