@@ -430,7 +430,7 @@ input[type="color"].color-preset-box::-moz-color-swatch {
     **Control + Linke MT gedrückt + Maus ziehen → Voxel ziehen zum Hinzufügen (Stapeln, nur im Hinzufügen-Modus)**<br>
     **NEU: Extrudieren (Modus "Extrudieren")**<br>
     **Linke MT gedrückt + Maus ziehen auf existierendem Voxel → Voxel extrudieren/verlängern**<br>
-    Mausrad → Kamera Geschwindigkeit anpassen<br>
+    Mausrad → Kamera Geschwindigkeit anpassen<<br>
     **Tab → Modus wechseln (Hinzufügen / Löschen / Zeichnen / Extrudieren)**<br>
     **1, 2, 3 → Voreingestellte Farbe wählen**<br>
     **Strg + Z → Rückgängig (Undo)**<br>
@@ -2440,6 +2440,10 @@ window.onload = function() {
 const frustum = new THREE.Frustum();
 const tempCameraMatrix = new THREE.Matrix4();
 const tempVoxelPosition = new THREE.Vector3(); // Re-use for performance
+// NEW: Bounding box for frustum culling
+const voxelBoundingBox = new THREE.Box3();
+const voxelMin = new THREE.Vector3(-HALF, -HALF, -HALF);
+const voxelMax = new THREE.Vector3(HALF, HALF, HALF);
 
 function animate() {
     requestAnimationFrame(animate);
@@ -2470,8 +2474,11 @@ function animate() {
         const [x, y, z] = parseKey(k);
         tempVoxelPosition.set(x * VS + HALF, y * VS + HALF, z * VS + HALF);
 
-        // Check if the voxel's bounding box is in the frustum
-        if (frustum.containsPoint(tempVoxelPosition)) {
+        // NEW: Update bounding box for the current voxel
+        voxelBoundingBox.setFromCenterAndSize(tempVoxelPosition, new THREE.Vector3(VS, VS, VS));
+
+        // Check if the voxel's bounding box intersects the frustum
+        if (frustum.intersectsBox(voxelBoundingBox)) { // Changed from containsPoint to intersectsBox
             // Set matrix for the visible instance
             dummy.position.copy(tempVoxelPosition);
             dummy.updateMatrix();
@@ -2833,7 +2840,7 @@ function onPointerMove(e) {
 
     if (isDraggingVoxelAction) {
         if (currentTargetVoxel) {
-            if (!lastActionVoxelCoords || key(currentTargetVoxel.gx, currentTargetVoxel.gy, currentTargetVoxel.gz) !== key(lastActionVoxelCoords.gx, lastActionVoxelCoords.gy, lastActionVoxelCoords.gz)) {
+            if (!lastActionVoxelCoords || key(currentTargetVoxel.gx, currentTargetVoxel.gy, currentTargetVoxel.gz) !== key(lastActionVoxelCoords.gx, lastActionVoxelCoords.gy, lastActionVoxelCoords.gz)) { // FIX: Changed 'lastTargetVoxel' to 'lastActionVoxelCoords'
                 if (lastActionVoxelCoords) {
                     drawLineOfVoxels(lastActionVoxelCoords, currentTargetVoxel, currentMode, currentColor, currentBlockSize);
                 } else {
