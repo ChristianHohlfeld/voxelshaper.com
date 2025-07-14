@@ -11,10 +11,10 @@
       content="width=device-width,initial-scale=1.0,maximum-scale=1.0,user-scalable=no,viewport-fit=cover">
 <link rel="icon" type="image/png" href="data:image/png;base64,iVBORw0KGgoAAAANl..."/>
 
-<meta name="twitter:card" content="summary_large_image">
-<meta name="twitter:title" content="VoxelShaper – Create in 3D, Effortlessly">
-<meta name="twitter:description" content="A powerful, intuitive voxel-based 3D editor – made for makers, artists, and coders.">
-<meta name="twitter:image" content="https://voxelshaper.com/preview.png">
+<meta name="twitter:card" content="summary_large_image">\
+<meta name="twitter:title" content="VoxelShaper – Create in 3D, Effortlessly">\
+<meta name="twitter:description" content="A powerful, intuitive voxel-based 3D editor – made for makers, artists, and coders.">\
+<meta name="twitter:image" content="https://voxelshaper.com/preview.png">\
 <title>VoxelShaper – Voxel Editor & 3D Print Exporter</title>
 <style>
 /* CSS für den Body mit Safe-Area-Anpassungen */
@@ -531,7 +531,7 @@ input[type="color"].color-preset-box::-moz-color-swatch {
             BLB
         </label>
         <label>
-            <input type="radio" name="anchor-point" value="BRB" id="anchor-brb" aria-label="Ankerpunkt: Unten-Rechts-Hinten">
+            <input type="radio" name="BRB" id="anchor-brb" aria-label="Ankerpunkt: Unten-Rechts-Hinten">
             BRB
         </label>
         <label>
@@ -970,7 +970,7 @@ let history = []; // Declared globally
 let historyPointer = -1; // Declared globally
 const MAX_HISTORY_SIZE = 100; // Limit history to prevent excessive memory usage
 
-// NEW: Global variable to track changes within a single user interaction (drag, multi-block placement)
+// NEW: Global object to store changes within a single user interaction (drag, multi-block placement)
 let currentBatchOfChanges = new Map(); // Map<globalVoxelKey, {initialColor: string|null, finalColor: string|null, dimX: number, dimY: number, dimZ: number}>
 
 // NEW: Global variables for image template
@@ -1194,10 +1194,10 @@ function handleGesture() {
     if (pointers.length === 1 && gestureState.type === 'rotate') {
         const p = pointers[0];
         const dx = p.x - gestureState.lastMid.x;
-        const dy = p.y - p.y; // Corrected: Should be p.y - gestureState.lastMid.y
+        const dy = p.y - gestureState.lastMid.y; // Fixed: Corrected typo from p.y - p.y
 
         euler.y -= dx * ROTATE_SPEED_TOUCH;
-        euler.x -= dy * ROTATE_SPEED_TOUCH;
+        euler.x += dy * ROTATE_SPEED_TOUCH; // Changed to += for intuitive vertical swipe
         euler.x = Math.max(-Math.PI / 2, Math.min(Math.PI / 2, euler.x));
         cam.quaternion.setFromEuler(euler);
 
@@ -1770,33 +1770,66 @@ function calculateTargetVoxelCoords(clientX, clientY, mode, isDragging, isStacki
     let targetVoxelCoords = null; // This will be the intended anchor point in grid coordinates
     let intersectionPoint = new THREE.Vector3();
 
-    // Priority 1: Fixed drag plane for ADD mode when dragging
-    // AND NOT Control-dragging (stacking)
-    if (isDragging && mode === Modes.ADD && !isStackingAdd && fixedDragPlaneParams.level !== null && fixedDragPlaneParams.axis !== null) {
-        let planeNormal = new THREE.Vector3();
-        if (fixedDragPlaneParams.axis === 'y') planeNormal.set(0, 1, 0);
-        else if (fixedDragPlaneParams.axis === 'x') planeNormal.set(1, 0, 0);
-        else planeNormal.set(0, 0, 1);
-        
-        const drawingPlane = new THREE.Plane(planeNormal, -(fixedDragPlaneParams.level * VS));
+    // When dragging (isDragging is true), we want to allow free movement for axis locking.
+    // The fixedDragPlaneParams are primarily for initial single-click placement or when nothing is hit.
+    if (isDragging && mode === Modes.ADD && !isStackingAdd) {
+         // When dragging, we don't force to a fixed plane based on the initial click.
+         // Instead, we allow the ray to intersect with existing voxels or the general grid.
+         // The axis locking will happen *after* this function returns.
+         const intersects = raycaster.intersectObjects(objectsToIntersect);
+         if (intersects.length > 0) {
+             const hit = intersects[0];
+             const hitNormal = hit.face.normal.clone();
+             intersectionPoint.copy(hit.point);
 
-        if (raycaster.ray.intersectPlane(drawingPlane, intersectionPoint)) {
-            let gx = Math.floor(intersectionPoint.x / VS);
-            let gy = Math.floor(intersectionPoint.y / VS);
-            let gz = Math.floor(intersectionPoint.z / VS);
+             const hitPointInside = hit.point.clone().sub(hitNormal.multiplyScalar(0.01));
+             const hitVoxelX = Math.floor(hitPointInside.x / VS);
+             const hitVoxelY = Math.floor(hitPointInside.y / VS);
+             const hitVoxelZ = Math.floor(hitPointInside.z / VS);
 
-            // Force the coordinate on the fixed axis to be the fixed level
-            if (fixedDragPlaneParams.axis === 'y') gy = fixedDragPlaneParams.level;
-            else if (fixedDragPlaneParams.axis === 'x') gx = fixedDragPlaneParams.level;
-            else if (fixedDragPlaneParams.axis === 'z') gz = fixedDragPlaneParams.level;
+             targetVoxelCoords = {
+                 gx: hitVoxelX + Math.round(hit.face.normal.x),
+                 gy: hitVoxelY + Math.round(hit.face.normal.y),
+                 gz: hitVoxelZ + Math.round(hit.face.normal.z)
+             };
+         } else {
+             // If nothing is hit during a drag, fall back to the active drawing level/axis
+             let planeNormal = new THREE.Vector3();
+             let planeConstant = 0;
+             if (currentDrawingAxis === 'y') {
+                 planeNormal.set(0, 1, 0);
+                 planeConstant = -(activeDrawingLevel.y * VS);
+             } else if (currentDrawingAxis === 'x') {
+                 planeNormal.set(1, 0, 0);
+                 planeConstant = -(activeDrawingLevel.x * VS);
+             } else if (currentDrawingAxis === 'z') {
+                 planeNormal.set(0, 0, 1);
+                 planeConstant = -(activeDrawingLevel.z * VS);
+             }
+             const drawingPlane = new THREE.Plane(planeNormal, planeConstant);
 
-            targetVoxelCoords = { gx, gy, gz };
-        } else {
-            // If ray does not intersect the fixed plane, it means the mouse is pointing away from it.
-            // In this specific dragging scenario with a fixed plane, we return null as no valid target
-            // can be found on the designated fixed plane.
-            return null; 
-        }
+             if (raycaster.ray.intersectPlane(drawingPlane, intersectionPoint)) {
+                 let gx = Math.floor(intersectionPoint.x / VS);
+                 let gy = Math.floor(intersectionPoint.y / VS);
+                 let gz = Math.floor(intersectionPoint.z / VS);
+
+                 if (currentDrawingAxis === 'y') gy = activeDrawingLevel.y;
+                 else if (currentDrawingAxis === 'x') gx = activeDrawingLevel.x;
+                 else if (currentDrawingAxis === 'z') gz = activeDrawingLevel.z;
+
+                 targetVoxelCoords = { gx, gy, gz };
+             } else {
+                 // If ray doesn't intersect, default to center of active drawing plane
+                 targetVoxelCoords = {
+                     gx: Math.floor(GRID / 2),
+                     gy: Math.floor(GRID / 2),
+                     gz: Math.floor(GRID / 2)
+                 };
+                 if (currentDrawingAxis === 'y') targetVoxelCoords.gy = activeDrawingLevel.y;
+                 else if (currentDrawingAxis === 'x') targetVoxelCoords.gx = activeDrawingLevel.x;
+                 else if (currentDrawingAxis === 'z') targetVoxelCoords.gz = activeDrawingLevel.z;
+             }
+         }
     }
     // Priority 2: General raycast for initial click, or non-ADD modes, or ADD mode without fixed drag plane
     // or when Control-dragging (stacking)
@@ -2118,7 +2151,175 @@ function resetToDefaultProject() {
     console.log('Project reset to default state.');
 }
 
+// Refactored function to load project data from a parsed JSON object
+function loadProjectData(projectData) {
+    try {
+        const loadedVoxels = projectData.voxels;
+        const loadedSettings = projectData.settings;
 
+        // Clear current state and history before loading new project
+        clearAllInternal(true); // Clear without adding to history
+
+        // Remove existing template image if any
+        removeImageTemplate(true); // true to prevent history logging for this internal operation
+
+        // NEW: Load project metadata fields into internal variables
+        projectTitle = projectData.title || '';
+        projectDescription = projectData.description || '';
+        projectTags = Array.isArray(projectData.tags) ? projectData.tags : (typeof projectData.tags === 'string' ? projectData.tags.split(',').map(tag => tag.trim()).filter(tag => tag !== '') : []);
+        projectRemixOf = projectData.remixOf || '';
+        projectSourceJsonUrl = projectData.sourceJsonUrl || '';
+        projectVisibility = projectData.visibility || 'public'; // Default to public if not found
+
+        // Load settings first to get the correct GRID size
+        if (loadedSettings) {
+            GRID = loadedSettings.gridSize !== undefined ? loadedSettings.gridSize : 10;
+            document.getElementById('grid-size-slider').value = GRID;
+            document.getElementById('grid-size-display').textContent = `${GRID}×${GRID}×${GRID}`;
+            localStorage.setItem('voxelEditorGridSize', GRID); // Ensure it's saved back
+            console.log("Loaded GRID size from JSON:", GRID);
+        } else {
+            console.warn("No settings found in JSON, using default GRID size.");
+        }
+
+        // Load voxels into the global map and create chunks as needed
+        for (const k in loadedVoxels) {
+            const colorValue = loadedVoxels[k];
+            const parts = k.split(',').map(Number); 
+            if (parts.length === 3 && !isNaN(parts[0]) && !isNaN(parts[1]) && !isNaN(parts[2])) {
+                const gx = parts[0];
+                const gy = parts[1];
+                const gz = parts[2];
+
+                // Only add if within the bounds of the newly loaded GRID size
+                if (gx >= 0 && gx < GRID && gy >= 0 && gy < GRID && gz >= 0 && gz < GRID) {
+                    _addSingleVoxel(gx, gy, gz, colorValue); // Use internal helper
+                }
+            }
+        }
+
+        // Continue loading other settings after GRID is set and InstancedMesh is re-initialized
+        if (loadedSettings) {
+            if (loadedSettings.cameraPosition) {
+                cam.position.fromArray(loadedSettings.cameraPosition);
+            }
+            if (loadedSettings.cameraQuaternion) {
+                cam.quaternion.fromArray(loadedSettings.cameraQuaternion);
+                euler.setFromQuaternion(cam.quaternion, 'YXZ');
+            }
+            if (loadedSettings.activeDrawingLevel) {
+                activeDrawingLevel = { ...loadedSettings.activeDrawingLevel };
+                localStorage.setItem('voxelEditorActiveDrawingLevelX', activeDrawingLevel.x);
+                localStorage.setItem('voxelEditorActiveDrawingLevelY', activeDrawingLevel.y);
+                localStorage.setItem('voxelEditorActiveDrawingLevelZ', activeDrawingLevel.z);
+            }
+            if (loadedSettings.currentDrawingAxis) {
+                currentDrawingAxis = loadedSettings.currentDrawingAxis;
+                localStorage.setItem('voxelEditorCurrentDrawingAxis', currentDrawingAxis);
+            }
+            updateGridHelperPosition();
+
+            currentColor = loadedSettings.currentColor || '#ffffff';
+            document.getElementById('color-picker').value = currentColor;
+
+            if (loadedSettings.presetColors) {
+                for(let i = 0; i < loadedSettings.presetColors.length && i < presetColors.length; i++) {
+                    presetColors[i] = loadedSettings.presetColors[i];
+                    // For input type="color", setting value directly updates its visual
+                    document.getElementById(`color-preset-${i + 1}`).value = presetColors[i];
+                    localStorage.setItem(`voxelPresetColor${i + 1}`, presetColors[i]);
+                }
+            }
+            setActivePreset(loadedSettings.activePresetIndex !== undefined ? loadedSettings.activePresetIndex : -1);
+
+            if (loadedSettings.moveSpeed !== undefined) {
+                moveSpeed = loadedSettings.moveSpeed;
+                document.getElementById('fly-speed-slider').value = moveSpeed;
+                document.getElementById('fly-speed-display').textContent = moveSpeed.toFixed(2);
+                localStorage.setItem('voxelEditorFlySpeed', moveSpeed);
+            }
+
+            if (loadedSettings.currentBlockSize !== undefined) {
+                setFixedBlockSize(loadedSettings.currentBlockSize); // Use setFixedBlockSize
+                localStorage.setItem('voxelEditorCurrentBlockSize', currentBlockSize);
+            }
+
+            // NEW: Load dynamic block dimensions and flag
+            if (loadedSettings.dynamicBlockDim) {
+                dynamicBlockDim = { ...loadedSettings.dynamicBlockDim };
+                document.getElementById('dynamic-block-x').value = dynamicBlockDim.x;
+                document.getElementById('dynamic-block-y').value = dynamicBlockDim.y;
+                document.getElementById('dynamic-block-z').value = dynamicBlockDim.z;
+                localStorage.setItem('voxelEditorDynamicBlockDimX', dynamicBlockDim.x);
+                localStorage.setItem('voxelEditorDynamicBlockDimY', dynamicBlockDim.y);
+                localStorage.setItem('voxelEditorDynamicBlockDimZ', dynamicBlockDim.z);
+            }
+            if (loadedSettings.useDynamicBlockDim !== undefined) {
+                useDynamicBlockDim = loadedSettings.useDynamicBlockDim;
+                localStorage.setItem('voxelEditorUseDynamicBlockDim', useDynamicBlockDim);
+            }
+            updateBlockSizeButtonsActiveState(); // Update active state for buttons
+
+            // NEW: Load anchor point
+            if (loadedSettings.currentAnchorPoint) {
+                currentAnchorPoint = { ...loadedSettings.currentAnchorPoint };
+                localStorage.setItem('voxelEditorAnchorPoint', JSON.stringify(currentAnchorPoint));
+                // Update UI radio button
+                const anchorId = getAnchorPointRadioId(currentAnchorPoint);
+                const radioBtn = document.getElementById(anchorId);
+                if (radioBtn) radioBtn.checked = true;
+            }
+
+
+            if (loadedSettings.templateImageData) {
+                templateImageData = loadedSettings.templateImageData;
+                console.log("Loading template image data:", templateImageData);
+                const loader = new THREE.TextureLoader();
+                loader.load(templateImageData.src, (texture) => {
+                    const material = new THREE.MeshBasicMaterial({ map: texture, side: THREE.DoubleSide, transparent: true, depthWrite: false });
+                    const geometry = new THREE.PlaneGeometry(templateImageData.scaledWidth, templateImageData.scaledHeight);
+                    if (templateImageMesh) {
+                        scene.remove(templateImageMesh);
+                        templateImageMesh.geometry.dispose();
+                        templateImageMesh.material.dispose();
+                    }
+                    templateImageMesh = new THREE.Mesh(geometry, material);
+                    templateImageMesh.position.fromArray(templateImageData.position);
+                    templateImageMesh.rotation.fromArray(templateImageData.rotation);
+                    templateImageMesh.scale.fromArray(templateImageData.scale);
+                    templateImageMesh.renderOrder = -1;
+                    scene.add(templateImageMesh);
+                    document.getElementById('removeImageTemplateBtn').style.display = 'inline-block';
+                }, undefined, (err) => {
+                    console.error('Error loading template image texture:', err);
+                    templateImageMesh = null;
+                    templateImageData = null;
+                    document.getElementById('removeImageTemplateBtn').style.display = 'none';
+                });
+            }
+        }
+
+        history.length = 0;
+        historyPointer = -1;
+
+        // Reset measurement state on load
+        measurementStartPoint = null;
+        measurementEndPoint = null;
+        distanceDisplay.style.display = 'none';
+        previewLineInstancedMesh.count = 0; // Clear preview line
+        previewLineInstancedMesh.instanceMatrix.needsUpdate = true;
+        previewLineVoxels = [];
+
+        console.log('Project loaded successfully.');
+        resetCameraPosition();
+    } catch (error) {
+        console.error('Error loading JSON file:', error);
+        showMessageModal('Fehler', 'Fehler beim Laden der Datei. Stellen Sie sicher, dass es sich um eine gültige Voxel-Projekt-JSON-Datei handelt. Fehler: ' + error.message);
+        resetToDefaultProject(); // Reset to safe state on error
+    }
+}
+
+// Original loadJSON function, now calls loadProjectData
 function loadJSON(event) {
     const file = event.target.files[0];
     if (!file) return;
@@ -2127,168 +2328,11 @@ function loadJSON(event) {
     reader.onload = (e) => {
         try {
             const projectData = JSON.parse(e.target.result);
-            const loadedVoxels = projectData.voxels;
-            const loadedSettings = projectData.settings;
-
-            // Clear current state and history before loading new project
-            clearAllInternal(true); // Clear without adding to history
-
-            // Remove existing template image if any
-            removeImageTemplate(true); // true to prevent history logging for this internal operation
-
-            // NEW: Load project metadata fields into internal variables
-            projectTitle = projectData.title || '';
-            projectDescription = projectData.description || '';
-            projectTags = Array.isArray(projectData.tags) ? projectData.tags : (typeof projectData.tags === 'string' ? projectData.tags.split(',').map(tag => tag.trim()).filter(tag => tag !== '') : []);
-            projectRemixOf = projectData.remixOf || '';
-            projectSourceJsonUrl = projectData.sourceJsonUrl || '';
-            projectVisibility = projectData.visibility || 'public'; // Default to public if not found
-
-            // Load settings first to get the correct GRID size
-            if (loadedSettings) {
-                GRID = loadedSettings.gridSize !== undefined ? loadedSettings.gridSize : 10;
-                document.getElementById('grid-size-slider').value = GRID;
-                document.getElementById('grid-size-display').textContent = `${GRID}×${GRID}×${GRID}`;
-                localStorage.setItem('voxelEditorGridSize', GRID); // Ensure it's saved back
-                console.log("Loaded GRID size from JSON:", GRID);
-            } else {
-                console.warn("No settings found in JSON, using default GRID size.");
-            }
-
-            // Load voxels into the global map and create chunks as needed
-            for (const k in loadedVoxels) {
-                const colorValue = loadedVoxels[k];
-                const parts = k.split(',').map(Number); 
-                if (parts.length === 3 && !isNaN(parts[0]) && !isNaN(parts[1]) && !isNaN(parts[2])) {
-                    const gx = parts[0];
-                    const gy = parts[1];
-                    const gz = parts[2];
-
-                    // Only add if within the bounds of the newly loaded GRID size
-                    if (gx >= 0 && gx < GRID && gy >= 0 && gy < GRID && gz >= 0 && gz < GRID) {
-                        _addSingleVoxel(gx, gy, gz, colorValue); // Use internal helper
-                    }
-                }
-            }
-
-            // Continue loading other settings after GRID is set and InstancedMesh is re-initialized
-            if (loadedSettings) {
-                if (loadedSettings.cameraPosition) {
-                    cam.position.fromArray(loadedSettings.cameraPosition);
-                }
-                if (loadedSettings.cameraQuaternion) {
-                    cam.quaternion.fromArray(loadedSettings.cameraQuaternion);
-                    euler.setFromQuaternion(cam.quaternion, 'YXZ');
-                }
-                if (loadedSettings.activeDrawingLevel) {
-                    activeDrawingLevel = { ...loadedSettings.activeDrawingLevel };
-                    localStorage.setItem('voxelEditorActiveDrawingLevelX', activeDrawingLevel.x);
-                    localStorage.setItem('voxelEditorActiveDrawingLevelY', activeDrawingLevel.y);
-                    localStorage.setItem('voxelEditorActiveDrawingLevelZ', activeDrawingLevel.z);
-                }
-                if (loadedSettings.currentDrawingAxis) {
-                    currentDrawingAxis = loadedSettings.currentDrawingAxis;
-                    localStorage.setItem('voxelEditorCurrentDrawingAxis', currentDrawingAxis);
-                }
-                updateGridHelperPosition();
-
-                currentColor = loadedSettings.currentColor || '#ffffff';
-                document.getElementById('color-picker').value = currentColor;
-
-                if (loadedSettings.presetColors) {
-                    for(let i = 0; i < loadedSettings.presetColors.length && i < presetColors.length; i++) {
-                        presetColors[i] = loadedSettings.presetColors[i];
-                        // For input type="color", setting value directly updates its visual
-                        document.getElementById(`color-preset-${i + 1}`).value = presetColors[i];
-                        localStorage.setItem(`voxelPresetColor${i + 1}`, presetColors[i]);
-                    }
-                }
-                setActivePreset(loadedSettings.activePresetIndex !== undefined ? loadedSettings.activePresetIndex : -1);
-
-                if (loadedSettings.moveSpeed !== undefined) {
-                    moveSpeed = loadedSettings.moveSpeed;
-                    document.getElementById('fly-speed-slider').value = moveSpeed;
-                    document.getElementById('fly-speed-display').textContent = moveSpeed.toFixed(2);
-                    localStorage.setItem('voxelEditorFlySpeed', moveSpeed);
-                }
-
-                if (loadedSettings.currentBlockSize !== undefined) {
-                    setFixedBlockSize(loadedSettings.currentBlockSize); // Use setFixedBlockSize
-                    localStorage.setItem('voxelEditorCurrentBlockSize', currentBlockSize);
-                }
-
-                // NEW: Load dynamic block dimensions and flag
-                if (loadedSettings.dynamicBlockDim) {
-                    dynamicBlockDim = { ...loadedSettings.dynamicBlockDim };
-                    document.getElementById('dynamic-block-x').value = dynamicBlockDim.x;
-                    document.getElementById('dynamic-block-y').value = dynamicBlockDim.y;
-                    document.getElementById('dynamic-block-z').value = dynamicBlockDim.z;
-                    localStorage.setItem('voxelEditorDynamicBlockDimX', dynamicBlockDim.x);
-                    localStorage.setItem('voxelEditorDynamicBlockDimY', dynamicBlockDim.y);
-                    localStorage.setItem('voxelEditorDynamicBlockDimZ', dynamicBlockDim.z);
-                }
-                if (loadedSettings.useDynamicBlockDim !== undefined) {
-                    useDynamicBlockDim = loadedSettings.useDynamicBlockDim;
-                    localStorage.setItem('voxelEditorUseDynamicBlockDim', useDynamicBlockDim);
-                }
-                updateBlockSizeButtonsActiveState(); // Update active state for buttons
-
-                // NEW: Load anchor point
-                if (loadedSettings.currentAnchorPoint) {
-                    currentAnchorPoint = { ...loadedSettings.currentAnchorPoint };
-                    localStorage.setItem('voxelEditorAnchorPoint', JSON.stringify(currentAnchorPoint));
-                    // Update UI radio button
-                    const anchorId = getAnchorPointRadioId(currentAnchorPoint);
-                    const radioBtn = document.getElementById(anchorId);
-                    if (radioBtn) radioBtn.checked = true;
-                }
-
-
-                if (loadedSettings.templateImageData) {
-                    templateImageData = loadedSettings.templateImageData;
-                    console.log("Loading template image data:", templateImageData);
-                    const loader = new THREE.TextureLoader();
-                    loader.load(templateImageData.src, (texture) => {
-                        const material = new THREE.MeshBasicMaterial({ map: texture, side: THREE.DoubleSide, transparent: true, depthWrite: false });
-                        const geometry = new THREE.PlaneGeometry(templateImageData.scaledWidth, templateImageData.scaledHeight);
-                        if (templateImageMesh) {
-                            scene.remove(templateImageMesh);
-                            templateImageMesh.geometry.dispose();
-                            templateImageMesh.material.dispose();
-                        }
-                        templateImageMesh = new THREE.Mesh(geometry, material);
-                        templateImageMesh.position.fromArray(templateImageData.position);
-                        templateImageMesh.rotation.fromArray(templateImageData.rotation);
-                        templateImageMesh.scale.fromArray(templateImageData.scale);
-                        templateImageMesh.renderOrder = -1;
-                        scene.add(templateImageMesh);
-                        document.getElementById('removeImageTemplateBtn').style.display = 'inline-block';
-                    }, undefined, (err) => {
-                        console.error('Error loading template image texture:', err);
-                        templateImageMesh = null;
-                        templateImageData = null;
-                        document.getElementById('removeImageTemplateBtn').style.display = 'none';
-                    });
-                }
-            }
-
-            history.length = 0;
-            historyPointer = -1;
-
-            // Reset measurement state on load
-            measurementStartPoint = null;
-            measurementEndPoint = null;
-            distanceDisplay.style.display = 'none';
-            previewLineInstancedMesh.count = 0; // Clear preview line
-            previewLineInstancedMesh.instanceMatrix.needsUpdate = true;
-            previewLineVoxels = [];
-
-            console.log('Project loaded successfully.');
-            resetCameraPosition();
+            loadProjectData(projectData);
         } catch (error) {
-            console.error('Error loading JSON file:', error);
-            showMessageModal('Fehler', 'Fehler beim Laden der Datei. Stellen Sie sicher, dass es sich um eine gültige Voxel-Projekt-JSON-Datei handelt. Fehler: ' + error.message);
-            resetToDefaultProject(); // Reset to safe state on error
+            console.error('Error parsing file JSON:', error);
+            showMessageModal('Fehler', 'Fehler beim Parsen der Datei. Stellen Sie sicher, dass es sich um eine gültige JSON-Datei handelt. Fehler: ' + error.message);
+            resetToDefaultProject();
         }
     };
     reader.readAsText(file);
@@ -2717,7 +2761,7 @@ window.onload = function() {
     document.getElementById('loadBtn').addEventListener('click', () => {
         document.getElementById('fileInput').click();
     });
-    document.getElementById('fileInput').addEventListener('change', loadJSON);
+    document.getElementById('fileInput').addEventListener('change', loadJSON); // This now calls the refactored loadJSON
     document.getElementById('exportStlBtn').addEventListener('click', exportSTL);
 
     document.getElementById('exportObjBtn').addEventListener('click', exportOBJ);
@@ -2883,6 +2927,31 @@ window.onload = function() {
     const initialAnchorId = getAnchorPointRadioId(currentAnchorPoint);
     const initialRadioBtn = document.getElementById(initialAnchorId);
     if (initialRadioBtn) initialRadioBtn.checked = true;
+
+    // --- NEW: Check for projectJson URL parameter on load ---
+    const urlParams = new URLSearchParams(window.location.search);
+    const encodedJson = urlParams.get('projectJson');
+
+    if (encodedJson) {
+        try {
+            const decodedJsonString = decodeURIComponent(encodedJson);
+            const projectData = JSON.parse(decodedJsonString);
+            loadProjectData(projectData); // Load project from URL
+            console.log("Project loaded from URL parameter.");
+        } catch (error) {
+            console.error("Error loading project from URL parameter:", error);
+            showMessageModal('Fehler', 'Fehler beim Laden des Projekts aus der URL. Ungültige oder beschädigte Projektdaten. Fehler: ' + error.message);
+            resetToDefaultProject(); // Reset to default if URL load fails
+        }
+    } else {
+        // If no URL parameter, load default project or from local storage
+        // This part remains as it was, ensuring the editor starts with a usable state
+        // if no URL parameter is provided.
+        console.log("No projectJson URL parameter found. Loading default or local storage project.");
+        // Existing logic for loading from local storage or starting fresh
+        // (already handled by the initial variable assignments and UI updates)
+    }
+    // --- END NEW URL PARAMETER LOGIC ---
 
     animate();
 }; // END window.onload
@@ -3141,6 +3210,7 @@ function onPointerDown(e) {
 
         // Determine the fixed drawing plane based on modifier keys (Shift/Control) ONLY IF IN ADD mode
         // NEW: If Control is pressed, we don't set a fixed plane for stacking, as it should be vertical from the start.
+        // This is only for the *initial* click. For dragging, `fixedDragPlaneParams` will be overridden by axis lock.
         if (currentMode === Modes.ADD && !isControlDragging) {
             setFixedDragPlane(e.clientX, e.clientY, currentMode);
         } else {
@@ -3216,24 +3286,17 @@ function onPointerMove(e) {
                 }
 
                 if (dragAxisLock) {
-                    const snappedTargetVoxel = { ...initialDragVoxelCoords };
-                    if (dragAxisLock === 'x') snappedTargetVoxel.gx = currentTargetVoxel.gx;
-                    else if (dragAxisLock === 'y') {
-                        // For Y-axis lock, get the Y coordinate from the ray intersection with an XZ plane
-                        const tempPlane = new THREE.Plane(new THREE.Vector3(0, 1, 0), -(initialDragVoxelCoords.gy * VS));
-                        const raycaster = new THREE.Raycaster();
-                        const rect = cvs.getBoundingClientRect();
-                        const mouse = new THREE.Vector2(((e.clientX - rect.left) / rect.width) * 2 - 1,
-                                                        -((e.clientY - rect.top) / rect.height) * 2 + 1);
-                        raycaster.setFromCamera(mouse, cam);
-                        const intersectionPoint = new THREE.Vector3();
-                        if (raycaster.ray.intersectPlane(tempPlane, intersectionPoint)) {
-                            snappedTargetVoxel.gy = Math.floor(intersectionPoint.y / VS);
-                        } else {
-                            // If ray doesn't intersect, keep the current Y to avoid jumps
-                            snappedTargetVoxel.gy = currentTargetVoxel.gy;
-                        }
-                    } else snappedTargetVoxel.gz = currentTargetVoxel.gz;
+                    const snappedTargetVoxel = { ...currentTargetVoxel }; // Start with current target
+                    if (dragAxisLock === 'x') {
+                        snappedTargetVoxel.gy = initialDragVoxelCoords.gy;
+                        snappedTargetVoxel.gz = initialDragVoxelCoords.gz;
+                    } else if (dragAxisLock === 'y') {
+                        snappedTargetVoxel.gx = initialDragVoxelCoords.gx;
+                        snappedTargetVoxel.gz = initialDragVoxelCoords.gz;
+                    } else if (dragAxisLock === 'z') {
+                        snappedTargetVoxel.gx = initialDragVoxelCoords.gx;
+                        snappedTargetVoxel.gy = initialDragVoxelCoords.gy;
+                    }
                     currentTargetVoxel = snappedTargetVoxel; // Use the snapped target for drawing
                 }
 
@@ -3347,25 +3410,18 @@ function onPointerMove(e) {
                 }
 
                 if (dragAxisLock) {
-                    const snappedTargetVoxel = { ...initialDragVoxelCoords };
-                    if (dragAxisLock === 'x') snappedTargetVoxel.gx = currentTargetVoxel.gx;
-                    else if (dragAxisLock === 'y') {
-                        // For Y-axis lock, get the Y coordinate from the ray intersection with an XZ plane
-                        const tempPlane = new THREE.Plane(new THREE.Vector3(0, 1, 0), -(initialDragVoxelCoords.gy * VS));
-                        const raycaster = new THREE.Raycaster();
-                        const rect = cvs.getBoundingClientRect();
-                        const mouse = new THREE.Vector2(((e.clientX - rect.left) / rect.width) * 2 - 1,
-                                                        -((e.clientY - rect.top) / rect.height) * 2 + 1);
-                        raycaster.setFromCamera(mouse, cam);
-                        const intersectionPoint = new THREE.Vector3();
-                        if (raycaster.ray.intersectPlane(tempPlane, intersectionPoint)) {
-                            snappedTargetVoxel.gy = Math.floor(intersectionPoint.y / VS);
-                        } else {
-                            // If ray doesn't intersect, keep the current Y to avoid jumps
-                            snappedTargetVoxel.gy = currentTargetVoxel.gy;
-                        }
-                    } else snappedTargetVoxel.gz = currentTargetVoxel.gz;
-                    currentTargetVoxel = snappedTargetVoxel;
+                    const snappedTargetVoxel = { ...currentTargetVoxel }; // Start with current target
+                    if (dragAxisLock === 'x') {
+                        snappedTargetVoxel.gy = initialDragVoxelCoords.gy;
+                        snappedTargetVoxel.gz = initialDragVoxelCoords.gz;
+                    } else if (dragAxisLock === 'y') {
+                        snappedTargetVoxel.gx = initialDragVoxelCoords.gx;
+                        snappedTargetVoxel.gz = initialDragVoxelCoords.gz;
+                    } else if (dragAxisLock === 'z') {
+                        snappedTargetVoxel.gx = initialDragVoxelCoords.gx;
+                        snappedTargetVoxel.gy = initialDragVoxelCoords.gy;
+                    }
+                    currentTargetVoxel = snappedTargetVoxel; // Use the snapped target for drawing
                 }
             }
 
@@ -3438,23 +3494,17 @@ function onPointerUp(e) {
                 // NEW: Apply axis snapping to the final target voxel
                 // For touch, we don't have a separate "Control" key, so only general dragAxisLock applies
                 if (dragAxisLock) {
-                    const snappedFinalTargetVoxel = { ...initialDragVoxelCoords };
-                    if (dragAxisLock === 'x') snappedFinalTargetVoxel.gx = finalTargetVoxel.gx;
-                    else if (dragAxisLock === 'y') {
-                        // For Y-axis lock, get the Y coordinate from the ray intersection with an XZ plane
-                        const tempPlane = new THREE.Plane(new THREE.Vector3(0, 1, 0), -(initialDragVoxelCoords.gy * VS));
-                        const raycaster = new THREE.Raycaster();
-                        const rect = cvs.getBoundingClientRect();
-                        const mouse = new THREE.Vector2(((e.clientX - rect.left) / rect.width) * 2 - 1,
-                                                        -((e.clientY - rect.top) / rect.height) * 2 + 1);
-                        raycaster.setFromCamera(mouse, cam);
-                        const intersectionPoint = new THREE.Vector3();
-                        if (raycaster.ray.intersectPlane(tempPlane, intersectionPoint)) {
-                            snappedFinalTargetVoxel.gy = Math.floor(intersectionPoint.y / VS);
-                        } else {
-                            snappedFinalTargetVoxel.gy = finalTargetVoxel.gy; // Fallback
-                        }
-                    } else snappedFinalTargetVoxel.gz = finalTargetVoxel.gz;
+                    const snappedFinalTargetVoxel = { ...finalTargetVoxel }; // Start with current target
+                    if (dragAxisLock === 'x') {
+                        snappedFinalTargetVoxel.gy = initialDragVoxelCoords.gy;
+                        snappedFinalTargetVoxel.gz = initialDragVoxelCoords.gz;
+                    } else if (dragAxisLock === 'y') {
+                        snappedFinalTargetVoxel.gx = initialDragVoxelCoords.gx;
+                        snappedFinalTargetVoxel.gz = initialDragVoxelCoords.gz;
+                    } else if (dragAxisLock === 'z') {
+                        snappedFinalTargetVoxel.gx = initialDragVoxelCoords.gx;
+                        snappedFinalTargetVoxel.gy = initialDragVoxelCoords.gy;
+                    }
                     finalTargetVoxel = snappedFinalTargetVoxel;
                 }
 
@@ -3527,23 +3577,17 @@ function onPointerUp(e) {
                         finalTargetVoxel.gx = initialDragVoxelCoords.gx;
                         finalTargetVoxel.gz = initialDragVoxelCoords.gz;
                     } else if (dragAxisLock) { // Existing axis snapping for general line drawing
-                        const snappedFinalTargetVoxel = { ...initialDragVoxelCoords };
-                        if (dragAxisLock === 'x') snappedFinalTargetVoxel.gx = finalTargetVoxel.gx;
-                        else if (dragAxisLock === 'y') {
-                            // For Y-axis lock, get the Y coordinate from the ray intersection with an XZ plane
-                            const tempPlane = new THREE.Plane(new THREE.Vector3(0, 1, 0), -(initialDragVoxelCoords.gy * VS));
-                            const raycaster = new THREE.Raycaster();
-                            const rect = cvs.getBoundingClientRect();
-                            const mouse = new THREE.Vector2(((e.clientX - rect.left) / rect.width) * 2 - 1,
-                                                            -((e.clientY - rect.top) / rect.height) * 2 + 1);
-                            raycaster.setFromCamera(mouse, cam);
-                            const intersectionPoint = new THREE.Vector3();
-                            if (raycaster.ray.intersectPlane(tempPlane, intersectionPoint)) {
-                                snappedFinalTargetVoxel.gy = Math.floor(intersectionPoint.y / VS);
-                            } else {
-                                snappedFinalTargetVoxel.gy = finalTargetVoxel.gy; // Fallback
-                            }
-                        } else snappedFinalTargetVoxel.gz = finalTargetVoxel.gz;
+                        const snappedFinalTargetVoxel = { ...finalTargetVoxel }; // Start with current target
+                        if (dragAxisLock === 'x') {
+                            snappedFinalTargetVoxel.gy = initialDragVoxelCoords.gy;
+                            snappedFinalTargetVoxel.gz = initialDragVoxelCoords.gz;
+                        } else if (dragAxisLock === 'y') {
+                            snappedFinalTargetVoxel.gx = initialDragVoxelCoords.gx;
+                            snappedFinalTargetVoxel.gz = initialDragVoxelCoords.gz;
+                        } else if (dragAxisLock === 'z') {
+                            snappedFinalTargetVoxel.gx = initialDragVoxelCoords.gx;
+                            snappedFinalTargetVoxel.gy = initialDragVoxelCoords.gy;
+                        }
                         finalTargetVoxel = snappedFinalTargetVoxel;
                     }
 
