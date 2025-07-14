@@ -1,3551 +1,713 @@
 <!DOCTYPE html>
-<html lang="de">
+<html lang="de" data-theme="dark">
 <head>
-<meta charset="UTF-8">
-<meta property="og:title" content="VoxelShaper – Create in 3D, Effortlessly" />
-<meta property="og:description" content="A powerful, intuitive voxel-based 3D editor – made for makers, artists, and coders." />
-<meta property="og:image" content="https://voxelshaper.com/preview.png" />
-<meta property="og:url" content="https://voxelshaper.com/" />
-<meta property="og:type" content="website" />
-<meta name="viewport"
-      content="width=device-width,initial-scale=1.0,maximum-scale=1.0,user-scalable=no,viewport-fit=cover">
-<link rel="icon" type="image/png" href="data:image/png;base64,iVBORw0KGgoAAAANl..."/>
-
-<meta name="twitter:card" content="summary_large_image">
-<meta name="twitter:title" content="VoxelShaper – Create in 3D, Effortlessly">
-<meta name="twitter:description" content="A powerful, intuitive voxel-based 3D editor – made for makers, artists, and coders.">
-<meta name="twitter:image" content="https://voxelshaper.com/preview.png">
-<title>VoxelShaper – Voxel Editor & 3D Print Exporter</title>
-<style>
-/* CSS für den Body mit Safe-Area-Anpassungen */
-body {
-    margin: 0;
-    overflow: hidden;
-    font-family: sans-serif;
-    display: flex;
-    flex-direction: column;
-    height: 100vh;
-    background: #282c34;
-    color: #e0e0e0;
-
-    /* --- WICHTIG: ANPASSUNGEN FÜR SICHERE BEREICHE --- */
-    /* Verschiebt den Inhalt nach unten, um Platz für die Statusleiste/Notch zu schaffen */
-    padding-top: env(safe-area-inset-top);
-    /* Fügt Polsterung für den unteren Bereich hinzu (z.B. für Home-Indikatoren auf iPhones) */
-    padding-bottom: env(safe-area-inset-bottom);
-    padding-left: env(safe-area-inset-left);
-    padding-right: env(safe-area-inset-right);
-    /* Entscheidend: Stellt sicher, dass das Padding in der 100vh Höhe enthalten ist */
-    box-sizing: border-box;
-    /* NEW: Prevent full page zoom on mobile */
-    touch-action: pan-x pan-y;
-    /* NEW: Prevent text selection */
-    -webkit-user-select: none;
-    -moz-user-select: none;
-    user-select: none;
-}
-
-/* verhindert, dass das OS den Canvas als Text selektiert */
-canvas, body, #container{
-    -webkit-user-select: none;
-    -moz-user-select: none;
-    user-select: none;
-    -webkit-touch-callout: none;    /* iOS Kontextmenü */
-}
-#controls{padding:14px;background:#3a3f47;border-bottom:1px solid #4a4f57;display:flex;flex-wrap:wrap;gap:12px;justify-content:center;align-items:center}
-#controls button,#controls label{padding:8px 18px;border:none;border-radius:5px;font-size:1em;background:#555c66;color:#e0e0e0;cursor:pointer}
-#controls button:hover{background:#6a727f}
-#grid-size-display{font-weight:700;color:#90caf9}
-#current-mode{
-    font-weight:700;
-    color:#81c784;
-    min-width: 160px; /* Fixed width */
-    max-width: 160px; /* Fixed width */
-    text-align: center; /* Center the text */
-}
-#container{
-    flex:1;
-    position:relative;
-    border: 2px solid transparent; /* Default border for the container */
-    box-sizing: border-box; /* Ensure border doesn't push content out */
-    overflow: hidden; /* Prevent canvas border from overflowing if issues persist */
-    /* Prevent accidental zooming */
-    touch-action: none;
-}
-canvas{
-    width:100%;
-    height:100%;
-    display: block; /* Ensure canvas behaves as a block element */
-    box-sizing: border-box; /* Ensure border (if added back) doesn't push content out */
-}
-.info-box{
-    position:absolute;
-    bottom:18px;
-    left:18px;
-    padding:12px;
-    border-radius:8px;
-    font-size:.85em;
-    background:rgba(0,0,0,.6);
-    pointer-events:none;
-    /* Default to hidden, will be controlled by JS based on local storage */
-    display: none;
-}
-.info-box strong{color:#90caf9}
-#fileInput{display:none}
-
-/* Slider-Stil */
-input[type="range"] {
-    -webkit-appearance: none;
-    width: 150px;
-    height: 8px;
-    background: #4a4f57;
-    border-radius: 5px;
-    outline: none;
-    opacity: 0.8;
-    transition: opacity .2s;
-    margin-left: 10px;
-    margin-right: 10px;
-}
-input[type="range"]:hover {
-    opacity: 1;
-}
-input[type="range"]::-webkit-slider-thumb {
-    -webkit-appearance: none;
-    appearance: none;
-    width: 20px;
-    height: 20px;
-    border-radius: 50%;
-    background: #90caf9;
-    cursor: pointer;
-}
-input[type="range"]::-moz-range-thumb {
-    width: 20px;
-    height: 20px;
-    border-radius: 50%;
-    background: #90caf9;
-    cursor: pointer;
-}
-/* Color Picker Styling - MADE ROUND */
-input[type="color"] {
-    -webkit-appearance: none;
-    -moz-appearance: none;
-    appearance: none;
-    width: 38px;
-    height: 38px;
-    border: none;
-    border-radius: 50%; /* Made round */
-    background-color: transparent;
-    cursor: pointer;
-    padding: 0;
-    vertical-align: middle;
-}
-input[type="color"]::-webkit-color-swatch-wrapper {
-    padding: 0;
-}
-input[type="color"]::-webkit-color-swatch {
-    border: 1px solid #555c66;
-    border-radius: 50%; /* Made round */
-}
-input[type="color"]::-moz-color-swatch-wrapper {
-    padding: 0;
-}
-input[type="color"]::-moz-color-swatch {
-    border: 1px solid #555c66;
-    border-radius: 50%;
-}
-
-/* Style for the preset color boxes - KEPT RECTANGULAR */
-/* NEW: Apply to input[type="color"] as well */
-.color-preset-box, input[type="color"].color-preset-box {
-    width: 38px;
-    height: 38px;
-    border-radius: 5px; /* Kept rectangular */
-    border: 2px solid #555c66;
-    cursor: pointer;
-    display: inline-block;
-    vertical-align: middle;
-    box-sizing: border-box;
-    transition: transform 0.1s ease-in-out, border-color 0.2s ease-in-out, box-shadow 0.2s ease-in-out;
-    /* Ensure input type color specific styles are overridden for rectangular shape */
-    -webkit-appearance: none;
-    -moz-appearance: none;
-    appearance: none;
-    padding: 0;
-}
-
-input[type="color"].color-preset-box::-webkit-color-swatch-wrapper {
-    padding: 0;
-}
-input[type="color"].color-preset-box::-webkit-color-swatch {
-    border: none; /* Remove inner border from default swatch */
-    border-radius: 3px; /* Slightly smaller radius than outer for visual effect */
-}
-input[type="color"].color-preset-box::-moz-color-swatch-wrapper {
-    padding: 0;
-}
-input[type="color"].color-preset-box::-moz-color-swatch {
-    border: none;
-    border-radius: 3px;
-}
-
-
-.color-preset-box:hover, input[type="color"].color-preset-box:hover {
-    transform: scale(1.1);
-}
-.color-preset-box.active, input[type="color"].color-preset-box.active {
-    border-color: #90caf9;
-    box-shadow: 0 0 8px rgba(144, 202, 249, 0.7);
-}
-
-/* Modal Styles */
-.modal {
-    display: none;
-    position: fixed;
-    z-index: 1000;
-    left: 0;
-    top: 0;
-    width: 100%;
-    height: 100%;
-    background-color: rgba(0, 0, 0, 0.7);
-    align-items: center;
-    justify-content: center;
-}
-
-.modal-content {
-    background-color: #3a3f47;
-    margin: auto;
-    padding: 30px;
-    border-radius: 8px;
-    text-align: center;
-    box-shadow: 0 4px 8px rgba(0,0,0,.2);
-    max-width: 400px;
-    color: #e0e0e0;
-}
-
-.modal-content h3 {
-    margin-top: 0;
-    color: #90caf9;
-}
-
-.modal-buttons {
-    margin-top: 25px;
-    display: flex;
-    justify-content: space-around;
-    gap: 10px;
-}
-
-.modal-buttons button {
-    padding: 10px 20px;
-    border: none;
-    border-radius: 5px;
-    cursor: pointer;
-    font-size: 1em;
-    flex-grow: 1;
-}
-
-.modal-buttons button.confirm-save {
-    background-color: #4CAF50; /* Green */
-    color: white;
-}
-
-.modal-buttons button.confirm-no-save {
-    background-color: #f44336; /* Red */
-    color: white;
-}
-
-.modal-buttons button.cancel {
-    background-color: #555c66; /* Grey */
-    color: #e0e0e0;
-}
-
-.modal-buttons button:hover {
-    opacity: 0.9;
-}
-
-/* ---------------------------------------------------
-    HAMBURGER-BUTTON
-    --------------------------------------------------- */
-#menuToggle{
-    position: fixed;
-    /* top: 10px; <-- DIESE ZEILE WIRD GEÄNDERT! */
-    top: calc(10px + env(safe-area-inset-top)); /* <-- NEU: Verschiebt es um 10px + Safe-Area nach unten */
-    right: 10px;
-    z-index: 1500;             /* über allen Panels */
-    width: 42px; height: 42px;
-    font-size: 1.4em;
-    line-height: 42px;
-    text-align: center;
-    background:#555c66;
-    color:#e0e0e0;
-    border:none;
-    border-radius:8px;
-    cursor:pointer;
-    box-shadow:0 2px 6px rgba(0,0,0,.4);
-}
-#menuToggle:hover{background:#6a727f}
-
-/* ---------------------------------------------------
-    Responsive-Regel: Auf Viewports ≤ 768 px wird
-    das Bedienfeld anfangs versteckt.
-    --------------------------------------------------- */
-@media (max-width:768px){
-    #controls{display:none;}
-    /* Mobile button sizing */
-    button {
-        min-width: 44px;
-        min-height: 44px; /* Meet touch target guidelines */
-    }
-}
-/* Canvas & Container: KEINE default-Gesten */
-#container,
-#voxelCanvas{
-    touch-action: none;           /* iOS ≥13.4, Android, Desktop */
-    -ms-touch-action: none;       /* altes Edge/IE */
-
-    /* ← neu: sorge dafür, dass die CSS-Border innen sitzt */
-           box-sizing: border-box;
-}
-
-/* NEW: Accessibility - Screen Reader Only */
-.sr-only {
-  position: absolute;
-  width: 1px;
-  height: 1px;
-  padding: 0;
-  margin: -1px;
-  overflow: hidden;
-  clip: rect(0,0,0,0);
-  border: 0;
-}
-
-/* NEW: Touch Indicator */
-.touch-indicator {
-    position: absolute;
-    width: 40px;
-    height: 40px;
-    border-radius: 50%;
-    background: rgba(0, 150, 255, 0.3);
-    transform: translate(-50%, -50%);
-    pointer-events: none;
-    animation: pulse 0.5s;
-    display: none; /* Hidden by default */
-    z-index: 2000; /* Ensure it's on top */
-}
-
-
-@keyframes pulse {
-    0% { transform: translate(-50%, -50%) scale(1); opacity: 0.5; }
-    50% { transform: translate(-50%, -50%) scale(1.5); opacity: 0.2; }
-    100% { transform: translate(-50%, -50%) scale(1); opacity: 0.5; }
-}
-
-/* NEW: Mobile-specific controls */
-.mobile-only {
-    display: none; /* Hidden by default */
-    position: absolute;
-    bottom: calc(20px + env(safe-area-inset-bottom)); /* Adjust for safe area */
-    right: calc(20px + env(safe-area-inset-right)); /* Adjust for safe area */
-    flex-direction: column;
-    gap: 12px;
-    z-index: 1000;
-}
-
-@media (max-width: 768px) {
-    .mobile-only {
-        display: flex; /* Show on mobile */
-    }
-    
-    .mobile-btn {
-        width: 60px;
-        height: 60px;
-        font-size: 24px;
-        border-radius: 50%;
-        background: rgba(90, 90, 120, 0.8);
-        color: white;
-        border: 2px solid white;
-        cursor: pointer;
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        box-shadow: 0 2px 6px rgba(0,0,0,.4);
-    }
-    .mobile-btn:hover {
-        background: rgba(110, 110, 140, 0.9);
-    }
-}
-
-/* NEW: Distance Display Style */
-#distanceDisplay {
-    position: absolute;
-    bottom: 18px;
-    right: 18px;
-    padding: 8px 12px;
-    background: rgba(0,0,0,0.6);
-    color: #e0e0e0;
-    border-radius: 5px;
-    font-size: 0.9em;
-    display: none; /* Hidden by default, shown on drag */
-    z-index: 900; /* Below modals, above canvas */
-}
-
-/* Style for dynamic block size inputs */
-.dynamic-block-input {
-    width: 60px; /* Smaller width for number inputs */
-    padding: 8px;
-    border: none;
-    border-radius: 5px;
-    font-size: 1em;
-    background: #555c66;
-    color: #e0e0e0;
-    text-align: center;
-    -moz-appearance: textfield; /* Remove Firefox spinner */
-}
-
-/* Hide number input arrows for Chrome, Safari, Edge, Opera */
-.dynamic-block-input::-webkit-outer-spin-button,
-.dynamic-block-input::-webkit-inner-spin-button {
-    -webkit-appearance: none;
-    margin: 0;
-}
-
-.dynamic-block-input-group {
-    display: flex;
-    align-items: center;
-    gap: 5px;
-}
-
-.block-size-btn.active, #setDynamicBlockSizeBtn.active {
-    border-color: #90caf9;
-    box-shadow: 0 0 8px rgba(144, 202, 249, 0.7);
-}
-
-</style>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>VoxelShaper - Community 3D Modelle</title>
+    <!-- DaisyUI & Tailwind CSS -->
+    <link href="https://cdn.jsdelivr.net/npm/daisyui@4.7.2/dist/full.min.css" rel="stylesheet" type="text/css" />
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Font Awesome für Icons -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <style>
+        .voxel-bg {
+            background: linear-gradient(135deg, #1a202c 0%, #2d3748 100%);
+        }
+        .model-card {
+            transition: transform 0.3s ease, box-shadow 0.3s ease;
+            border: 1px solid #2d3748;
+        }
+        .model-card:hover {
+            transform: translateY(-5px);
+            box-shadow: 0 10px 25px rgba(0, 0, 0, 0.3);
+        }
+        .rating-stars {
+            color: #fbbf24;
+        }
+        .voxel-logo {
+            font-family: 'Arial Black', sans-serif;
+            letter-spacing: -1px;
+            text-shadow: 0 0 10px rgba(66, 153, 225, 0.5);
+        }
+        .model-preview {
+            height: 200px;
+            background-color: #2d3748;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            overflow: hidden;
+        }
+        .voxel-grid {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 10px;
+            width: 80px;
+            height: 80px;
+            transform: rotateX(60deg) rotateZ(45deg) scale(0.8);
+            transform-style: preserve-3d;
+        }
+        .voxel {
+            width: 20px;
+            height: 20px;
+            background: #4299e1;
+            box-shadow: inset 0 0 2px rgba(255,255,255,0.2);
+        }
+    </style>
 </head>
-<body>
-<button id="menuToggle" aria-label="Menü umschalten">☰</button>
-
-<div id="controls">
-    <label for="grid-size-slider">Gittergröße:</label>
-    <input type="range" id="grid-size-slider" min="5" max="180" value="10" aria-label="Gittergröße anpassen">
-    <span id="grid-size-display">10×10×10</span>
-    <label for="color-picker">Farbe:</label>
-    <input type="color" id="color-picker" value="#ffffff" aria-label="Aktuelle Farbe wählen">
-    <!-- NEW: Preset color inputs are now type="color" -->
-    <input type="color" id="color-preset-1" class="color-preset-box" value="#8B4513" aria-label="Voreingestellte Farbe 1">
-    <input type="color" id="color-preset-2" class="color-preset-box" value="#708237" aria-label="Voreingestellte Farbe 2">
-    <input type="color" id="color-preset-3" class="color-preset-box" value="#6495ED" aria-label="Voreingestellte Farbe 3">
-
-    <button id="modeToggle" aria-label="Modus wechseln">Modus wechseln</button><span id="current-mode">Modus: Hinzufügen</span>
-    <button id="clearBtn" aria-label="Alles löschen">Alles löschen</button>
-    <button id="fillLevelBtn" aria-label="Ebene füllen">Ebene füllen</button>
-    <button id="saveBtn" aria-label="Projekt speichern" aria-describedby="save-description">Projekt speichern</button>
-    <div id="save-description" class="sr-only">Speichert das aktuelle Projekt als JSON-Datei</div>
-    <button id="loadBtn" aria-label="Projekt laden">Projekt laden</button>
-    <button id="exportStlBtn" aria-label="STL Export">STL Export</button>
-    <button id="exportObjBtn" aria-label="OBJ Export">OBJ Export</button>
-
-    <label for="fly-speed-slider">Fluggeschwindigkeit:</label>
-    <input type="range" id="fly-speed-slider" min="0.01" max="1.0" step="0.01" value="0.1" aria-label="Fluggeschwindigkeit anpassen">
-    <span id="fly-speed-display">0.10</span>
-
-    <label>Feste Blockgröße:</label>
-    <button id="block-size-1x1" class="block-size-btn active" aria-label="Blockgröße 1x1x1">1x1x1</button>
-    <button id="block-size-4x4" class="block-size-btn" aria-label="Blockgröße 4x4x4">4x4x4</button>
-    <button id="block-size-8x8" class="block-size-btn" aria-label="Blockgröße 8x8x8">8x8x8</button>
-    <button id="block-size-10x10" class="block-size-btn" aria-label="Blockgröße 10x10x10">10x10x10</button>
-
-    <label>Dynamische Blockgröße:</label>
-    <div class="dynamic-block-input-group">
-        <input type="number" id="dynamic-block-x" class="dynamic-block-input" value="1" min="1" max="180" aria-label="Dynamische Blockbreite (X)">
-        <span>x</span>
-        <input type="number" id="dynamic-block-y" class="dynamic-block-input" value="1" min="1" max="180" aria-label="Dynamische Blockhöhe (Y)">
-        <span>x</span>
-        <input type="number" id="dynamic-block-z" class="dynamic-block-input" value="1" min="1" max="180" aria-label="Dynamische Blocktiefe (Z)">
-    </div>
-    <button id="setDynamicBlockSizeBtn" aria-label="Dynamische Größe festlegen">Größe festlegen</button>
-
-    <button id="measureDistanceBtn" aria-label="Abstand messen">Abstand messen</button>
-
-
-    <button id="helpToggleBtn" aria-label="Hilfe umschalten">Hilfe</button>
-    <button id="resetCameraBtn" aria-label="Kamera zurücksetzen">Zur Szene zurückkehren</button>
-
-    <!-- Image Template Controls -->
-    <button id="loadImageTemplateBtn" aria-label="Bild als Vorlage laden">Bild als Vorlage laden</button>
-    <button id="removeImageTemplateBtn" style="display:none;" aria-label="Bildvorlage entfernen">Bildvorlage entfernen</button>
-    <input type="file" id="imageFileInput" accept="image/*" style="display:none;">
-</div>
-
-<div id="container">
-    <canvas id="voxelCanvas"></canvas>
-    <div class="info-box" id="infoBox"> <strong>Steuerung</strong><br>
-    Rechte MT gehalten + Maus → Kamera drehen (Fly Mode)<br>
-    WASD / E / Q → bewegen<br>
-    Linke MT → Voxel hinzuf./löschen/zeichnen<br>
-    **Alt + Mausrad → Zeichenebene Y hoch/runter (Gitter folgt)**<br>
-    **Alt + Shift + Mausrad → Zeicheneben Z hoch/runter (Gitter folgt)**<br>
-    **Alt + Control + Mausrad → Zeichenebene X hoch/runter (Gitter folgt)**<br>
-    **Shift + Linke MT gedrückt + Maus ziehen → Voxel Aktion auf aktiver Ebene (Hinzufügen / Löschen / Zeichnen)**<br>
-    **Control + Linke MT gedrückt + Maus ziehen → Voxel ziehen zum Hinzufügen (Stapeln, nur im Hinzufügen-Modus)**<br>
-    **NEU: Linien zeichnen (Modus "Hinzufügen", "Löschen", "Zeichnen")**<br>
-    **Linke MT gedrückt + Maus ziehen → Linie von Voxeln zeichnen**<br>
-    Mausrad → Kamera Geschwindigkeit anpassen<<br>
-    **Tab → Modus wechseln (Hinzufügen / Löschen / Zeichnen / Messen)**<br>
-    **1, 2, 3 → Voreingestellte Farbe wählen**<br>
-    **Strg + Z → Rückgängig (Undo)**<br>
-    **Strg + Y oder Strg + Shift + Z → Wiederholen (Redo)**<br>
-    **NEU: Abstand messen (Modus "Messen")**<br>
-    **Linke MT → Erster Klick setzt Startpunkt, Zweiter Klick setzt Endpunkt und zeigt Distanz**
-    </div>
-    <div id="touch-indicator" class="touch-indicator"></div>
-    <input type="file" id="fileInput" accept=".json">
-    <div id="distanceDisplay">Distanz: 0.00 mm</div>
-</div>
-
-<div id="clearConfirmationModal" class="modal">
-    <div class="modal-content">
-        <h3>Projekt löschen</h3>
-        <p>Möchten Sie das aktuelle Projekt speichern, bevor Sie alle Voxel löschen?</p>
-        <div class="modal-buttons">
-            <button id="saveAndClearBtn" class="confirm-save">Speichern & Löschen</button>
-            <button id="clearWithoutSaveBtn" class="confirm-no-save">Ohne Speichern löschen</button>
-            <button id="cancelClearBtn" class="cancel">Abbrechen</button>
+<body class="voxel-bg min-h-screen text-gray-100">
+    <!-- Navigation -->
+    <div class="navbar bg-base-200 border-b border-gray-700 px-4 py-3">
+        <div class="flex-1">
+            <a href="#" class="voxel-logo text-2xl font-bold text-blue-400">
+                <i class="fas fa-cube mr-2"></i>VoxelShaper
+            </a>
+            <div class="hidden md:flex ml-10">
+                <a href="#" class="btn btn-ghost btn-sm">Entdecken</a>
+                <a href="#" class="btn btn-ghost btn-sm">Beliebt</a>
+                <a href="#" class="btn btn-ghost btn-sm">Neu</a>
+                <a href="#" class="btn btn-ghost btn-sm">Kategorien</a>
+            </div>
+        </div>
+        <div class="flex-none gap-4">
+            <div class="form-control hidden md:block">
+                <input type="text" placeholder="Suche..." class="input input-bordered input-sm w-48 bg-gray-700 border-gray-600" />
+            </div>
+            <div class="dropdown dropdown-end">
+                <div tabindex="0" role="button" class="btn btn-ghost btn-circle">
+                    <i class="fas fa-bell text-xl"></i>
+                </div>
+                <ul tabindex="0" class="dropdown-content z-[1] menu p-2 shadow bg-gray-800 rounded-box w-64 mt-4">
+                    <li class="text-center py-4 text-gray-400">Keine Benachrichtigungen</li>
+                </ul>
+            </div>
+            <div class="dropdown dropdown-end">
+                <div tabindex="0" role="button" id="user-menu-button" class="btn btn-ghost btn-circle avatar placeholder">
+                    <div class="bg-gray-600 text-gray-300 rounded-full w-10">
+                        <span><i class="fas fa-user"></i></span>
+                    </div>
+                </div>
+                <ul tabindex="0" class="dropdown-content z-[1] menu p-2 shadow bg-gray-800 rounded-box w-52 mt-4">
+                    <li id="login-button"><a><i class="fas fa-sign-in-alt mr-2"></i>Anmelden</a></li>
+                    <li id="profile-button" class="hidden"><a><i class="fas fa-user mr-2"></i>Profil</a></li>
+                    <li id="logout-button" class="hidden"><a><i class="fas fa-sign-out-alt mr-2"></i>Abmelden</a></li>
+                </ul>
+            </div>
         </div>
     </div>
-</div>
 
-<div id="messageModal" class="modal">
-    <div class="modal-content">
-        <h3 id="messageModalTitle">Nachricht</h3>
-        <p id="messageModalText"></p>
-        <div class="modal-buttons">
-            <button id="messageModalCloseBtn" class="cancel">Schließen</button>
+    <!-- Hauptinhalt -->
+    <div class="container mx-auto px-4 py-8">
+        <div class="flex justify-between items-center mb-8">
+            <h1 class="text-3xl font-bold">Community-Modelle</h1>
+            <button id="upload-model-button" class="btn btn-primary">
+                <i class="fas fa-upload mr-2"></i>Modell hochladen
+            </button>
+        </div>
+
+        <!-- Filter & Sortierung -->
+        <div class="bg-base-200 rounded-lg p-4 mb-6">
+            <div class="flex flex-wrap items-center gap-4">
+                <div>
+                    <span class="text-gray-400 mr-2">Filter:</span>
+                    <select class="select select-bordered select-sm bg-gray-700 border-gray-600">
+                        <option>Alle Kategorien</option>
+                        <option>Spielzeug</option>
+                        <option>Dekoration</option>
+                        <option>Funktional</option>
+                        <option>Kunst</option>
+                    </select>
+                </div>
+                <div>
+                    <span class="text-gray-400 mr-2">Sortieren:</span>
+                    <select class="select select-bordered select-sm bg-gray-700 border-gray-600">
+                        <option>Beliebteste</option>
+                        <option>Neueste</option>
+                        <option>Am besten bewertet</option>
+                    </select>
+                </div>
+                <div class="flex items-center">
+                    <span class="text-gray-400 mr-2">Lizenz:</span>
+                    <div class="flex gap-2">
+                        <button class="btn btn-xs">Alle</button>
+                        <button class="btn btn-xs btn-outline">CC BY</button>
+                        <button class="btn btn-xs btn-outline">CC BY-SA</button>
+                        <button class="btn btn-xs btn-outline">CC0</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Modelle Grid -->
+        <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
+            <!-- Modell 1 -->
+            <div class="model-card card bg-gray-800 rounded-xl overflow-hidden">
+                <div class="model-preview">
+                    <div class="voxel-grid">
+                        <div class="voxel"></div><div class="voxel"></div><div class="voxel"></div>
+                        <div class="voxel"></div><div class="voxel bg-blue-500"></div><div class="voxel"></div>
+                        <div class="voxel"></div><div class="voxel"></div><div class="voxel"></div>
+                    </div>
+                </div>
+                <div class="card-body p-4">
+                    <div class="flex justify-between">
+                        <h2 class="card-title text-lg">Roboter-Figur</h2>
+                        <div class="badge badge-outline badge-primary">Spielzeug</div>
+                    </div>
+                    <p class="text-gray-400 text-sm mt-2">Ein niedlicher Roboter zum Sammeln und Spielen.</p>
+                    <div class="mt-4 flex justify-between items-center">
+                        <div>
+                            <div class="rating-stars">
+                                <i class="fas fa-star"></i>
+                                <i class="fas fa-star"></i>
+                                <i class="fas fa-star"></i>
+                                <i class="fas fa-star"></i>
+                                <i class="fas fa-star-half-alt"></i>
+                                <span class="text-gray-400 ml-2">4.5</span>
+                            </div>
+                            <div class="text-gray-400 text-sm mt-1">124 Downloads</div>
+                        </div>
+                        <button class="btn btn-primary btn-sm download-button">
+                            <i class="fas fa-download mr-1"></i> Download
+                        </button>
+                    </div>
+                    <div class="mt-4 flex items-center text-sm text-gray-400">
+                        <div class="avatar">
+                            <div class="w-8 rounded-full bg-gray-700">
+                                <span><i class="fas fa-user"></i></span>
+                            </div>
+                        </div>
+                        <span class="ml-2">VoxelMaster</span>
+                        <span class="ml-auto">vor 2 Tagen</span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Modell 2 -->
+            <div class="model-card card bg-gray-800 rounded-xl overflow-hidden">
+                <div class="model-preview">
+                    <div class="voxel-grid">
+                        <div class="voxel"></div><div class="voxel"></div><div class="voxel"></div>
+                        <div class="voxel bg-green-500"></div><div class="voxel bg-green-500"></div><div class="voxel bg-green-500"></div>
+                        <div class="voxel"></div><div class="voxel"></div><div class="voxel"></div>
+                    </div>
+                </div>
+                <div class="card-body p-4">
+                    <div class="flex justify-between">
+                        <h2 class="card-title text-lg">Pflanzen-Topf</h2>
+                        <div class="badge badge-outline badge-success">Dekoration</div>
+                    </div>
+                    <p class="text-gray-400 text-sm mt-2">Modernes Pflanzgefäß für deine Sukkulenten.</p>
+                    <div class="mt-4 flex justify-between items-center">
+                        <div>
+                            <div class="rating-stars">
+                                <i class="fas fa-star"></i>
+                                <i class="fas fa-star"></i>
+                                <i class="fas fa-star"></i>
+                                <i class="fas fa-star"></i>
+                                <i class="fas fa-star"></i>
+                                <span class="text-gray-400 ml-2">5.0</span>
+                            </div>
+                            <div class="text-gray-400 text-sm mt-1">87 Downloads</div>
+                        </div>
+                        <button class="btn btn-primary btn-sm download-button">
+                            <i class="fas fa-download mr-1"></i> Download
+                        </button>
+                    </div>
+                    <div class="mt-4 flex items-center text-sm text-gray-400">
+                        <div class="avatar">
+                            <div class="w-8 rounded-full bg-gray-700">
+                                <span><i class="fas fa-user"></i></span>
+                            </div>
+                        </div>
+                        <span class="ml-2">GreenThumb</span>
+                        <span class="ml-auto">vor 1 Woche</span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Modell 3 -->
+            <div class="model-card card bg-gray-800 rounded-xl overflow-hidden">
+                <div class="model-preview">
+                    <div class="voxel-grid">
+                        <div class="voxel bg-yellow-500"></div><div class="voxel"></div><div class="voxel bg-yellow-500"></div>
+                        <div class="voxel"></div><div class="voxel bg-yellow-500"></div><div class="voxel"></div>
+                        <div class="voxel bg-yellow-500"></div><div class="voxel"></div><div class="voxel bg-yellow-500"></div>
+                    </div>
+                </div>
+                <div class="card-body p-4">
+                    <div class="flex justify-between">
+                        <h2 class="card-title text-lg">Schlüsselhalter</h2>
+                        <div class="badge badge-outline badge-warning">Funktional</div>
+                    </div>
+                    <p class="text-gray-400 text-sm mt-2">Praktischer Halter für deine Schlüssel.</p>
+                    <div class="mt-4 flex justify-between items-center">
+                        <div>
+                            <div class="rating-stars">
+                                <i class="fas fa-star"></i>
+                                <i class="fas fa-star"></i>
+                                <i class="fas fa-star"></i>
+                                <i class="fas fa-star"></i>
+                                <i class="far fa-star"></i>
+                                <span class="text-gray-400 ml-2">4.0</span>
+                            </div>
+                            <div class="text-gray-400 text-sm mt-1">156 Downloads</div>
+                        </div>
+                        <button class="btn btn-primary btn-sm download-button">
+                            <i class="fas fa-download mr-1"></i> Download
+                        </button>
+                    </div>
+                    <div class="mt-4 flex items-center text-sm text-gray-400">
+                        <div class="avatar">
+                            <div class="w-8 rounded-full bg-gray-700">
+                                <span><i class="fas fa-user"></i></span>
+                            </div>
+                        </div>
+                        <span class="ml-2">HomeMaker</span>
+                        <span class="ml-auto">vor 3 Tagen</span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Modell 4 -->
+            <div class="model-card card bg-gray-800 rounded-xl overflow-hidden">
+                <div class="model-preview">
+                    <div class="voxel-grid">
+                        <div class="voxel bg-purple-500"></div><div class="voxel bg-purple-500"></div><div class="voxel"></div>
+                        <div class="voxel"></div><div class="voxel bg-purple-500"></div><div class="voxel"></div>
+                        <div class="voxel"></div><div class="voxel"></div><div class="voxel bg-purple-500"></div>
+                    </div>
+                </div>
+                <div class="card-body p-4">
+                    <div class="flex justify-between">
+                        <h2 class="card-title text-lg">Abstrakte Skulptur</h2>
+                        <div class="badge badge-outline badge-secondary">Kunst</div>
+                    </div>
+                    <p class="text-gray-400 text-sm mt-2">Moderne Skulptur für dein Regal.</p>
+                    <div class="mt-4 flex justify-between items-center">
+                        <div>
+                            <div class="rating-stars">
+                                <i class="fas fa-star"></i>
+                                <i class="fas fa-star"></i>
+                                <i class="fas fa-star"></i>
+                                <i class="fas fa-star-half-alt"></i>
+                                <i class="far fa-star"></i>
+                                <span class="text-gray-400 ml-2">3.5</span>
+                            </div>
+                            <div class="text-gray-400 text-sm mt-1">67 Downloads</div>
+                        </div>
+                        <button class="btn btn-primary btn-sm download-button">
+                            <i class="fas fa-download mr-1"></i> Download
+                        </button>
+                    </div>
+                    <div class="mt-4 flex items-center text-sm text-gray-400">
+                        <div class="avatar">
+                            <div class="w-8 rounded-full bg-gray-700">
+                                <span><i class="fas fa-user"></i></span>
+                            </div>
+                        </div>
+                        <span class="ml-2">ArtCreator</span>
+                        <span class="ml-auto">vor 5 Tagen</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Pagination -->
+        <div class="join mt-10 flex justify-center">
+            <button class="join-item btn btn-sm">«</button>
+            <button class="join-item btn btn-sm btn-active">1</button>
+            <button class="join-item btn btn-sm">2</button>
+            <button class="join-item btn btn-sm">3</button>
+            <button class="join-item btn btn-sm">4</button>
+            <button class="join-item btn btn-sm">»</button>
         </div>
     </div>
-</div>
 
-<!-- NEW: Mobile controls -->
-<div id="mobile-controls" class="mobile-only">
-    <button class="mobile-btn" id="mobile-undo" aria-label="Rückgängig machen">↺</button>
-    <button class="mobile-btn" id="mobile-redo" aria-label="Wiederholen">↻</button>
-    <button class="mobile-btn" id="mobile-save" aria-label="Speichern">💾</button>
-    <button class="mobile-btn" id="mobile-camera" aria-label="Kamera wechseln">📷</button>
-    <!-- Removed mobile-extrude-mode button -->
-    <button class="mobile-btn" id="mobile-assist" aria-label="Touch-Assist umschalten">🧲</button>
-</div>
-
-
-<script src="https://cdn.jsdelivr.net/npm/three@0.128.0/build/three.min.js"></script>
-<script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/utils/BufferGeometryUtils.js"></script>
-<script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/exporters/STLExporter.js"></script>
-
-<!-- VoxelShaperIO Library (embedded) -->
-<script>
-var VoxelShaperIO = (function() {
-    // Helper to convert hex to RGBA for VOX palette
-    function hexToRgba(hex) {
-        if (!hex || hex.length !== 7) return 0x00000000; // Default to transparent black
-        const r = parseInt(hex.substring(1, 3), 16);
-        const g = parseInt(hex.substring(3, 5), 16);
-        const b = parseInt(hex.substring(5, 7), 16);
-        return (r << 24) | (g << 16) | (b << 8) | 0xFF; // RGBA
-    }
-
-    // Helper to convert RGBA to hex
-    function rgbaToHex(rgba) {
-        const r = (rgba >>> 24) & 0xFF;
-        const g = (rgba >>> 16) & 0xFF;
-        const b = (rgba >>> 8) & 0xFF;
-        return `#${((1 << 24) + (r << 16) + (g << 8) + b).toString(16).slice(1).toUpperCase()}`;
-    }
-
-    class VoxModel {
-        constructor(sizeX, sizeY, sizeZ, voxels = [], palette = new Uint32Array(256)) {
-            this.sizeX = sizeX;
-            this.sizeY = sizeY;
-            this.sizeZ = sizeZ;
-            this.voxels = voxels; // Array of {x, y, z, c} where c is palette index
-            this.palette = palette; // Uint32Array of RGBA colors
-            // Initialize default palette if not provided
-            if (this.palette.every(val => val === 0)) {
-                this.palette[1] = hexToRgba("#FF0000"); // Red
-                this.palette[2] = hexToRgba("#00FF00"); // Green
-                this.palette[3] = hexToRgba("#0000FF"); // Blue
-                // ... add more default colors as needed
-            }
-        }
-    }
-
-    // Basic OBJ exporter (simplified, no materials)
-    function voxToOBJ(voxModel, cubeSize = 1) {
-        let obj = `# VoxelShaper OBJ Export\n`;
-        let vertexCount = 0;
-
-        voxModel.voxels.forEach(v => {
-            const x = v.x * cubeSize;
-            const y = v.y * cubeSize;
-            const z = v.z * cubeSize;
-
-            // Vertices for a cube
-            obj += `v ${x} ${y} ${z}\n`;
-            obj += `v ${x + cubeSize} ${y} ${z}\n`;
-            obj += `v ${x + cubeSize} ${y + cubeSize} ${z}\n`;
-            obj += `v ${x} ${y + cubeSize} ${z}\n`;
-            obj += `v ${x} ${y} ${z + cubeSize}\n`;
-            obj += `v ${x + cubeSize} ${y} ${z + cubeSize}\n`;
-            obj += `v ${x + cubeSize} ${y + cubeSize} ${z + cubeSize}\n`;
-            obj += `v ${x} ${y + cubeSize} ${z + cubeSize}\n`;
-
-            // Faces (simplified, assuming no normals/texture coords for now)
-            // Front face
-            obj += `f ${vertexCount + 1} ${vertexCount + 2} ${vertexCount + 3} ${vertexCount + 4}\n`;
-            // Back face
-            obj += `f ${vertexCount + 5} ${vertexCount + 8} ${vertexCount + 7} ${vertexCount + 6}\n`;
-            // Top face
-            obj += `f ${vertexCount + 4} ${vertexCount + 3} ${vertexCount + 7} ${vertexCount + 8}\n`;
-            // Bottom face
-            obj += `f ${vertexCount + 1} ${vertexCount + 5} ${vertexCount + 6} ${vertexCount + 2}\n`;
-            // Right face
-            obj += `f ${vertexCount + 2} ${vertexCount + 6} ${vertexCount + 7} ${vertexCount + 3}\n`;
-            // Left face
-            obj += `f ${vertexCount + 5} ${vertexCount + 1} ${vertexCount + 4} ${vertexCount + 8}\n`;
-
-            vertexCount += 8;
-        });
-        return obj;
-    }
-
-    // Helper for writing binary data
-    class DataViewWriter {
-        constructor(initialCapacity = 1024) {
-            this.buffer = new ArrayBuffer(initialCapacity);
-            this.dataView = new DataView(this.buffer);
-            this.position = 0;
-        }
-
-        _ensureCapacity(bytesNeeded) {
-            if (this.position + bytesNeeded > this.buffer.byteLength) {
-                const newCapacity = Math.max(this.buffer.byteLength * 2, this.position + bytesNeeded);
-                const newBuffer = new ArrayBuffer(newCapacity);
-                new Uint8Array(newBuffer).set(new Uint8Array(this.buffer));
-                this.buffer = newBuffer;
-                this.dataView = new DataView(this.buffer);
-            }
-        }
-
-        writeString(str) {
-            this._ensureCapacity(str.length);
-            for (let i = 0; i < str.length; i++) {
-                this.dataView.setUint8(this.position++, str.charCodeAt(i));
-            }
-        }
-
-        writeInt32(value) {
-            this._ensureCapacity(4);
-            this.dataView.setInt32(this.position, value, true); // Little-endian
-            this.position += 4;
-        }
-
-        writeUint32(value) {
-            this._ensureCapacity(4);
-            this.dataView.setUint32(this.position, value, true); // Little-endian
-            this.position += 4;
-        }
-
-        writeUint8(value) {
-            this._ensureCapacity(1);
-            this.dataView.setUint8(this.position++, value);
-        }
-
-        getBuffer() {
-            return this.buffer.slice(0, this.position);
-        }
-    }
-
-    // Helper for reading binary data
-    class DataViewReader {
-        constructor(arrayBuffer) {
-            this.buffer = arrayBuffer;
-            this.dataView = new DataView(arrayBuffer);
-            this.position = 0;
-        }
-
-        readString(length) {
-            let str = '';
-            for (let i = 0; i < length; i++) {
-                str += String.fromCharCode(this.dataView.getUint8(this.position++));
-            }
-            return str;
-        }
-
-        readInt32() {
-            const value = this.dataView.getInt32(this.position, true); // Little-endian
-            this.position += 4;
-            return value;
-        }
-
-        readUint32() {
-            const value = this.dataView.getUint32(this.position, true); // Little-endian
-            this.position += 4;
-            return value;
-        }
-
-        readUint8() {
-            return this.dataView.getUint8(this.position++);
-        }
-    }
-
-    function saveBlob(data, filename) {
-        const blob = new Blob([data], { type: 'application/octet-stream' });
-        const url = URL.createObjectURL(blob);
-        const a = document.createElement('a');
-        a.href = url;
-        a.download = filename;
-        document.body.appendChild(a);
-        a.click();
-        document.body.removeChild(a);
-        URL.revokeObjectURL(url);
-    }
-
-    return {
-        VoxModel,
-        voxToOBJ,
-        saveBlob,
-        rgbaToHex // Export rgbaToHex for debugging
-    };
-})();
-</script>
-
-
-<script>
-/* ---------- Konstanten ---------- */
-const VS = 1, HALF = VS * 0.5;
-const CHUNK_SIZE = 16; // Each chunk is CHUNK_SIZE x CHUNK_SIZE x CHUNK_SIZE voxels
-
-/* ==============================================================
-   FAST NUMERIC VOXEL-KEY  (max. GRID 0-1023 in jeder Achse)
-   --------------------------------------------------------------
-   – 30-Bit-Packing:  x<<20 | y<<10 | z
-   – 100 % kollisionsfrei, >10× schneller als String-Hash,
-     0 % GC-Druck
-   ============================================================== */
-// 10 Bit pro Achse  →  0 … 1023
-const VOX_BITS = 10;
-const VOX_MASK = (1 << VOX_BITS) - 1;   // 0x3FF
-const SHIFT_X  = VOX_BITS * 2;          // 20
-const SHIFT_Y  = VOX_BITS;              // 10
-// SHIFT_Z = 0
-
-/**
- * Kombiniert (x,y,z) zu einem einzigen 30-Bit-Integer-Key.
- * - Alle Koordinaten müssen 0 ≤ coord ≤ 1023 sein.
- */
-function key(x, y, z) {
-    // >>> 0 zwingt in den 32-Bit-Integer-Bereich
-    return ((x << SHIFT_X) | (y << SHIFT_Y) | z) >>> 0;
-}
-
-/**
- * Invers zu `key()` – liefert [x, y, z].
- */
-function parseKey(k) {
-    return [
-        (k >>> SHIFT_X) & VOX_MASK,
-        (k >>> SHIFT_Y) & VOX_MASK,
-        k & VOX_MASK
-    ];
-}
-
-/* ---------- globale Variablen ---------- */
-let isHoldDrawingActive = false;   // NEW: Verfolgt, ob ein Long-Press-Zeichnen aktiv ist
-const LONG_PRESS_DELAY_MS = 500;   // NEW: Wartezeit (in Millisekunden) für Long-Press-Erkennung
-const VOXEL_DRAG_THRESHOLD = 2; // NEW: Voxel-basierter Schwellenwert für Achsensperrung beim Ziehen (Increased from 0.5)
-
-/* ----------------------------------------------
-   GLOBAL – neue Hilfs-Variablen
----------------------------------------------- */
-// --- Touch Gesture Constants ---
-const PINCH_ZOOM_MULT = 40;     // Zoom-Geschwindigkeit ↑
-const TAP_DIST_TH = 10;         // max. Bewegung (px) für 'Tap'
-const MOVE_PX = 10;             // ab hier gilt es als Drag
-const DT_MS = 250;              // max. Abstand Taps (ms)
-const PAN_PIX_TH = 10;          // ab px Bewegung → Pan
-const PINCH_REL_TH = 0.08;      // ≥8 % Distanzänderung → Pinch
-const ROTATE_SPEED_TOUCH = 0.004; // Drehgeschwindigkeit für Touch
-const PAN_SPEED_TOUCH = 0.1;   // Pan-Geschwindigkeit für Touch
-
-// --- Touch State ---
-let activePointers = new Map(); // Map<pointerId, {x, y, pointerType}>
-let gestureState = {
-    type: 'none', // 'none', 'tap', 'pan', 'pinch', 'rotate'
-    startDist: 0,
-    startMid: { x: 0, y: 0 },
-    lastMid: { x: 0, y: 0 },
-    lastDist: 0,
-    startTime: 0,
-    initialPointerCount: 0,
-};
-let tapCandidate = null; // {x, y, time}
-let doubleTapDragActive = false; // Flag for double-tap-and-drag drawing
-let touchIndicator; // DOM element for visual feedback
-
-let scene, cam, ren, gridHelper, boxHelper;
-let rotSpeed = 0.004;   // Globale Drehgeschwindigkeit für Maus
-
-let euler; // Declare euler globally
-const voxels = new Map();   // Map<globalVoxelKey,{color}> - Stores ALL voxels for save/load/history
-const chunks = new Map();   // Map<chunkKey, VoxelChunk> - Stores active chunks for rendering
-
-let cvs;
-let containerDiv; // Reference to the container div
-let activeDrawingLevel = { x: 0, y: 0, z: 0 }; // Objekt für aktive Ebenen
-let currentDrawingAxis = 'y'; // Aktuelle Achse für Alt+Mausrad
-
-// NEW: Global object to store fixed plane parameters for drag operations
-let fixedDragPlaneParams = { level: null, axis: null };
-
-// Lade die Farbe aus dem Local Storage oder nutze Weiß als Standard
-let currentColor = localStorage.getItem('voxelEditorColor') || '#ffffff';
-let moveSpeed = parseFloat(localStorage.getItem('voxelEditorFlySpeed')) || 0.1;
-// Lade die Gittergröße aus dem Local Storage oder nutze 10 als Standard
-let GRID = parseInt(localStorage.getItem('voxelEditorGridSize')) || 10;
-
-// Load other settings from local storage or set defaults
-activeDrawingLevel.x = parseInt(localStorage.getItem('voxelEditorActiveDrawingLevelX') || '0');
-activeDrawingLevel.y = parseInt(localStorage.getItem('voxelEditorActiveDrawingLevelY') || '0');
-activeDrawingLevel.z = parseInt(localStorage.getItem('voxelEditorActiveDrawingLevelZ') || '0');
-currentDrawingAxis = localStorage.getItem('voxelEditorCurrentDrawingAxis') || 'y';
-let currentBlockSize = parseInt(localStorage.getItem('voxelEditorCurrentBlockSize') || '1'); // Declared here
-
-// NEW: Dynamic block dimensions
-let dynamicBlockDim = {
-    x: parseInt(localStorage.getItem('voxelEditorDynamicBlockDimX') || '1'),
-    y: parseInt(localStorage.getItem('voxelEditorDynamicBlockDimY') || '1'),
-    z: parseInt(localStorage.getItem('voxelEditorDynamicBlockDimZ') || '1')
-};
-let useDynamicBlockDim = localStorage.getItem('voxelEditorUseDynamicBlockDim') === 'true';
-
-
-// Preset colors - NEW, more natural colors
-const presetColors = [
-    localStorage.getItem('voxelPresetColor1') || '#8B4513', // Erdton (SaddleBrown)
-    localStorage.getItem('voxelPresetColor2') || '#708237', // Grasgrün (OliveDrab)
-    localStorage.getItem('voxelPresetColor3') || '#6495ED'  // Wasserblau (CornflowerBlue)
-];
-let activePresetIndex = -1; // -1 means no preset is "active" initially, 0 for the first preset, etc.
-let presetBoxes = []; // Global array to store references to preset color boxes
-
-// Referenzen für Lichter, die Schatten werfen, um sie später anpassen zu können
-let mainDirectionalLight;
-let fillDirectionalLight; // NEW: Zweites gerichtetes Licht
-let hemisphereLight;      // NEW: Hemisphärenlicht
-let groundPlane;          // NEW: Bodenplatte
-
-// Globale Variablen für Dragging-Status
-let isShiftDragging = false;   // physische Shift-Taste
-
-function shiftActive(){        // true, wenn Shift an
-    return isShiftDragging;
-}
-let isControlDragging = false;
-// Removed 'rotate' global variable as it's redundant with pointer lock
-let isPointerLocked = false; // NEW: Track pointer lock status
-let lastActionVoxelCoords = null; // NEW: Tracks the last voxel acted upon for drag drawing
-let initialClickPos = null; // To differentiate click from drag
-let firstMoveAfterLock = true; // NEW: Flag to ignore first movement after pointer lock
-
-// Performance optimization: InstancedMesh
-// Removed global instancedMesh, now managed by chunks
-const dummy = new THREE.Object3D(); // For setting instance matrices
-const tempColor = new THREE.Color(); // For setting instance colors
-
-// NEU: Globale Variable für den Vorschau-Voxel
-const previewVoxelGeometry = new THREE.BoxGeometry(VS, VS, VS);
-const previewVoxelMaterial = new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.5, depthTest: false }); // depthTest: false, damit er immer sichtbar ist
-// NEW: Z-Fighting fix for preview voxel
-previewVoxelMaterial.polygonOffset = true;
-previewVoxelMaterial.polygonOffsetFactor = -1;
-let previewVoxelMesh = new THREE.Mesh(previewVoxelGeometry, previewVoxelMaterial); // Initialize here
-// ENDE NEU
-
-// Modus-Enum
-const Modes = {
-    ADD: 'Hinzufügen',
-    DELETE: 'Löschen',
-    DRAW: 'Zeichnen',
-    MEASURE: 'Messen', // NEW
-};
-let currentMode = Modes.ADD; // Standardmodus
-
-// Undo/Redo History
-let history = []; // Declared globally
-let historyPointer = -1; // Declared globally
-const MAX_HISTORY_SIZE = 100; // Limit history to prevent excessive memory usage
-
-// NEW: Global variables for image template
-let templateImageMesh = null;
-// Updated templateImageData structure to store scaled dimensions
-let templateImageData = null; // { src: base64, position: [], rotation: [], scale: [], locked: boolean, scaledWidth: number, scaledHeight: number }
-
-// NEW: Mobile specific flags and variables
-let isMobile = window.matchMedia('(max-width: 768px)').matches;
-let touchAssistEnabled = false; // For magnetic targeting
-
-// NEW: Distance measurement variables
-let distanceDisplay;
-let initialDragVoxelWorldPos = null;
-let dragAxisLock = null; // NEW: Stores the axis locked for line drawing ('x', 'y', 'z' or null)
-
-// NEW: Global variables for measurement
-let measurementStartPoint = null; // {gx, gy, gz} of the first clicked voxel
-let measurementEndPoint = null; // {gx, gy, gz} of the second clicked voxel
-
-
-/* ---------- Chunking System Classes and Helpers ---------- */
-
-function getChunkCoords(gx, gy, gz) {
-    return {
-        cx: Math.floor(gx / CHUNK_SIZE),
-        cy: Math.floor(gy / CHUNK_SIZE),
-        cz: Math.floor(gz / CHUNK_SIZE)
-    };
-}
-
-function getChunkKey(cx, cy, cz) {
-    return `${cx},${cy},${cz}`;
-}
-
-class VoxelChunk {
-    constructor(chunkX, chunkY, chunkZ, chunkSize, scene) {
-        this.chunkX = chunkX;
-        this.chunkY = chunkY;
-        this.chunkZ = chunkZ;
-        this.chunkSize = chunkSize;
-        this.scene = scene;
-
-        // Global offset for this chunk
-        this.offsetX = chunkX * chunkSize * VS;
-        this.offsetY = chunkY * chunkSize * VS;
-        this.offsetZ = chunkZ * chunkSize * VS;
-
-        // Map from local voxel key (within this chunk) to {color, instanceId}
-        this.voxels = new Map();
-        // Map from global voxel key to local instanceId within this chunk's InstancedMesh
-        this.globalToLocalInstanceIdMap = new Map();
-
-        const maxInstancesInChunk = chunkSize * chunkSize * chunkSize;
-        const voxelBaseGeometry = new THREE.BoxGeometry(VS, VS, VS);
-        const meshMaterial = new THREE.MeshLambertMaterial();
-
-        // Reverted to standard Three.js InstancedMesh color handling
-        this.instancedMesh = new THREE.InstancedMesh(voxelBaseGeometry, meshMaterial, maxInstancesInChunk);
-        // REMOVED: this.instancedMesh.geometry.setAttribute('instanceMatrix', this.instancedMesh.instanceMatrix); // This line caused the error
-        this.instancedMesh.instanceColor = new THREE.InstancedBufferAttribute(new Float32Array(maxInstancesInChunk * 3), 3);
-
-        this.instancedMesh.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
-        this.instancedMesh.instanceColor.setUsage(THREE.DynamicDrawUsage);
-        this.instancedMesh.castShadow = true;
-        this.instancedMesh.receiveShadow = true;
-        this.instancedMesh.count = 0; // Initially no instances
-        this.instancedMesh.position.set(this.offsetX, this.offsetY, this.offsetZ); // Position the chunk mesh
-        this.scene.add(this.instancedMesh);
-
-        // Bounding box for frustum culling
-        this.boundingBox = new THREE.Box3(
-            new THREE.Vector3(this.offsetX, this.offsetY, this.offsetZ),
-            new THREE.Vector3(this.offsetX + chunkSize * VS, this.offsetY + chunkSize * VS, this.offsetZ + chunkSize * VS)
-        );
-    }
-
-    // Helper to get local voxel key within chunk
-    getLocalKey(gx, gy, gz) {
-        const lx = gx % this.chunkSize;
-        const ly = gy % this.chunkSize;
-        const lz = gz % this.chunkSize;
-        return key(lx, ly, lz); // Use the global key function for local keys too
-    }
-
-    addVoxel(gx, gy, gz, colorHex) {
-        const localKey = this.getLocalKey(gx, gy, gz);
-        const globalKey = key(gx, gy, gz);
-
-        if (this.voxels.has(localKey)) {
-            // Update existing voxel
-            const instanceId = this.voxels.get(localKey).instanceId;
-            this.voxels.set(localKey, { color: colorHex, instanceId });
-            this.updateInstanceColor(instanceId, colorHex);
-        } else {
-            // Add new voxel
-            const instanceId = this.instancedMesh.count++;
-            this.voxels.set(localKey, { color: colorHex, instanceId });
-            this.globalToLocalInstanceIdMap.set(globalKey, instanceId); // Map global key to instance ID within this chunk
-
-            const localX = gx % this.chunkSize;
-            const localY = gy % this.chunkSize;
-            const localZ = gz % this.chunkSize;
-
-            dummy.position.set(localX * VS + HALF, localY * VS + HALF, localZ * VS + HALF);
-            dummy.updateMatrix();
-            this.instancedMesh.setMatrixAt(instanceId, dummy.matrix);
-            this.updateInstanceColor(instanceId, colorHex);
-            this.instancedMesh.instanceMatrix.needsUpdate = true;
-            this.instancedMesh.instanceColor.needsUpdate = true;
-        }
-    }
-
-    removeVoxel(gx, gy, gz) {
-        const localKey = this.getLocalKey(gx, gy, gz);
-        const globalKey = key(gx, gy, gz);
-
-        if (!this.voxels.has(localKey)) return;
-
-        const { instanceId: removedInstanceId } = this.voxels.get(localKey);
-
-        this.voxels.delete(localKey);
-        this.globalToLocalInstanceIdMap.delete(globalKey);
-
-        // Swap the last instance with the removed one to maintain dense buffer
-        const lastInstanceId = this.instancedMesh.count - 1;
-        if (removedInstanceId !== lastInstanceId) {
-            // Find the local key of the voxel that was at the lastInstanceId
-            let lastVoxelLocalKey = null;
-            for (const [lKey, data] of this.voxels.entries()) {
-                if (data.instanceId === lastInstanceId) {
-                    lastVoxelLocalKey = lKey;
-                    break;
-                }
-            }
-            
-            if (lastVoxelLocalKey !== null) {
-                // Copy matrix and color from last instance to removed instance's slot
-                const tempMatrix = new THREE.Matrix4();
-                this.instancedMesh.getMatrixAt(lastInstanceId, tempMatrix);
-                this.instancedMesh.setMatrixAt(removedInstanceId, tempMatrix);
-
-                const lastVoxelColor = this.voxels.get(lastVoxelLocalKey).color;
-                this.updateInstanceColor(removedInstanceId, lastVoxelColor);
-
-                // Update the instanceId in the last voxel's data
-                this.voxels.get(lastVoxelLocalKey).instanceId = removedInstanceId;
-                // Update the globalToLocalInstanceIdMap for the moved voxel
-                const [lx, ly, lz] = parseKey(lastVoxelLocalKey);
-                const globalX = this.chunkX * this.chunkSize + lx;
-                const globalY = this.chunkY * this.chunkSize + ly;
-                const globalZ = this.chunkZ * this.chunkSize + lz;
-                this.globalToLocalInstanceIdMap.set(key(globalX, globalY, globalZ), removedInstanceId);
-            }
-        }
-        this.instancedMesh.count--;
-        this.instancedMesh.instanceMatrix.needsUpdate = true;
-        this.instancedMesh.instanceColor.needsUpdate = true;
-    }
-
-    recolorVoxel(gx, gy, gz, newColorHex) {
-        const localKey = this.getLocalKey(gx, gy, gz);
-        if (!this.voxels.has(localKey)) return;
-
-        const { instanceId } = this.voxels.get(localKey);
-        this.voxels.set(localKey, { color: newColorHex, instanceId });
-        this.updateInstanceColor(instanceId, newColorHex);
-    }
-
-    updateInstanceColor(instanceId, hex) {
-        const c = new THREE.Color(hex);
-        // Set color using r, g, b components (0-1 range)
-        this.instancedMesh.instanceColor.setXYZ(instanceId, c.r, c.g, c.b);
-        this.instancedMesh.instanceColor.needsUpdate = true;
-    }
-
-    dispose() {
-        this.scene.remove(this.instancedMesh);
-        this.instancedMesh.geometry.dispose();
-        this.instancedMesh.material.dispose();
-        this.instancedMesh = null;
-        this.voxels.clear();
-        this.globalToLocalInstanceIdMap.clear();
-    }
-}
-
-
-/* ---------- Hilfsfunktionen (alle vor window.onload verschoben) ---------- */
-
-function onResize() {
-    // Use containerDiv for sizing
-    cam.aspect = containerDiv.clientWidth / containerDiv.clientHeight;
-    cam.updateProjectionMatrix();
-    ren.setSize(containerDiv.clientWidth, containerDiv.clientHeight);
-    // NEW: Adjust pixel ratio for mobile performance
-    if (isMobile) {
-        ren.setPixelRatio(Math.min(1.5, window.devicePixelRatio));
-    } else {
-        ren.setPixelRatio(window.devicePixelRatio);
-    }
-}
-
-function handleGesture() {
-    const pointers = [...activePointers.values()];
-    if (pointers.length === 0) return;
-
-    // --- Single-finger drag for camera rotation ---
-    if (pointers.length === 1 && gestureState.type === 'rotate') {
-        const p = pointers[0];
-        const dx = p.x - gestureState.lastMid.x;
-        const dy = p.y - gestureState.lastMid.y;
-
-        euler.y -= dx * ROTATE_SPEED_TOUCH;
-        euler.x -= dy * ROTATE_SPEED_TOUCH;
-        euler.x = Math.max(-Math.PI / 2, Math.min(Math.PI / 2, euler.x));
-        cam.quaternion.setFromEuler(euler);
-
-        gestureState.lastMid = { x: p.x, y: p.y };
-        return;
-    }
-
-    // --- Multi-finger gestures (pan/pinch) ---
-    if (pointers.length >= 2) {
-        const [p0, p1] = pointers;
-        const midX = (p0.x + p1.x) * 0.5;
-        const midY = (p0.y + p1.y) * 0.5;
-        const dist = Math.hypot(p1.x - p0.x, p1.y - p0.y);
-
-        // --- Determine gesture type on first move ---
-        if (gestureState.type === 'none') {
-            const dMid = Math.hypot(midX - gestureState.startMid.x, midY - gestureState.startMid.y);
-            const relDelta = Math.abs(dist - gestureState.startDist) / gestureState.startDist;
-
-            if (relDelta > PINCH_REL_TH) {
-                gestureState.type = 'pinch';
-            } else if (dMid > PAN_PIX_TH) {
-                gestureState.type = 'pan';
-            }
-            return; // Wait for next move event to execute
-        }
-
-        // --- Execute Pinch (Zoom) ---
-        else if (gestureState.type === 'pinch') {
-            const scale = dist / gestureState.lastDist;
-            const zoomDelta = (1 - scale) * PINCH_ZOOM_MULT * moveSpeed;
-            cam.position.addScaledVector(
-                cam.getWorldDirection(new THREE.Vector3()),
-                zoomDelta
-            );
-            gestureState.lastDist = dist;
-        }
-        // --- Execute Pan (Strafe) ---
-        else if (gestureState.type === 'pan') {
-            const panFactor = PAN_SPEED_TOUCH * moveSpeed;
-            const dx = (midX - gestureState.lastMid.x) * panFactor;
-            const dy = (midY - gestureState.lastMid.y) * panFactor;
-
-            const dir = cam.getWorldDirection(new THREE.Vector3());
-            const right = new THREE.Vector3().crossVectors(dir, cam.up).normalize();
-            // Use world up for vertical panning to avoid disorienting movement
-            const upVec = new THREE.Vector3(0, 1, 0);
-
-            cam.position.addScaledVector(right, -dx);
-            cam.position.addScaledVector(upVec, dy);
-
-            gestureState.lastMid = { x: midX, y: midY };
-        }
-    }
-}
-
-
-function releasePointer(id, eventType) { // Add eventType parameter
-    activePointers.delete(id);
-
-    // NEW: Handle three-finger swipe for undo/redo
-    if (gestureState.initialPointerCount >= 3 && activePointers.size === 0 && initialClickPos && eventType.pointerType === 'touch') {
-        const dx = eventType.clientX - initialClickPos.x;
-        const absDx = Math.abs(dx);
-
-        if (absDx > 50) { // Horizontal swipe threshold
-            if (dx > 0) redo();
-            else undo();
-        }
-    }
-
-    if (activePointers.size < 2) {
-        gestureState.type = 'none';
-        if (activePointers.size === 1) {
-            const last = [...activePointers.values()][0];
-            gestureState.lastMid = { x: last.x, y: last.y };
-        }
-    }
-
-    if (activePointers.size === 0) {
-        doubleTapDragActive = false;
-        lastActionVoxelCoords = null;
-        touchIndicator.style.display = 'none';
-        // Also reset fixed drag plane params for touch
-        fixedDragPlaneParams = { level: null, axis: null };
-        // Hide distance display on touch up
-        // Only hide if not in measurement mode or if measurement is completed
-        if (currentMode !== Modes.MEASURE || (currentMode === Modes.MEASURE && measurementStartPoint === null && measurementEndPoint === null)) {
-            distanceDisplay.style.display = 'none';
-        }
-        initialDragVoxelWorldPos = null;
-        dragAxisLock = null; // NEW: Reset drag axis lock
-    }
-}
-
-function rebuildHelpers() {
-    if (typeof THREE === 'undefined') {
-        console.error("THREE is not defined in rebuildHelpers. Cannot rebuild helpers.");
-        return;
-    }
-    if (gridHelper) scene.remove(gridHelper);
-    if (boxHelper) scene.remove(boxHelper);
-
-    const size = GRID * VS;
-
-    if (currentDrawingAxis === 'y') {
-        gridHelper = new THREE.GridHelper(size, GRID, 0x444444, 0x444444 );
-        gridHelper.position.set(size / 2, activeDrawingLevel.y * VS, size / 2);
-    } else if (currentDrawingAxis === 'x') {
-        gridHelper = new THREE.GridHelper(size, GRID, 0x444444, 0x444444);
-        gridHelper.rotation.z = Math.PI / 2;
-        gridHelper.position.set(activeDrawingLevel.x * VS, size / 2, size / 2);
-    } else if (currentDrawingAxis === 'z') {
-        gridHelper = new THREE.GridHelper(size, GRID, 0x444444, 0x444444);
-        gridHelper.rotation.x = Math.PI / 2;
-        gridHelper.position.set(size / 2, size / 2, activeDrawingLevel.z * VS);
-    }
-    scene.add(gridHelper);
-
-    const edges = new THREE.EdgesGeometry(new THREE.BoxGeometry(size, size, size));
-    boxHelper = new THREE.LineSegments(edges, new THREE.LineBasicMaterial({ color: 0x00ffff }));
-    boxHelper.position.set(size / 2, size / 2, size / 2);
-    scene.add(boxHelper);
-}
-
-function updateGridHelperPosition() {
-    rebuildHelpers();
-    localStorage.setItem('voxelEditorActiveDrawingLevelX', activeDrawingLevel.x);
-    localStorage.setItem('voxelEditorActiveDrawingLevelY', activeDrawingLevel.y);
-    localStorage.setItem('voxelEditorActiveDrawingLevelZ', activeDrawingLevel.z);
-    localStorage.setItem('voxelEditorCurrentDrawingAxis', currentDrawingAxis);
-}
-
-function cycleMode() {
-    switch (currentMode) {
-        case Modes.ADD:
-            currentMode = Modes.DELETE;
-            break;
-        case Modes.DELETE:
-            currentMode = Modes.DRAW;
-            break;
-        case Modes.DRAW:
-            currentMode = Modes.MEASURE; // Cycle to Measure mode
-            break;
-        case Modes.MEASURE: // NEW: Cycle back to ADD mode
-            currentMode = Modes.ADD;
-            // Reset measurement state when exiting measure mode
-            measurementStartPoint = null;
-            measurementEndPoint = null;
-            distanceDisplay.style.display = 'none';
-            break;
-    }
-    document.getElementById('current-mode').textContent = `Modus: ${currentMode}`;
-    fixedDragPlaneParams = { level: null, axis: null };
-    lastActionVoxelCoords = null;
-    updatePreviewVoxel(0, 0, 0, false); // Hide preview when changing mode
-}
-
-function setActivePreset(index) {
-    if (index >= 0 && index < presetColors.length) {
-        currentColor = presetColors[index];
-        document.getElementById('color-picker').value = currentColor;
-        localStorage.setItem('voxelEditorColor', currentColor); // Save as current selected color
-
-        // Update active class for visual feedback
-        presetBoxes.forEach((box, i) => {
-            if (i === index) {
-                box.classList.add('active');
-            } else {
-                box.classList.remove('active');
-            }
-        });
-        activePresetIndex = index; // Store which preset is active
-    }
-}
-
-// New function to save current color to a preset slot
-function savePresetColor(index, colorValue) { // Modified to accept colorValue
-    if (index >= 0 && index < presetColors.length) {
-        presetColors[index] = colorValue; // Update the array with the new color
-        localStorage.setItem(`voxelPresetColor${index + 1}`, colorValue); // Persist to local storage
-        // The input type="color" itself will update its background color
-        // No need to call setActivePreset here, as it's a direct edit of the preset
-        console.log(`Preset color ${index + 1} saved: ${colorValue}`);
-    }
-}
-
-function addCommand(type, gx, gy, gz, oldColor = null, newColor = null, oldState = null, newState = null, commandData = null) {
-    // Clear redo history
-    if (historyPointer < history.length - 1) {
-        history.splice(historyPointer + 1);
-    }
-
-    history.push({ type, gx, gy, gz, oldColor, newColor, oldState, newState, commandData });
-    historyPointer++;
-
-    // Limit history size
-    if (history.length > MAX_HISTORY_SIZE) {
-        history.shift();
-        historyPointer--;
-    }
-}
-
-function executeCommand(command, reverse = false) {
-    const { type, gx, gy, gz, oldColor, newColor, oldState, newState, commandData } = command;
-    switch (type) {
-        case 'add':
-            // For add, we need the dimensions from the command data
-            const addDimX = commandData ? commandData.dimX : 1;
-            const addDimY = commandData ? commandData.dimY : 1;
-            const addDimZ = commandData ? commandData.dimZ : 1;
-            if (reverse) {
-                removeVoxel(gx, gy, gz, addDimX, addDimY, addDimZ, true); // true for fromHistory
-            } else {
-                addVoxel(gx, gy, gz, newColor, addDimX, addDimY, addDimZ, true); // true for fromHistory
-            }
-            break;
-        case 'delete':
-            // For delete, we need the dimensions from the command data
-            const delDimX = commandData ? commandData.dimX : 1;
-            const delDimY = commandData ? commandData.dimY : 1;
-            const delDimZ = commandData ? commandData.dimZ : 1;
-            if (reverse) {
-                addVoxel(gx, gy, gz, oldColor, delDimX, delDimY, delDimZ, true); // Re-add with original color
-            } else {
-                removeVoxel(gx, gy, gz, delDimX, delDimY, delDimZ, true);
-            }
-            break;
-        case 'recolor':
-            if (reverse) {
-                recolorVoxel(gx, gy, gz, oldColor, true);
-            } else {
-                recolorVoxel(gx, gy, gz, newColor, true);
-            }
-            break;
-        case 'clearAll':
-            if (reverse) {
-                clearAllInternal(true); // Clear current state first without history
-                // Restore old state by adding voxels back
-                oldState.forEach(v => addVoxel(v.gx, v.gy, v.gz, v.color, v.dimX, v.dimY, v.dimZ, true));
-            } else {
-                clearAllInternal(true); // Clear directly without history
-            }
-            break;
-        case 'fillLevel':
-            if (reverse) {
-                clearAllInternal(true); // Clear current state
-                oldState.forEach(v => addVoxel(v.gx, v.gy, v.gz, v.color, v.dimX, v.dimY, v.dimZ, true));
-            } else {
-                clearAllInternal(true); // Clear current state
-                newState.forEach(v => addVoxel(v.gx, v.gy, v.gz, v.color, v.dimX, v.dimY, v.dimZ, true)); // Fixed gy to v.gy
-            }
-            break;
-        case 'resizeGrid':
-            const targetGridSize = reverse ? commandData.oldGrid : commandData.newGrid;
-            GRID = targetGridSize;
-            document.getElementById('grid-size-slider').value = GRID;
-            document.getElementById('grid-size-display').textContent = `${GRID}×${GRID}×${GRID}`;
-            localStorage.setItem('voxelEditorGridSize', GRID);
-
-            clearAllInternal(true); // Clear current state without history
-            const targetState = reverse ? oldState : newState;
-            targetState.forEach(v => addVoxel(v.gx, v.gy, v.gz, v.color, v.dimX, v.dimY, v.dimZ, true));
-            break;
-        case 'line': // NEW: Handle line command
-            // Restore old state first
-            clearAllInternal(true); // Clear current state without history logging
-            oldState.forEach(v => addVoxel(v.gx, v.gy, v.gz, v.color, v.dimX, v.dimY, v.dimZ, true));
-
-            // Then apply new state (or re-apply old state if reversing)
-            const lineStateToApply = reverse ? oldState : newState;
-            // Clear current state again before applying the target state
-            clearAllInternal(true); // Clear current state without history logging
-            lineStateToApply.forEach(v => addVoxel(v.gx, v.gy, v.gz, v.color, v.dimX, v.dimY, v.dimZ, true));
-            break;
-    }
-    rebuildHelpers(); // Ensure helpers reflect the new state
-}
-
-function undo() {
-    if (historyPointer >= 0) {
-        executeCommand(history[historyPointer], true); // true for reverse
-        historyPointer--;
-    }
-}
-
-function redo() {
-    if (historyPointer < history.length - 1) {
-        historyPointer++;
-        executeCommand(history[historyPointer], false); // false for forward
-    }
-}
-
-
-// Function to add a voxel (updates the voxels Map, and the relevant chunk)
-function addVoxel(gx, gy, gz, colorHex, dimX = 1, dimY = 1, dimZ = 1, fromHistory = false) {
-    // This function now adds a single voxel at (gx,gy,gz).
-    // The `dimX, dimY, dimZ` parameters are passed to `performVoxelModification`
-    // to handle the actual block placement, ensuring history captures the block's dimensions.
-
-    // Clamp coordinates to grid boundaries
-    gx = Math.max(0, Math.min(GRID - 1, gx));
-    gy = Math.max(0, Math.min(GRID - 1, gy));
-    gz = Math.max(0, Math.min(GRID - 1, gz));
-
-    const globalKey = key(gx, gy, gz);
-
-    // Check if a voxel already exists at this exact coordinate
-    if (voxels.has(globalKey)) {
-        const existingData = voxels.get(globalKey);
-        if (existingData.color !== colorHex) {
-            if (!fromHistory) {
-                addCommand('recolor', gx, gy, gz, existingData.color, colorHex);
-            }
-            voxels.set(globalKey, { color: colorHex }); // Update color in global map
-            const { cx, cy, cz } = getChunkCoords(gx, gy, gz);
-            const chunkKey = getChunkKey(cx, cy, cz);
-            if (chunks.has(chunkKey)) {
-                chunks.get(chunkKey).recolorVoxel(gx, gy, gz, colorHex);
-            }
-        }
-        return; // Voxel already exists and color is same or updated
-    } else {
-        // New voxel, add to global voxels map
-        if (!fromHistory) {
-            // Store dimensions for undo/redo
-            addCommand('add', gx, gy, gz, null, colorHex, null, null, { dimX, dimY, dimZ });
-        }
-        voxels.set(globalKey, { color: colorHex }); // Store color in global map
-
-        const { cx, cy, cz } = getChunkCoords(gx, gy, gz);
-        const chunkKey = getChunkKey(cx, cy, cz);
-        let chunk = chunks.get(chunkKey);
-        if (!chunk) {
-            chunk = new VoxelChunk(cx, cy, cz, CHUNK_SIZE, scene);
-            chunks.set(chunkKey, chunk);
-        }
-        chunk.addVoxel(gx, gy, gz, colorHex);
-    }
-}
-
-
-// Function to remove a voxel (updates the voxels Map and the relevant chunk)
-function removeVoxel(gx, gy, gz, dimX = 1, dimY = 1, dimZ = 1, fromHistory = false) {
-    // This function now removes a single voxel at (gx,gy,gz).
-    // The `dimX, dimY, dimZ` parameters are passed to `performVoxelModification`
-    // to handle the actual block removal, ensuring history captures the block's dimensions.
-
-    const globalKey = key(gx, gy, gz);
-    if (!voxels.has(globalKey)) {
-        return; // Voxel does not exist
-    }
-
-    const removedVoxelData = voxels.get(globalKey);
-
-    if (!fromHistory) {
-        // Store dimensions for undo/redo
-        addCommand('delete', gx, gy, gz, removedVoxelData.color, null, null, null, { dimX, dimY, dimZ });
-    }
-
-    voxels.delete(globalKey); // Remove from global map
-
-    const { cx, cy, cz } = getChunkCoords(gx, gy, gz);
-    const chunkKey = getChunkKey(cx, cy, cz);
-    if (chunks.has(chunkKey)) {
-        const chunk = chunks.get(chunkKey);
-        chunk.removeVoxel(gx, gy, gz);
-        if (chunk.instancedMesh.count === 0) {
-            chunk.dispose();
-            chunks.delete(chunkKey);
-        }
-    }
-}
-
-// Function to recolor a voxel (updates the voxels Map and the relevant chunk)
-function recolorVoxel(gx, gy, gz, newColorHex, fromHistory = false) {
-    const globalKey = key(gx, gy, gz);
-    if (!voxels.has(globalKey)) {
-        return; // Voxel does not exist
-    }
-
-    const existingData = voxels.get(globalKey);
-    if (existingData.color === newColorHex) {
-        return; // Color is already the same
-    }
-
-    if (!fromHistory) {
-        addCommand('recolor', gx, gy, gz, existingData.color, newColorHex);
-    }
-
-    voxels.set(globalKey, { color: newColorHex }); // Update color in global map
-
-    const { cx, cy, cz } = getChunkCoords(gx, gy, gz);
-    const chunkKey = getChunkKey(cx, cy, cz);
-    if (chunks.has(chunkKey)) {
-        chunks.get(chunkKey).recolorVoxel(gx, gy, gz, newColorHex);
-    }
-}
-
-// NEW: Helper function to perform the actual voxel modification for a block
-// Now takes explicit dimX, dimY, dimZ
-function performVoxelModification(baseX, baseY, baseZ, mode, color, dimX, dimY, dimZ) {
-    for (let xOffset = 0; xOffset < dimX; xOffset++) {
-        for (let yOffset = 0; yOffset < dimY; yOffset++) {
-            for (let zOffset = 0; zOffset < dimZ; zOffset++) {
-                const x = baseX + xOffset;
-                const y = baseY + yOffset;
-                const z = baseZ + zOffset;
-
-                // Clamp coordinates to grid boundaries
-                const clampedX = Math.max(0, Math.min(GRID - 1, x));
-                const clampedY = Math.max(0, Math.min(GRID - 1, y));
-                const clampedZ = Math.max(0, Math.min(GRID - 1, z));
-
-                const voxelKey = key(clampedX, clampedY, clampedZ);
-                const actualHasVoxel = voxels.has(voxelKey);
-
-                switch (mode) {
-                    case Modes.ADD:
-                        if (!actualHasVoxel) {
-                            addVoxel(clampedX, clampedY, clampedZ, color, dimX, dimY, dimZ, true); // true for fromHistory
-                        }
-                        break;
-                    case Modes.DELETE:
-                        if (actualHasVoxel) {
-                            removeVoxel(clampedX, clampedY, clampedZ, dimX, dimY, dimZ, true); // true for fromHistory
-                        }
-                        break;
-                    case Modes.DRAW:
-                        if (actualHasVoxel && voxels.get(voxelKey).color !== color) {
-                            recolorVoxel(clampedX, clampedY, clampedZ, color, true); // true for fromHistory
-                        }
-                        break;
-                }
-            }
-        }
-    }
-}
-
-// NEW: DDA (Digital Differential Analyzer) for 3D Line Drawing
-function drawLineOfVoxels(start, end, mode, color, dimX, dimY, dimZ) {
-    // Capture the state before the line drawing for undo/redo
-    const oldState = [...voxels.entries()].map(([id, data]) => {
-        const [gx, gy, gz] = parseKey(id);
-        // We need to store the dimensions for each voxel if we want to perfectly restore
-        // a line of multi-voxel blocks. For now, we'll assume line drawing only applies
-        // 1x1x1 voxels, or the same block size for each point on the line.
-        // For simplicity, we'll capture the current state and restore it.
-        return { gx, gy, gz, color: data.color, dimX: 1, dimY: 1, dimZ: 1 }; // Store default 1x1x1 for simplicity
-    });
-
-    let x = start.gx;
-    let y = start.gy;
-    let z = start.gz;
-    const x2 = end.gx;
-    const y2 = end.gy;
-    const z2 = end.gz;
-
-    const dx = x2 - x;
-    const dy = y2 - y;
-    const dz = z2 - z;
-
-    const steps = Math.max(Math.abs(dx), Math.abs(dy), Math.abs(dz));
-
-    if (steps === 0) {
-        performVoxelModification(x, y, z, mode, color, dimX, dimY, dimZ);
-    } else {
-        const x_inc = dx / steps;
-        const y_inc = dy / steps;
-        const z_inc = dz / steps;
-
-        for (let i = 0; i <= steps; i++) {
-            // Apply modification for the base of the block
-            performVoxelModification(Math.round(x), Math.round(y), Math.round(z), mode, color, dimX, dimY, dimZ);
-            x += x_inc;
-            y += y_inc;
-            z += z_inc;
-        }
-    }
-    // After drawing the line, add a single command to history
-    // We need to compare the current state with `oldState` to determine `newState`
-    const newState = [...voxels.entries()].map(([id, data]) => {
-        const [gx, gy, gz] = parseKey(id);
-        return { gx, gy, gz, color: data.color, dimX: 1, dimY: 1, dimZ: 1 }; // Store default 1x1x1 for simplicity
-    });
-    addCommand('line', null, null, null, null, null, oldState, newState);
-}
-
-
-// NEU: Hilfsfunktion zum Aktualisieren des Vorschau-Voxels
-// Now takes explicit dimX, dimY, dimZ, but for MEASURE mode, it will override to 1x1x1
-function updatePreviewVoxel(x, y, z, visible, dimX = 1, dimY = 1, dimZ = 1) {
-    if (previewVoxelMesh) {
-        if (visible) {
-            // For MEASURE mode, always show a 1x1x1 preview
-            if (currentMode === Modes.MEASURE) {
-                dimX = 1;
-                dimY = 1;
-                dimZ = 1;
-            }
-
-            // Dispose old geometry if dimensions change
-            if (previewVoxelMesh.geometry.parameters.width !== dimX * VS ||
-                previewVoxelMesh.geometry.parameters.height !== dimY * VS ||
-                previewVoxelMesh.geometry.parameters.depth !== dimZ * VS) {
-                previewVoxelMesh.geometry.dispose();
-                const tempGeometry = new THREE.BoxGeometry(dimX * VS, dimY * VS, dimZ * VS);
-                previewVoxelMesh.geometry = tempGeometry;
-            }
-
-
-            // Calculate the center of the block relative to its (x,y,z) base corner
-            const centerX = x * VS + (dimX * VS) / 2;
-            const centerY = y * VS + (dimY * VS) / 2;
-            const centerZ = z * VS + (dimZ * VS) / 2;
-
-            previewVoxelMesh.position.set(centerX, centerY, centerZ);
-
-            previewVoxelMesh.visible = true;
-            previewVoxelMaterial.color.set(currentColor); // Vorschau-Farbe an aktuelle Farbe anpassen
-            // Optional: Passe die Opazität basierend auf dem Modus an
-            if (currentMode === Modes.DELETE) {
-                previewVoxelMaterial.opacity = 0.2; // Weniger sichtbar beim Löschen
-            } else {
-                previewVoxelMaterial.opacity = 0.5; // Standard Opazität
-            }
-        } else {
-            previewVoxelMesh.visible = false;
-        }
-    }
-}
-// ENDE NEU
-
-// NEW helper function to set the fixed drag plane parameters
-function setFixedDragPlane(clientX, clientY, mode) {
-    // Only set fixed drag plane for ADD mode
-    if (mode !== Modes.ADD) {
-        fixedDragPlaneParams = { level: null, axis: null };
-        return;
-    }
-
-    const rect = cvs.getBoundingClientRect();
-    const mouse = new THREE.Vector2(((clientX - rect.left) / rect.width) * 2 - 1,
-                                    -((clientY - rect.top) / rect.height) * 2 + 1);
-    const raycaster = new THREE.Raycaster();
-    raycaster.setFromCamera(mouse, cam);
-    
-    // Raycast against all active chunk meshes
-    const objectsToIntersect = Array.from(chunks.values()).map(chunk => chunk.instancedMesh);
-    const intersects = raycaster.intersectObjects(objectsToIntersect);
-
-    if (intersects.length > 0) {
-        const hit = intersects[0];
-        // The face normal is in world coordinates for the hit face
-        const hitNormal = hit.face.normal.clone();
-        
-        // BUGFIX: Move the intersection point slightly *inside* the hit voxel
-        // This ensures that flooring the coordinate gives the coordinate of the HIT voxel, not the next one.
-        const hitPoint = hit.point.clone().sub(hitNormal.multiplyScalar(0.01));
-
-        // Convert world position to grid coordinates
-        const hitVoxelX = Math.floor(hitPoint.x / VS);
-        const hitVoxelY = Math.floor(hitPoint.y / VS);
-        const hitVoxelZ = Math.floor(hitPoint.z / VS);
-
-        let level, axis;
-
-        // The normal needs to be reset for axis detection after being used for the offset calculation
-        const axisNormal = hit.face.normal;
-        const absNx = Math.abs(axisNormal.x);
-        const absNy = Math.abs(axisNormal.y);
-        const absNz = Math.abs(axisNormal.z);
-
-        // When adding, we want to place on the *next* layer relative to the hit voxel
-        if (absNy > absNx && absNy > absNz) { 
-            axis = 'y';
-            level = hitVoxelY + Math.round(axisNormal.y);
-        } else if (absNx > absNy && absNx > absNz) {
-            axis = 'x';
-            level = hitVoxelX + Math.round(axisNormal.x);
-        } else {
-            axis = 'z';
-            level = hitVoxelZ + Math.round(axisNormal.z);
-        }
-        fixedDragPlaneParams.level = level;
-        fixedDragPlaneParams.axis = axis;
-    } else {
-        // If no voxel is hit, default to the current active drawing level and axis
-        fixedDragPlaneParams.axis = currentDrawingAxis;
-        fixedDragPlaneParams.level = activeDrawingLevel[currentDrawingAxis];
-    }
-}
-
-// NEW: Magnetic targeting helper for touch assist
-function getNearestVoxelCenter(intersectionPoint) {
-    const gx = Math.floor(intersectionPoint.x / VS);
-    const gy = Math.floor(intersectionPoint.y / VS);
-    const gz = Math.floor(intersectionPoint.z / VS);
-
-    // Calculate the center of the grid cell
-    return new THREE.Vector3(
-        gx * VS + HALF,
-        gy * VS + HALF,
-        gz * VS + HALF
-    );
-}
-
-
-// Modified calculateTargetVoxelCoords to use fixedDragPlaneParams and touchAssist
-function calculateTargetVoxelCoords(clientX, clientY, mode, isDragging, isStackingAdd, pointerType) { // Added pointerType
-    if (isPointerLocked) return null;
-
-    const rect = cvs.getBoundingClientRect();
-    const mouse = new THREE.Vector2(((clientX - rect.left) / rect.width) * 2 - 1,
-                                    -((clientY - rect.top) / rect.height) * 2 + 1);
-    const raycaster = new THREE.Raycaster();
-    raycaster.setFromCamera(mouse, cam);
-
-    const objectsToIntersect = Array.from(chunks.values()).map(chunk => chunk.instancedMesh);
-    let targetVoxelCoords = null;
-    let intersectionPoint = new THREE.Vector3();
-
-    // Priority 1: Fixed drag plane for ADD mode when dragging
-    if (isDragging && mode === Modes.ADD && fixedDragPlaneParams.level !== null && fixedDragPlaneParams.axis !== null) {
-        let planeNormal = new THREE.Vector3();
-        if (fixedDragPlaneParams.axis === 'y') planeNormal.set(0, 1, 0);
-        else if (fixedDragPlaneParams.axis === 'x') planeNormal.set(1, 0, 0);
-        else planeNormal.set(0, 0, 1);
-        
-        const drawingPlane = new THREE.Plane(planeNormal, -(fixedDragPlaneParams.level * VS));
-
-        if (raycaster.ray.intersectPlane(drawingPlane, intersectionPoint)) {
-            let gx = Math.floor(intersectionPoint.x / VS);
-            let gy = Math.floor(intersectionPoint.y / VS);
-            let gz = Math.floor(intersectionPoint.z / VS);
-
-            // Force the coordinate on the fixed axis to be the fixed level
-            if (fixedDragPlaneParams.axis === 'y') gy = fixedDragPlaneParams.level;
-            else if (fixedDragPlaneParams.axis === 'x') gx = fixedDragPlaneParams.level;
-            else if (fixedDragPlaneParams.axis === 'z') gz = fixedDragPlaneParams.level;
-
-            targetVoxelCoords = { gx, gy, gz };
-        } else {
-            // If ray does not intersect the fixed plane, it means the mouse is pointing away from it.
-            // In this specific dragging scenario with a fixed plane, we return null as no valid target
-            // can be found on the designated fixed plane.
-            return null; 
-        }
-    }
-    // Priority 2: General raycast for initial click, or non-ADD modes, or ADD mode without fixed drag plane
-    else {
-        const intersects = raycaster.intersectObjects(objectsToIntersect);
-        if (intersects.length > 0) {
-            const hit = intersects[0];
-            const hitNormal = hit.face.normal.clone();
-            intersectionPoint.copy(hit.point);
-
-            // BUGFIX: Move point slightly inside the hit voxel to get correct base coordinates
-            const hitPointInside = hit.point.clone().sub(hitNormal.multiplyScalar(0.01));
-            const hitVoxelX = Math.floor(hitPointInside.x / VS);
-            const hitVoxelY = Math.floor(hitPointInside.y / VS);
-            const hitVoxelZ = Math.floor(hitPointInside.z / VS);
-
-            if (mode === Modes.ADD) {
-                // Place on the face normal to the hit voxel
-                targetVoxelCoords = {
-                    gx: hitVoxelX + Math.round(hit.face.normal.x),
-                    gy: hitVoxelY + Math.round(hit.face.normal.y),
-                    gz: hitVoxelZ + Math.round(hit.face.normal.z)
-                };
-            } else { // DELETE, DRAW, MEASURE
-                // Target the hit voxel itself
-                targetVoxelCoords = { gx: hitVoxelX, gy: hitVoxelY, gz: hitVoxelZ };
-            }
-        } else if (mode === Modes.ADD) {
-            // Fallback for ADD when nothing is hit, use activeDrawingLevel
-            // Define a mathematical plane based on the current active drawing level and axis
-            let planeNormal = new THREE.Vector3();
-            let planeConstant = 0; // Distance from origin
-            if (currentDrawingAxis === 'y') {
-                planeNormal.set(0, 1, 0);
-                planeConstant = -(activeDrawingLevel.y * VS);
-            } else if (currentDrawingAxis === 'x') {
-                planeNormal.set(1, 0, 0);
-                planeConstant = -(activeDrawingLevel.x * VS);
-            } else if (currentDrawingAxis === 'z') {
-                planeNormal.set(0, 0, 1);
-                planeConstant = -(activeDrawingLevel.z * VS);
-            }
-            const drawingPlane = new THREE.Plane(planeNormal, planeConstant);
-
-            // Intersect the ray with this mathematical plane
-            if (raycaster.ray.intersectPlane(drawingPlane, intersectionPoint)) {
-                let gx = Math.floor(intersectionPoint.x / VS);
-                let gy = Math.floor(intersectionPoint.y / VS);
-                let gz = Math.floor(intersectionPoint.z / VS);
-
-                // Ensure the coordinate on the fixed axis is exactly the active drawing level
-                if (currentDrawingAxis === 'y') gy = activeDrawingLevel.y;
-                else if (currentDrawingAxis === 'x') gx = activeDrawingLevel.x;
-                else if (currentDrawingAxis === 'z') gz = activeDrawingLevel.z;
-
-                targetVoxelCoords = { gx, gy, gz };
-            } else {
-                // If the ray doesn't intersect the plane (e.g., camera is parallel or looking away),
-                // default to the center of the active drawing plane.
-                targetVoxelCoords = {
-                    gx: Math.floor(GRID / 2),
-                    gy: Math.floor(GRID / 2),
-                    gz: Math.floor(GRID / 2)
-                };
-                if (currentDrawingAxis === 'y') targetVoxelCoords.gy = activeDrawingLevel.y;
-                else if (currentDrawingAxis === 'x') targetVoxelCoords.gx = activeDrawingLevel.x;
-                else if (currentDrawingAxis === 'z') targetVoxelCoords.gz = activeDrawingLevel.z;
-            }
-        }
-    }
-
-    if (targetVoxelCoords) {
-        // Apply touch assist (magnetic targeting) if enabled for touch devices
-        if (pointerType === 'touch' && touchAssistEnabled && intersectionPoint) {
-            const snappedPos = getNearestVoxelCenter(intersectionPoint);
-            targetVoxelCoords.gx = Math.round(snappedPos.x / VS - HALF);
-            targetVoxelCoords.gy = Math.round(snappedPos.y / VS - HALF);
-            targetVoxelCoords.gz = Math.round(snappedPos.z / VS - HALF);
-        }
-
-        // Clamp coordinates to grid boundaries
-        targetVoxelCoords.gx = Math.max(0, Math.min(GRID - 1, targetVoxelCoords.gx));
-        targetVoxelCoords.gy = Math.max(0, Math.min(GRID - 1, targetVoxelCoords.gy));
-        targetVoxelCoords.gz = Math.max(0, Math.min(GRID - 1, targetVoxelCoords.gz));
-        return targetVoxelCoords;
-    }
-    return null;
-}
-
-function clearAllInternal(fromHistory = false) {
-    if (!fromHistory) {
-        const oldState = [...voxels.entries()].map(([id, data]) => {
-            const parts = parseKey(id);
-            return { gx: parts[0], gy: parts[1], gz: parts[2], color: data.color };
-        });
-        addCommand('clearAll', null, null, null, null, null, oldState, []);
-    }
-    // Dispose all chunks and clear the chunks map
-    for (const chunk of chunks.values()) {
-        chunk.dispose();
-    }
-    chunks.clear();
-    voxels.clear(); // Clear global voxel map
-    rebuildHelpers(); // Ensure helpers are reset or updated appropriately
-}
-
-function clearAll() {
-    clearAllInternal(false); // User initiated clear, adds to history
-}
-
-
-function fillActiveLevel() {
-    // Capture the current state before the fill for undo/redo
-    const oldState = [...voxels.entries()].map(([id, data]) => {
-        const parts = parseKey(id);
-        return { gx: parts[0], gy: parts[1], gz: parts[2], color: data.color };
-    });
-
-    // Clear existing voxels on the plane for fill, without adding to history
-    const voxelsToRemove = [];
-    for (let x = 0; x < GRID; x++) {
-        for (let z = 0; z < GRID; z++) {
-            let gx, gy, gz;
-            if (currentDrawingAxis === 'y') {
-                gx = x;
-                gy = activeDrawingLevel.y;
-                gz = z;
-            } else if (currentDrawingAxis === 'x') {
-                gx = activeDrawingLevel.x;
-                gy = x; // Use x as y-coordinate for horizontal plane
-                gz = z; // Use z as z-coordinate
-            }
-            else if (currentDrawingAxis === 'z') {
-                gx = x;
-                gy = z; // Use z as y-coordinate for horizontal plane
-                gz = activeDrawingLevel.z;
-            }
-            const k = key(gx, gy, gz);
-            if (voxels.has(k)) {
-                voxelsToRemove.push(k);
-            }
-        }
-    }
-    // Remove all existing voxels on the plane
-    voxelsToRemove.forEach(k => {
-        const [gx, gy, gz] = parseKey(k);
-        removeVoxel(gx, gy, gz, 1, 1, 1, true); // true for fromHistory, to avoid adding individual delete commands
-    });
-
-
-    // Add new voxels for the fill
-    const newState = [];
-    for (let x = 0; x < GRID; x++) {
-        for (let z = 0; z < GRID; z++) {
-            let gx, gy, gz;
-            if (currentDrawingAxis === 'y') {
-                gx = x;
-                gy = activeDrawingLevel.y;
-                gz = z;
-            } else if (currentDrawingAxis === 'x') {
-                gx = activeDrawingLevel.x;
-                gy = x;
-                gz = z;
-            }
-            else if (currentDrawingAxis === 'z') {
-                gx = x;
-                gy = z;
-                gz = activeDrawingLevel.z;
-            }
-            addVoxel(gx, gy, gz, currentColor, 1, 1, 1, true); // true for fromHistory, to avoid adding individual add commands
-            newState.push({ gx, gy, gz, color: currentColor, dimX: 1, dimY: 1, dimZ: 1 });
-        }
-    }
-
-    // Add a single command for the entire fill operation
-    addCommand('fillLevel', null, null, null, null, null, oldState, newState);
-}
-
-
-function saveJSON() {
-    const data = {};
-    voxels.forEach((value, k) => { // k is now a number
-        const [gx,gy,gz] = parseKey(k); // Parse the numeric key back to coords
-        data[`${gx},${gy},${gz}`] = value.color; // Save as string key
-    });
-
-    const settings = {
-        gridSize: GRID,
-        cameraPosition: cam.position.toArray(),
-        cameraQuaternion: cam.quaternion.toArray(),
-        activeDrawingLevel: activeDrawingLevel,
-        currentDrawingAxis: currentDrawingAxis,
-        currentColor: currentColor,
-        presetColors: presetColors,
-        activePresetIndex: activePresetIndex,
-        moveSpeed: moveSpeed, // Save fly speed
-        currentBlockSize: currentBlockSize, // Save current block size
-        dynamicBlockDim: dynamicBlockDim, // NEW: Save dynamic block dimensions
-        useDynamicBlockDim: useDynamicBlockDim, // NEW: Save dynamic block flag
-        templateImageData: templateImageData // NEW: Save template image data
-    };
-
-    const projectData = {
-        voxels: data,
-        settings: settings
-    };
-
-    const json = JSON.stringify(projectData, null, 2);
-    const blob = new Blob([json], { type: 'application/json' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = 'voxel_project.json';
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
-    URL.revokeObjectURL(url);
-}
-
-function resetToDefaultProject() {
-    clearAllInternal(true); // Clear everything without adding to history
-    GRID = 10;
-    document.getElementById('grid-size-slider').value = GRID;
-    document.getElementById('grid-size-display').textContent = `${GRID}×${GRID}×${GRID}`;
-    localStorage.setItem('voxelEditorGridSize', GRID);
-
-    currentColor = '#ffffff';
-    document.getElementById('color-picker').value = currentColor;
-    localStorage.setItem('voxelEditorColor', currentColor);
-
-    activeDrawingLevel = { x: 0, y: 0, z: 0 };
-    currentDrawingAxis = 'y';
-    localStorage.setItem('voxelEditorActiveDrawingLevelX', activeDrawingLevel.x);
-    localStorage.setItem('voxelEditorActiveDrawingLevelY', activeDrawingLevel.y);
-    localStorage.setItem('voxelEditorActiveDrawingLevelZ', activeDrawingLevel.z);
-    localStorage.setItem('voxelEditorCurrentDrawingAxis', currentDrawingAxis);
-
-    moveSpeed = 0.1;
-    document.getElementById('fly-speed-slider').value = moveSpeed;
-    document.getElementById('fly-speed-display').textContent = moveSpeed.toFixed(2);
-    localStorage.setItem('voxelEditorFlySpeed', moveSpeed);
-
-    currentBlockSize = 1;
-    setFixedBlockSize(currentBlockSize); // Use setFixedBlockSize
-    localStorage.setItem('voxelEditorCurrentBlockSize', currentBlockSize);
-
-    // NEW: Reset dynamic block size
-    dynamicBlockDim = { x: 1, y: 1, z: 1 };
-    useDynamicBlockDim = false;
-    localStorage.setItem('voxelEditorDynamicBlockDimX', dynamicBlockDim.x);
-    localStorage.setItem('voxelEditorDynamicBlockDimY', dynamicBlockDim.y);
-    localStorage.setItem('voxelEditorDynamicDimZ', dynamicBlockDim.z); // Fixed typo in local storage key
-    localStorage.setItem('voxelEditorUseDynamicBlockDim', useDynamicBlockDim);
-    document.getElementById('dynamic-block-x').value = dynamicBlockDim.x;
-    document.getElementById('dynamic-block-y').value = dynamicBlockDim.y;
-    document.getElementById('dynamic-block-z').value = dynamicBlockDim.z;
-    updateBlockSizeButtonsActiveState(); // Update active state for buttons
-
-
-    // Reset preset colors to defaults
-    presetColors[0] = '#8B4513';
-    presetColors[1] = '#708237';
-    presetColors[2] = '#6495ED';
-    localStorage.setItem('voxelPresetColor1', presetColors[0]);
-    localStorage.setItem('voxelPresetColor2', presetColors[1]);
-    localStorage.setItem('voxelPresetColor3', presetColors[2]);
-    presetBoxes.forEach((box, i) => {
-        // For input type="color", setting value directly updates its visual
-        box.value = presetColors[i];
-        box.classList.remove('active');
-    });
-    activePresetIndex = -1;
-
-    removeImageTemplate(true); // Remove template without history logging
-
-    history.length = 0;
-    historyPointer = -1;
-
-    // Reset measurement state
-    measurementStartPoint = null;
-    measurementEndPoint = null;
-    distanceDisplay.style.display = 'none';
-
-    rebuildHelpers();
-    resetCameraPosition();
-    console.log('Project reset to default state.');
-}
-
-
-function loadJSON(event) {
-    const file = event.target.files[0];
-    if (!file) return;
-
-    const reader = new FileReader();
-    reader.onload = (e) => {
-        try {
-            const projectData = JSON.parse(e.target.result);
-            const loadedVoxels = projectData.voxels;
-            const loadedSettings = projectData.settings;
-
-            // Clear current state and history before loading new project
-            clearAllInternal(true); // Clear without adding to history
-
-            // Remove existing template image if any
-            removeImageTemplate(true); // true to prevent history logging for this internal operation
-
-            // Load settings first to get the correct GRID size
-            if (loadedSettings) {
-                GRID = loadedSettings.gridSize !== undefined ? loadedSettings.gridSize : 10;
-                document.getElementById('grid-size-slider').value = GRID;
-                document.getElementById('grid-size-display').textContent = `${GRID}×${GRID}×${GRID}`;
-                localStorage.setItem('voxelEditorGridSize', GRID); // Ensure it's saved back
-                console.log("Loaded GRID size from JSON:", GRID);
-            } else {
-                console.warn("No settings found in JSON, using default GRID size.");
-            }
-
-            // Load voxels into the global map and create chunks as needed
-            for (const k in loadedVoxels) {
-                const colorValue = loadedVoxels[k];
-                const parts = k.split(',').map(Number); 
-                if (parts.length === 3 && !isNaN(parts[0]) && !isNaN(parts[1]) && !isNaN(parts[2])) {
-                    const gx = parts[0];
-                    const gy = parts[1];
-                    const gz = parts[2];
-
-                    // Only add if within the bounds of the newly loaded GRID size
-                    if (gx >= 0 && gx < GRID && gy >= 0 && gy < GRID && gz >= 0 && gz < GRID) {
-                        addVoxel(gx, gy, gz, colorValue, 1, 1, 1, true); // Use addVoxel to handle chunk creation/update, assume 1x1x1 for loaded voxels from old format
-                    }
-                }
-            }
-
-            // Continue loading other settings after GRID is set and InstancedMesh is re-initialized
-            if (loadedSettings) {
-                if (loadedSettings.cameraPosition) {
-                    cam.position.fromArray(loadedSettings.cameraPosition);
-                }
-                if (loadedSettings.cameraQuaternion) {
-                    cam.quaternion.fromArray(loadedSettings.cameraQuaternion);
-                    euler.setFromQuaternion(cam.quaternion, 'YXZ');
-                }
-                if (loadedSettings.activeDrawingLevel) {
-                    activeDrawingLevel = { ...loadedSettings.activeDrawingLevel };
-                    localStorage.setItem('voxelEditorActiveDrawingLevelX', activeDrawingLevel.x);
-                    localStorage.setItem('voxelEditorActiveDrawingLevelY', activeDrawingLevel.y);
-                    localStorage.setItem('voxelEditorActiveDrawingLevelZ', activeDrawingLevel.z);
-                }
-                if (loadedSettings.currentDrawingAxis) {
-                    currentDrawingAxis = loadedSettings.currentDrawingAxis;
-                    localStorage.setItem('voxelEditorCurrentDrawingAxis', currentDrawingAxis);
-                }
-                updateGridHelperPosition();
-
-                currentColor = loadedSettings.currentColor || '#ffffff';
-                document.getElementById('color-picker').value = currentColor;
-
-                if (loadedSettings.presetColors) {
-                    for(let i = 0; i < loadedSettings.presetColors.length && i < presetColors.length; i++) {
-                        presetColors[i] = loadedSettings.presetColors[i];
-                        // For input type="color", set the value
-                        document.getElementById(`color-preset-${i + 1}`).value = presetColors[i];
-                        localStorage.setItem(`voxelPresetColor${i + 1}`, presetColors[i]);
-                    }
-                }
-                setActivePreset(loadedSettings.activePresetIndex !== undefined ? loadedSettings.activePresetIndex : -1);
-
-                if (loadedSettings.moveSpeed !== undefined) {
-                    moveSpeed = loadedSettings.moveSpeed;
-                    document.getElementById('fly-speed-slider').value = moveSpeed;
-                    document.getElementById('fly-speed-display').textContent = moveSpeed.toFixed(2);
-                    localStorage.setItem('voxelEditorFlySpeed', moveSpeed);
-                }
-
-                if (loadedSettings.currentBlockSize !== undefined) {
-                    setFixedBlockSize(loadedSettings.currentBlockSize); // Use setFixedBlockSize
-                    localStorage.setItem('voxelEditorCurrentBlockSize', currentBlockSize);
-                }
-
-                // NEW: Load dynamic block dimensions and flag
-                if (loadedSettings.dynamicBlockDim) {
-                    dynamicBlockDim = { ...loadedSettings.dynamicBlockDim };
-                    document.getElementById('dynamic-block-x').value = dynamicBlockDim.x;
-                    document.getElementById('dynamic-block-y').value = dynamicBlockDim.y;
-                    document.getElementById('dynamic-block-z').value = dynamicBlockDim.z;
-                    localStorage.setItem('voxelEditorDynamicDimX', dynamicBlockDim.x); // Fixed typo in local storage key
-                    localStorage.setItem('voxelEditorDynamicDimY', dynamicBlockDim.y); // Fixed typo in local storage key
-                    localStorage.setItem('voxelEditorDynamicDimZ', dynamicBlockDim.z); // Fixed typo in local storage key
-                }
-                if (loadedSettings.useDynamicBlockDim !== undefined) {
-                    useDynamicBlockDim = loadedSettings.useDynamicBlockDim;
-                    localStorage.setItem('voxelEditorUseDynamicBlockDim', useDynamicBlockDim);
-                }
-                updateBlockSizeButtonsActiveState(); // Update active state for buttons
-
-
-                if (loadedSettings.templateImageData) {
-                    templateImageData = loadedSettings.templateImageData;
-                    console.log("Loading template image data:", templateImageData);
-                    const loader = new THREE.TextureLoader();
-                    loader.load(templateImageData.src, (texture) => {
-                        const material = new THREE.MeshBasicMaterial({ map: texture, side: THREE.DoubleSide, transparent: true, depthWrite: false });
-                        const geometry = new THREE.PlaneGeometry(templateImageData.scaledWidth, templateImageData.scaledHeight);
-                        if (templateImageMesh) {
-                            scene.remove(templateImageMesh);
-                            templateImageMesh.geometry.dispose();
-                            templateImageMesh.material.dispose();
-                        }
-                        templateImageMesh = new THREE.Mesh(geometry, material);
-                        templateImageMesh.position.fromArray(templateImageData.position);
-                        templateImageMesh.rotation.fromArray(templateImageData.rotation);
-                        templateImageMesh.scale.fromArray(templateImageData.scale);
-                        templateImageMesh.renderOrder = -1;
-                        scene.add(templateImageMesh);
-                        document.getElementById('removeImageTemplateBtn').style.display = 'inline-block';
-                    }, undefined, (err) => {
-                        console.error('Error loading template image texture:', err);
-                        templateImageMesh = null;
-                        templateImageData = null;
-                        document.getElementById('removeImageTemplateBtn').style.display = 'none';
-                    });
-                }
-            }
-
-            history.length = 0;
-            historyPointer = -1;
-
-            // Reset measurement state on load
-            measurementStartPoint = null;
-            measurementEndPoint = null;
-            distanceDisplay.style.display = 'none';
-
-            console.log('Project loaded successfully.');
-            resetCameraPosition();
-        } catch (error) {
-            console.error('Error loading JSON file:', error);
-            showMessageModal('Fehler', 'Fehler beim Laden der Datei. Stellen Sie sicher, dass es sich um eine gültige Voxel-Projekt-JSON-Datei handelt. Fehler: ' + error.message);
-            resetToDefaultProject(); // Reset to safe state on error
-        }
-    };
-    reader.readAsText(file);
-}
-
-
-function exportSTL() {
-    if (voxels.size === 0) {
-        showMessageModal('Export fehlgeschlagen', 'Keine Voxel zum Exportieren vorhanden!');
-        return;
-    }
-
-    const geometriesToMerge = [];
-    const tempBoxGeometry = new THREE.BoxGeometry(VS, VS, VS);
-    const tempMatrix = new THREE.Matrix4();
-    const tempColorExport = new THREE.Color();
-
-    voxels.forEach((data, k) => {
-        const [x, y, z] = parseKey(k);
-        
-        dummy.position.set(x * VS + HALF, y * VS + HALF, z * VS + HALF);
-        dummy.updateMatrix();
-        tempMatrix.copy(dummy.matrix); // Use dummy for matrix calculation
-
-        tempColorExport.set(data.color);
-
-        const instanceGeometry = tempBoxGeometry.clone();
-        instanceGeometry.applyMatrix4(tempMatrix);
-
-        const vertexColorArray = [];
-        for (let j = 0; j < instanceGeometry.attributes.position.count; j++) {
-            vertexColorArray.push(tempColorExport.r, tempColorExport.g, tempColorExport.b); // Fixed typo here
-        }
-        instanceGeometry.setAttribute('color', new THREE.Float32BufferAttribute(vertexColorArray, 3));
-        geometriesToMerge.push(instanceGeometry);
-    });
-
-    let mergedGeometry;
-    if (geometriesToMerge.length > 0) {
-        mergedGeometry = THREE.BufferGeometryUtils.mergeBufferGeometries(geometriesToMerge, true);
-    } else {
-        mergedGeometry = new THREE.BufferGeometry();
-    }
-
-    // Create a temporary mesh for the exporter
-    const tempMesh = new THREE.Mesh(mergedGeometry); // No material needed for STL export
-
-    const exporter = new THREE.STLExporter();
-    const result = exporter.parse(tempMesh);
-
-    const blob = new Blob([result], { type: 'application/octet-stream' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = 'voxel_model.stl';
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
-    URL.revokeObjectURL(url);
-
-    tempBoxGeometry.dispose();
-    if (mergedGeometry) mergedGeometry.dispose();
-    showMessageModal('Export erfolgreich', 'STL-Modell erfolgreich exportiert!');
-}
-
-// NEW: Function to export OBJ
-function exportOBJ() {
-    if (voxels.size === 0) {
-        showMessageModal('Export fehlgeschlagen', 'Keine Voxel zum Exportieren vorhanden!');
-        return;
-    }
-
-    const voxelsToExport = [];
-    let maxX = 0, maxY = 0, maxZ = 0;
-
-    voxels.forEach((data, k) => {
-        const [x, y, z] = parseKey(k);
-        voxelsToExport.push({ x, y, z, c: 1 }); // VoxelShaperIO.voxToOBJ doesn't use color index directly for OBJ
-        maxX = Math.max(maxX, x);
-        maxY = Math.max(maxY, y);
-        maxZ = Math.max(maxZ, z);
-    });
-
-    const voxModel = new VoxelShaperIO.VoxModel(maxX + 1, maxY + 1, maxZ + 1, voxelsToExport);
-    const objText = VoxelShaperIO.voxToOBJ(voxModel, VS); // Use VS (1) as cubeSize
-
-    VoxelShaperIO.saveBlob(objText, 'voxel_model.obj');
-    showMessageModal('Export erfolgreich', 'OBJ-Modell erfolgreich exportiert!');
-}
-
-// NEW: Generic message modal
-function showMessageModal(title, message) {
-    const modal = document.getElementById('messageModal');
-    document.getElementById('messageModalTitle').textContent = title;
-    document.getElementById('messageModalText').textContent = message;
-    modal.style.display = 'flex';
-}
-
-function resetCameraPosition() {
-    cam.position.set(GRID * 1.0, GRID * 1.2, GRID * 1.5);
-    cam.lookAt(GRID / 2, GRID / 2, GRID / 2);
-    if (euler) {
-        euler.setFromQuaternion(cam.quaternion, 'YXZ');
-    }
-}
-
-// NEW: Function to load image as template
-function loadImageTemplate() {
-    document.getElementById('imageFileInput').click();
-}
-
-// NEW: Handle image file selection
-function handleImageFileSelect(event) {
-    const file = event.target.files[0];
-    if (!file) return;
-
-    const reader = new FileReader();
-    reader.onload = (e) => {
-        const base64Image = e.target.result;
-
-        const img = new Image();
-        img.onload = () => {
-            const aspectRatio = img.width / img.height;
-            const planeWidth = GRID * VS;
-            const planeHeight = planeWidth / aspectRatio;
-
-            if (templateImageMesh) {
-                scene.remove(templateImageMesh);
-                templateImageMesh.geometry.dispose();
-                templateImageMesh.material.dispose();
-            }
-
-            const texture = new THREE.TextureLoader().load(base64Image);
-            const material = new THREE.MeshBasicMaterial({ map: texture, side: THREE.DoubleSide, transparent: true, depthWrite: false });
-            const geometry = new THREE.PlaneGeometry(planeWidth, planeHeight);
-
-            templateImageMesh = new THREE.Mesh(geometry, material);
-
-            templateImageMesh.position.set(
-                (GRID * VS) / 2,
-                (GRID * VS) / 2,
-                -0.5 * VS
-            );
-            templateImageMesh.rotation.y = Math.PI;
-
-            templateImageMesh.renderOrder = -1;
-            scene.add(templateImageMesh);
-
-            templateImageData = {
-                src: base64Image,
-                position: templateImageMesh.position.toArray(),
-                rotation: templateImageMesh.rotation.toArray(),
-                scale: [1, 1, 1], 
-                scaledWidth: planeWidth,
-                scaledHeight: planeHeight
-            };
-            console.log("Saving template image data:", templateImageData);
-
-            document.getElementById('removeImageTemplateBtn').style.display = 'inline-block';
+    <!-- Footer -->
+    <footer class="footer p-10 bg-gray-900 text-gray-400 mt-16">
+        <div class="container mx-auto">
+            <div class="grid grid-cols-1 md:grid-cols-4 gap-8">
+                <div>
+                    <h3 class="footer-title text-white">VoxelShaper</h3>
+                    <p class="mt-4">Die Community für 3D-Voxelmodelle. Teile, entdecke und drucke einzigartige Kreationen.</p>
+                    <div class="flex gap-4 mt-4">
+                        <a href="#"><i class="fab fa-discord text-xl"></i></a>
+                        <a href="#"><i class="fab fa-twitter text-xl"></i></a>
+                        <a href="#"><i class="fab fa-instagram text-xl"></i></a>
+                        <a href="#"><i class="fab fa-github text-xl"></i></a>
+                    </div>
+                </div>
+                <div>
+                    <h3 class="footer-title">Ressourcen</h3>
+                    <a class="link link-hover mt-4">Blog</a>
+                    <a class="link link-hover">Tutorials</a>
+                    <a class="link link-hover">Dokumentation</a>
+                    <a class="link link-hover">API</a>
+                </div>
+                <div>
+                    <h3 class="footer-title">Community</h3>
+                    <a class="link link-hover mt-4">Forum</a>
+                    <a class="link link-hover">Events</a>
+                    <a class="link link-hover">Mitwirkende</a>
+                    <a class="link link-hover">Partner</a>
+                </div>
+                <div>
+                    <h3 class="footer-title">Rechtliches</h3>
+                    <a class="link link-hover mt-4">AGB</a>
+                    <a class="link link-hover">Datenschutz</a>
+                    <a class="link link-hover">Lizenzierung</a>
+                    <a class="link link-hover">Cookie-Richtlinie</a>
+                </div>
+            </div>
+            <div class="border-t border-gray-800 mt-12 pt-6 text-center">
+                <p>© 2023 VoxelShaper. Alle Rechte vorbehalten.</p>
+            </div>
+        </div>
+    </footer>
+
+    <!-- Firebase Login Modal -->
+    <dialog id="auth-modal" class="modal">
+        <div class="modal-box bg-gray-800">
+            <h3 class="font-bold text-lg text-center">Anmeldung bei VoxelShaper</h3>
+            <p class="py-4 text-center">Melde dich an, um Modelle zu bewerten, herunterzuladen und eigene Kreationen zu teilen.</p>
+            <div class="modal-action flex flex-col items-center w-full">
+                <form method="dialog" class="w-full">
+                    <div class="flex flex-col gap-3 w-full">
+                        <input id="email-input" type="email" placeholder="E-Mail" class="input input-bordered w-full bg-gray-700 border-gray-600" />
+                        <input id="password-input" type="password" placeholder="Passwort" class="input input-bordered w-full bg-gray-700 border-gray-600" />
+                        <button id="firebase-login" class="btn btn-primary w-full">
+                            <i class="fas fa-sign-in-alt mr-2"></i> Anmelden
+                        </button>
+                        <button id="firebase-signup" class="btn btn-secondary w-full">
+                            <i class="fas fa-user-plus mr-2"></i> Registrieren
+                        </button>
+                        <div class="divider text-gray-500">ODER</div>
+                        <button id="google-login" class="btn btn-info w-full text-white">
+                            <i class="fab fa-google mr-2"></i> Mit Google anmelden
+                        </button>
+                        <button class="btn btn-outline w-full" onclick="document.getElementById('auth-modal').close()">Abbrechen</button>
+                    </div>
+                    <p id="auth-error-message" class="text-red-500 text-sm mt-4 text-center hidden"></p>
+                </form>
+            </div>
+        </div>
+    </dialog>
+
+    <!-- Upload Model Modal -->
+    <dialog id="upload-modal" class="modal">
+        <div class="modal-box bg-gray-800">
+            <h3 class="font-bold text-lg">Modell hochladen</h3>
+            <p class="py-4">Lade dein 3D-Voxelmodell hoch und teile es mit der Community.</p>
+            <div class="modal-action">
+                <form method="dialog" class="w-full">
+                    <div class="flex flex-col gap-3">
+                        <input id="model-title-input" type="text" placeholder="Modell Titel" class="input input-bordered w-full bg-gray-700 border-gray-600" />
+                        <textarea id="model-description-input" placeholder="Modell Beschreibung" class="textarea textarea-bordered w-full bg-gray-700 border-gray-600 h-24"></textarea>
+                        <input id="model-file-input" type="file" class="file-input file-input-bordered w-full bg-gray-700 border-gray-600" accept=".obj,.stl,.gltf,.glb" />
+                        <button id="upload-submit-button" class="btn btn-primary w-full">
+                            <i class="fas fa-upload mr-2"></i> Hochladen
+                        </button>
+                        <button class="btn btn-outline w-full" onclick="document.getElementById('upload-modal').close()">Abbrechen</button>
+                    </div>
+                    <p id="upload-error-message" class="text-red-500 text-sm mt-2 hidden"></p>
+                    <p id="upload-success-message" class="text-green-500 text-sm mt-2 hidden"></p>
+                </form>
+            </div>
+        </div>
+    </dialog>
+
+    <script type="module">
+        // Import the functions you need from the SDKs you need
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/11.10.0/firebase-app.js";
+        import { 
+            getAuth, 
+            signInWithEmailAndPassword, 
+            createUserWithEmailAndPassword, 
+            onAuthStateChanged,
+            signOut,
+            GoogleAuthProvider, // Import GoogleAuthProvider
+            signInWithPopup     // Import signInWithPopup
+        } from "https://www.gstatic.com/firebasejs/11.10.0/firebase-auth.js";
+        import { getStorage, ref, uploadBytes, getDownloadURL } from "https://www.gstatic.com/firebasejs/11.10.0/firebase-storage.js";
+        import { getFirestore, collection, addDoc, serverTimestamp } from "https://www.gstatic.com/firebasejs/11.10.0/firebase-firestore.js";
+
+
+        // Your web app's Firebase configuration
+        const firebaseConfig = {
+            apiKey: "AIzaSyB9-mpyAu9W6oiVtB0fYG8E6YFvTAsjtAA",
+            authDomain: "voxelshaper.firebaseapp.com",
+            projectId: "voxelshaper",
+            storageBucket: "voxelshaper.firebasestorage.app",
+            messagingSenderId: "1053689247573",
+            appId: "1:1053689247573:web:f7960c7f8c2e8849e8e1dc",
+            measurementId: "G-QJ5CNKZ5DR"
         };
-        img.src = base64Image;
-    };
-    reader.readAsDataURL(file);
-}
 
-// NEW: Function to remove the image template
-function removeImageTemplate(fromLoad = false) {
-    if (templateImageMesh) {
-        scene.remove(templateImageMesh);
-        templateImageMesh.geometry.dispose();
-        templateImageMesh.material.dispose();
-        templateImageMesh = null;
-        templateImageData = null;
-        document.getElementById('removeImageTemplateBtn').style.display = 'none';
-        if (!fromLoad) {
-            // No history command needed for removal, as it's part of the project state
-            // and handled by save/load.
-        }
-    }
-}
-
-// NEW: Function to update the ground plane size based on current GRID
-function updateGroundPlaneSize() {
-    // Remove the ground plane if it exists
-    if (groundPlane) {
-        scene.remove(groundPlane);
-        groundPlane.geometry.dispose();
-        groundPlane.material.dispose();
-        groundPlane = null;
-    }
-}
-
-// Helper to get current block dimensions based on active mode
-function getCurrentBlockDimensions() {
-    if (useDynamicBlockDim) {
-        return {
-            dimX: dynamicBlockDim.x,
-            dimY: dynamicBlockDim.y,
-            dimZ: dynamicBlockDim.z
-        };
-    } else {
-        // Fixed block size logic (2D square on active plane)
-        let dimX = 1, dimY = 1, dimZ = 1;
-        if (currentDrawingAxis === 'y') {
-            dimX = currentBlockSize;
-            dimZ = currentBlockSize;
-        } else if (currentDrawingAxis === 'x') {
-            dimY = currentBlockSize;
-            dimZ = currentBlockSize;
-        } else { // currentDrawingAxis === 'z'
-            dimX = currentBlockSize;
-            dimY = currentBlockSize;
-        }
-        return { dimX, dimY, dimZ };
-    }
-}
-
-
-/* ---------- Initialisierung bei Fensterladung ---------- */
-window.onload = function() {
-    cvs = document.getElementById('voxelCanvas');
-    containerDiv = document.getElementById('container');
-    touchIndicator = document.getElementById('touch-indicator');
-    distanceDisplay = document.getElementById('distanceDisplay'); // Get distance display element
-
-    // Scene
-    scene = new THREE.Scene();
-    scene.background = new THREE.Color(0x282c34);
-
-    // Camera
-    const aspect = containerDiv.clientWidth / containerDiv.clientHeight;
-    cam = new THREE.PerspectiveCamera(75, aspect, 0.1, 1000);
-    resetCameraPosition();
-    euler = new THREE.Euler(0, 0, 0, 'YXZ');
-
-    // Renderer
-    ren = new THREE.WebGLRenderer({ canvas: cvs, antialias: true });
-    ren.setSize(containerDiv.clientWidth, containerDiv.clientHeight);
-    // NEW: Set pixel ratio based on device and mobile flag
-    isMobile = window.matchMedia('(max-width: 768px)').matches;
-    if (isMobile) {
-        ren.setPixelRatio(Math.min(1.5, window.devicePixelRatio)); // Cap pixel ratio for mobile performance
-    } else {
-        ren.setPixelRatio(window.devicePixelRatio);
-    }
-    ren.shadowMap.enabled = true;
-    ren.shadowMap.type = THREE.PCFSoftShadowMap;
-  
-    // Lights
-    const ambientLight = new THREE.AmbientLight(0x202020);
-    scene.add(ambientLight);
-
-    mainDirectionalLight = new THREE.DirectionalLight(0xffffff, 1.0);
-    mainDirectionalLight.position.set(10, 20, 15);
-    mainDirectionalLight.castShadow = true;
-    mainDirectionalLight.shadow.mapSize.width = 2048;
-    mainDirectionalLight.shadow.mapSize.height = 2048;
-    mainDirectionalLight.shadow.camera.near = 0.5;
-    mainDirectionalLight.shadow.camera.far = 50;
-    mainDirectionalLight.shadow.camera.left = -30;
-    mainDirectionalLight.shadow.camera.right = 30;
-    mainDirectionalLight.shadow.camera.top = 30;
-    mainDirectionalLight.shadow.camera.bottom = -30;
-    mainDirectionalLight.shadow.bias = -0.0005;
-    mainDirectionalLight.shadow.normalBias = 0.02;
-    scene.add(mainDirectionalLight);
-
-    fillDirectionalLight = new THREE.DirectionalLight(0xffffff, 0.3);
-    fillDirectionalLight.position.set(-10, 10, -15);
-    scene.add(fillDirectionalLight);
-
-    hemisphereLight = new THREE.HemisphereLight(0xffffff, 0x444444, 0.6);
-    scene.add(hemisphereLight);
-
-    updateGroundPlaneSize();
-
-    scene.add(previewVoxelMesh);
-    updatePreviewVoxel(0,0,0,false);
-
-    // Helpers
-    rebuildHelpers();
-
-    // Event Listeners
-    window.addEventListener('resize', onResize);
-    containerDiv.addEventListener('pointerdown', onPointerDown);
-    containerDiv.addEventListener('pointermove', onPointerMove);
-    containerDiv.addEventListener('pointerup', onPointerUp);
-    containerDiv.addEventListener('pointercancel', onPointerUp);
-    containerDiv.addEventListener('pointerleave', onPointerLeave);
-    containerDiv.addEventListener('wheel', onMouseWheel, { passive: false });
-    // NEW: Prevent mobile scrolling on touchmove if pointers are active
-    containerDiv.addEventListener('touchmove', (e) => {
-        if (activePointers.size > 0) e.preventDefault();
-    }, { passive: false });
-
-
-    document.addEventListener('keydown', onKeyDown);
-    document.addEventListener('keyup', onKeyUp);
-    document.addEventListener('pointerlockchange', onPointerLockChange, false);
-
-
-    // Prevent context menu on right click
-    containerDiv.addEventListener('contextmenu', (e) => e.preventDefault());
-
-    // UI event listeners
-    document.getElementById('grid-size-slider').addEventListener('input', (e) => {
-        const oldGrid = GRID;
-        const newGrid = parseInt(e.target.value); // Get the new grid size first
-
-        // Capture old state before clearing
-        const oldVoxelState = [...voxels.entries()].map(([id, data]) => {
-            const parts = parseKey(id);
-            return { gx: parts[0], gy: parts[1], gz: parts[2], color: data.color };
-        });
-
-        // Clear all existing chunks and global voxels map
-        for (const chunk of chunks.values()) {
-            chunk.dispose();
-        }
-        chunks.clear();
-        voxels.clear();
-
-        // Determine which voxels should be kept in the new grid size
-        const voxelsToKeep = oldVoxelState.filter(v => 
-            v.gx < newGrid && v.gy < newGrid && v.gz < newGrid
-        );
-
-        // Update GRID *after* filtering voxels, but before re-adding them
-        GRID = newGrid;
-        document.getElementById('grid-size-display').textContent = `${GRID}×${GRID}×${GRID}`;
-        localStorage.setItem('voxelEditorGridSize', GRID);
-        console.log("Grid size changed to:", GRID);
-        console.log("Saving 'voxelEditorGridSize' to localStorage:", localStorage.getItem('voxelEditorGridSize'));
-
-        // Re-add kept voxels to rebuild chunks
-        voxelsToKeep.forEach(v => {
-            addVoxel(v.gx, v.gy, v.gz, v.color, 1, 1, 1, true); // true for fromHistory
-        });
-        
-        const newVoxelState = [...voxels.entries()].map(([id, data]) => {
-            const parts = parseKey(id);
-            return { gx: parts[0], gy: parts[1], gz: parts[2], color: data.color };
-        });
-
-        addCommand('resizeGrid', null, null, null, null, null, oldVoxelState, newVoxelState, { oldGrid: oldGrid, newGrid: GRID });
-
-        rebuildHelpers();
-        resetCameraPosition();
-    });
-
-    document.getElementById('color-picker').addEventListener('input', (e) => {
-        currentColor = e.target.value;
-        localStorage.setItem('voxelEditorColor', currentColor);
-        presetBoxes.forEach(box => box.classList.remove('active'));
-        activePresetIndex = -1;
-    });
-
-    presetBoxes = [
-        document.getElementById('color-preset-1'),
-        document.getElementById('color-preset-2'),
-        document.getElementById('color-preset-3')
-    ];
-    presetColors.forEach((color, index) => {
-            const box = presetBoxes[index];
-            box.value = color; // Set initial value for input type="color"
-            box.addEventListener('click', (e) => {
-                // Clicking the preset box sets the main color picker to its color
-                // No modifier key needed for saving anymore, as it's a direct input
-                setActivePreset(index);
-            });
-            box.addEventListener('input', (e) => {
-                // Changing the color via the preset's own color picker
-                savePresetColor(index, e.target.value);
-            });
-        });
-    if (activePresetIndex !== -1) {
-        setActivePreset(activePresetIndex);
-    } else {
-        document.getElementById('color-picker').value = currentColor;
-    }
-
-
-    document.getElementById('modeToggle').addEventListener('click', cycleMode);
-    document.getElementById('current-mode').textContent = `Modus: ${currentMode}`;
-
-    const clearConfirmationModal = document.getElementById('clearConfirmationModal');
-    document.getElementById('clearBtn').addEventListener('click', () => {
-        clearConfirmationModal.style.display = 'flex';
-    });
-    document.getElementById('saveAndClearBtn').addEventListener('click', () => {
-        saveJSON();
-        clearAll();
-        clearConfirmationModal.style.display = 'none';
-    });
-    document.getElementById('clearWithoutSaveBtn').addEventListener('click', () => {
-        clearAll();
-        clearConfirmationModal.style.display = 'none';
-    });
-    document.getElementById('cancelClearBtn').addEventListener('click', () => {
-        clearConfirmationModal.style.display = 'none';
-    });
-
-    document.getElementById('messageModalCloseBtn').addEventListener('click', () => {
-        document.getElementById('messageModal').style.display = 'none';
-    });
-
-
-    document.getElementById('fillLevelBtn').addEventListener('click', fillActiveLevel);
-    document.getElementById('saveBtn').addEventListener('click', saveJSON);
-    document.getElementById('loadBtn').addEventListener('click', () => {
-        document.getElementById('fileInput').click();
-    });
-    document.getElementById('fileInput').addEventListener('change', loadJSON);
-    document.getElementById('exportStlBtn').addEventListener('click', exportSTL);
-
-    document.getElementById('exportObjBtn').addEventListener('click', exportOBJ);
-
-    document.getElementById('fly-speed-slider').addEventListener('input', (e) => {
-        moveSpeed = parseFloat(e.target.value);
-        document.getElementById('fly-speed-display').textContent = moveSpeed.toFixed(2);
-        localStorage.setItem('voxelEditorFlySpeed', moveSpeed);
-    });
-
-    // Block Size buttons
-    document.getElementById('block-size-1x1').addEventListener('click', () => setFixedBlockSize(1));
-    document.getElementById('block-size-4x4').addEventListener('click', () => setFixedBlockSize(4));
-    document.getElementById('block-size-8x8').addEventListener('click', () => setFixedBlockSize(8));
-    document.getElementById('block-size-10x10').addEventListener('click', () => setFixedBlockSize(10));
-
-    // NEW: Dynamic block size inputs and button
-    const dynamicXInput = document.getElementById('dynamic-block-x');
-    const dynamicYInput = document.getElementById('dynamic-block-y');
-    const dynamicZInput = document.getElementById('dynamic-block-z');
-    const setDynamicBlockSizeBtn = document.getElementById('setDynamicBlockSizeBtn');
-
-    dynamicXInput.addEventListener('input', (e) => {
-        dynamicBlockDim.x = parseInt(e.target.value) || 1;
-        localStorage.setItem('voxelEditorDynamicBlockDimX', dynamicBlockDim.x);
-    });
-    dynamicYInput.addEventListener('input', (e) => {
-        dynamicBlockDim.y = parseInt(e.target.value) || 1;
-        localStorage.setItem('voxelEditorDynamicBlockDimY', dynamicBlockDim.y);
-    });
-    dynamicZInput.addEventListener('input', (e) => {
-        dynamicBlockDim.z = parseInt(e.target.value) || 1;
-        localStorage.setItem('voxelEditorDynamicBlockDimZ', dynamicBlockDim.z);
-    });
-
-    setDynamicBlockSizeBtn.addEventListener('click', () => {
-        setDynamicBlockDimensions();
-    });
-
-    // NEW: Measure distance button
-    document.getElementById('measureDistanceBtn').addEventListener('click', () => {
-        currentMode = Modes.MEASURE;
-        document.getElementById('current-mode').textContent = `Modus: ${currentMode}`;
-        // Reset any ongoing measurement
-        measurementStartPoint = null;
-        measurementEndPoint = null;
-        distanceDisplay.style.display = 'none';
-        updatePreviewVoxel(0, 0, 0, false); // Hide preview when changing mode
-    });
-
-
-    // Info Box (Help) Toggle Logic
-    const infoBox = document.getElementById('infoBox');
-    const helpToggleBtn = document.getElementById('helpToggleBtn');
-    let showInfoBox = localStorage.getItem('showInfoBox') === 'true';
-
-    function updateInfoBoxVisibility() {
-        infoBox.style.display = showInfoBox ? 'block' : 'none';
-        helpToggleBtn.textContent = showInfoBox ? 'Hilfe ausblenden' : 'Hilfe anzeigen';
-        localStorage.setItem('showInfoBox', showInfoBox);
-    }
-    helpToggleBtn.addEventListener('click', () => {
-        showInfoBox = !showInfoBox;
-        updateInfoBoxVisibility();
-    });
-    updateInfoBoxVisibility();
-
-    document.getElementById('resetCameraBtn').addEventListener('click', resetCameraPosition);
-
-    document.getElementById('loadImageTemplateBtn').addEventListener('click', loadImageTemplate);
-    document.getElementById('imageFileInput').addEventListener('change', handleImageFileSelect);
-    document.getElementById('removeImageTemplateBtn').addEventListener('click', removeImageTemplate);
-
-
-    // Hamburger menu toggle for mobile
-    const menuToggle = document.getElementById('menuToggle');
-    menuToggle.addEventListener('click', () => {
-        const controlsPanel = document.getElementById('controls');
-        if (controlsPanel.style.display === 'none' || controlsPanel.style.display === '') {
-            controlsPanel.style.display = 'flex';
-        } else {
-            controlsPanel.style.display = 'none';
-        }
-    });
-
-    // Check media query on load and resize
-    const mediaQuery = window.matchMedia('(max-width: 768px)');
-    function handleMediaQueryChange(e) {
-        isMobile = e.matches; // Update isMobile flag
-        const controlsPanel = document.getElementById('controls');
-        if (e.matches) {
-            controlsPanel.style.display = 'none';
-            menuToggle.style.display = 'block';
-        } else {
-            controlsPanel.style.display = 'flex';
-            menuToggle.style.display = 'none';
-        }
-        onResize(); // Also call onResize to adjust pixel ratio
-    }
-    mediaQuery.addListener(handleMediaQueryChange);
-    handleMediaQueryChange(mediaQuery);
-
-    // NEW: Mobile controls event listeners
-    document.getElementById('mobile-undo').addEventListener('click', undo);
-    document.getElementById('mobile-redo').addEventListener('click', redo);
-    document.getElementById('mobile-save').addEventListener('click', saveJSON);
-    document.getElementById('mobile-camera').addEventListener('click', () => {
-        // Toggle between camera modes or reset camera view
-        resetCameraPosition(); // Simple reset for now
-    });
-    document.getElementById('mobile-assist').addEventListener('click', () => {
-        touchAssistEnabled = !touchAssistEnabled;
-        const assistButton = document.getElementById('mobile-assist');
-        assistButton.style.borderColor = touchAssistEnabled ? '#90caf9' : 'white';
-        showMessageModal('Touch Assist', `Magnetisches Zielen ist jetzt ${touchAssistEnabled ? 'aktiviert' : 'deaktiviert'}.`);
-    });
-
-    // Initialize UI elements with loaded values
-    document.getElementById('grid-size-slider').value = GRID;
-    document.getElementById('grid-size-display').textContent = `${GRID}×${GRID}×${GRID}`;
-    document.getElementById('color-picker').value = currentColor;
-    document.getElementById('fly-speed-slider').value = moveSpeed;
-    document.getElementById('fly-speed-display').textContent = moveSpeed.toFixed(2);
-    document.getElementById('dynamic-block-x').value = dynamicBlockDim.x;
-    document.getElementById('dynamic-block-y').value = dynamicBlockDim.y;
-    document.getElementById('dynamic-block-z').value = dynamicBlockDim.z;
-
-    // Set initial active state for block size buttons
-    updateBlockSizeButtonsActiveState();
-
-    animate();
-}; // END window.onload
-
-/* ---------- Animations-Loop ---------- */
-const frustum = new THREE.Frustum();
-const tempCameraMatrix = new THREE.Matrix4();
-// NEW: Bounding box for frustum culling
-const voxelBoundingBox = new THREE.Box3();
-const voxelMin = new THREE.Vector3(-HALF, -HALF, -HALF);
-const voxelMax = new THREE.Vector3(HALF, HALF, HALF);
-
-function animate() {
-    requestAnimationFrame(animate);
-
-    // Continuous keyboard movement when pointer is locked (fly mode)
-    if (isPointerLocked) {
-        const forward = cam.getWorldDirection(new THREE.Vector3());
-        const right = new THREE.Vector3().crossVectors(forward, cam.up).normalize();
-        const up = new THREE.Vector3(0, 1, 0); // World up direction
-
-        const currentMoveSpeed = moveSpeed * 5;
-
-        if (keyboard['w']) cam.position.addScaledVector(forward, currentMoveSpeed);
-        if (keyboard['s']) cam.position.addScaledVector(forward, -currentMoveSpeed);
-        if (keyboard['a']) cam.position.addScaledVector(right, -currentMoveSpeed);
-        if (keyboard['d']) cam.position.addScaledVector(right, currentMoveSpeed);
-        if (keyboard['q']) cam.position.addScaledVector(up, -currentMoveSpeed);
-        if (keyboard['e']) cam.position.addScaledVector(up, currentMoveSpeed);
-    }
-
-    // Frustum Culling for Chunks
-    cam.updateMatrixWorld(); // Ensure camera matrices are up-to-date
-    tempCameraMatrix.multiplyMatrices(cam.projectionMatrix, cam.matrixWorldInverse);
-    frustum.setFromProjectionMatrix(tempCameraMatrix);
-
-    for (const chunk of chunks.values()) {
-        if (frustum.intersectsBox(chunk.boundingBox)) {
-            chunk.instancedMesh.visible = true;
-        } else {
-            chunk.instancedMesh.visible = false;
-        }
-    }
-
-    ren.render(scene, cam);
-}
-
-/* ---------- Mouse / Pointer Input ---------- */
-let pointerIsDown = false;
-let lastX, lastY;
-let suppressNextTap = false; // NEW: To prevent tap after a drag gesture
-let initialDragVoxelCoords = null; // NEW: Stores the starting voxel for line drawing
-
-function onPointerDown(e) {
-    // Prevent context menu for all right-clicks
-    if (e.button === 2) {
-        e.preventDefault();
-    }
-
-    // --- Desktop: Right-click for Pointer Lock Camera ---
-    if (e.pointerType === 'mouse' && e.button === 2) {
-        // If RMB is pressed, we want camera control.
-        // Immediately reset any active left-click drawing state.
-        pointerIsDown = false;
-        lastActionVoxelCoords = null;
-        initialDragVoxelCoords = null; // Reset for line drawing
-        voxelsAtDragStart = null; // Reset snapshot
-        dragAxisLock = null; // NEW: Reset drag axis lock
-        
-        // Fix: Focus canvas BEFORE requesting pointer lock
-        cvs.focus(); 
-        cvs.requestPointerLock();
-        return; // Important: Exit, as this pointer event is for camera control
-    }
-
-    // If pointer is locked (meaning RMB is already controlling camera), ignore other clicks.
-    if (isPointerLocked) return;
-
-    // --- Touch Input Handling ---
-    if (e.pointerType === 'touch') {
-        if (suppressNextTap) {
-            suppressNextTap = false;
-            return;
-        }
-
-        activePointers.set(e.pointerId, { x: e.clientX, y: e.clientY, pointerType: e.pointerType });
-        touchIndicator.style.display = 'block';
-        touchIndicator.style.left = `${e.clientX}px`;
-        touchIndicator.style.top = `${e.clientY}px`;
-
-        const now = performance.now();
-        // Check for double-tap-and-drag for drawing
-        if (tapCandidate && (now - tapCandidate.time < DT_MS) && (Math.hypot(e.clientX - tapCandidate.x, e.clientY - tapCandidate.y) < TAP_DIST_TH)) {
-            doubleTapDragActive = true;
-            tapCandidate = null;
-            // Set fixed plane for touch double-tap-drag drawing ONLY IF IN ADD mode
-            if (currentMode === Modes.ADD) {
-                setFixedDragPlane(e.clientX, e.clientY, currentMode);
+        // Initialize Firebase
+        const app = initializeApp(firebaseConfig);
+        const auth = getAuth(app);
+        const storage = getStorage(app);
+        const db = getFirestore(app);
+
+        // UI Elemente
+        const loginButton = document.getElementById('login-button');
+        const logoutButton = document.getElementById('logout-button');
+        const profileButton = document.getElementById('profile-button');
+        const userMenuButton = document.getElementById('user-menu-button');
+        const authModal = document.getElementById('auth-modal');
+        const firebaseLoginButton = document.getElementById('firebase-login');
+        const firebaseSignupButton = document.getElementById('firebase-signup');
+        const googleLoginButton = document.getElementById('google-login'); // New Google login button
+        const emailInput = document.getElementById('email-input');
+        const passwordInput = document.getElementById('password-input');
+        const authErrorMessage = document.getElementById('auth-error-message');
+
+        // Upload Modal Elemente
+        const uploadModelButton = document.getElementById('upload-model-button');
+        const uploadModal = document.getElementById('upload-modal');
+        const modelTitleInput = document.getElementById('model-title-input');
+        const modelDescriptionInput = document.getElementById('model-description-input');
+        const modelFileInput = document.getElementById('model-file-input');
+        const uploadSubmitButton = document.getElementById('upload-submit-button');
+        const uploadErrorMessage = document.getElementById('upload-error-message');
+        const uploadSuccessMessage = document.getElementById('upload-success-message');
+
+        // Google Auth Provider
+        const googleProvider = new GoogleAuthProvider();
+
+        // Funktion zum Anzeigen von Fehlermeldungen
+        function showMessage(element, message, isError = true) {
+            element.textContent = message;
+            element.classList.remove('hidden');
+            if (isError) {
+                element.classList.remove('text-green-500');
+                element.classList.add('text-red-500');
             } else {
-                fixedDragPlaneParams = { level: null, axis: null }; // Ensure it's reset
-            }
-            // For line drawing, set the initial point on double-tap-drag start
-            // Only draw lines if not in MEASURE mode
-            if (currentMode !== Modes.MEASURE) {
-                initialDragVoxelCoords = calculateTargetVoxelCoords(e.clientX, e.clientY, currentMode, false, false, 'touch');
-                if (initialDragVoxelCoords) {
-                    voxelsAtDragStart = new Map(voxels); // Snapshot current voxels for line drawing
-                    const { dimX, dimY, dimZ } = getCurrentBlockDimensions(); // Get current block dimensions
-                    performVoxelModification(initialDragVoxelCoords.gx, initialDragVoxelCoords.gy, initialDragVoxelCoords.gz, currentMode, currentColor, dimX, dimY, dimZ);
-                    lastActionVoxelCoords = { ...initialDragVoxelCoords }; // Set last action for DDA
-                    initialDragVoxelWorldPos = new THREE.Vector3(initialDragVoxelCoords.gx * VS + HALF, initialDragVoxelCoords.gy * VS + HALF, initialDragVoxelCoords.gz * VS + HALF);
-                    distanceDisplay.style.display = 'block';
-                }
-            }
-        } else { // Single tap or start of multi-finger gesture
-            tapCandidate = { x: e.clientX, y: e.clientY, time: now };
-            initialDragVoxelCoords = null; // Reset for new tap sequence
-            voxelsAtDragStart = null; // Reset snapshot
-            initialDragVoxelWorldPos = null;
-
-            if (currentMode === Modes.MEASURE) { // Handle single tap for measurement
-                const clickedVoxel = calculateTargetVoxelCoords(e.clientX, e.clientY, currentMode, false, false, 'touch');
-                if (clickedVoxel) {
-                    if (measurementStartPoint === null) {
-                        measurementStartPoint = { ...clickedVoxel };
-                        measurementEndPoint = null; // Reset end point
-                        distanceDisplay.style.display = 'none'; // Hide until second point
-                        updatePreviewVoxel(measurementStartPoint.gx, measurementStartPoint.gy, measurementStartPoint.gz, true, 1, 1, 1); // Show preview at start point
-                    } else {
-                        measurementEndPoint = { ...clickedVoxel };
-                        const dist = new THREE.Vector3(measurementStartPoint.gx * VS, measurementStartPoint.gy * VS, measurementStartPoint.gz * VS).distanceTo(
-                                     new THREE.Vector3(measurementEndPoint.gx * VS, measurementEndPoint.gy * VS, measurementEndPoint.gz * VS));
-                        distanceDisplay.textContent = `Distanz: ${dist.toFixed(2)} mm`;
-                        distanceDisplay.style.display = 'block';
-                        updatePreviewVoxel(0, 0, 0, false); // Hide preview after measurement
-                        // Prepare for next measurement
-                        measurementStartPoint = null;
-                        measurementEndPoint = null;
-                    }
-                }
-                // Don't set pointerIsDown for measurement clicks
-                return; // Exit, as we've handled the measurement click
+                element.classList.remove('text-red-500');
+                element.classList.add('text-green-500');
             }
         }
 
-        const pointers = [...activePointers.values()];
-        gestureState.initialPointerCount = pointers.length;
-
-        if (pointers.length === 1) {
-            gestureState.type = 'rotate'; // Single-finger drag for rotation
-            gestureState.lastMid = { x: e.clientX, y: e.clientY };
-        } else if (pointers.length >= 2) {
-            // Multi-finger gestures (pan/pinch)
-            const [p0, p1] = pointers;
-            const midX = (p0.x + p1.x) * 0.5;
-            const midY = (p0.y + p1.y) * 0.5;
-            const dist = Math.hypot(p1.x - p0.x, p1.y - p0.y);
-            gestureState.type = 'none'; // Will be determined on first move
-            gestureState.startMid = { x: midX, y: midY };
-            gestureState.lastMid = { x: midX, y: midY };
-            gestureState.startDist = dist;
-            gestureState.lastDist = dist;
-        }
-        initialClickPos = { x: e.clientX, y: e.clientY }; // For tap/drag distinction
-        return;
-    }
-
-    // --- Desktop: Left-click for Voxel Interaction / Measurement ---
-    if (e.pointerType === 'mouse' && e.button === 0) { // Ensure it's LMB
-        pointerIsDown = true;
-        lastX = e.clientX; // Store for preview updates
-        lastY = e.clientY; // Store for preview updates
-        initialClickPos = { x: e.clientX, y: e.clientY }; // For click vs. drag distinction
-
-        if (currentMode === Modes.MEASURE) {
-            const clickedVoxel = calculateTargetVoxelCoords(e.clientX, e.clientY, currentMode, false, false, 'mouse');
-            if (clickedVoxel) {
-                if (measurementStartPoint === null) {
-                    measurementStartPoint = { ...clickedVoxel };
-                    measurementEndPoint = null; // Reset end point
-                    distanceDisplay.style.display = 'none'; // Hide until second point
-                    updatePreviewVoxel(measurementStartPoint.gx, measurementStartPoint.gy, measurementStartPoint.gz, true, 1, 1, 1); // Show preview at start point
-                } else {
-                    measurementEndPoint = { ...clickedVoxel };
-                    const dist = new THREE.Vector3(measurementStartPoint.gx * VS, measurementStartPoint.gy * VS, measurementStartPoint.gz * VS).distanceTo(
-                                 new THREE.Vector3(measurementEndPoint.gx * VS, measurementEndPoint.gy * VS, measurementEndPoint.gz * VS));
-                    distanceDisplay.textContent = `Distanz: ${dist.toFixed(2)} mm`;
-                    distanceDisplay.style.display = 'block';
-                    updatePreviewVoxel(0, 0, 0, false); // Hide preview after measurement
-                    // Prepare for next measurement
-                    measurementStartPoint = null;
-                    measurementEndPoint = null;
-                }
-            }
-            pointerIsDown = false; // Measurement clicks are not "drags" for drawing purposes
-            return; // Exit, as we've handled the measurement click
+        // Funktion zum Verbergen von Nachrichten
+        function hideMessage(element) {
+            element.classList.add('hidden');
+            element.textContent = '';
         }
 
-        // Determine the fixed drawing plane based on modifier keys (Shift/Control) ONLY IF IN ADD mode
-        if (currentMode === Modes.ADD) {
-            setFixedDragPlane(e.clientX, e.clientY, currentMode);
-        } else {
-            fixedDragPlaneParams = { level: null, axis: null }; // Ensure it's reset for other modes
-        }
-        
-        // For line drawing, set the initial point on pointer down
-        initialDragVoxelCoords = calculateTargetVoxelCoords(e.clientX, e.clientY, currentMode, false, isControlDragging, 'mouse');
-        if (initialDragVoxelCoords) { // Only proceed if a valid initial voxel target is found
-            voxelsAtDragStart = new Map(voxels); // Snapshot current voxels for line drawing
-            // Perform the initial voxel action immediately on pointer down for single clicks
-            const { dimX, dimY, dimZ } = getCurrentBlockDimensions(); // Get current block dimensions
-            performVoxelModification(initialDragVoxelCoords.gx, initialDragVoxelCoords.gy, initialDragVoxelCoords.gz, currentMode, currentColor, dimX, dimY, dimZ);
-            lastActionVoxelCoords = { ...initialDragVoxelCoords }; // Store for potential dragging
-            initialDragVoxelWorldPos = new THREE.Vector3(initialDragVoxelCoords.gx * VS + HALF, initialDragVoxelCoords.gy * VS + HALF, initialDragVoxelCoords.gz * VS + HALF);
-            distanceDisplay.style.display = 'block'; // Show distance display
-        } else {
-            // If initialDragVoxelCoords is null, it means no valid target was found.
-            // In this case, we should prevent any drawing operation from starting.
-            pointerIsDown = false; // Prevent drag
-            initialClickPos = null; // Reset
-            initialDragVoxelCoords = null; // Ensure it's null
-            voxelsAtDragStart = null; // Ensure it's null
-            distanceDisplay.style.display = 'none'; // Hide
-            initialDragVoxelWorldPos = null;
-        }
-    }
-}
-
-
-function onPointerMove(e) {
-    e.preventDefault();
-
-    // --- 1. Handle Pointer Lock Camera (RMB) ---
-    if (isPointerLocked) {
-        if (firstMoveAfterLock) {
-            firstMoveAfterLock = false;
-            return;
-        }
-        const dx = e.movementX || 0;
-        const dy = e.movementY || 0;
-        euler.y -= dx * rotSpeed;
-        euler.x -= dy * rotSpeed;
-        euler.x = Math.max(-Math.PI / 2, Math.min(Math.PI / 2, euler.x));
-        cam.quaternion.setFromEuler(euler);
-        return; // IMPORTANT: Exit, as pointer is locked for camera control
-    }
-
-    // --- 2. Handle Touch Input (Gestures or Drag Drawing) ---
-    if (e.pointerType === 'touch') {
-        if (!activePointers.has(e.pointerId)) return; // Pointer not tracked
-
-        activePointers.set(e.pointerId, { x: e.clientX, y: e.clientY, pointerType: e.pointerType }); // Update pointer position
-        touchIndicator.style.left = `${e.clientX}px`;
-        touchIndicator.style.top = `${e.clientY}px`;
-
-        if (doubleTapDragActive && currentMode !== Modes.MEASURE) { // Only draw lines if not in MEASURE mode
-            // Touch-based drag drawing (for ADD/DELETE/DRAW modes)
-            let currentTargetVoxel = calculateTargetVoxelCoords(e.clientX, e.clientY, currentMode, true, false, 'touch');
-            
-            if (currentTargetVoxel && initialDragVoxelCoords) { // Ensure initial point is set for line drawing
-                // NEW: Axis snapping for line drawing
-                if (!dragAxisLock) {
-                    const dx = Math.abs(currentTargetVoxel.gx - initialDragVoxelCoords.gx);
-                    const dy = Math.abs(currentTargetVoxel.gy - initialDragVoxelCoords.gy);
-                    const dz = Math.abs(currentTargetVoxel.gz - initialDragVoxelCoords.gz);
-
-                    if (dx > VOXEL_DRAG_THRESHOLD || dy > VOXEL_DRAG_THRESHOLD || dz > VOXEL_DRAG_THRESHOLD) { // Use voxel-based threshold
-                        if (dx >= dy && dx >= dz) dragAxisLock = 'x';
-                        else if (dy >= dx && dy >= dz) dragAxisLock = 'y';
-                        else dragAxisLock = 'z';
-                    }
-                }
-
-                if (dragAxisLock) {
-                    const snappedTargetVoxel = { ...initialDragVoxelCoords };
-                    if (dragAxisLock === 'x') snappedTargetVoxel.gx = currentTargetVoxel.gx;
-                    else if (dragAxisLock === 'y') snappedTargetVoxel.gy = currentTargetVoxel.gy;
-                    else snappedTargetVoxel.gz = currentTargetVoxel.gz;
-                    currentTargetVoxel = snappedTargetVoxel; // Use the snapped target for drawing
-                }
-
-                // Restore the state to `voxelsAtDragStart` before redrawing the line
-                if (voxelsAtDragStart) { // Add null check
-                    // Clear current voxels to redraw the projected line
-                    for (const chunk of chunks.values()) {
-                        chunk.dispose();
-                    }
-                    chunks.clear();
-                    voxels.clear();
-                    // Re-add original voxels
-                    voxelsAtDragStart.forEach((data, k) => addVoxel(parseKey(k)[0], parseKey(k)[1], parseKey(k)[2], data.color, 1, 1, 1, true));
-                }
+        // UI basierend auf Login-Status aktualisieren
+        function updateUI(user) {
+            if (user) {
+                loginButton.classList.add('hidden');
+                logoutButton.classList.remove('hidden');
+                profileButton.classList.remove('hidden');
                 
-                const { dimX, dimY, dimZ } = getCurrentBlockDimensions(); // Get current block dimensions
-                // Draw the line from the initial click point to the current point
-                drawLineOfVoxelsSegment(initialDragVoxelCoords, currentTargetVoxel, currentMode, currentColor, dimX, dimY, dimZ);
-                lastActionVoxelCoords = { ...currentTargetVoxel };
-
-                // Update distance display
-                const currentVoxelWorldPos = new THREE.Vector3(currentTargetVoxel.gx * VS + HALF, currentTargetVoxel.gy * VS + HALF, currentTargetVoxel.gz * VS + HALF);
-                const distance = initialDragVoxelWorldPos.distanceTo(currentVoxelWorldPos);
-                distanceDisplay.textContent = `Distanz: ${distance.toFixed(2)} mm`;
-            }
-            updatePreviewVoxel(0, 0, 0, false); // Hide preview during active touch drag
-            return;
-        } else if (currentMode === Modes.MEASURE && measurementStartPoint) { // Preview measurement line
-            const currentTargetVoxel = calculateTargetVoxelCoords(e.clientX, e.clientY, currentMode, false, false, 'touch');
-            if (currentTargetVoxel) {
-                const dist = new THREE.Vector3(measurementStartPoint.gx * VS, measurementStartPoint.gy * VS, measurementStartPoint.gz * VS).distanceTo(
-                             new THREE.Vector3(currentTargetVoxel.gx * VS, currentTargetVoxel.gy * VS, currentTargetVoxel.gz * VS));
-                distanceDisplay.textContent = `Distanz: ${dist.toFixed(2)} mm`;
-                distanceDisplay.style.display = 'block';
-                updatePreviewVoxel(currentTargetVoxel.gx, currentTargetVoxel.gy, currentTargetVoxel.gz, true, 1, 1, 1); // Show preview at current target
+                // Angenommen, wir haben Benutzerdaten
+                userMenuButton.innerHTML = `
+                    <div class="avatar">
+                        <div class="w-10 rounded-full bg-blue-600">
+                            <span class="text-white">${user.email ? user.email.charAt(0).toUpperCase() : '<i class="fas fa-user"></i>'}</span>
+                        </div>
+                    </div>
+                `;
             } else {
-                distanceDisplay.style.display = 'none';
-                updatePreviewVoxel(0, 0, 0, false);
-            }
-            return; // Exit, handled by measurement preview
-        }
-
-        // If not double-tap-drag or measurement, handle camera gestures. These should NOT draw cubes.
-        handleGesture(); // Handles single-finger rotation, multi-finger pan/pinch
-        updatePreviewVoxel(0, 0, 0, false); // Hide preview during gestures
-        distanceDisplay.style.display = 'none'; // Hide distance display during camera gestures
-        return;
-    }
-
-    // --- 3. Handle Desktop Mouse Hover and Left-Click Drag for Voxel Interaction / Measurement ---
-    // Update lastX, lastY for preview voxel calculation when not dragging.
-    lastX = e.clientX;
-    lastY = e.clientY;
-
-    const movedDistance = initialClickPos ? Math.hypot(e.clientX - initialClickPos.x, e.clientY - initialClickPos.y) : 0;
-    const isDraggingVoxelAction = pointerIsDown && (movedDistance > MOVE_PX || isShiftDragging || isControlDragging || isHoldDrawingActive);
-
-    let currentTargetVoxel = calculateTargetVoxelCoords(e.clientX, e.clientY, currentMode, isDraggingVoxelAction, isControlDragging, 'mouse');
-
-    if (currentMode === Modes.MEASURE) {
-        if (measurementStartPoint && currentTargetVoxel) {
-            const dist = new THREE.Vector3(measurementStartPoint.gx * VS, measurementStartPoint.gy * VS, measurementStartPoint.gz * VS).distanceTo(
-                         new THREE.Vector3(currentTargetVoxel.gx * VS, currentTargetVoxel.gy * VS, currentTargetVoxel.gz * VS));
-            distanceDisplay.textContent = `Distanz: ${dist.toFixed(2)} mm`;
-            distanceDisplay.style.display = 'block';
-            updatePreviewVoxel(currentTargetVoxel.gx, currentTargetVoxel.gy, currentTargetVoxel.gz, true, 1, 1, 1); // Show preview at current target
-        } else {
-            distanceDisplay.style.display = 'none';
-            if (currentTargetVoxel) {
-                updatePreviewVoxel(currentTargetVoxel.gx, currentTargetVoxel.gy, currentTargetVoxel.gz, true, 1, 1, 1); // Show preview at current target
-            } else {
-                updatePreviewVoxel(0, 0, 0, false);
+                loginButton.classList.remove('hidden');
+                logoutButton.classList.add('hidden');
+                profileButton.classList.add('hidden');
+                
+                userMenuButton.innerHTML = `
+                    <div class="bg-gray-600 text-gray-300 rounded-full w-10">
+                        <span><i class="fas fa-user"></i></span>
+                    </div>
+                `;
             }
         }
-        return; // Exit, handled by measurement preview
-    }
 
-    if (isDraggingVoxelAction) {
-        if (currentTargetVoxel && initialDragVoxelCoords) { // Ensure initial point is set for line drawing
-            // NEW: Axis snapping for line drawing
-            if (!dragAxisLock) {
-                const dx = Math.abs(currentTargetVoxel.gx - initialDragVoxelCoords.gx);
-                const dy = Math.abs(currentTargetVoxel.gy - initialDragVoxelCoords.gy);
-                const dz = Math.abs(currentTargetVoxel.gz - initialDragVoxelCoords.gz);
-
-                if (dx > VOXEL_DRAG_THRESHOLD || dy > VOXEL_DRAG_THRESHOLD || dz > VOXEL_DRAG_THRESHOLD) { // Use voxel-based threshold
-                    if (dx >= dy && dx >= dz) dragAxisLock = 'x';
-                    else if (dy >= dx && dy >= dz) dragAxisLock = 'y';
-                    else dragAxisLock = 'z';
-                }
+        // Firebase Auth State Listener
+        onAuthStateChanged(auth, (user) => {
+            updateUI(user);
+            if (user) {
+                authModal.close(); // Schließt das Modal, wenn der Benutzer angemeldet ist
             }
-
-            if (dragAxisLock) {
-                const snappedTargetVoxel = { ...initialDragVoxelCoords };
-                if (dragAxisLock === 'x') snappedTargetVoxel.gx = currentTargetVoxel.gx;
-                else if (dragAxisLock === 'y') snappedTargetVoxel.gy = currentTargetVoxel.gy;
-                else snappedTargetVoxel.gz = currentTargetVoxel.gz;
-                currentTargetVoxel = snappedTargetVoxel; // Use the snapped target for drawing
-            }
-
-            // Restore the state to `voxelsAtDragStart` before redrawing the line
-            if (voxelsAtDragStart) { // Add null check
-                // Clear current voxels to redraw the projected line
-                for (const chunk of chunks.values()) {
-                    chunk.dispose();
-                }
-                chunks.clear();
-                voxels.clear();
-                // Re-add original voxels
-                voxelsAtDragStart.forEach((data, k) => addVoxel(parseKey(k)[0], parseKey(k)[1], parseKey(k)[2], data.color, 1, 1, 1, true));
-            }
-            
-            const { dimX, dimY, dimZ } = getCurrentBlockDimensions(); // Get current block dimensions
-            // Draw the line from the initial click point to the current point
-            drawLineOfVoxelsSegment(initialDragVoxelCoords, currentTargetVoxel, currentMode, currentColor, dimX, dimY, dimZ);
-            lastActionVoxelCoords = { ...currentTargetVoxel }; // Update last action for continuous feedback
-
-            // Update distance display
-            const currentVoxelWorldPos = new THREE.Vector3(currentTargetVoxel.gx * VS + HALF, currentTargetVoxel.gy * VS + HALF, currentTargetVoxel.gz * VS + HALF);
-            const distance = initialDragVoxelWorldPos.distanceTo(currentVoxelWorldPos);
-            distanceDisplay.textContent = `Distanz: ${distance.toFixed(2)} mm`;
-            distanceDisplay.style.display = 'block';
-        }
-        updatePreviewVoxel(0, 0, 0, false); // Hide preview during active mouse drag
-    } else {
-        distanceDisplay.style.display = 'none'; // Hide distance display if not dragging
-        const { dimX, dimY, dimZ } = getCurrentBlockDimensions(); // Get current block dimensions for preview
-        if (currentTargetVoxel) {
-            updatePreviewVoxel(currentTargetVoxel.gx, currentTargetVoxel.gy, currentTargetVoxel.gz, true, dimX, dimY, dimZ);
-        } else {
-            updatePreviewVoxel(0, 0, 0, false);
-        }
-    }
-}
-
-
-function onPointerUp(e) {
-    // --- Touch Input Release ---
-    if (e.pointerType === 'touch') {
-        if (suppressNextTap) {
-            suppressNextTap = false;
-        } else if (activePointers.size === 1 && !doubleTapDragActive && currentMode !== Modes.MEASURE) { // Added currentMode check
-            // This block handles single-finger TAP for drawing, if it wasn't a drag for camera rotation
-            const movedDistance = initialClickPos ? Math.hypot(e.clientX - initialClickPos.x, e.clientY - initialClickPos.y) : 0;
-            if (movedDistance <= TAP_DIST_TH) { // It was a tap, not a drag
-                 const clickedVoxel = calculateTargetVoxelCoords(e.clientX, e.clientY, currentMode, false, false, 'touch');
-                 if (clickedVoxel) {
-                     // Single tap action, add to history
-                     const oldState = new Map(voxels);
-                     const { dimX, dimY, dimZ } = getCurrentBlockDimensions(); // Get current block dimensions
-                     performVoxelModification(clickedVoxel.gx, clickedVoxel.gy, clickedVoxel.gz, currentMode, currentColor, dimX, dimY, dimZ);
-                     addCommand('add', clickedVoxel.gx, clickedVoxel.gy, clickedVoxel.gz, null, currentColor, oldState, new Map(voxels), { dimX, dimY, dimZ }); // This is a simplified history for single tap.
-                 }
-            }
-        }
-        if (doubleTapDragActive && currentMode !== Modes.MEASURE && initialDragVoxelCoords) { // Added currentMode check
-            // Line drawing completed by touch double-tap-drag
-            let finalTargetVoxel = calculateTargetVoxelCoords(e.clientX, e.clientY, currentMode, true, false, 'touch');
-            if (finalTargetVoxel) {
-                // NEW: Apply axis snapping to the final target voxel
-                if (dragAxisLock) {
-                    const snappedFinalTargetVoxel = { ...initialDragVoxelCoords };
-                    if (dragAxisLock === 'x') snappedFinalTargetVoxel.gx = finalTargetVoxel.gx;
-                    else if (dragAxisLock === 'y') snappedFinalTargetVoxel.gy = finalTargetVoxel.gy;
-                    else snappedFinalTargetVoxel.gz = finalTargetVoxel.gz;
-                    finalTargetVoxel = snappedFinalTargetVoxel;
-                }
-
-                // Restore the state to `voxelsAtDragStart` before drawing the final line for history
-                if (voxelsAtDragStart) { // Add null check
-                    // Clear current voxels to redraw the final line
-                    for (const chunk of chunks.values()) {
-                        chunk.dispose();
-                    }
-                    chunks.clear();
-                    voxels.clear();
-                    // Re-add original voxels
-                    voxelsAtDragStart.forEach((data, k) => addVoxel(parseKey(k)[0], parseKey(k)[1], parseKey(k)[2], data.color, 1, 1, 1, true));
-                }
-                const { dimX, dimY, dimZ } = getCurrentBlockDimensions(); // Get current block dimensions
-                // Draw the final line and add to history as one command
-                const oldStateForHistory = [...voxelsAtDragStart.entries()].map(([id, data]) => {
-                    const [gx, gy, gz] = parseKey(id);
-                    return { gx, gy, gz, color: data.color, dimX: 1, dimY: 1, dimZ: 1 };
-                });
-                drawLineOfVoxelsSegment(initialDragVoxelCoords, finalTargetVoxel, currentMode, currentColor, dimX, dimY, dimZ);
-                const newStateForHistory = [...voxels.entries()].map(([id, data]) => {
-                    const [gx, gy, gz] = parseKey(id);
-                    return { gx, gy, gz, color: data.color, dimX: 1, dimY: 1, dimZ: 1 };
-                });
-                addCommand('line', null, null, null, null, null, oldStateForHistory, newStateForHistory);
-            }
-        }
-        releasePointer(e.pointerId, e);
-        // Only hide distance display if not in measurement mode and a measurement is not ongoing
-        if (currentMode !== Modes.MEASURE || (currentMode === Modes.MEASURE && measurementStartPoint === null && measurementEndPoint === null)) {
-            distanceDisplay.style.display = 'none';
-        }
-        initialDragVoxelWorldPos = null;
-        dragAxisLock = null; // NEW: Reset drag axis lock
-        return;
-    }
-
-    // --- Desktop: Mouse Release ---
-    if (e.pointerType === 'mouse') {
-        if (e.button === 2) { // Right-click release
-            document.exitPointerLock();
-            return;
-        }
-
-        const movedDistance = initialClickPos ? Math.hypot(e.clientX - initialClickPos.x, e.clientY - initialClickPos.y) : 0;
-        const wasSingleClick = movedDistance <= MOVE_PX;
-
-        if (currentMode === Modes.MEASURE) {
-            // Do not hide distance display immediately on mouse up in measurement mode,
-            // it should remain visible until a new measurement starts or mode changes.
-            // The logic for resetting measurementStartPoint/EndPoint is in onPointerDown.
-            // Just hide the preview voxel.
-            updatePreviewVoxel(0, 0, 0, false);
-            pointerIsDown = false; // Ensure pointerIsDown is reset
-            return; // Exit, handled by measurement mode
-        }
-
-        if (pointerIsDown && !isPointerLocked && initialDragVoxelCoords) {
-            // If it was a drag (not a single click), add the line to history
-            if (!wasSingleClick) {
-                let finalTargetVoxel = calculateTargetVoxelCoords(e.clientX, e.clientY, currentMode, true, false, 'mouse');
-                if (finalTargetVoxel) {
-                    // NEW: Apply axis snapping to the final target voxel
-                    if (dragAxisLock) {
-                        const snappedFinalTargetVoxel = { ...initialDragVoxelCoords };
-                        if (dragAxisLock === 'x') snappedFinalTargetVoxel.gx = finalTargetVoxel.gx;
-                        else if (dragAxisLock === 'y') snappedFinalTargetVoxel.gy = finalTargetVoxel.gy;
-                        else snappedFinalTargetVoxel.gz = finalTargetVoxel.gz;
-                        finalTargetVoxel = snappedFinalTargetVoxel;
-                    }
-
-                    // Restore the state to `voxelsAtDragStart` before drawing the final line for history
-                    if (voxelsAtDragStart) { // Add null check
-                        // Clear current voxels to redraw the final line
-                        for (const chunk of chunks.values()) {
-                            chunk.dispose();
-                        }
-                        chunks.clear();
-                        voxels.clear();
-                        // Re-add original voxels
-                        voxelsAtDragStart.forEach((data, k) => addVoxel(parseKey(k)[0], parseKey(k)[1], parseKey(k)[2], data.color, 1, 1, 1, true));
-                    }
-                    const { dimX, dimY, dimZ } = getCurrentBlockDimensions(); // Get current block dimensions
-                    // Draw the final line and add to history as one command
-                    const oldStateForHistory = [...voxelsAtDragStart.entries()].map(([id, data]) => {
-                        const [gx, gy, gz] = parseKey(id);
-                        return { gx, gy, gz, color: data.color, dimX: 1, dimY: 1, dimZ: 1 };
-                    });
-                    drawLineOfVoxelsSegment(initialDragVoxelCoords, finalTargetVoxel, currentMode, currentColor, dimX, dimY, dimZ);
-                    const newStateForHistory = [...voxels.entries()].map(([id, data]) => {
-                        const [gx, gy, gz] = parseKey(id);
-                        return { gx, gy, gz, color: data.color, dimX: 1, dimY: 1, dimZ: 1 };
-                    });
-                    addCommand('line', null, null, null, null, null, oldStateForHistory, newStateForHistory);
-                }
-            }
-        }
-    }
-
-    // --- General Cleanup ---
-    pointerIsDown = false;
-    isControlDragging = false;
-    isShiftDragging = false;
-    lastActionVoxelCoords = null;
-    initialClickPos = null;
-    initialDragVoxelCoords = null; // Reset initial drag point
-    voxelsAtDragStart = null; // Reset snapshot
-    fixedDragPlaneParams = { level: null, axis: null }; // Always reset on pointer up
-    // updatePreviewVoxel(0, 0, 0, false); // This might be handled by measurement mode
-    // Only hide distance display if not in measurement mode and a measurement is not ongoing
-    if (currentMode !== Modes.MEASURE || (currentMode === Modes.MEASURE && measurementStartPoint === null && measurementEndPoint === null)) {
-        distanceDisplay.style.display = 'none';
-    }
-    initialDragVoxelWorldPos = null;
-    dragAxisLock = null; // NEW: Reset drag axis lock
-}
-
-
-function onPointerLeave(e) {
-    if (e.pointerType === 'mouse') {
-        pointerIsDown = false;
-        lastActionVoxelCoords = null;
-        initialDragVoxelCoords = null; // Reset initial drag point
-        voxelsAtDragStart = null; // Reset snapshot
-        updatePreviewVoxel(0, 0, 0, false);
-        // Only hide distance display if not in measurement mode and a measurement is not ongoing
-        if (currentMode !== Modes.MEASURE || (currentMode === Modes.MEASURE && measurementStartPoint === null && measurementEndPoint === null)) {
-            distanceDisplay.style.display = 'none';
-        }
-        initialDragVoxelWorldPos = null;
-        dragAxisLock = null; // NEW: Reset drag axis lock
-    }
-}
-
-function onPointerLockChange() {
-    if (document.pointerLockElement === cvs) {
-        isPointerLocked = true;
-        firstMoveAfterLock = true;
-        updatePreviewVoxel(0,0,0,false);
-        euler.setFromQuaternion(cam.quaternion, 'YXZ');
-
-    } else {
-        isPointerLocked = false;
-    }
-}
-
-function onMouseWheel(e) {
-    e.preventDefault();
-
-    const sensitivity = 0.005;
-    let zoomAmount = e.deltaY * sensitivity;
-
-    if (e.altKey) {
-        // Only allow axis lock changes in ADD mode
-        if (currentMode === Modes.ADD) {
-            if (e.shiftKey) {
-                activeDrawingLevel.z = Math.max(0, Math.min(GRID - 1, activeDrawingLevel.z - Math.sign(e.deltaY)));
-                currentDrawingAxis = 'z';
-            } else if (e.ctrlKey) {
-                activeDrawingLevel.x = Math.max(0, Math.min(GRID - 1, activeDrawingLevel.x - Math.sign(e.deltaY)));
-                currentDrawingAxis = 'x';
-            } else {
-                activeDrawingLevel.y = Math.max(0, Math.min(GRID - 1, activeDrawingLevel.y - Math.sign(e.deltaY)));
-                currentDrawingAxis = 'y';
-            }
-            updateGridHelperPosition();
-        } else {
-            // If not in ADD mode, just zoom
-            cam.position.addScaledVector(
-                cam.getWorldDirection(new THREE.Vector3()),
-                zoomAmount * moveSpeed * 5
-            );
-        }
-    } else {
-        const speedChange = -Math.sign(e.deltaY) * 0.01;
-        moveSpeed = Math.max(0.01, Math.min(1.0, moveSpeed + speedChange));
-        document.getElementById('fly-speed-slider').value = moveSpeed;
-        document.getElementById('fly-speed-display').textContent = moveSpeed.toFixed(2);
-        localStorage.setItem('voxelEditorFlySpeed', moveSpeed);
-
-        cam.position.addScaledVector(
-            cam.getWorldDirection(new THREE.Vector3()),
-            zoomAmount * moveSpeed * 5
-        );
-    }
-}
-
-// Helper to get a point on a specific fixed plane
-function getPointOnFixedPlane(clientX, clientY, axis, level) {
-    const rect = cvs.getBoundingClientRect();
-    const mouse = new THREE.Vector2(((clientX - rect.left) / rect.width) * 2 - 1,
-                                    -((clientY - rect.top) / rect.height) * 2 + 1);
-    const raycaster = new THREE.Raycaster();
-    raycaster.setFromCamera(mouse, cam);
-
-    let planeNormal = new THREE.Vector3();
-    if (axis === 'y') planeNormal.set(0, 1, 0);
-    else if (axis === 'x') planeNormal.set(1, 0, 0);
-    else if (axis === 'z') planeNormal.set(0, 0, 1);
-    const drawingPlane = new THREE.Plane(planeNormal, -(level * VS));
-
-    const intersectionPoint = new THREE.Vector3();
-    const intersectResult = raycaster.ray.intersectPlane(drawingPlane, intersectionPoint);
-
-    if (intersectResult) { // Check if intersection occurred
-        let gx = Math.floor(intersectionPoint.x / VS);
-        let gy = Math.floor(intersectionPoint.y / VS);
-        let gz = Math.floor(intersectionPoint.z / VS);
-
-        if (axis === 'y') gy = level;
-        else if (axis === 'x') gx = level;
-        else if (axis === 'z') gz = level;
-
-        gx = Math.max(0, Math.min(GRID - 1, gx));
-        gy = Math.max(0, Math.min(GRID - 1, gy));
-        gz = Math.max(0, Math.min(GRID - 1, gz));
-
-        return { gx, gy, gz };
-    }
-    return null;
-}
-
-// Function to set the current fixed block size
-function setFixedBlockSize(size) {
-    currentBlockSize = size;
-    useDynamicBlockDim = false; // Deactivate dynamic mode
-    localStorage.setItem('voxelEditorCurrentBlockSize', currentBlockSize);
-    localStorage.setItem('voxelEditorUseDynamicBlockDim', useDynamicBlockDim);
-    updateBlockSizeButtonsActiveState(); // Update active state for buttons
-    
-    // Trigger a mouse move to update preview voxel
-    const rect = cvs.getBoundingClientRect();
-    const mouseX = lastX - rect.left;
-    const mouseY = lastY - rect.top;
-    if (mouseX >= 0 && mouseX <= rect.width && mouseY >= 0 && mouseY <= rect.height) {
-        const mouseEvent = new MouseEvent('mousemove', {
-            clientX: lastX,
-            clientY: lastY,
-            buttons: pointerIsDown ? 1 : 0
         });
-        onPointerMove(mouseEvent);
-    } else {
-        updatePreviewVoxel(0,0,0,false);
-    }
-}
 
-// NEW: Function to set dynamic block dimensions
-function setDynamicBlockDimensions() {
-    const x = parseInt(document.getElementById('dynamic-block-x').value);
-    const y = parseInt(document.getElementById('dynamic-block-y').value);
-    const z = parseInt(document.getElementById('dynamic-block-z').value);
-
-    dynamicBlockDim.x = Math.max(1, Math.min(GRID, x));
-    dynamicBlockDim.y = Math.max(1, Math.min(GRID, y));
-    dynamicBlockDim.z = Math.max(1, Math.min(GRID, z));
-
-    // Update input fields to reflect clamped values
-    document.getElementById('dynamic-block-x').value = dynamicBlockDim.x;
-    document.getElementById('dynamic-block-y').value = dynamicBlockDim.y;
-    document.getElementById('dynamic-block-z').value = dynamicBlockDim.z;
-
-    useDynamicBlockDim = true; // Activate dynamic mode
-    localStorage.setItem('voxelEditorDynamicBlockDimX', dynamicBlockDim.x);
-    localStorage.setItem('voxelEditorDynamicBlockDimY', dynamicBlockDim.y);
-    localStorage.setItem('voxelEditorDynamicBlockDimZ', dynamicBlockDim.z);
-    localStorage.setItem('voxelEditorUseDynamicBlockDim', useDynamicBlockDim);
-
-    updateBlockSizeButtonsActiveState(); // Update active state for buttons
-
-    // Trigger a mouse move to update preview voxel
-    const rect = cvs.getBoundingClientRect();
-    const mouseX = lastX - rect.left;
-    const mouseY = lastY - rect.top;
-    if (mouseX >= 0 && mouseX <= rect.width && mouseY >= 0 && mouseY <= rect.height) {
-        const mouseEvent = new MouseEvent('mousemove', {
-            clientX: lastX,
-            clientY: lastY,
-            buttons: pointerIsDown ? 1 : 0
+        // Login-Handler
+        loginButton.addEventListener('click', () => {
+            hideMessage(authErrorMessage);
+            authModal.showModal();
         });
-        onPointerMove(mouseEvent);
-    } else {
-        updatePreviewVoxel(0,0,0,false);
-    }
-}
 
-// NEW: Function to update the active class on block size buttons
-function updateBlockSizeButtonsActiveState() {
-    document.querySelectorAll('.block-size-btn').forEach(btn => btn.classList.remove('active'));
-    document.getElementById('setDynamicBlockSizeBtn').classList.remove('active');
-
-    if (useDynamicBlockDim) {
-        document.getElementById('setDynamicBlockSizeBtn').classList.add('active');
-    } else {
-        const activeFixedBtn = document.getElementById(`block-size-${currentBlockSize}x${currentBlockSize}`);
-        if (activeFixedBtn) {
-            activeFixedBtn.classList.add('active');
-        }
-    }
-}
-
-
-// NEW: Helper function to draw a line segment without adding to history directly
-function drawLineOfVoxelsSegment(start, end, mode, color, dimX, dimY, dimZ) {
-    let x = start.gx;
-    let y = start.gy;
-    let z = start.gz;
-    const x2 = end.gx;
-    const y2 = end.gy;
-    const z2 = end.gz;
-
-    const dx = x2 - x;
-    const dy = y2 - y;
-    const dz = z2 - z;
-
-    const steps = Math.max(Math.abs(dx), Math.abs(dy), Math.abs(dz));
-
-    if (steps === 0) {
-        performVoxelModification(x, y, z, mode, color, dimX, dimY, dimZ);
-        return;
-    }
-
-    const x_inc = dx / steps;
-    const y_inc = dy / steps;
-    const z_inc = dz / steps;
-
-    for (let i = 0; i <= steps; i++) {
-        // Apply modification for the base of the block
-        performVoxelModification(Math.round(x), Math.round(y), Math.round(z), mode, color, dimX, dimY, dimZ);
-        x += x_inc;
-        y += y_inc;
-        z += z_inc;
-    }
-}
-
-let voxelsAtDragStart = null; // NEW: Snapshot of voxels at the start of a drag for line drawing
-
-/* ---------- Keyboard Input ---------- */
-const keyboard = {};
-function onKeyDown(e) {
-    keyboard[e.key] = true;
-
-    if (e.key === 'Shift') {
-        isShiftDragging = true;
-    }
-    if (e.key === 'Control' || e.key === 'Meta') {
-        isControlDragging = true;
-    }
-
-    if ((e.ctrlKey || e.metaKey) && e.key === 'z') {
-        e.preventDefault();
-        undo();
-    }
-    if (((e.ctrlKey || e.metaKey) && e.key === 'y') || ((e.ctrlKey || e.metaKey) && e.shiftKey && e.key === 'Z')) {
-        e.preventDefault();
-        redo();
-    }
-    if ((e.ctrlKey || e.metaKey) && e.key === 'd') {
-        e.preventDefault();
-    }
-
-    switch (e.key) {
-        case 'Tab':
+        // Firebase Login
+        firebaseLoginButton.addEventListener('click', async (e) => {
             e.preventDefault();
-            cycleMode();
-            break;
-        case '1': setActivePreset(0); break;
-        case '2': setActivePreset(1); break;
-        case '3': setActivePreset(2); break;
-    }
-}
+            hideMessage(authErrorMessage);
+            const email = emailInput.value;
+            const password = passwordInput.value;
 
-function onKeyUp(e) {
-    keyboard[e.key] = false;
+            try {
+                await signInWithEmailAndPassword(auth, email, password);
+                // UI wird durch onAuthStateChanged aktualisiert
+            } catch (error) {
+                console.error("Firebase Login Error:", error.code, error.message);
+                let errorMessage = "Anmeldung fehlgeschlagen. Bitte versuchen Sie es erneut.";
+                if (error.code === 'auth/user-not-found' || error.code === 'auth/wrong-password') {
+                    errorMessage = "Ungültige E-Mail oder Passwort.";
+                } else if (error.code === 'auth/invalid-email') {
+                    errorMessage = "Ungültiges E-Mail-Format.";
+                }
+                showMessage(authErrorMessage, errorMessage);
+            }
+        });
 
-    if (e.key === 'Shift') {
-        isShiftDragging = false;
-    }
-    if (e.key === 'Control' || e.key === 'Meta') {
-        isControlDragging = false;
-    }
-}
-</script>
+        // Firebase Registrierung
+        firebaseSignupButton.addEventListener('click', async (e) => {
+            e.preventDefault();
+            hideMessage(authErrorMessage);
+            const email = emailInput.value;
+            const password = passwordInput.value;
+
+            try {
+                await createUserWithEmailAndPassword(auth, email, password);
+                // UI wird durch onAuthStateChanged aktualisiert
+            } catch (error) {
+                console.error("Firebase Signup Error:", error.code, error.message);
+                let errorMessage = "Registrierung fehlgeschlagen. Bitte versuchen Sie es erneut.";
+                if (error.code === 'auth/email-already-in-use') {
+                    errorMessage = "Diese E-Mail-Adresse wird bereits verwendet.";
+                } else if (error.code === 'auth/weak-password') {
+                    errorMessage = "Das Passwort sollte mindestens 6 Zeichen lang sein.";
+                } else if (error.code === 'auth/invalid-email') {
+                    errorMessage = "Ungültiges E-Mail-Format.";
+                }
+                showMessage(authErrorMessage, errorMessage);
+            }
+        });
+
+        // Firebase Google Login
+        googleLoginButton.addEventListener('click', async (e) => {
+            e.preventDefault();
+            hideMessage(authErrorMessage);
+            try {
+                await signInWithPopup(auth, googleProvider);
+                // UI wird durch onAuthStateChanged aktualisiert
+            } catch (error) {
+                console.error("Firebase Google Login Error:", error.code, error.message);
+                // Log the current origin to help the user debug
+                console.log("Current window origin (add this to Firebase authorized domains if necessary):", window.location.origin);
+
+                let errorMessage = "Anmeldung mit Google fehlgeschlagen. Bitte versuchen Sie es erneut.";
+                if (error.code === 'auth/popup-closed-by-user') {
+                    errorMessage = "Anmeldung abgebrochen (Popup geschlossen).";
+                } else if (error.code === 'auth/cancelled-popup-request') {
+                    errorMessage = "Anmeldeanfrage wurde abgebrochen (erneuter Versuch zu schnell).";
+                } else if (error.code === 'auth/operation-not-allowed') {
+                    errorMessage = "Google-Anmeldung ist in Ihrem Firebase-Projekt nicht aktiviert. Bitte überprüfen Sie die Firebase Console.";
+                } else if (error.code === 'auth/network-request-failed') {
+                    errorMessage = "Netzwerkfehler. Bitte überprüfen Sie Ihre Internetverbindung.";
+                } else if (error.code === 'auth/unauthorized-domain') {
+                    errorMessage = `Fehler: Nicht autorisierte Domain. Bitte fügen Sie "${window.location.origin}" zu den autorisierten Domains in Ihrer Firebase Console hinzu (Authentifizierung -> Einstellungen).`;
+                } else {
+                    errorMessage = `Anmeldung fehlgeschlagen: ${error.message}.`;
+                }
+                showMessage(authErrorMessage, errorMessage);
+            }
+        });
+
+        // Firebase Logout
+        logoutButton.addEventListener('click', async (e) => {
+            e.preventDefault();
+            try {
+                await signOut(auth);
+                // UI wird durch onAuthStateChanged aktualisiert
+            } catch (error) {
+                console.error("Firebase Logout Error:", error.message);
+            }
+        });
+
+        // Upload Model Button Handler
+        uploadModelButton.addEventListener('click', () => {
+            if (!auth.currentUser) {
+                authModal.showModal();
+                showMessage(authErrorMessage, 'Bitte melden Sie sich an, um Modelle hochzuladen.', true);
+            } else {
+                hideMessage(uploadErrorMessage);
+                hideMessage(uploadSuccessMessage);
+                modelTitleInput.value = ''; // Clear previous input
+                modelDescriptionInput.value = ''; // Clear previous input
+                modelFileInput.value = ''; // Clear previous file
+                uploadModal.showModal();
+            }
+        });
+
+        // Handle Model Upload
+        uploadSubmitButton.addEventListener('click', async (e) => {
+            e.preventDefault();
+            hideMessage(uploadErrorMessage);
+            hideMessage(uploadSuccessMessage);
+
+            const title = modelTitleInput.value.trim();
+            const description = modelDescriptionInput.value.trim();
+            const file = modelFileInput.files[0];
+
+            if (!title || !description || !file) {
+                showMessage(uploadErrorMessage, 'Bitte füllen Sie alle Felder aus und wählen Sie eine Datei aus.');
+                return;
+            }
+
+            if (!auth.currentUser) {
+                showMessage(uploadErrorMessage, 'Sie müssen angemeldet sein, um ein Modell hochzuladen.');
+                return;
+            }
+
+            try {
+                // 1. Upload file to Firebase Storage
+                const storageRef = ref(storage, `models/${auth.currentUser.uid}/${file.name}`);
+                const uploadResult = await uploadBytes(storageRef, file);
+                const downloadURL = await getDownloadURL(uploadResult.ref);
+
+                // 2. Save metadata to Firestore
+                await addDoc(collection(db, "models"), {
+                    title: title,
+                    description: description,
+                    fileUrl: downloadURL,
+                    fileName: file.name,
+                    uploaderUid: auth.currentUser.uid,
+                    uploaderEmail: auth.currentUser.email,
+                    timestamp: serverTimestamp(),
+                    downloads: 0,
+                    rating: 0, // Initial rating
+                    ratingCount: 0 // Initial rating count
+                });
+
+                showMessage(uploadSuccessMessage, 'Modell erfolgreich hochgeladen!', false);
+                modelTitleInput.value = '';
+                modelDescriptionInput.value = '';
+                modelFileInput.value = ''; // Clear file input
+                // uploadModal.close(); // Optionally close modal on success
+            } catch (error) {
+                console.error("Model Upload Error:", error);
+                showMessage(uploadErrorMessage, `Fehler beim Hochladen des Modells: ${error.message}`);
+            }
+        });
+
+        // Download-Button Funktionen
+        document.querySelectorAll('.download-button').forEach(button => {
+            button.addEventListener('click', function() {
+                if (!auth.currentUser) { // Prüfen, ob der Benutzer angemeldet ist
+                    authModal.showModal();
+                } else {
+                    const modelTitle = this.closest('.card-body').querySelector('.card-title').textContent;
+                    // Ersetzen Sie alert() durch eine DaisyUI Modal oder Toast Benachrichtigung
+                    const downloadMessage = document.createElement('div');
+                    downloadMessage.className = 'alert alert-info fixed bottom-4 right-4 z-50 w-80';
+                    downloadMessage.innerHTML = `
+                        <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" class="stroke-current shrink-0 w-6 h-6"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
+                        <span>Download von "${modelTitle}" gestartet!</span>
+                    `;
+                    document.body.appendChild(downloadMessage);
+                    setTimeout(() => downloadMessage.remove(), 3000); // Nachricht nach 3 Sekunden entfernen
+                }
+            });
+        });
+    </script>
 </body>
 </html>
