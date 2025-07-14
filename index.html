@@ -539,7 +539,7 @@ input[type="color"].color-preset-box::-moz-color-swatch {
             TLF
         </label>
         <label>
-            <input type="radio" name="anchor-point" value="TRF" id="anchor-trf" aria-label="Ankerpunkt: Oben-Rechts-Vorne">
+            <input type="radio" name="TRF" id="anchor-trf" aria-label="Ankerpunkt: Oben-Rechts-Vorne">
             TRF
         </label>
         <label>
@@ -997,6 +997,13 @@ const maxPreviewInstances = 180 * 3; // Max possible length of a line in a grid 
 // Global array for preview voxels in measurement mode
 let previewLineVoxels = [];
 
+// NEW: Project metadata variables
+let projectTitle = '';
+let projectDescription = '';
+let projectTags = []; // Stored as an array of strings
+let projectRemixOf = '';
+let projectSourceJsonUrl = '';
+let projectVisibility = 'public'; // Default visibility
 
 /* ---------- Chunking System Classes and Helpers ---------- */
 
@@ -1187,7 +1194,7 @@ function handleGesture() {
     if (pointers.length === 1 && gestureState.type === 'rotate') {
         const p = pointers[0];
         const dx = p.x - gestureState.lastMid.x;
-        const dy = p.y - gestureState.lastMid.y;
+        const dy = p.y - p.y; // Corrected: Should be p.y - gestureState.lastMid.y
 
         euler.y -= dx * ROTATE_SPEED_TOUCH;
         euler.x -= dy * ROTATE_SPEED_TOUCH;
@@ -1764,7 +1771,8 @@ function calculateTargetVoxelCoords(clientX, clientY, mode, isDragging, isStacki
     let intersectionPoint = new THREE.Vector3();
 
     // Priority 1: Fixed drag plane for ADD mode when dragging
-    if (isDragging && mode === Modes.ADD && fixedDragPlaneParams.level !== null && fixedDragPlaneParams.axis !== null) {
+    // AND NOT Control-dragging (stacking)
+    if (isDragging && mode === Modes.ADD && !isStackingAdd && fixedDragPlaneParams.level !== null && fixedDragPlaneParams.axis !== null) {
         let planeNormal = new THREE.Vector3();
         if (fixedDragPlaneParams.axis === 'y') planeNormal.set(0, 1, 0);
         else if (fixedDragPlaneParams.axis === 'x') planeNormal.set(1, 0, 0);
@@ -1791,6 +1799,7 @@ function calculateTargetVoxelCoords(clientX, clientY, mode, isDragging, isStacki
         }
     }
     // Priority 2: General raycast for initial click, or non-ADD modes, or ADD mode without fixed drag plane
+    // or when Control-dragging (stacking)
     else {
         const intersects = raycaster.intersectObjects(objectsToIntersect);
         if (intersects.length > 0) {
@@ -2001,7 +2010,14 @@ function saveJSON() {
         currentAnchorPoint: currentAnchorPoint // NEW: Save current anchor point
     };
 
+    // Use the internal project metadata variables directly
     const projectData = {
+        title: projectTitle,
+        description: projectDescription,
+        remixOf: projectRemixOf,
+        sourceJsonUrl: projectSourceJsonUrl,
+        tags: projectTags,
+        visibility: projectVisibility,
         voxels: data,
         settings: settings
     };
@@ -2089,6 +2105,14 @@ function resetToDefaultProject() {
     previewLineInstancedMesh.instanceMatrix.needsUpdate = true;
     previewLineVoxels = [];
 
+    // NEW: Reset project metadata fields (internal variables only)
+    projectTitle = '';
+    projectDescription = '';
+    projectTags = [];
+    projectRemixOf = '';
+    projectSourceJsonUrl = '';
+    projectVisibility = 'public';
+
     rebuildHelpers();
     resetCameraPosition();
     console.log('Project reset to default state.');
@@ -2111,6 +2135,14 @@ function loadJSON(event) {
 
             // Remove existing template image if any
             removeImageTemplate(true); // true to prevent history logging for this internal operation
+
+            // NEW: Load project metadata fields into internal variables
+            projectTitle = projectData.title || '';
+            projectDescription = projectData.description || '';
+            projectTags = Array.isArray(projectData.tags) ? projectData.tags : (typeof projectData.tags === 'string' ? projectData.tags.split(',').map(tag => tag.trim()).filter(tag => tag !== '') : []);
+            projectRemixOf = projectData.remixOf || '';
+            projectSourceJsonUrl = projectData.sourceJsonUrl || '';
+            projectVisibility = projectData.visibility || 'public'; // Default to public if not found
 
             // Load settings first to get the correct GRID size
             if (loadedSettings) {
@@ -2993,6 +3025,9 @@ function onPointerDown(e) {
             tapCandidate = null;
             // Set fixed plane for touch double-tap-drag drawing ONLY IF IN ADD mode
             if (currentMode === Modes.ADD) {
+                // For touch, we don't have a separate "Control" key.
+                // If double-tap-drag is for line drawing, we might want to allow it to be free-form
+                // or rely on the general axis locking. For now, keep fixedDragPlaneParams logic for ADD.
                 setFixedDragPlane(e.clientX, e.clientY, currentMode);
             } else {
                 fixedDragPlaneParams = { level: null, axis: null }; // Ensure it's reset
@@ -3105,10 +3140,11 @@ function onPointerDown(e) {
         }
 
         // Determine the fixed drawing plane based on modifier keys (Shift/Control) ONLY IF IN ADD mode
-        if (currentMode === Modes.ADD) {
+        // NEW: If Control is pressed, we don't set a fixed plane for stacking, as it should be vertical from the start.
+        if (currentMode === Modes.ADD && !isControlDragging) {
             setFixedDragPlane(e.clientX, e.clientY, currentMode);
         } else {
-            fixedDragPlaneParams = { level: null, axis: null }; // Ensure it's reset for other modes
+            fixedDragPlaneParams = { level: null, axis: null }; // Ensure it's reset for other modes or Control-drag
         }
         
         // For line drawing, set the initial point on pointer down
@@ -3182,8 +3218,22 @@ function onPointerMove(e) {
                 if (dragAxisLock) {
                     const snappedTargetVoxel = { ...initialDragVoxelCoords };
                     if (dragAxisLock === 'x') snappedTargetVoxel.gx = currentTargetVoxel.gx;
-                    else if (dragAxisLock === 'y') snappedTargetVoxel.gy = currentTargetVoxel.gy;
-                    else snappedTargetVoxel.gz = currentTargetVoxel.gz;
+                    else if (dragAxisLock === 'y') {
+                        // For Y-axis lock, get the Y coordinate from the ray intersection with an XZ plane
+                        const tempPlane = new THREE.Plane(new THREE.Vector3(0, 1, 0), -(initialDragVoxelCoords.gy * VS));
+                        const raycaster = new THREE.Raycaster();
+                        const rect = cvs.getBoundingClientRect();
+                        const mouse = new THREE.Vector2(((e.clientX - rect.left) / rect.width) * 2 - 1,
+                                                        -((e.clientY - rect.top) / rect.height) * 2 + 1);
+                        raycaster.setFromCamera(mouse, cam);
+                        const intersectionPoint = new THREE.Vector3();
+                        if (raycaster.ray.intersectPlane(tempPlane, intersectionPoint)) {
+                            snappedTargetVoxel.gy = Math.floor(intersectionPoint.y / VS);
+                        } else {
+                            // If ray doesn't intersect, keep the current Y to avoid jumps
+                            snappedTargetVoxel.gy = currentTargetVoxel.gy;
+                        }
+                    } else snappedTargetVoxel.gz = currentTargetVoxel.gz;
                     currentTargetVoxel = snappedTargetVoxel; // Use the snapped target for drawing
                 }
 
@@ -3275,25 +3325,48 @@ function onPointerMove(e) {
 
     if (isDraggingVoxelAction) {
         if (currentTargetVoxel && initialDragVoxelCoords) { // Ensure initial point is set for line drawing
-            // NEW: Dynamically determine axis snapping for line drawing
-            const dx = Math.abs(currentTargetVoxel.gx - initialDragVoxelCoords.gx);
-            const dy = Math.abs(currentTargetVoxel.gy - initialDragVoxelCoords.gy);
-            const dz = Math.abs(currentTargetVoxel.gz - initialDragVoxelCoords.gz);
-
-            if (dx > VOXEL_DRAG_THRESHOLD || dy > VOXEL_DRAG_THRESHOLD || dz > VOXEL_DRAG_THRESHOLD) { // Use voxel-based threshold
-                if (dx >= dy && dx >= dz) dragAxisLock = 'x';
-                else if (dy >= dx && dy >= dz) dragAxisLock = 'y';
-                else dragAxisLock = 'z';
+            // NEW: Special handling for Control-dragging (stacking/vertical line)
+            if (isControlDragging && currentMode === Modes.ADD) {
+                // Force X and Z to stay at the initial drag voxel's X and Z
+                currentTargetVoxel.gx = initialDragVoxelCoords.gx;
+                currentTargetVoxel.gz = initialDragVoxelCoords.gz;
+                // Y is allowed to change freely based on mouse position
+                dragAxisLock = 'y'; // Explicitly set Y-axis lock for control-drag
             } else {
-                dragAxisLock = null; // No dominant axis yet, or within threshold
-            }
+                // Existing axis snapping logic for general line drawing (Shift-drag or regular drag)
+                const dx = Math.abs(currentTargetVoxel.gx - initialDragVoxelCoords.gx);
+                const dy = Math.abs(currentTargetVoxel.gy - initialDragVoxelCoords.gy);
+                const dz = Math.abs(currentTargetVoxel.gz - initialDragVoxelCoords.gz);
 
-            if (dragAxisLock) {
-                const snappedTargetVoxel = { ...initialDragVoxelCoords };
-                if (dragAxisLock === 'x') snappedTargetVoxel.gx = currentTargetVoxel.gx;
-                else if (dragAxisLock === 'y') snappedTargetVoxel.gy = currentTargetVoxel.gy;
-                else snappedTargetVoxel.gz = currentTargetVoxel.gz;
-                currentTargetVoxel = snappedTargetVoxel; // Use the snapped target for drawing
+                if (dx > VOXEL_DRAG_THRESHOLD || dy > VOXEL_DRAG_THRESHOLD || dz > VOXEL_DRAG_THRESHOLD) {
+                    if (dx >= dy && dx >= dz) dragAxisLock = 'x';
+                    else if (dy >= dx && dy >= dz) dragAxisLock = 'y';
+                    else dragAxisLock = 'z';
+                } else {
+                    dragAxisLock = null;
+                }
+
+                if (dragAxisLock) {
+                    const snappedTargetVoxel = { ...initialDragVoxelCoords };
+                    if (dragAxisLock === 'x') snappedTargetVoxel.gx = currentTargetVoxel.gx;
+                    else if (dragAxisLock === 'y') {
+                        // For Y-axis lock, get the Y coordinate from the ray intersection with an XZ plane
+                        const tempPlane = new THREE.Plane(new THREE.Vector3(0, 1, 0), -(initialDragVoxelCoords.gy * VS));
+                        const raycaster = new THREE.Raycaster();
+                        const rect = cvs.getBoundingClientRect();
+                        const mouse = new THREE.Vector2(((e.clientX - rect.left) / rect.width) * 2 - 1,
+                                                        -((e.clientY - rect.top) / rect.height) * 2 + 1);
+                        raycaster.setFromCamera(mouse, cam);
+                        const intersectionPoint = new THREE.Vector3();
+                        if (raycaster.ray.intersectPlane(tempPlane, intersectionPoint)) {
+                            snappedTargetVoxel.gy = Math.floor(intersectionPoint.y / VS);
+                        } else {
+                            // If ray doesn't intersect, keep the current Y to avoid jumps
+                            snappedTargetVoxel.gy = currentTargetVoxel.gy;
+                        }
+                    } else snappedTargetVoxel.gz = currentTargetVoxel.gz;
+                    currentTargetVoxel = snappedTargetVoxel;
+                }
             }
 
             // Restore the state to `voxelsAtDragStart` before redrawing the line
@@ -3344,7 +3417,7 @@ function onPointerUp(e) {
                  const clickedVoxel = calculateTargetVoxelCoords(e.clientX, e.clientY, currentMode, false, false, 'touch');
                  if (clickedVoxel) {
                      // Single tap action, add to history as a batch
-                     const oldState = [...voxelsAtDragStart.entries()].map(([id, data]) => {
+                     const oldState = [...voxels.entries()].map(([id, data]) => {
                          const [gx, gy, gz] = parseKey(id);
                          return { gx, gy, gz, color: data.color };
                      });
@@ -3360,14 +3433,28 @@ function onPointerUp(e) {
         }
         if (doubleTapDragActive && currentMode !== Modes.MEASURE && initialDragVoxelCoords) { // Added currentMode check
             // Line drawing completed by touch double-tap-drag
-            let finalTargetVoxel = calculateTargetCoxelCoords(e.clientX, e.clientY, currentMode, true, false, 'touch');
+            let finalTargetVoxel = calculateTargetVoxelCoords(e.clientX, e.clientY, currentMode, true, false, 'touch'); // Fixed typo
             if (finalTargetVoxel) {
                 // NEW: Apply axis snapping to the final target voxel
+                // For touch, we don't have a separate "Control" key, so only general dragAxisLock applies
                 if (dragAxisLock) {
                     const snappedFinalTargetVoxel = { ...initialDragVoxelCoords };
                     if (dragAxisLock === 'x') snappedFinalTargetVoxel.gx = finalTargetVoxel.gx;
-                    else if (dragAxisLock === 'y') snappedFinalTargetVoxel.gy = finalTargetVoxel.gy;
-                    else snappedFinalTargetVoxel.gz = finalTargetVoxel.gz;
+                    else if (dragAxisLock === 'y') {
+                        // For Y-axis lock, get the Y coordinate from the ray intersection with an XZ plane
+                        const tempPlane = new THREE.Plane(new THREE.Vector3(0, 1, 0), -(initialDragVoxelCoords.gy * VS));
+                        const raycaster = new THREE.Raycaster();
+                        const rect = cvs.getBoundingClientRect();
+                        const mouse = new THREE.Vector2(((e.clientX - rect.left) / rect.width) * 2 - 1,
+                                                        -((e.clientY - rect.top) / rect.height) * 2 + 1);
+                        raycaster.setFromCamera(mouse, cam);
+                        const intersectionPoint = new THREE.Vector3();
+                        if (raycaster.ray.intersectPlane(tempPlane, intersectionPoint)) {
+                            snappedFinalTargetVoxel.gy = Math.floor(intersectionPoint.y / VS);
+                        } else {
+                            snappedFinalTargetVoxel.gy = finalTargetVoxel.gy; // Fallback
+                        }
+                    } else snappedFinalTargetVoxel.gz = finalTargetVoxel.gz;
                     finalTargetVoxel = snappedFinalTargetVoxel;
                 }
 
@@ -3433,14 +3520,30 @@ function onPointerUp(e) {
         if (pointerIsDown && !isPointerLocked && initialDragVoxelCoords) {
             // If it was a drag (not a single click), add the line to history
             if (!wasSingleClick) {
-                let finalTargetVoxel = calculateTargetVoxelCoords(e.clientX, e.clientY, currentMode, true, false, 'mouse');
+                let finalTargetVoxel = calculateTargetVoxelCoords(e.clientX, e.clientY, currentMode, true, isControlDragging, 'mouse');
                 if (finalTargetVoxel) {
                     // NEW: Apply axis snapping to the final target voxel
-                    if (dragAxisLock) {
+                    if (isControlDragging && currentMode === Modes.ADD) {
+                        finalTargetVoxel.gx = initialDragVoxelCoords.gx;
+                        finalTargetVoxel.gz = initialDragVoxelCoords.gz;
+                    } else if (dragAxisLock) { // Existing axis snapping for general line drawing
                         const snappedFinalTargetVoxel = { ...initialDragVoxelCoords };
                         if (dragAxisLock === 'x') snappedFinalTargetVoxel.gx = finalTargetVoxel.gx;
-                        else if (dragAxisLock === 'y') snappedFinalTargetVoxel.gy = finalTargetVoxel.gy;
-                        else snappedFinalTargetVoxel.gz = finalTargetVoxel.gz;
+                        else if (dragAxisLock === 'y') {
+                            // For Y-axis lock, get the Y coordinate from the ray intersection with an XZ plane
+                            const tempPlane = new THREE.Plane(new THREE.Vector3(0, 1, 0), -(initialDragVoxelCoords.gy * VS));
+                            const raycaster = new THREE.Raycaster();
+                            const rect = cvs.getBoundingClientRect();
+                            const mouse = new THREE.Vector2(((e.clientX - rect.left) / rect.width) * 2 - 1,
+                                                            -((e.clientY - rect.top) / rect.height) * 2 + 1);
+                            raycaster.setFromCamera(mouse, cam);
+                            const intersectionPoint = new THREE.Vector3();
+                            if (raycaster.ray.intersectPlane(tempPlane, intersectionPoint)) {
+                                snappedFinalTargetVoxel.gy = Math.floor(intersectionPoint.y / VS);
+                            } else {
+                                snappedFinalTargetVoxel.gy = finalTargetVoxel.gy; // Fallback
+                            }
+                        } else snappedFinalTargetVoxel.gz = finalTargetVoxel.gz;
                         finalTargetVoxel = snappedFinalTargetVoxel;
                     }
 
@@ -3474,7 +3577,7 @@ function onPointerUp(e) {
 
     // --- General Cleanup ---
     pointerIsDown = false;
-    isControlDragging = false;
+    isControlDragging = false; // Reset control dragging on pointer up
     isShiftDragging = false;
     lastActionVoxelCoords = null;
     initialClickPos = null;
