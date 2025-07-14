@@ -1228,7 +1228,8 @@ function handleGesture() {
         // --- Execute Pinch (Zoom) ---
         else if (gestureState.type === 'pinch') {
             const scale = dist / gestureState.lastDist;
-            const zoomDelta = (1 - scale) * PINCH_ZOOM_MULT * moveSpeed;
+            // Invert pinch zoom direction
+            const zoomDelta = (scale - 1) * PINCH_ZOOM_MULT * moveSpeed; // MODIFIED: (scale - 1) instead of (1 - scale)
             cam.position.addScaledVector(
                 cam.getWorldDirection(new THREE.Vector3()),
                 zoomDelta
@@ -1818,18 +1819,38 @@ function calculateTargetVoxelCoords(clientX, clientY, mode, pointerType) {
 
         // Berechne die Koordinaten des *getroffenen* Voxels.
         // Verschiebe den Schnittpunkt leicht *innerhalb* des getroffenen Voxels, um das Abrunden zu erleichtern.
-        const hitPointInside = hit.point.clone().sub(hitNormal.multiplyScalar(0.01));
+        const hitPointInside = hit.point.clone().sub(hitNormal.multiplyScalar(0.001)); // Kleinerer Offset für Präzision
         const hitVoxelX = Math.floor(hitPointInside.x / VS);
         const hitVoxelY = Math.floor(hitPointInside.y / VS);
         const hitVoxelZ = Math.floor(hitPointInside.z / VS);
 
         if (mode === Modes.ADD) {
-            // Im Hinzufügen-Modus ist das Ziel, wenn ein Voxel getroffen wird, das Voxel *neben* dem getroffenen
+            // Im Hinzufügen-Modus ist das Ziel das Voxel *neben* dem getroffenen
             // in Richtung der Normalen.
+            let normalX = 0, normalY = 0, normalZ = 0;
+            const absX = Math.abs(hit.face.normal.x);
+            const absY = Math.abs(hit.face.normal.y);
+            const absZ = Math.abs(hit.face.normal.z);
+
+            // Bestimme die dominante Normalkomponente, um eine saubere achsenparallele Platzierung zu gewährleisten
+            if (absX > absY && absX > absZ) {
+                normalX = Math.sign(hit.face.normal.x);
+            } else if (absY > absX && absY > absZ) {
+                normalY = Math.sign(hit.face.normal.y);
+            } else if (absZ > absX && absZ > absY) {
+                normalZ = Math.sign(hit.face.normal.z);
+            }
+            // Fallback für Kanten-/Eckfälle, bei denen mehrere Komponenten gleich oder nahezu gleich sein könnten
+            if (normalX === 0 && normalY === 0 && normalZ === 0) {
+                if (Math.abs(hit.face.normal.y) > 0.01) normalY = Math.sign(hit.face.normal.y);
+                else if (Math.abs(hit.face.normal.x) > 0.01) normalX = Math.sign(hit.face.normal.x);
+                else if (Math.abs(hit.face.normal.z) > 0.01) normalZ = Math.sign(hit.face.normal.z);
+            }
+
             targetVoxelCoords = {
-                gx: hitVoxelX + Math.round(hit.face.normal.x),
-                gy: hitVoxelY + Math.round(hit.face.normal.y),
-                gz: hitVoxelZ + Math.round(hit.face.normal.z)
+                gx: hitVoxelX + normalX,
+                gy: hitVoxelY + normalY,
+                gz: hitVoxelZ + normalZ
             };
         } else { // DELETE, DRAW, MEASURE
             // In anderen Modi ist das Ziel das *getroffene* Voxel selbst.
