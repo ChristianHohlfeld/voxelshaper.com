@@ -76,7 +76,7 @@ canvas{
     width:100%;
     height:100%;
     display: block; /* Ensure canvas behaves as a block element */
-    box-sizing: border-box; /* Ensure border (if added back) doesn't push content out */
+    box-sizing: border-box;
 }
 .info-box{
     position:absolute;
@@ -576,10 +576,10 @@ input[type="color"].color-preset-box::-moz-color-swatch {
     **Linke MT gedrückt + Maus ziehen → Linie von Voxeln zeichnen**<br>
     Mausrad → Kamera Geschwindigkeit anpassen<<br>
     **Tab → Modus wechseln (Hinzufügen / Löschen / Zeichnen / Messen)**<br>
-    **1, 2, 3 → Voreingestellte Farbe wählen**<br>
+    **1, 2, 3 → Voreingestellte Farbe wählen**<<br>
     **Strg + Z → Rückgängig (Undo)**<br>
     **Strg + Y oder Strg + Shift + Z → Wiederholen (Redo)**<br>
-    **NEU: Abstand messen (Modus "Messen")**<br>
+    **NEU: Abstand messen (Modus "Messen")**<<br>
     **Linke MT → Erster Klick setzt Startpunkt, Zweiter Klick setzt Endpunkt und zeigt Distanz**
     </div>
     <div id="touch-indicator" class="touch-indicator"></div>
@@ -1024,8 +1024,8 @@ class VoxelChunk {
         this.chunkX = chunkX;
         this.chunkY = chunkY;
         this.chunkZ = chunkZ;
-        this.chunkSize = chunkSize;
         this.scene = scene;
+        this.chunkSize = chunkSize; // FIX: Store chunkSize correctly
 
         // Global offset for this chunk
         this.offsetX = chunkX * chunkSize * VS;
@@ -1194,10 +1194,10 @@ function handleGesture() {
     if (pointers.length === 1 && gestureState.type === 'rotate') {
         const p = pointers[0];
         const dx = p.x - gestureState.lastMid.x;
-        const dy = p.y - gestureState.lastMid.y; // Fixed: Corrected typo from p.y - p.y
+        const dy = p.y - gestureState.lastMid.y; // Corrected this line
 
         euler.y -= dx * ROTATE_SPEED_TOUCH;
-        euler.x += dy * ROTATE_SPEED_TOUCH; // Changed to += for intuitive vertical swipe
+        euler.x += dy * ROTATE_SPEED_TOUCH;
         euler.x = Math.max(-Math.PI / 2, Math.min(Math.PI / 2, euler.x));
         cam.quaternion.setFromEuler(euler);
 
@@ -1755,9 +1755,48 @@ function getAnchorOffsetVoxels(dimX, dimY, dimZ) {
     return { offsetX, offsetY, offsetZ };
 }
 
+// Helper function to find the closest point on a line (defined by point and direction) to a ray
+const tempVector1 = new THREE.Vector3();
+const tempVector2 = new THREE.Vector3();
 
-// Modified calculateTargetVoxelCoords to use fixedDragPlaneParams and touchAssist
-function calculateTargetVoxelCoords(clientX, clientY, mode, isDragging, isStackingAdd, pointerType) { // Added pointerType
+function closestPointOnLineToRay(rayOrigin, rayDirection, linePoint, lineDirection) {
+    const a = rayDirection.dot(rayDirection); // |rayDirection|^2
+    const b = rayDirection.dot(lineDirection); // dot product of directions
+    const c = lineDirection.dot(lineDirection); // |lineDirection|^2
+
+    // Vector from linePoint to rayOrigin
+    const r = tempVector1.subVectors(rayOrigin, linePoint);
+
+    const d = rayDirection.dot(r);
+    const e = lineDirection.dot(r);
+
+    const denominator = a * c - b * b;
+
+    if (denominator === 0) { // Lines are parallel or collinear
+        // In this case, just project rayOrigin onto the line
+        return linePoint.clone().add(lineDirection.clone().multiplyScalar(e / c));
+    }
+
+    // Parameter 't' for the ray (P_ray = rayOrigin + t * rayDirection)
+    // Parameter 's' for the line (P_line = linePoint + s * lineDirection)
+    // We want to find 's' for the point on the line closest to the ray
+    const s = (a * e - b * d) / denominator;
+
+    return linePoint.clone().add(lineDirection.clone().multiplyScalar(s));
+}
+
+
+/**
+ * Berechnet die Ziel-Voxel-Koordinaten basierend auf der Mausposition und dem Modus.
+ * Diese Funktion gibt die rohen Gitterkoordinaten zurück, ohne Ankerpunkt-Offset oder Klemmen.
+ *
+ * @param {number} clientX - X-Koordinate des Mauszeigers im Client-Bereich.
+ * @param {number} clientY - Y-Koordinate des Mauszeigers im Client-Bereich.
+ * @param {string} mode - Aktueller Modus (ADD, DELETE, DRAW, MEASURE).
+ * @param {string} pointerType - Typ des Pointers ('mouse' oder 'touch').
+ * @returns {object|null} - Objekt mit gx, gy, gz oder null, wenn kein Ziel gefunden wurde.
+ */
+function calculateTargetVoxelCoords(clientX, clientY, mode, pointerType) {
     if (isPointerLocked) return null;
 
     const rect = cvs.getBoundingClientRect();
@@ -1767,101 +1806,40 @@ function calculateTargetVoxelCoords(clientX, clientY, mode, isDragging, isStacki
     raycaster.setFromCamera(mouse, cam);
 
     const objectsToIntersect = Array.from(chunks.values()).map(chunk => chunk.instancedMesh);
-    let targetVoxelCoords = null; // This will be the intended anchor point in grid coordinates
+    let targetVoxelCoords = null;
     let intersectionPoint = new THREE.Vector3();
 
-    // When dragging (isDragging is true), we want to allow free movement for axis locking.
-    // The fixedDragPlaneParams are primarily for initial single-click placement or when nothing is hit.
-    if (isDragging && mode === Modes.ADD && !isStackingAdd) {
-         // When dragging, we don't force to a fixed plane based on the initial click.
-         // Instead, we allow the ray to intersect with existing voxels or the general grid.
-         // The axis locking will happen *after* this function returns.
-         const intersects = raycaster.intersectObjects(objectsToIntersect);
-         if (intersects.length > 0) {
-             const hit = intersects[0];
-             const hitNormal = hit.face.normal.clone();
-             intersectionPoint.copy(hit.point);
+    const intersects = raycaster.intersectObjects(objectsToIntersect);
 
-             const hitPointInside = hit.point.clone().sub(hitNormal.multiplyScalar(0.01));
-             const hitVoxelX = Math.floor(hitPointInside.x / VS);
-             const hitVoxelY = Math.floor(hitPointInside.y / VS);
-             const hitVoxelZ = Math.floor(hitPointInside.z / VS);
+    if (intersects.length > 0) {
+        const hit = intersects[0];
+        const hitNormal = hit.face.normal.clone();
+        intersectionPoint.copy(hit.point);
 
-             targetVoxelCoords = {
-                 gx: hitVoxelX + Math.round(hit.face.normal.x),
-                 gy: hitVoxelY + Math.round(hit.face.normal.y),
-                 gz: hitVoxelZ + Math.round(hit.face.normal.z)
-             };
-         } else {
-             // If nothing is hit during a drag, fall back to the active drawing level/axis
-             let planeNormal = new THREE.Vector3();
-             let planeConstant = 0;
-             if (currentDrawingAxis === 'y') {
-                 planeNormal.set(0, 1, 0);
-                 planeConstant = -(activeDrawingLevel.y * VS);
-             } else if (currentDrawingAxis === 'x') {
-                 planeNormal.set(1, 0, 0);
-                 planeConstant = -(activeDrawingLevel.x * VS);
-             } else if (currentDrawingAxis === 'z') {
-                 planeNormal.set(0, 0, 1);
-                 planeConstant = -(activeDrawingLevel.z * VS);
-             }
-             const drawingPlane = new THREE.Plane(planeNormal, planeConstant);
+        // Berechne die Koordinaten des *getroffenen* Voxels.
+        // Verschiebe den Schnittpunkt leicht *innerhalb* des getroffenen Voxels, um das Abrunden zu erleichtern.
+        const hitPointInside = hit.point.clone().sub(hitNormal.multiplyScalar(0.01));
+        const hitVoxelX = Math.floor(hitPointInside.x / VS);
+        const hitVoxelY = Math.floor(hitPointInside.y / VS);
+        const hitVoxelZ = Math.floor(hitPointInside.z / VS);
 
-             if (raycaster.ray.intersectPlane(drawingPlane, intersectionPoint)) {
-                 let gx = Math.floor(intersectionPoint.x / VS);
-                 let gy = Math.floor(intersectionPoint.y / VS);
-                 let gz = Math.floor(intersectionPoint.z / VS);
-
-                 if (currentDrawingAxis === 'y') gy = activeDrawingLevel.y;
-                 else if (currentDrawingAxis === 'x') gx = activeDrawingLevel.x;
-                 else if (currentDrawingAxis === 'z') gz = activeDrawingLevel.z;
-
-                 targetVoxelCoords = { gx, gy, gz };
-             } else {
-                 // If ray doesn't intersect, default to center of active drawing plane
-                 targetVoxelCoords = {
-                     gx: Math.floor(GRID / 2),
-                     gy: Math.floor(GRID / 2),
-                     gz: Math.floor(GRID / 2)
-                 };
-                 if (currentDrawingAxis === 'y') targetVoxelCoords.gy = activeDrawingLevel.y;
-                 else if (currentDrawingAxis === 'x') targetVoxelCoords.gx = activeDrawingLevel.x;
-                 else if (currentDrawingAxis === 'z') targetVoxelCoords.gz = activeDrawingLevel.z;
-             }
-         }
-    }
-    // Priority 2: General raycast for initial click, or non-ADD modes, or ADD mode without fixed drag plane
-    // or when Control-dragging (stacking)
-    else {
-        const intersects = raycaster.intersectObjects(objectsToIntersect);
-        if (intersects.length > 0) {
-            const hit = intersects[0];
-            const hitNormal = hit.face.normal.clone();
-            intersectionPoint.copy(hit.point);
-
-            // BUGFIX: Move point slightly inside the hit voxel to get correct base coordinates
-            const hitPointInside = hit.point.clone().sub(hitNormal.multiplyScalar(0.01));
-            const hitVoxelX = Math.floor(hitPointInside.x / VS);
-            const hitVoxelY = Math.floor(hitPointInside.y / VS);
-            const hitVoxelZ = Math.floor(hitPointInside.z / VS);
-
-            if (mode === Modes.ADD) {
-                // Place on the face normal to the hit voxel
-                targetVoxelCoords = {
-                    gx: hitVoxelX + Math.round(hit.face.normal.x),
-                    gy: hitVoxelY + Math.round(hit.face.normal.y),
-                    gz: hitVoxelZ + Math.round(hit.face.normal.z)
-                };
-            } else { // DELETE, DRAW, MEASURE
-                // Target the hit voxel itself
-                targetVoxelCoords = { gx: hitVoxelX, gy: hitVoxelY, gz: hitVoxelZ };
-            }
-        } else if (mode === Modes.ADD) {
-            // Fallback for ADD when nothing is hit, use activeDrawingLevel
-            // Define a mathematical plane based on the current active drawing level and axis
+        if (mode === Modes.ADD) {
+            // Im Hinzufügen-Modus ist das Ziel, wenn ein Voxel getroffen wird, das Voxel *neben* dem getroffenen
+            // in Richtung der Normalen.
+            targetVoxelCoords = {
+                gx: hitVoxelX + Math.round(hit.face.normal.x),
+                gy: hitVoxelY + Math.round(hit.face.normal.y),
+                gz: hitVoxelZ + Math.round(hit.face.normal.z)
+            };
+        } else { // DELETE, DRAW, MEASURE
+            // In anderen Modi ist das Ziel das *getroffene* Voxel selbst.
+            targetVoxelCoords = { gx: hitVoxelX, gy: hitVoxelY, gz: hitVoxelZ };
+        }
+    } else { // Kein Voxel getroffen
+        if (mode === Modes.ADD) {
+            // Wenn kein Voxel getroffen wird, verwende im Hinzufügen-Modus die aktive Zeichenebene.
             let planeNormal = new THREE.Vector3();
-            let planeConstant = 0; // Distance from origin
+            let planeConstant = 0;
             if (currentDrawingAxis === 'y') {
                 planeNormal.set(0, 1, 0);
                 planeConstant = -(activeDrawingLevel.y * VS);
@@ -1874,21 +1852,18 @@ function calculateTargetVoxelCoords(clientX, clientY, mode, isDragging, isStacki
             }
             const drawingPlane = new THREE.Plane(planeNormal, planeConstant);
 
-            // Intersect the ray with this mathematical plane
             if (raycaster.ray.intersectPlane(drawingPlane, intersectionPoint)) {
                 let gx = Math.floor(intersectionPoint.x / VS);
                 let gy = Math.floor(intersectionPoint.y / VS);
                 let gz = Math.floor(intersectionPoint.z / VS);
 
-                // Ensure the coordinate on the fixed axis is exactly the active drawing level
                 if (currentDrawingAxis === 'y') gy = activeDrawingLevel.y;
                 else if (currentDrawingAxis === 'x') gx = activeDrawingLevel.x;
                 else if (currentDrawingAxis === 'z') gz = activeDrawingLevel.z;
 
                 targetVoxelCoords = { gx, gy, gz };
             } else {
-                // If the ray doesn't intersect the plane (e.g., camera is parallel or looking away),
-                // default to the center of the active drawing plane.
+                // KRITISCHER FALLBACK: Wenn der Strahl die Ebene nicht schneidet, Standard auf die Mitte der aktiven Zeichenebene.
                 targetVoxelCoords = {
                     gx: Math.floor(GRID / 2),
                     gy: Math.floor(GRID / 2),
@@ -1899,34 +1874,21 @@ function calculateTargetVoxelCoords(clientX, clientY, mode, isDragging, isStacki
                 else if (currentDrawingAxis === 'z') targetVoxelCoords.gz = activeDrawingLevel.z;
             }
         }
+        // Wenn nicht im Hinzufügen-Modus und keine Schnittmenge, bleibt targetVoxelCoords null.
     }
 
-    if (targetVoxelCoords) {
-        // Apply touch assist (magnetic targeting) if enabled for touch devices
-        if (pointerType === 'touch' && touchAssistEnabled && intersectionPoint) {
-            const snappedPos = getNearestVoxelCenter(intersectionPoint);
-            targetVoxelCoords.gx = Math.round(snappedPos.x / VS - HALF);
-            targetVoxelCoords.gy = Math.round(snappedPos.y / VS - HALF);
-            targetVoxelCoords.gz = Math.round(snappedPos.z / VS - HALF);
-        }
-
-        // NEW: Apply anchor point offset to get the actual bottom-left-front corner
-        const { dimX, dimY, dimZ } = getCurrentBlockDimensions();
-        const { offsetX, offsetY, offsetZ } = getAnchorOffsetVoxels(dimX, dimY, dimZ);
-
-        targetVoxelCoords.gx -= offsetX;
-        targetVoxelCoords.gy -= offsetY;
-        targetVoxelCoords.gz -= offsetZ;
-
-        // Clamp coordinates to grid boundaries (after offset)
-        targetVoxelCoords.gx = Math.max(0, Math.min(GRID - dimX, targetVoxelCoords.gx));
-        targetVoxelCoords.gy = Math.max(0, Math.min(GRID - dimY, targetVoxelCoords.gy));
-        targetVoxelCoords.gz = Math.max(0, Math.min(GRID - dimZ, targetVoxelCoords.gz));
-        
-        return targetVoxelCoords;
+    // Wende Touch-Assist (magnetische Zielerfassung) an, wenn für Touch-Geräte aktiviert
+    if (targetVoxelCoords && pointerType === 'touch' && touchAssistEnabled && intersectionPoint) {
+        const snappedPos = getNearestVoxelCenter(intersectionPoint);
+        targetVoxelCoords.gx = Math.round(snappedPos.x / VS - HALF);
+        targetVoxelCoords.gy = Math.round(snappedPos.y / VS - HALF);
+        targetVoxelCoords.gz = Math.round(snappedPos.z / VS - HALF);
     }
-    return null;
+    
+    // Ankerpunkt-Offset und Klemmen werden vom Aufrufer (onPointerDown/onPointerMove) angewendet.
+    return targetVoxelCoords;
 }
+
 
 function clearAllInternal(fromHistory = false) {
     if (!fromHistory) {
@@ -2364,7 +2326,7 @@ function exportSTL() {
 
         const vertexColorArray = [];
         for (let j = 0; j < instanceGeometry.attributes.position.count; j++) {
-            vertexColorArray.push(tempColorExport.r, tempColorExport.g, tempColorExport.b); // Fixed typo here
+            vertexColorArray.push(tempColorExport.r, tempColorExport.g, tempColorExport.b);
         }
         instanceGeometry.setAttribute('color', new THREE.Float32BufferAttribute(vertexColorArray, 3));
         geometriesToMerge.push(instanceGeometry);
@@ -2515,13 +2477,21 @@ function removeImageTemplate(fromLoad = false) {
 
 // NEW: Function to update the ground plane size based on current GRID
 function updateGroundPlaneSize() {
-    // Remove the ground plane if it exists
+    // Remove the ground plane if it's not needed or exists
     if (groundPlane) {
         scene.remove(groundPlane);
         groundPlane.geometry.dispose();
         groundPlane.material.dispose();
         groundPlane = null;
     }
+    // If you want a ground plane, re-add it here, e.g.:
+    // const groundGeometry = new THREE.PlaneGeometry(GRID * VS, GRID * VS);
+    // const groundMaterial = new THREE.MeshLambertMaterial({ color: 0x555555 });
+    // groundPlane = new THREE.Mesh(groundGeometry, groundMaterial);
+    // groundPlane.rotation.x = -Math.PI / 2;
+    // groundPlane.position.y = -0.01; // Slightly below grid
+    // groundPlane.receiveShadow = true;
+    // scene.add(groundPlane);
 }
 
 // Helper to get current block dimensions based on active mode
@@ -3045,37 +3015,46 @@ let pointerIsDown = false;
 let lastX, lastY;
 let suppressNextTap = false; // NEW: To prevent tap after a drag gesture
 let initialDragVoxelCoords = null; // NEW: Stores the starting voxel for line drawing
+let voxelsAtDragStart = null; // NEW: Snapshot of voxels at the start of a drag operation
 
+
+/**
+ * Behandelt das Drücken eines Maus- oder Touch-Pointers.
+ * Dies ist der Startpunkt für Voxel-Aktionen und Kamera-Steuerung.
+ *
+ * @param {PointerEvent} e - Das PointerEvent-Objekt.
+ * @returns {void}
+ */
 function onPointerDown(e) {
-    // Prevent context menu for all right-clicks
+    // Verhindert das Kontextmenü bei allen Rechtsklicks
     if (e.button === 2) {
         e.preventDefault();
     }
 
-    // --- Desktop: Right-click for Pointer Lock Camera ---
+    // --- Desktop: Rechtsklick für Pointer Lock Kamera-Steuerung ---
     if (e.pointerType === 'mouse' && e.button === 2) {
-        // If RMB is pressed, we want camera control.
-        // Immediately reset any active left-click drawing state.
+        // Wenn die rechte Maustaste gedrückt wird, wollen wir die Kamera steuern.
+        // Setze sofort alle aktiven Linksklick-Zeichenzustände zurück.
         pointerIsDown = false;
         lastActionVoxelCoords = null;
-        initialDragVoxelCoords = null; // Reset for line drawing
-        voxelsAtDragStart = null; // Reset snapshot
-        dragAxisLock = null; // Reset drag axis lock
-        currentBatchOfChanges.clear(); // Clear batch changes on camera interaction
+        initialDragVoxelCoords = null; // Zurücksetzen für Linienzeichnen
+        voxelsAtDragStart = null; // Zurücksetzen des Snapshots
+        dragAxisLock = null; // Zurücksetzen der Achsenfixierung
+        currentBatchOfChanges.clear(); // Batch-Änderungen bei Kamera-Interaktion löschen
         
-        // Fix: Focus canvas BEFORE requesting pointer lock
+        // Fix: Canvas fokussieren *bevor* Pointer Lock angefordert wird
         cvs.focus(); 
         cvs.requestPointerLock();
-        return; // Important: Exit, as this pointer event is for camera control
+        return; // Wichtig: Beende, da dieses Pointer-Ereignis für die Kamera-Steuerung ist
     }
 
-    // If pointer is locked (meaning RMB is already controlling camera), ignore other clicks.
+    // Wenn der Pointer gesperrt ist (d.h. RMB steuert bereits die Kamera), ignoriere andere Klicks.
     if (isPointerLocked) return;
 
-    // Clear batch changes for a new interaction
+    // Batch-Änderungen für eine neue Interaktion löschen
     currentBatchOfChanges.clear();
 
-    // --- Touch Input Handling ---
+    // --- Touch-Eingabe-Behandlung ---
     if (e.pointerType === 'touch') {
         if (suppressNextTap) {
             suppressNextTap = false;
@@ -3088,46 +3067,61 @@ function onPointerDown(e) {
         touchIndicator.style.top = `${e.clientY}px`;
 
         const now = performance.now();
-        // Check for double-tap-and-drag for drawing
+        // Überprüfe auf Doppeltippen und Ziehen zum Zeichnen
         if (tapCandidate && (now - tapCandidate.time < DT_MS) && (Math.hypot(e.clientX - tapCandidate.x, e.clientY - tapCandidate.y) < TAP_DIST_TH)) {
             doubleTapDragActive = true;
             tapCandidate = null;
-            // Set fixed plane for touch double-tap-drag drawing ONLY IF IN ADD mode
-            if (currentMode === Modes.ADD) {
-                // For touch, we don't have a separate "Control" key.
-                // If double-tap-drag is for line drawing, we might want to allow it to be free-form
-                // or rely on the general axis locking. For now, keep fixedDragPlaneParams logic for ADD.
-                setFixedDragPlane(e.clientX, e.clientY, currentMode);
-            } else {
-                fixedDragPlaneParams = { level: null, axis: null }; // Ensure it's reset
-            }
-            // For line drawing, set the initial point on double-tap-drag start
-            // Only draw lines if not in MEASURE mode
+            
+            // Für Linienzeichnen, setze den Startpunkt beim Doppeltippen-Ziehen
+            // Nur Linien zeichnen, wenn nicht im MEASURE-Modus
             if (currentMode !== Modes.MEASURE) {
-                initialDragVoxelCoords = calculateTargetVoxelCoords(e.clientX, e.clientY, currentMode, false, false, 'touch');
-                if (initialDragVoxelCoords) {
-                    voxelsAtDragStart = new Map(voxels); // Snapshot current voxels for line drawing
-                    const { dimX, dimY, dimZ } = getCurrentBlockDimensions(); // Get current block dimensions
-                    performVoxelModification(initialDragVoxelCoords.gx, initialDragVoxelCoords.gy, initialDragVoxelCoords.gz, currentMode, currentColor, dimX, dimY, dimZ, false); // Not from history
-                    lastActionVoxelCoords = { ...initialDragVoxelCoords }; // Set last action for DDA
+                // Hole die rohen Ziel-Voxel-Koordinaten
+                let rawTargetVoxel = calculateTargetVoxelCoords(e.clientX, e.clientY, currentMode, 'touch');
+                if (rawTargetVoxel) {
+                    const { dimX, dimY, dimZ } = getCurrentBlockDimensions();
+
+                    // Ankerpunkt-Offset und Klemmen auf die initialen Zieh-Voxel-Koordinaten anwenden
+                    const { offsetX, offsetY, offsetZ } = getAnchorOffsetVoxels(dimX, dimY, dimZ);
+
+                    rawTargetVoxel.gx -= offsetX;
+                    rawTargetVoxel.gy -= offsetY;
+                    rawTargetVoxel.gz -= offsetZ;
+
+                    rawTargetVoxel.gx = Math.max(0, Math.min(GRID - dimX, rawTargetVoxel.gx));
+                    rawTargetVoxel.gy = Math.max(0, Math.min(GRID - dimY, rawTargetVoxel.gy));
+                    rawTargetVoxel.gz = Math.max(0, Math.min(GRID - dimZ, rawTargetVoxel.gz));
+
+                    initialDragVoxelCoords = rawTargetVoxel; // Setze die geklemmten und offset-bereinigten Koordinaten
+                    
+                    voxelsAtDragStart = new Map(voxels); // Snapshot der aktuellen Voxel für Linienzeichnen
+                    performVoxelModification(initialDragVoxelCoords.gx, initialDragVoxelCoords.gy, initialDragVoxelCoords.gz, currentMode, currentColor, dimX, dimY, dimZ, false); // Nicht aus der Historie
+                    lastActionVoxelCoords = { ...initialDragVoxelCoords }; // Setze die letzte Aktion für DDA
                     initialDragVoxelWorldPos = new THREE.Vector3(initialDragVoxelCoords.gx * VS + HALF, initialDragVoxelCoords.gy * VS + HALF, initialDragVoxelCoords.gz * VS + HALF);
                     distanceDisplay.style.display = 'block';
                 }
             }
-        } else { // Single tap or start of multi-finger gesture
+        } else { // Einzelner Tipp oder Start einer Mehrfinger-Geste
             tapCandidate = { x: e.clientX, y: e.clientY, time: now };
-            initialDragVoxelCoords = null; // Reset for new tap sequence
-            voxelsAtDragStart = null; // Reset snapshot
+            initialDragVoxelCoords = null; // Zurücksetzen für neue Tipp-Sequenz
+            voxelsAtDragStart = null; // Zurücksetzen des Snapshots
             initialDragVoxelWorldPos = null;
 
-            if (currentMode === Modes.MEASURE) { // Handle single tap for measurement
-                const clickedVoxel = calculateTargetVoxelCoords(e.clientX, e.clientY, currentMode, false, false, 'touch');
+            if (currentMode === Modes.MEASURE) { // Behandle einzelnen Tipp für Messung
+                const clickedVoxel = calculateTargetVoxelCoords(e.clientX, e.clientY, currentMode, 'touch');
                 if (clickedVoxel) {
+                    const { dimX, dimY, dimZ } = getCurrentBlockDimensions();
+                    // Ankerpunkt-Offset und Klemmen für den Mess-Startpunkt anwenden
+                    const { offsetX, offsetY, offsetZ } = getAnchorOffsetVoxels(dimX, dimY, dimZ);
+                    clickedVoxel.gx -= offsetX; clickedVoxel.gy -= offsetY; clickedVoxel.gz -= offsetZ;
+                    clickedVoxel.gx = Math.max(0, Math.min(GRID - dimX, clickedVoxel.gx));
+                    clickedVoxel.gy = Math.max(0, Math.min(GRID - dimY, clickedVoxel.gy));
+                    clickedVoxel.gz = Math.max(0, Math.min(GRID - dimZ, clickedVoxel.gz));
+
                     if (measurementStartPoint === null) {
                         measurementStartPoint = { ...clickedVoxel };
-                        measurementEndPoint = null; // Reset end point
-                        distanceDisplay.style.display = 'none'; // Hide until second point
-                        // Update preview line
+                        measurementEndPoint = null; // Endpunkt zurücksetzen
+                        distanceDisplay.style.display = 'none'; // Verstecken bis zum zweiten Punkt
+                        // Vorschau-Linie aktualisieren
                         previewLineVoxels = [{ gx: measurementStartPoint.gx, gy: measurementStartPoint.gy, gz: measurementStartPoint.gz }];
                         updatePreviewLineMesh();
                     } else {
@@ -3136,17 +3130,17 @@ function onPointerDown(e) {
                                      new THREE.Vector3(measurementEndPoint.gx * VS, measurementEndPoint.gy * VS, measurementEndPoint.gz * VS));
                         distanceDisplay.textContent = `Distanz: ${dist.toFixed(2)} mm`;
                         distanceDisplay.style.display = 'block';
-                        // Clear preview line after measurement
+                        // Vorschau-Linie nach der Messung löschen
                         previewLineInstancedMesh.count = 0;
                         previewLineInstancedMesh.instanceMatrix.needsUpdate = true;
                         previewLineVoxels = [];
-                        // Prepare for next measurement
+                        // Für nächste Messung vorbereiten
                         measurementStartPoint = null;
                         measurementEndPoint = null;
                     }
                 }
-                // Don't set pointerIsDown for measurement clicks
-                return; // Exit, as we've handled the measurement click
+                // PointerIsDown nicht für Messklicks setzen
+                return; // Beende, da wir den Messklick behandelt haben
             }
         }
 
@@ -3154,39 +3148,47 @@ function onPointerDown(e) {
         gestureState.initialPointerCount = pointers.length;
 
         if (pointers.length === 1) {
-            gestureState.type = 'rotate'; // Single-finger drag for rotation
+            gestureState.type = 'rotate'; // Ein-Finger-Ziehen für Rotation
             gestureState.lastMid = { x: e.clientX, y: e.clientY };
         } else if (pointers.length >= 2) {
-            // Multi-finger gestures (pan/pinch)
+            // Mehrfinger-Gesten (Schwenken/Zoomen)
             const [p0, p1] = pointers;
             const midX = (p0.x + p1.x) * 0.5;
             const midY = (p0.y + p1.y) * 0.5;
             const dist = Math.hypot(p1.x - p0.x, p1.y - p0.y);
-            gestureState.type = 'none'; // Will be determined on first move
+            gestureState.type = 'none'; // Wird beim ersten Bewegen bestimmt
             gestureState.startMid = { x: midX, y: midY };
             gestureState.lastMid = { x: midX, y: midY };
             gestureState.startDist = dist;
             gestureState.lastDist = dist;
         }
-        initialClickPos = { x: e.clientX, y: e.clientY }; // For tap/drag distinction
+        initialClickPos = { x: e.clientX, y: e.clientY }; // Für Unterscheidung Tipp/Ziehen
         return;
     }
 
-    // --- Desktop: Left-click for Voxel Interaction / Measurement ---
-    if (e.pointerType === 'mouse' && e.button === 0) { // Ensure it's LMB
+    // --- Desktop: Linksklick für Voxel-Interaktion / Messung ---
+    if (e.pointerType === 'mouse' && e.button === 0) { // Stelle sicher, dass es die linke Maustaste ist
         pointerIsDown = true;
-        lastX = e.clientX; // Store for preview updates
-        lastY = e.clientY; // Store for preview updates
-        initialClickPos = { x: e.clientX, y: e.clientY }; // For click vs. drag distinction
+        lastX = e.clientX; // Speichern für Vorschau-Updates
+        lastY = e.clientY; // Speichern für Vorschau-Updates
+        initialClickPos = { x: e.clientX, y: e.clientY }; // Für Unterscheidung Klick vs. Ziehen
 
         if (currentMode === Modes.MEASURE) {
-            const clickedVoxel = calculateTargetVoxelCoords(e.clientX, e.clientY, currentMode, false, false, 'mouse');
+            const clickedVoxel = calculateTargetVoxelCoords(e.clientX, e.clientY, currentMode, 'mouse');
             if (clickedVoxel) {
+                const { dimX, dimY, dimZ } = getCurrentBlockDimensions();
+                // Ankerpunkt-Offset und Klemmen für den Mess-Startpunkt anwenden
+                const { offsetX, offsetY, offsetZ } = getAnchorOffsetVoxels(dimX, dimY, dimZ);
+                clickedVoxel.gx -= offsetX; clickedVoxel.gy -= offsetY; clickedVoxel.gz -= offsetZ;
+                clickedVoxel.gx = Math.max(0, Math.min(GRID - dimX, clickedVoxel.gx));
+                clickedVoxel.gy = Math.max(0, Math.min(GRID - dimY, clickedVoxel.gy));
+                clickedVoxel.gz = Math.max(0, Math.min(GRID - dimZ, clickedVoxel.gz));
+
                 if (measurementStartPoint === null) {
                     measurementStartPoint = { ...clickedVoxel };
-                    measurementEndPoint = null; // Reset end point
-                    distanceDisplay.style.display = 'none'; // Hide until second point
-                    // Update preview line
+                    measurementEndPoint = null; // Endpunkt zurücksetzen
+                    distanceDisplay.style.display = 'none'; // Verstecken bis zum zweiten Punkt
+                    // Vorschau-Linie aktualisieren
                     previewLineVoxels = [{ gx: measurementStartPoint.gx, gy: measurementStartPoint.gy, gz: measurementStartPoint.gz }];
                     updatePreviewLineMesh();
                 } else {
@@ -3195,56 +3197,86 @@ function onPointerDown(e) {
                                  new THREE.Vector3(measurementEndPoint.gx * VS, measurementEndPoint.gy * VS, measurementEndPoint.gz * VS));
                     distanceDisplay.textContent = `Distanz: ${dist.toFixed(2)} mm`;
                     distanceDisplay.style.display = 'block';
-                    // Clear preview line after measurement
+                    // Vorschau-Linie nach der Messung löschen
                     previewLineInstancedMesh.count = 0;
                     previewLineInstancedMesh.instanceMatrix.needsUpdate = true;
                     previewLineVoxels = [];
-                    // Prepare for next measurement
+                    // Für nächste Messung vorbereiten
                     measurementStartPoint = null;
                     measurementEndPoint = null;
                 }
             }
-            pointerIsDown = false; // Measurement clicks are not "drags" for drawing purposes
-            return; // Exit, as we've handled the measurement click
-        }
-
-        // Determine the fixed drawing plane based on modifier keys (Shift/Control) ONLY IF IN ADD mode
-        // NEW: If Control is pressed, we don't set a fixed plane for stacking, as it should be vertical from the start.
-        // This is only for the *initial* click. For dragging, `fixedDragPlaneParams` will be overridden by axis lock.
-        if (currentMode === Modes.ADD && !isControlDragging) {
-            setFixedDragPlane(e.clientX, e.clientY, currentMode);
-        } else {
-            fixedDragPlaneParams = { level: null, axis: null }; // Ensure it's reset for other modes or Control-drag
+            pointerIsDown = false; // Messklicks sind keine "Zieh"-Aktionen zum Zeichnen
+            return; // Beende, da wir den Messklick behandelt haben
         }
         
-        // For line drawing, set the initial point on pointer down
-        initialDragVoxelCoords = calculateTargetVoxelCoords(e.clientX, e.clientY, currentMode, false, isControlDragging, 'mouse');
-        if (initialDragVoxelCoords) { // Only proceed if a valid initial voxel target is found
-            voxelsAtDragStart = new Map(voxels); // Snapshot current voxels for line drawing
-            // Perform the initial voxel action immediately on pointer down for single clicks
-            const { dimX, dimY, dimZ } = getCurrentBlockDimensions(); // Get current block dimensions
-            performVoxelModification(initialDragVoxelCoords.gx, initialDragVoxelCoords.gy, initialDragVoxelCoords.gz, currentMode, currentColor, dimX, dimY, dimZ, false); // Not from history
-            lastActionVoxelCoords = { ...initialDragVoxelCoords }; // Set last action for potential dragging
-            initialDragVoxelWorldPos = new THREE.Vector3(initialDragVoxelCoords.gx * VS + HALF, initialDragVoxelCoords.gy * VS + HALF, initialDragVoxelCoords.gz * VS + HALF);
-            distanceDisplay.style.display = 'block'; // Show distance display
+        // Hole die rohen Ziel-Voxel-Koordinaten vom Raycast
+        let rawTargetVoxel = calculateTargetVoxelCoords(e.clientX, e.clientY, currentMode, 'mouse');
+        
+        // Passe rawTargetVoxel basierend auf Modifikatoren für initialDragVoxelCoords an
+        if (isControlDragging && currentMode === Modes.ADD) {
+            // Für Control-Ziehen (Stapeln): initialDragVoxelCoords ist der Startpunkt für das Stapeln.
+            // calculateTargetVoxelCoords gibt im ADD-Modus bereits das "nächste" Voxel zurück, wenn ein Treffer erfolgt.
+            // Dies ist der korrekte Startpunkt für das Stapeln.
+            initialDragVoxelCoords = rawTargetVoxel;
+        } else if (isShiftDragging) {
+            // Für Shift-Ziehen (auf aktiver Ebene): Projiziere den Strahl auf die aktive Ebene.
+            initialDragVoxelCoords = getPointOnFixedPlane(e.clientX, e.clientY, currentDrawingAxis, activeDrawingLevel[currentDrawingAxis]);
+            if (!initialDragVoxelCoords && rawTargetVoxel) { // Fallback: Wenn Ebenenschnitt fehlschlägt, aber ein Voxel getroffen wurde
+                initialDragVoxelCoords = rawTargetVoxel;
+            }
         } else {
-            // If initialDragVoxelCoords is null, it means no valid target was found.
-            // In this case, we should prevent any drawing operation from starting.
-            pointerIsDown = false; // Prevent drag
-            initialClickPos = null; // Reset
-            initialDragVoxelCoords = null; // Ensure it's null
-            voxelsAtDragStart = null; // Ensure it's null
-            distanceDisplay.style.display = 'none'; // Hide
+            // Normaler Klick/Ziehen: Verwende das rohe Ziel-Voxel direkt als initialen Ziehpunkt
+            initialDragVoxelCoords = rawTargetVoxel;
+        }
+
+        console.log("onPointerDown: initialDragVoxelCoords (vor Anker/Klemmen) =", initialDragVoxelCoords);
+
+        if (initialDragVoxelCoords) {
+            const { dimX, dimY, dimZ } = getCurrentBlockDimensions();
+            // Wende den Ankerpunkt-Offset und das Klemmen *einmalig* auf die initialDragVoxelCoords an
+            const { offsetX, offsetY, offsetZ } = getAnchorOffsetVoxels(dimX, dimY, dimZ);
+
+            initialDragVoxelCoords.gx -= offsetX;
+            initialDragVoxelCoords.gy -= offsetY;
+            initialDragVoxelCoords.gz -= offsetZ;
+
+            initialDragVoxelCoords.gx = Math.max(0, Math.min(GRID - dimX, initialDragVoxelCoords.gx));
+            initialDragVoxelCoords.gy = Math.max(0, Math.min(GRID - dimY, initialDragVoxelCoords.gy));
+            initialDragVoxelCoords.gz = Math.max(0, Math.min(GRID - dimZ, initialDragVoxelCoords.gz));
+
+            console.log("onPointerDown: initialDragVoxelCoords (nach Anker/Klemmen) =", initialDragVoxelCoords);
+
+            voxelsAtDragStart = new Map(voxels); // Snapshot der aktuellen Voxel
+            // Führe die initiale Voxel-Aktion sofort beim Drücken des Pointers für einzelne Klicks aus
+            performVoxelModification(initialDragVoxelCoords.gx, initialDragVoxelCoords.gy, initialDragVoxelCoords.gz, currentMode, currentColor, dimX, dimY, dimZ, false);
+            lastActionVoxelCoords = { ...initialDragVoxelCoords };
+            initialDragVoxelWorldPos = new THREE.Vector3(initialDragVoxelCoords.gx * VS + HALF, initialDragVoxelCoords.gy * VS + HALF, initialDragVoxelCoords.gz * VS + HALF);
+            distanceDisplay.style.display = 'block';
+        } else {
+            pointerIsDown = false;
+            initialClickPos = null;
+            initialDragVoxelCoords = null;
+            voxelsAtDragStart = null;
+            distanceDisplay.style.display = 'none';
             initialDragVoxelWorldPos = null;
+            console.warn("onPointerDown: Kein gültiges initiales Ziel-Voxel gefunden. Aktion unterdrückt.");
         }
     }
 }
 
 
+/**
+ * Behandelt das Bewegen eines Maus- oder Touch-Pointers.
+ * Dies wird für Kamera-Steuerung, Voxel-Vorschau und Zieh-Zeichnen verwendet.
+ *
+ * @param {PointerEvent} e - Das PointerEvent-Objekt.
+ * @returns {void}
+ */
 function onPointerMove(e) {
     e.preventDefault();
 
-    // --- 1. Handle Pointer Lock Camera (RMB) ---
+    // --- 1. Pointer Lock Kamera-Steuerung (RMB) ---
     if (isPointerLocked) {
         if (firstMoveAfterLock) {
             firstMoveAfterLock = false;
@@ -3256,37 +3288,40 @@ function onPointerMove(e) {
         euler.x -= dy * rotSpeed;
         euler.x = Math.max(-Math.PI / 2, Math.min(Math.PI / 2, euler.x));
         cam.quaternion.setFromEuler(euler);
-        return; // IMPORTANT: Exit, as pointer is locked for camera control
+        return; // WICHTIG: Beende, da der Pointer für die Kamera-Steuerung gesperrt ist
     }
 
-    // --- 2. Handle Touch Input (Gestures or Drag Drawing) ---
-    if (e.pointerType === 'touch') {
-        if (!activePointers.has(e.pointerId)) return; // Pointer not tracked
+    // Declare dimensions here, so they are available for all branches
+    const { dimX, dimY, dimZ } = getCurrentBlockDimensions();
 
-        activePointers.set(e.pointerId, { x: e.clientX, y: e.clientY, pointerType: e.pointerType }); // Update pointer position
+    // --- 2. Touch-Eingabe-Behandlung (Gesten oder Zieh-Zeichnen) ---
+    if (e.pointerType === 'touch') {
+        if (!activePointers.has(e.pointerId)) return; // Pointer nicht verfolgt
+
+        activePointers.set(e.pointerId, { x: e.clientX, y: e.clientY, pointerType: e.pointerType }); // Pointer-Position aktualisieren
         touchIndicator.style.left = `${e.clientX}px`;
         touchIndicator.style.top = `${e.clientY}px`;
 
-        if (doubleTapDragActive && currentMode !== Modes.MEASURE) { // Only draw lines if not in MEASURE mode
-            // Touch-based drag drawing (for ADD/DELETE/DRAW modes)
-            let currentTargetVoxel = calculateTargetVoxelCoords(e.clientX, e.clientY, currentMode, true, false, 'touch');
+        if (doubleTapDragActive && currentMode !== Modes.MEASURE) { // Nur Linien zeichnen, wenn nicht im MEASURE-Modus
+            let rawCurrentTargetVoxel = calculateTargetVoxelCoords(e.clientX, e.clientY, currentMode, 'touch');
+            let currentTargetVoxel = null; // Initialisieren
             
-            if (currentTargetVoxel && initialDragVoxelCoords) { // Ensure initial point is set for line drawing
-                // NEW: Dynamically determine axis snapping for line drawing
-                const dx = Math.abs(currentTargetVoxel.gx - initialDragVoxelCoords.gx);
-                const dy = Math.abs(currentTargetVoxel.gy - initialDragVoxelCoords.gy);
-                const dz = Math.abs(currentTargetVoxel.gz - initialDragVoxelCoords.gz);
+            if (rawCurrentTargetVoxel && initialDragVoxelCoords) { // Stelle sicher, dass der initiale Punkt für Linienzeichnen gesetzt ist
+                // Achsenfixierung für Touch-Zieh-Zeichnen anwenden
+                const dx = Math.abs(rawCurrentTargetVoxel.gx - initialDragVoxelCoords.gx);
+                const dy = Math.abs(rawCurrentTargetVoxel.gy - initialDragVoxelCoords.gy);
+                const dz = Math.abs(rawCurrentTargetVoxel.gz - initialDragVoxelCoords.gz);
 
-                if (dx > VOXEL_DRAG_THRESHOLD || dy > VOXEL_DRAG_THRESHOLD || dz > VOXEL_DRAG_THRESHOLD) { // Use voxel-based threshold
+                if (dx > VOXEL_DRAG_THRESHOLD || dy > VOXEL_DRAG_THRESHOLD || dz > VOXEL_DRAG_THRESHOLD) { // Verwende Voxel-basierten Schwellenwert
                     if (dx >= dy && dx >= dz) dragAxisLock = 'x';
                     else if (dy >= dx && dy >= dz) dragAxisLock = 'y';
                     else dragAxisLock = 'z';
                 } else {
-                    dragAxisLock = null; // No dominant axis yet, or within threshold
+                    dragAxisLock = null; // Noch keine dominante Achse oder innerhalb des Schwellenwerts
                 }
 
                 if (dragAxisLock) {
-                    const snappedTargetVoxel = { ...currentTargetVoxel }; // Start with current target
+                    const snappedTargetVoxel = { ...rawCurrentTargetVoxel }; // Starte mit aktuellem Ziel
                     if (dragAxisLock === 'x') {
                         snappedTargetVoxel.gy = initialDragVoxelCoords.gy;
                         snappedTargetVoxel.gz = initialDragVoxelCoords.gz;
@@ -3297,109 +3332,174 @@ function onPointerMove(e) {
                         snappedTargetVoxel.gx = initialDragVoxelCoords.gx;
                         snappedTargetVoxel.gy = initialDragVoxelCoords.gy;
                     }
-                    currentTargetVoxel = snappedTargetVoxel; // Use the snapped target for drawing
+                    currentTargetVoxel = snappedTargetVoxel; // Verwende das gefangene Ziel zum Zeichnen
+                } else {
+                    currentTargetVoxel = rawCurrentTargetVoxel; // Keine Fixierung, verwende roh
                 }
 
-                // Restore the state to `voxelsAtDragStart` before redrawing the line
-                if (voxelsAtDragStart) { // Add null check
-                    // Clear current voxels to redraw the projected line
+                // Ankerpunkt-Offset und Klemmen auf currentTargetVoxel anwenden
+                const { offsetX, offsetY, offsetZ } = getAnchorOffsetVoxels(dimX, dimY, dimZ);
+
+                currentTargetVoxel.gx -= offsetX;
+                currentTargetVoxel.gy -= offsetY;
+                currentTargetVoxel.gz -= offsetZ;
+
+                currentTargetVoxel.gx = Math.max(0, Math.min(GRID - dimX, currentTargetVoxel.gx));
+                currentTargetVoxel.gy = Math.max(0, Math.min(GRID - dimY, currentTargetVoxel.gy));
+                currentTargetVoxel.gz = Math.max(0, Math.min(GRID - dimZ, currentTargetVoxel.gz));
+
+                // Setze den Zustand auf `voxelsAtDragStart` zurück, bevor die Linie neu gezeichnet wird
+                if (voxelsAtDragStart) {
+                    // Lösche aktuelle Voxel, um die projizierte Linie neu zu zeichnen
                     for (const chunk of chunks.values()) {
                         chunk.dispose();
                     }
                     chunks.clear();
                     voxels.clear();
-                    // Re-add original voxels
+                    // Füge Original-Voxel wieder hinzu
                     voxelsAtDragStart.forEach((data, k) => _addSingleVoxel(parseKey(k)[0], parseKey(k)[1], parseKey(k)[2], data.color));
                 }
                 
-                const { dimX, dimY, dimZ } = getCurrentBlockDimensions(); // Get current block dimensions
-                // Draw the line from the initial click point to the current point
+                // Zeichne die Linie vom initialen Klickpunkt zum aktuellen Punkt
                 drawLineOfVoxelsSegment(initialDragVoxelCoords, currentTargetVoxel, currentMode, currentColor, dimX, dimY, dimZ);
-                lastActionVoxelCoords = { ...currentTargetVoxel }; // Update last action for continuous feedback
+                lastActionVoxelCoords = { ...currentTargetVoxel }; // Aktualisiere die letzte Aktion für kontinuierliches Feedback
 
-                // Update distance display
+                // Distanzanzeige aktualisieren
                 const currentVoxelWorldPos = new THREE.Vector3(currentTargetVoxel.gx * VS + HALF, currentTargetVoxel.gy * VS + HALF, currentTargetVoxel.gz * VS + HALF);
                 const distance = initialDragVoxelWorldPos.distanceTo(currentVoxelWorldPos);
                 distanceDisplay.textContent = `Distanz: ${distance.toFixed(2)} mm`;
             }
-            updatePreviewVoxel(0, 0, 0, false); // Hide preview during active touch drag
+            updatePreviewVoxel(0, 0, 0, false); // Vorschau während des aktiven Touch-Zieh-Vorgangs ausblenden
             return;
-        } else if (currentMode === Modes.MEASURE && measurementStartPoint) { // Preview measurement line
-            const currentTargetVoxel = calculateTargetVoxelCoords(e.clientX, e.clientY, currentMode, false, false, 'touch');
+        } else if (currentMode === Modes.MEASURE && measurementStartPoint) { // Vorschau der Messlinie
+            const currentTargetVoxel = calculateTargetVoxelCoords(e.clientX, e.clientY, currentMode, 'touch');
             if (currentTargetVoxel) {
+                // Ankerpunkt-Offset und Klemmen für den Mess-Zielpunkt anwenden
+                const { offsetX, offsetY, offsetZ } = getAnchorOffsetVoxels(dimX, dimY, dimZ);
+                currentTargetVoxel.gx -= offsetX; currentTargetVoxel.gy -= offsetY; currentTargetVoxel.gz -= offsetZ;
+                currentTargetVoxel.gx = Math.max(0, Math.min(GRID - dimX, currentTargetVoxel.gx));
+                currentTargetVoxel.gy = Math.max(0, Math.min(GRID - dimY, currentTargetVoxel.gy));
+                currentTargetVoxel.gz = Math.max(0, Math.min(GRID - dimZ, currentTargetVoxel.gz));
+
                 const dist = new THREE.Vector3(measurementStartPoint.gx * VS, measurementStartPoint.gy * VS, measurementStartPoint.gz * VS).distanceTo(
                              new THREE.Vector3(currentTargetVoxel.gx * VS, currentTargetVoxel.gy * VS, currentTargetVoxel.gz * VS));
                 distanceDisplay.textContent = `Distanz: ${dist.toFixed(2)} mm`;
                 distanceDisplay.style.display = 'block';
-                // Update preview line voxels
+                // Vorschau-Voxel der Linie aktualisieren
                 previewLineVoxels = getVoxelsOnLine(measurementStartPoint, currentTargetVoxel);
                 updatePreviewLineMesh();
             } else {
                 distanceDisplay.style.display = 'none';
-                previewLineInstancedMesh.count = 0; // Clear preview line if no target
+                previewLineInstancedMesh.count = 0; // Vorschau-Linie löschen, wenn kein Ziel
                 previewLineInstancedMesh.instanceMatrix.needsUpdate = true;
                 previewLineVoxels = [];
             }
-            return; // Exit, handled by measurement preview
+            return; // Beende, behandelt durch Mess-Vorschau
         }
 
-        // If not double-tap-drag or measurement, handle camera gestures. These should NOT draw cubes.
-        handleGesture(); // Handles single-finger rotation, multi-finger pan/pinch
-        updatePreviewVoxel(0, 0, 0, false); // Hide preview during gestures
-        distanceDisplay.style.display = 'none'; // Hide distance display during camera gestures
-        previewLineInstancedMesh.count = 0; // Clear preview line during camera gestures
+        // Wenn nicht Doppeltippen-Ziehen oder Messung, behandle Kamera-Gesten. Diese sollten KEINE Würfel zeichnen.
+        handleGesture(); // Behandelt Ein-Finger-Rotation, Mehrfinger-Schwenken/Zoomen
+        updatePreviewVoxel(0, 0, 0, false); // Vorschau während Gesten ausblenden
+        distanceDisplay.style.display = 'none'; // Distanzanzeige während Kamera-Gesten ausblenden
+        previewLineInstancedMesh.count = 0; // Vorschau-Linie während Kamera-Gesten löschen
         previewLineInstancedMesh.instanceMatrix.needsUpdate = true;
         previewLineVoxels = [];
         return;
     }
 
-    // --- 3. Handle Desktop Mouse Hover and Left-Click Drag for Voxel Interaction / Measurement ---
-    // Update lastX, lastY for preview voxel calculation when not dragging.
+    // --- 3. Desktop: Maus-Hover und Linksklick-Ziehen für Voxel-Interaktion / Messung ---
+    // lastX, lastY für die Berechnung des Vorschau-Voxels aktualisieren, wenn nicht gezogen wird.
     lastX = e.clientX;
     lastY = e.clientY;
 
     const movedDistance = initialClickPos ? Math.hypot(e.clientX - initialClickPos.x, e.clientY - initialClickPos.y) : 0;
-    const isDraggingVoxelAction = pointerIsDown && (movedDistance > MOVE_PX || isShiftDragging || isControlDragging || isHoldDrawingActive);
+    // Die Bedingung für isDraggingVoxelAction ist entscheidend.
+    // Sie ist wahr, wenn der Pointer gedrückt ist UND (er sich signifikant bewegt hat ODER Shift/Control gehalten werden)
+    const isDraggingVoxelAction = pointerIsDown && (movedDistance > MOVE_PX || isShiftDragging || isControlDragging);
 
-    let currentTargetVoxel = calculateTargetVoxelCoords(e.clientX, e.clientY, currentMode, isDraggingVoxelAction, isControlDragging, 'mouse');
+    let currentTargetVoxel = null;
 
     if (currentMode === Modes.MEASURE) {
-        if (measurementStartPoint && currentTargetVoxel) {
-            const dist = new THREE.Vector3(measurementStartPoint.gx * VS, measurementStartPoint.gy * VS, measurementStartPoint.gz * VS).distanceTo(
-                         new THREE.Vector3(currentTargetVoxel.gx * VS, currentTargetVoxel.gy * VS, currentTargetVoxel.gz * VS));
-            distanceDisplay.textContent = `Distanz: ${dist.toFixed(2)} mm`;
-            distanceDisplay.style.display = 'block';
-            // Update preview line voxels
-            previewLineVoxels = getVoxelsOnLine(measurementStartPoint, currentTargetVoxel);
-            updatePreviewLineMesh();
+        if (measurementStartPoint) {
+            const tempTargetVoxel = calculateTargetVoxelCoords(e.clientX, e.clientY, currentMode, 'mouse');
+            if (tempTargetVoxel) {
+                // Ankerpunkt-Offset und Klemmen für den Mess-Zielpunkt anwenden
+                const { offsetX, offsetY, offsetZ } = getAnchorOffsetVoxels(dimX, dimY, dimZ);
+                tempTargetVoxel.gx -= offsetX; tempTargetVoxel.gy -= offsetY; tempTargetVoxel.gz -= offsetZ;
+                tempTargetVoxel.gx = Math.max(0, Math.min(GRID - dimX, tempTargetVoxel.gx));
+                tempTargetVoxel.gy = Math.max(0, Math.min(GRID - dimY, tempTargetVoxel.gy));
+                tempTargetVoxel.gz = Math.max(0, Math.min(GRID - dimZ, tempTargetVoxel.gz));
+
+                const dist = new THREE.Vector3(measurementStartPoint.gx * VS, measurementStartPoint.gy * VS, measurementStartPoint.gz * VS).distanceTo(
+                             new THREE.Vector3(tempTargetVoxel.gx * VS, tempTargetVoxel.gy * VS, tempTargetVoxel.gz * VS));
+                distanceDisplay.textContent = `Distanz: ${dist.toFixed(2)} mm`;
+                distanceDisplay.style.display = 'block';
+                previewLineVoxels = getVoxelsOnLine(measurementStartPoint, tempTargetVoxel);
+                updatePreviewLineMesh();
+            } else {
+                distanceDisplay.style.display = 'none';
+                previewLineInstancedMesh.count = 0;
+                previewLineInstancedMesh.instanceMatrix.needsUpdate = true;
+                previewLineVoxels = [];
+            }
         } else {
-            distanceDisplay.style.display = 'none';
-            previewLineInstancedMesh.count = 0; // Clear preview line if no target
-            previewLineInstancedMesh.instanceMatrix.needsUpdate = true;
-            previewLineVoxels = [];
-            if (currentTargetVoxel) {
-                updatePreviewVoxel(currentTargetVoxel.gx, currentTargetVoxel.gy, currentTargetVoxel.gz, true, 1, 1, 1); // Show preview at current target
+            const tempTargetVoxel = calculateTargetVoxelCoords(e.clientX, e.clientY, currentMode, 'mouse');
+            if (tempTargetVoxel) {
+                // Ankerpunkt-Offset und Klemmen für die Vorschau anwenden
+                const { offsetX, offsetY, offsetZ } = getAnchorOffsetVoxels(dimX, dimY, dimZ);
+                tempTargetVoxel.gx -= offsetX; tempTargetVoxel.gy -= offsetY; tempTargetVoxel.gz -= offsetZ;
+                tempTargetVoxel.gx = Math.max(0, Math.min(GRID - dimX, tempTargetVoxel.gx));
+                tempTargetVoxel.gy = Math.max(0, Math.min(GRID - dimY, tempTargetVoxel.gy));
+                tempTargetVoxel.gz = Math.max(0, Math.min(GRID - dimZ, tempTargetVoxel.gz));
+                updatePreviewVoxel(tempTargetVoxel.gx, tempTargetVoxel.gy, tempTargetVoxel.gz, true, 1, 1, 1);
             } else {
                 updatePreviewVoxel(0, 0, 0, false);
             }
         }
-        return; // Exit, handled by measurement preview
-    }
-
-    if (isDraggingVoxelAction) {
-        if (currentTargetVoxel && initialDragVoxelCoords) { // Ensure initial point is set for line drawing
-            // NEW: Special handling for Control-dragging (stacking/vertical line)
+        return;
+    } else { // Normal drawing/deleting/recoloring
+        let rawCurrentTargetVoxel = calculateTargetVoxelCoords(e.clientX, e.clientY, currentMode, 'mouse');
+        
+        if (isDraggingVoxelAction && rawCurrentTargetVoxel && initialDragVoxelCoords) {
             if (isControlDragging && currentMode === Modes.ADD) {
-                // Force X and Z to stay at the initial drag voxel's X and Z
-                currentTargetVoxel.gx = initialDragVoxelCoords.gx;
-                currentTargetVoxel.gz = initialDragVoxelCoords.gz;
-                // Y is allowed to change freely based on mouse position
-                dragAxisLock = 'y'; // Explicitly set Y-axis lock for control-drag
-            } else {
-                // Existing axis snapping logic for general line drawing (Shift-drag or regular drag)
-                const dx = Math.abs(currentTargetVoxel.gx - initialDragVoxelCoords.gx);
-                const dy = Math.abs(currentTargetVoxel.gy - initialDragVoxelCoords.gy);
-                const dz = Math.abs(currentTargetVoxel.gz - initialDragVoxelCoords.gz);
+                // Stapeln: X und Z auf die X und Z des initialen Zieh-Voxels fixieren
+                const initialWorldX = initialDragVoxelCoords.gx * VS + HALF; // Verwende die bereits angepassten initialDragVoxelCoords
+                const initialWorldZ = initialDragVoxelCoords.gz * VS + HALF;
+
+                const linePoint = new THREE.Vector3(initialWorldX, 0, initialWorldZ); // Ein Punkt auf der vertikalen Linie
+                const lineDirection = new THREE.Vector3(0, 1, 0); // Welt-Y-Achse
+
+                const raycaster = new THREE.Raycaster();
+                const rect = cvs.getBoundingClientRect();
+                const mouse = new THREE.Vector2(((e.clientX - rect.left) / rect.width) * 2 - 1,
+                                                -((e.clientY - rect.top) / rect.height) * 2 + 1);
+                raycaster.setFromCamera(mouse, cam);
+                
+                const closestWorldPoint = closestPointOnLineToRay(raycaster.ray.origin, raycaster.ray.direction, linePoint, lineDirection);
+                
+                currentTargetVoxel = {
+                    gx: initialDragVoxelCoords.gx, // Fixed X
+                    gy: Math.floor(closestWorldPoint.y / VS), // Responsive Y
+                    gz: initialDragVoxelCoords.gz  // Fixed Z
+                };
+                // Clamp Y to grid boundaries
+                currentTargetVoxel.gy = Math.max(0, Math.min(GRID - 1, currentTargetVoxel.gy));
+                dragAxisLock = 'y'; // Explicit Y-axis lock for Control-drag
+
+            } else if (isShiftDragging) { // NEU: Explizite Shift-Zieh-Logik
+                // Auf die aktive Zeichenebene beschränken
+                currentTargetVoxel = getPointOnFixedPlane(e.clientX, e.clientY, currentDrawingAxis, activeDrawingLevel[currentDrawingAxis]);
+                if (!currentTargetVoxel) {
+                    updatePreviewVoxel(0, 0, 0, false);
+                    distanceDisplay.style.display = 'none';
+                    return; // Überspringe das Zeichnen in diesem Frame
+                }
+                dragAxisLock = null; // Keine Achsenfixierung für Shift-Ziehen, es ist ebenenfixiert
+            } else { // Normales Ziehen (kein Shift, kein Control)
+                // Achsenfixierung basierend auf rawCurrentTargetVoxel anwenden
+                const dx = Math.abs(rawCurrentTargetVoxel.gx - initialDragVoxelCoords.gx);
+                const dy = Math.abs(rawCurrentTargetVoxel.gy - initialDragVoxelCoords.gy);
+                const dz = Math.abs(rawCurrentTargetVoxel.gz - initialDragVoxelCoords.gz);
 
                 if (dx > VOXEL_DRAG_THRESHOLD || dy > VOXEL_DRAG_THRESHOLD || dz > VOXEL_DRAG_THRESHOLD) {
                     if (dx >= dy && dx >= dz) dragAxisLock = 'x';
@@ -3410,7 +3510,7 @@ function onPointerMove(e) {
                 }
 
                 if (dragAxisLock) {
-                    const snappedTargetVoxel = { ...currentTargetVoxel }; // Start with current target
+                    const snappedTargetVoxel = { ...rawCurrentTargetVoxel };
                     if (dragAxisLock === 'x') {
                         snappedTargetVoxel.gy = initialDragVoxelCoords.gy;
                         snappedTargetVoxel.gz = initialDragVoxelCoords.gz;
@@ -3421,63 +3521,97 @@ function onPointerMove(e) {
                         snappedTargetVoxel.gx = initialDragVoxelCoords.gx;
                         snappedTargetVoxel.gy = initialDragVoxelCoords.gy;
                     }
-                    currentTargetVoxel = snappedTargetVoxel; // Use the snapped target for drawing
+                    currentTargetVoxel = snappedTargetVoxel;
+                } else {
+                    currentTargetVoxel = rawCurrentTargetVoxel; // Keine Fixierung, verwende roh
                 }
             }
+            
+            // Wende den Ankerpunkt-Offset und das Klemmen auf currentTargetVoxel an
+            const { offsetX, offsetY, offsetZ } = getAnchorOffsetVoxels(dimX, dimY, dimZ);
 
-            // Restore the state to `voxelsAtDragStart` before redrawing the line
-            if (voxelsAtDragStart) { // Add null check
-                // Clear current voxels to redraw the projected line
+            currentTargetVoxel.gx -= offsetX;
+            currentTargetVoxel.gy -= offsetY;
+            currentTargetVoxel.gz -= offsetZ;
+
+            currentTargetVoxel.gx = Math.max(0, Math.min(GRID - dimX, currentTargetVoxel.gx));
+            currentTargetVoxel.gy = Math.max(0, Math.min(GRID - dimY, currentTargetVoxel.gy));
+            currentTargetVoxel.gz = Math.max(0, Math.min(GRID - dimZ, currentTargetVoxel.gz));
+
+            console.log("onPointerMove: currentTargetVoxel (nach Anker/Klemmen) =", currentTargetVoxel);
+
+            // Setze den Zustand auf `voxelsAtDragStart` zurück, bevor die Linie neu gezeichnet wird
+            if (voxelsAtDragStart) {
+                // Lösche aktuelle Voxel, um die projizierte Linie neu zu zeichnen
                 for (const chunk of chunks.values()) {
                     chunk.dispose();
                 }
                 chunks.clear();
                 voxels.clear();
-                // Re-add original voxels
+                // Füge Original-Voxel wieder hinzu
                 voxelsAtDragStart.forEach((data, k) => _addSingleVoxel(parseKey(k)[0], parseKey(k)[1], parseKey(k)[2], data.color));
             }
             
-            const { dimX, dimY, dimZ } = getCurrentBlockDimensions(); // Get current block dimensions
-            // Draw the line from the initial click point to the current point
+            // Zeichne die Linie vom initialen Klickpunkt zum aktuellen Punkt
             drawLineOfVoxelsSegment(initialDragVoxelCoords, currentTargetVoxel, currentMode, currentColor, dimX, dimY, dimZ);
-            lastActionVoxelCoords = { ...currentTargetVoxel }; // Update last action for continuous feedback
+            lastActionVoxelCoords = { ...currentTargetVoxel }; // Aktualisiere die letzte Aktion für kontinuierliches Feedback
 
-            // Update distance display
+            // Distanzanzeige aktualisieren
             const currentVoxelWorldPos = new THREE.Vector3(currentTargetVoxel.gx * VS + HALF, currentTargetVoxel.gy * VS + HALF, currentTargetVoxel.gz * VS + HALF);
             const distance = initialDragVoxelWorldPos.distanceTo(currentVoxelWorldPos);
             distanceDisplay.textContent = `Distanz: ${distance.toFixed(2)} mm`;
             distanceDisplay.style.display = 'block';
-        }
-        updatePreviewVoxel(0, 0, 0, false); // Hide preview during active mouse drag
-    } else {
-        distanceDisplay.style.display = 'none'; // Hide distance display if not dragging
-        const { dimX, dimY, dimZ } = getCurrentBlockDimensions(); // Get current block dimensions for preview
-        if (currentTargetVoxel) {
-            updatePreviewVoxel(currentTargetVoxel.gx, currentTargetVoxel.gy, currentTargetVoxel.gz, true, dimX, dimY, dimZ);
         } else {
-            updatePreviewVoxel(0, 0, 0, false);
+            distanceDisplay.style.display = 'none'; // Distanzanzeige ausblenden, wenn nicht gezogen wird
+            // For hover, calculate target voxel and apply anchor/clamping for preview
+            let hoverTargetVoxel = calculateTargetVoxelCoords(e.clientX, e.clientY, currentMode, 'mouse');
+            if (hoverTargetVoxel) {
+                const { offsetX, offsetY, offsetZ } = getAnchorOffsetVoxels(dimX, dimY, dimZ);
+                hoverTargetVoxel.gx -= offsetX; hoverTargetVoxel.gy -= offsetY; hoverTargetVoxel.gz -= offsetZ;
+                hoverTargetVoxel.gx = Math.max(0, Math.min(GRID - dimX, hoverTargetVoxel.gx));
+                hoverTargetVoxel.gy = Math.max(0, Math.min(GRID - dimY, hoverTargetVoxel.gy));
+                hoverTargetVoxel.gz = Math.max(0, Math.min(GRID - dimZ, hoverTargetVoxel.gz));
+                updatePreviewVoxel(hoverTargetVoxel.gx, hoverTargetVoxel.gy, hoverTargetVoxel.gz, true, dimX, dimY, dimZ);
+            } else {
+                updatePreviewVoxel(0, 0, 0, false);
+            }
         }
     }
 }
 
 
+/**
+ * Behandelt das Loslassen eines Maus- oder Touch-Pointers.
+ * Dies schließt Voxel-Aktionen ab und beendet Kamera-Steuerungen.
+ *
+ * @param {PointerEvent} e - Das PointerEvent-Objekt.
+ * @returns {void}
+ */
 function onPointerUp(e) {
-    // --- Touch Input Release ---
+    // Declare dimensions here for use in this function
+    const { dimX, dimY, dimZ } = getCurrentBlockDimensions();
+
+    // --- Touch-Eingabe-Freigabe ---
     if (e.pointerType === 'touch') {
         if (suppressNextTap) {
             suppressNextTap = false;
-        } else if (activePointers.size === 1 && !doubleTapDragActive && currentMode !== Modes.MEASURE) { // Added currentMode check
-            // This block handles single-finger TAP for drawing, if it wasn't a drag for camera rotation
+        } else if (activePointers.size === 1 && !doubleTapDragActive && currentMode !== Modes.MEASURE) {
+            // Dieser Block behandelt einzelne Finger-Taps zum Zeichnen, wenn es kein Ziehen für die Kamera-Rotation war
             const movedDistance = initialClickPos ? Math.hypot(e.clientX - initialClickPos.x, e.clientY - initialClickPos.y) : 0;
-            if (movedDistance <= TAP_DIST_TH) { // It was a tap, not a drag
-                 const clickedVoxel = calculateTargetVoxelCoords(e.clientX, e.clientY, currentMode, false, false, 'touch');
+            if (movedDistance <= TAP_DIST_TH) { // Es war ein Tipp, kein Ziehen
+                 const clickedVoxel = calculateTargetVoxelCoords(e.clientX, e.clientY, currentMode, 'touch');
                  if (clickedVoxel) {
-                     // Single tap action, add to history as a batch
+                     // Ankerpunkt-Offset und Klemmen für einzelnen Tipp anwenden
+                     const { offsetX, offsetY, offsetZ } = getAnchorOffsetVoxels(dimX, dimY, dimZ);
+                     clickedVoxel.gx -= offsetX; clickedVoxel.gy -= offsetY; clickedVoxel.gz -= offsetZ;
+                     clickedVoxel.gx = Math.max(0, Math.min(GRID - dimX, clickedVoxel.gx));
+                     clickedVoxel.gy = Math.max(0, Math.min(GRID - dimY, clickedVoxel.gy));
+                     clickedVoxel.gz = Math.max(0, Math.min(GRID - dimZ, clickedVoxel.gz));
+
                      const oldState = [...voxels.entries()].map(([id, data]) => {
                          const [gx, gy, gz] = parseKey(id);
                          return { gx, gy, gz, color: data.color };
                      });
-                     const { dimX, dimY, dimZ } = getCurrentBlockDimensions();
                      performVoxelModification(clickedVoxel.gx, clickedVoxel.gy, clickedVoxel.gz, currentMode, currentColor, dimX, dimY, dimZ, false);
                      const newState = [...voxels.entries()].map(([id, data]) => {
                          const [gx, gy, gz] = parseKey(id);
@@ -3487,14 +3621,14 @@ function onPointerUp(e) {
                  }
             }
         }
-        if (doubleTapDragActive && currentMode !== Modes.MEASURE && initialDragVoxelCoords) { // Added currentMode check
-            // Line drawing completed by touch double-tap-drag
-            let finalTargetVoxel = calculateTargetVoxelCoords(e.clientX, e.clientY, currentMode, true, false, 'touch'); // Fixed typo
-            if (finalTargetVoxel) {
-                // NEW: Apply axis snapping to the final target voxel
-                // For touch, we don't have a separate "Control" key, so only general dragAxisLock applies
+        if (doubleTapDragActive && currentMode !== Modes.MEASURE && initialDragVoxelCoords) {
+            let rawFinalTargetVoxel = calculateTargetVoxelCoords(e.clientX, e.clientY, currentMode, 'touch');
+            let finalTargetVoxel = null;
+
+            if (rawFinalTargetVoxel) {
+                // Achsenfixierung auf das finale Ziel-Voxel für Touch-Zieh-Zeichnen anwenden
                 if (dragAxisLock) {
-                    const snappedFinalTargetVoxel = { ...finalTargetVoxel }; // Start with current target
+                    const snappedFinalTargetVoxel = { ...rawFinalTargetVoxel };
                     if (dragAxisLock === 'x') {
                         snappedFinalTargetVoxel.gy = initialDragVoxelCoords.gy;
                         snappedFinalTargetVoxel.gz = initialDragVoxelCoords.gz;
@@ -3506,21 +3640,31 @@ function onPointerUp(e) {
                         snappedFinalTargetVoxel.gy = initialDragVoxelCoords.gy;
                     }
                     finalTargetVoxel = snappedFinalTargetVoxel;
+                } else {
+                    finalTargetVoxel = rawFinalTargetVoxel;
                 }
 
-                // Restore the state to `voxelsAtDragStart` before drawing the final line for history
-                if (voxelsAtDragStart) { // Add null check
-                    // Clear current voxels to redraw the final line
+                // Ankerpunkt-Offset und Klemmen auf finalTargetVoxel anwenden
+                const { offsetX, offsetY, offsetZ } = getAnchorOffsetVoxels(dimX, dimY, dimZ);
+
+                finalTargetVoxel.gx -= offsetX;
+                finalTargetVoxel.gy -= offsetY;
+                finalTargetVoxel.gz -= offsetZ;
+
+                finalTargetVoxel.gx = Math.max(0, Math.min(GRID - dimX, finalTargetVoxel.gx));
+                finalTargetVoxel.gy = Math.max(0, Math.min(GRID - dimY, finalTargetVoxel.gy));
+                finalTargetVoxel.gz = Math.max(0, Math.min(GRID - dimZ, finalTargetVoxel.gz));
+
+                // Setze den Zustand auf `voxelsAtDragStart` zurück, bevor die finale Linie für die Historie gezeichnet wird
+                if (voxelsAtDragStart) {
+                    // Lösche aktuelle Voxel, um die finale Linie neu zu zeichnen
                     for (const chunk of chunks.values()) {
                         chunk.dispose();
                     }
                     chunks.clear();
                     voxels.clear();
-                    // Re-add original voxels
                     voxelsAtDragStart.forEach((data, k) => _addSingleVoxel(parseKey(k)[0], parseKey(k)[1], parseKey(k)[2], data.color));
                 }
-                const { dimX, dimY, dimZ } = getCurrentBlockDimensions(); // Get current block dimensions
-                // Draw the final line and add to history as one command
                 const oldStateForHistory = [...voxelsAtDragStart.entries()].map(([id, data]) => {
                     const [gx, gy, gz] = parseKey(id);
                     return { gx, gy, gz, color: data.color };
@@ -3534,19 +3678,19 @@ function onPointerUp(e) {
             }
         }
         releasePointer(e.pointerId, e);
-        // Only hide distance display if not in measurement mode and a measurement is not ongoing
+        // Distanzanzeige nur ausblenden, wenn nicht im Mess-Modus oder wenn die Messung abgeschlossen ist
         if (currentMode !== Modes.MEASURE || (currentMode === Modes.MEASURE && measurementStartPoint === null && measurementEndPoint === null)) {
             distanceDisplay.style.display = 'none';
         }
         initialDragVoxelWorldPos = null;
-        dragAxisLock = null; // Reset drag axis lock
-        currentBatchOfChanges.clear(); // Ensure batch is cleared on pointer up
+        dragAxisLock = null; // Achsenfixierung zurücksetzen
+        currentBatchOfChanges.clear(); // Sicherstellen, dass der Batch beim Loslassen des Pointers gelöscht wird
         return;
     }
 
-    // --- Desktop: Mouse Release ---
+    // --- Desktop: Maus-Freigabe ---
     if (e.pointerType === 'mouse') {
-        if (e.button === 2) { // Right-click release
+        if (e.button === 2) { // Rechtsklick-Freigabe
             document.exitPointerLock();
             return;
         }
@@ -3555,55 +3699,98 @@ function onPointerUp(e) {
         const wasSingleClick = movedDistance <= MOVE_PX;
 
         if (currentMode === Modes.MEASURE) {
-            // Do not hide distance display immediately on mouse up in measurement mode,
-            // it should remain visible until a new measurement starts or mode changes.
-            // The logic for resetting measurementStartPoint/EndPoint is in onPointerDown.
-            // Just hide the preview voxel and clear the preview line.
+            // Distanzanzeige nicht sofort beim Loslassen der Maustaste im Mess-Modus ausblenden,
+            // sie sollte sichtbar bleiben, bis eine neue Messung beginnt oder der Modus wechselt.
+            // Die Logik zum Zurücksetzen von measurementStartPoint/EndPoint befindet sich in onPointerDown.
+            // Nur das Vorschau-Voxel ausblenden und die Vorschau-Linie löschen.
             updatePreviewVoxel(0, 0, 0, false);
             previewLineInstancedMesh.count = 0;
             previewLineInstancedMesh.instanceMatrix.needsUpdate = true;
             previewLineVoxels = [];
-            pointerIsDown = false; // Ensure pointerIsDown is reset
-            return; // Exit, handled by measurement mode
+            pointerIsDown = false; // Sicherstellen, dass pointerIsDown zurückgesetzt wird
+            return; // Beende, behandelt durch den Mess-Modus
         }
 
         if (pointerIsDown && !isPointerLocked && initialDragVoxelCoords) {
-            // If it was a drag (not a single click), add the line to history
+            // Wenn es ein Ziehen war (kein einzelner Klick), füge die Linie zur Historie hinzu
             if (!wasSingleClick) {
-                let finalTargetVoxel = calculateTargetVoxelCoords(e.clientX, e.clientY, currentMode, true, isControlDragging, 'mouse');
-                if (finalTargetVoxel) {
-                    // NEW: Apply axis snapping to the final target voxel
+                let rawFinalTargetVoxel = calculateTargetVoxelCoords(e.clientX, e.clientY, currentMode, 'mouse');
+                let finalTargetVoxel = null;
+
+                if (rawFinalTargetVoxel) {
                     if (isControlDragging && currentMode === Modes.ADD) {
-                        finalTargetVoxel.gx = initialDragVoxelCoords.gx;
-                        finalTargetVoxel.gz = initialDragVoxelCoords.gz;
-                    } else if (dragAxisLock) { // Existing axis snapping for general line drawing
-                        const snappedFinalTargetVoxel = { ...finalTargetVoxel }; // Start with current target
-                        if (dragAxisLock === 'x') {
-                            snappedFinalTargetVoxel.gy = initialDragVoxelCoords.gy;
-                            snappedFinalTargetVoxel.gz = initialDragVoxelCoords.gz;
-                        } else if (dragAxisLock === 'y') {
-                            snappedFinalTargetVoxel.gx = initialDragVoxelCoords.gx;
-                            snappedFinalTargetVoxel.gz = initialDragVoxelCoords.gz;
-                        } else if (dragAxisLock === 'z') {
-                            snappedFinalTargetVoxel.gx = initialDragVoxelCoords.gx;
-                            snappedFinalTargetVoxel.gy = initialDragVoxelCoords.gy;
+                        const initialWorldX = initialDragVoxelCoords.gx * VS + HALF;
+                        const initialWorldZ = initialDragVoxelCoords.gz * VS + HALF;
+
+                        const linePoint = new THREE.Vector3(initialWorldX, 0, initialWorldZ);
+                        const lineDirection = new THREE.Vector3(0, 1, 0);
+
+                        const raycaster = new THREE.Raycaster();
+                        const rect = cvs.getBoundingClientRect();
+                        const mouse = new THREE.Vector2(((e.clientX - rect.left) / rect.width) * 2 - 1,
+                                                        -((e.clientY - rect.top) / rect.height) * 2 + 1);
+                        raycaster.setFromCamera(mouse, cam);
+                        
+                        const closestWorldPoint = closestPointOnLineToRay(raycaster.ray.origin, raycaster.ray.direction, linePoint, lineDirection);
+                        
+                        finalTargetVoxel = {
+                            gx: initialDragVoxelCoords.gx,
+                            gy: Math.floor(closestWorldPoint.y / VS),
+                            gz: initialDragVoxelCoords.gz
+                        };
+                        finalTargetVoxel.gy = Math.max(0, Math.min(GRID - 1, finalTargetVoxel.gy));
+                    } else if (isShiftDragging) {
+                        finalTargetVoxel = getPointOnFixedPlane(e.clientX, e.clientY, currentDrawingAxis, activeDrawingLevel[currentDrawingAxis]);
+                        if (!finalTargetVoxel && rawFinalTargetVoxel) {
+                            finalTargetVoxel = rawFinalTargetVoxel;
                         }
-                        finalTargetVoxel = snappedFinalTargetVoxel;
+                    } else { // Normales Ziehen (kein Shift, kein Control)
+                        const dx = Math.abs(rawFinalTargetVoxel.gx - initialDragVoxelCoords.gx);
+                        const dy = Math.abs(rawFinalTargetVoxel.gy - initialDragVoxelCoords.gy);
+                        const dz = Math.abs(rawFinalTargetVoxel.gz - initialDragVoxelCoords.gz);
+
+                        if (dx > VOXEL_DRAG_THRESHOLD || dy > VOXEL_DRAG_THRESHOLD || dz > VOXEL_DRAG_THRESHOLD) {
+                            const snappedFinalTargetVoxel = { ...rawFinalTargetVoxel };
+                            if (dragAxisLock === 'x') {
+                                snappedFinalTargetVoxel.gy = initialDragVoxelCoords.gy;
+                                snappedFinalTargetVoxel.gz = initialDragVoxelCoords.gz;
+                            } else if (dragAxisLock === 'y') {
+                                snappedFinalTargetVoxel.gx = initialDragVoxelCoords.gx;
+                                snappedFinalTargetVoxel.gz = initialDragVoxelCoords.gz;
+                            } else if (dragAxisLock === 'z') {
+                                snappedFinalTargetVoxel.gx = initialDragVoxelCoords.gx;
+                                snappedFinalTargetVoxel.gy = initialDragVoxelCoords.gy;
+                            }
+                            finalTargetVoxel = snappedFinalTargetVoxel;
+                        } else {
+                            finalTargetVoxel = rawFinalTargetVoxel;
+                        }
                     }
 
-                    // Restore the state to `voxelsAtDragStart` before drawing the final line for history
-                    if (voxelsAtDragStart) { // Add null check
-                        // Clear current voxels to redraw the final line
+                    // Ankerpunkt-Offset und Klemmen auf finalTargetVoxel anwenden
+                    if (finalTargetVoxel) {
+                        const { offsetX, offsetY, offsetZ } = getAnchorOffsetVoxels(dimX, dimY, dimZ);
+
+                        finalTargetVoxel.gx -= offsetX;
+                        finalTargetVoxel.gy -= offsetY;
+                        finalTargetVoxel.gz -= offsetZ;
+
+                        finalTargetVoxel.gx = Math.max(0, Math.min(GRID - dimX, finalTargetVoxel.gx));
+                        finalTargetVoxel.gy = Math.max(0, Math.min(GRID - dimY, finalTargetVoxel.gy));
+                        finalTargetVoxel.gz = Math.max(0, Math.min(GRID - dimZ, finalTargetVoxel.gz));
+                    }
+                }
+
+                if (finalTargetVoxel) {
+                    // Setze den Zustand auf `voxelsAtDragStart` zurück, bevor die finale Linie für die Historie gezeichnet wird
+                    if (voxelsAtDragStart) {
                         for (const chunk of chunks.values()) {
                             chunk.dispose();
                         }
                         chunks.clear();
                         voxels.clear();
-                        // Re-add original voxels
                         voxelsAtDragStart.forEach((data, k) => _addSingleVoxel(parseKey(k)[0], parseKey(k)[1], parseKey(k)[2], data.color));
                     }
-                    const { dimX, dimY, dimZ } = getCurrentBlockDimensions(); // Get current block dimensions
-                    // Draw the final line and add to history as one command
                     const oldStateForHistory = [...voxelsAtDragStart.entries()].map(([id, data]) => {
                         const [gx, gy, gz] = parseKey(id);
                         return { gx, gy, gz, color: data.color };
@@ -3615,27 +3802,36 @@ function onPointerUp(e) {
                     });
                     addCommand('batch', oldStateForHistory, newStateForHistory);
                 }
+            } else { // Es war ein einzelner Klick, füge als Batch zur Historie hinzu
+                const oldState = [...voxelsAtDragStart.entries()].map(([id, data]) => {
+                    const [gx, gy, gz] = parseKey(id);
+                    return { gx, gy, gz, color: data.color };
+                });
+                const newState = [...voxels.entries()].map(([id, data]) => {
+                    const [gx, gy, gz] = parseKey(id);
+                    return { gx, gy, gz, color: data.color };
+                });
+                addCommand('batch', oldState, newState);
             }
         }
     }
 
-    // --- General Cleanup ---
+    // --- Allgemeine Bereinigung ---
     pointerIsDown = false;
-    isControlDragging = false; // Reset control dragging on pointer up
+    isControlDragging = false; // Control-Ziehen beim Loslassen des Pointers zurücksetzen
     isShiftDragging = false;
     lastActionVoxelCoords = null;
     initialClickPos = null;
-    initialDragVoxelCoords = null; // Reset initial drag point
-    voxelsAtDragStart = null; // Reset snapshot
-    fixedDragPlaneParams = { level: null, axis: null }; // Always reset on pointer up
-    // updatePreviewVoxel(0, 0, 0, false); // This might be handled by measurement mode
-    // Only hide distance display if not in measurement mode and a measurement is not ongoing
+    initialDragVoxelCoords = null; // Initialen Ziehpunkt zurücksetzen
+    voxelsAtDragStart = null; // Snapshot zurücksetzen
+    fixedDragPlaneParams = { level: null, axis: null }; // Immer beim Loslassen des Pointers zurücksetzen
+    // Distanzanzeige nur ausblenden, wenn nicht im Mess-Modus oder wenn die Messung abgeschlossen ist
     if (currentMode !== Modes.MEASURE || (currentMode === Modes.MEASURE && measurementStartPoint === null && measurementEndPoint === null)) {
         distanceDisplay.style.display = 'none';
     }
     initialDragVoxelWorldPos = null;
-    dragAxisLock = null; // Reset drag axis lock
-    currentBatchOfChanges.clear(); // Ensure batch is cleared on pointer up
+    dragAxisLock = null; // Achsenfixierung zurücksetzen
+    currentBatchOfChanges.clear(); // Sicherstellen, dass der Batch beim Loslassen des Pointers gelöscht wird
 }
 
 
@@ -3807,58 +4003,9 @@ function setDynamicBlockDimensions() {
     }
 }
 
-// NEW: Function to update the active class on block size buttons
-function updateBlockSizeButtonsActiveState() {
-    document.querySelectorAll('.block-size-btn').forEach(btn => btn.classList.remove('active'));
-    document.getElementById('setDynamicBlockSizeBtn').classList.remove('active');
-
-    if (useDynamicBlockDim) {
-        document.getElementById('setDynamicBlockSizeBtn').classList.add('active');
-    } else {
-        const activeFixedBtn = document.getElementById(`block-size-${currentBlockSize}x${currentBlockSize}`);
-        if (activeFixedBtn) {
-            activeFixedBtn.classList.add('active');
-        }
-    }
-}
-
-
-// NEW: Helper function to draw a line segment without adding to history directly
-function drawLineOfVoxelsSegment(start, end, mode, color, dimX, dimY, dimZ) {
-    let x = start.gx;
-    let y = start.gy;
-    let z = start.gz;
-    const x2 = end.gx;
-    const y2 = end.gy;
-    const z2 = end.gz;
-
-    const dx = x2 - x;
-    const dy = y2 - y;
-    const dz = z2 - z;
-
-    const steps = Math.max(Math.abs(dx), Math.abs(dy), Math.abs(dz));
-
-    if (steps === 0) {
-        performVoxelModification(x, y, z, mode, color, dimX, dimY, dimZ, false); // Not from history
-        return;
-    }
-
-    const x_inc = dx / steps;
-    const y_inc = dy / steps;
-    const z_inc = dz / steps;
-
-    for (let i = 0; i <= steps; i++) {
-        // Apply modification for the base of the block
-        performVoxelModification(Math.round(x), Math.round(y), Math.round(z), mode, color, dimX, dimY, dimZ, false); // Not from history
-        x += x_inc;
-        y += y_inc;
-        z += z_inc;
-    }
-}
-
-// NEW: Helper to get voxels on a line for preview (doesn't modify actual voxels)
+// NEW: Helper function to get all voxels on a 3D line segment using DDA algorithm
 function getVoxelsOnLine(start, end) {
-    const voxelsOnLine = [];
+    const voxels = [];
     let x = start.gx;
     let y = start.gy;
     let z = start.gz;
@@ -3873,8 +4020,8 @@ function getVoxelsOnLine(start, end) {
     const steps = Math.max(Math.abs(dx), Math.abs(dy), Math.abs(dz));
 
     if (steps === 0) {
-        voxelsOnLine.push({ gx: x, gy: y, gz: z });
-        return voxelsOnLine;
+        voxels.push({ gx: x, gy: y, gz: z });
+        return voxels;
     }
 
     const x_inc = dx / steps;
@@ -3882,34 +4029,40 @@ function getVoxelsOnLine(start, end) {
     const z_inc = dz / steps;
 
     for (let i = 0; i <= steps; i++) {
-        voxelsOnLine.push({ gx: Math.round(x), gy: Math.round(y), gz: Math.round(z) });
+        voxels.push({ gx: Math.round(x), gy: Math.round(y), gz: Math.round(z) });
         x += x_inc;
         y += y_inc;
         z += z_inc;
     }
-    return voxelsOnLine;
+    return voxels;
 }
 
-// NEW: Function to update the preview line InstancedMesh
-function updatePreviewLineMesh() {
-    previewLineInstancedMesh.count = 0;
-    const previewColor = new THREE.Color(0x00ff00); // Green for measurement line
+// NEW: Helper function to draw a line segment of voxels and update the scene
+function drawLineOfVoxelsSegment(start, end, mode, color, dimX, dimY, dimZ) {
+    const voxelsToDraw = getVoxelsOnLine(start, end);
+    for (const voxel of voxelsToDraw) {
+        performVoxelModification(voxel.gx, voxel.gy, voxel.gz, mode, color, dimX, dimY, dimZ, false);
+    }
+}
 
-    previewLineVoxels.forEach((voxel, index) => {
-        if (index < maxPreviewInstances) {
-            dummy.position.set(voxel.gx * VS + HALF, voxel.gy * VS + HALF, voxel.gz * VS + HALF);
-            dummy.updateMatrix();
-            previewLineInstancedMesh.setMatrixAt(index, dummy.matrix);
-            previewLineInstancedMesh.instanceColor.setXYZ(index, previewColor.r, previewColor.g, previewColor.b);
-            previewLineInstancedMesh.count++;
-        }
-    });
+// NEW: Update the InstancedMesh for the preview line in measurement mode
+function updatePreviewLineMesh() {
+    previewLineInstancedMesh.count = 0; // Reset count
+    const tempMatrix = new THREE.Matrix4();
+
+    for (let i = 0; i < previewLineVoxels.length && i < maxPreviewInstances; i++) {
+        const voxel = previewLineVoxels[i];
+        dummy.position.set(voxel.gx * VS + HALF, voxel.gy * VS + HALF, voxel.gz * VS + HALF);
+        dummy.updateMatrix();
+        previewLineInstancedMesh.setMatrixAt(i, dummy.matrix);
+        // Set a distinct color for the preview line
+        previewLineInstancedMesh.instanceColor.setXYZ(i, 0, 1, 0); // Green
+        previewLineInstancedMesh.count++;
+    }
     previewLineInstancedMesh.instanceMatrix.needsUpdate = true;
     previewLineInstancedMesh.instanceColor.needsUpdate = true;
 }
 
-
-let voxelsAtDragStart = null; // NEW: Snapshot of voxels at the start of a drag for line drawing
 
 /* ---------- Keyboard Input ---------- */
 const keyboard = {};
@@ -3919,7 +4072,7 @@ function onKeyDown(e) {
     if (e.key === 'Shift') {
         isShiftDragging = true;
     }
-    if (e.key === 'Control' || e.key === 'Meta') {
+    if (e.key === 'Control' || e.metaKey) {
         isControlDragging = true;
     }
 
@@ -3933,6 +4086,7 @@ function onKeyDown(e) {
     }
     if ((e.ctrlKey || e.metaKey) && e.key === 'd') {
         e.preventDefault();
+        // Prevent default behavior to avoid bookmarking on Ctrl+D
     }
 
     // Tab handling moved to cycleMode and input event listeners
@@ -3958,10 +4112,32 @@ function onKeyUp(e) {
     if (e.key === 'Shift') {
         isShiftDragging = false;
     }
-    if (e.key === 'Control' || e.key === 'Meta') {
+    if (e.key === 'Control' || e.metaKey) {
         isControlDragging = false;
     }
 }
-</script>
-</body>
-</html>
+
+function updateBlockSizeButtonsActiveState() {
+    // Remove active class from all fixed size buttons
+    document.querySelectorAll('.block-size-btn').forEach(btn => {
+        btn.classList.remove('active');
+    });
+
+    // Remove active class from dynamic block size button
+    document.getElementById('setDynamicBlockSizeBtn').classList.remove('active');
+
+    if (useDynamicBlockDim) {
+        document.getElementById('setDynamicBlockSizeBtn').classList.add('active');
+    } else {
+        // Add active class to the currently selected fixed size button
+        const activeBtn = document.getElementById(`block-size-${currentBlockSize}x${currentBlockSize}`);
+        if (activeBtn) {
+            activeBtn.classList.add('active');
+        } else {
+            // If currentBlockSize doesn't match a fixed button, default to 1x1x1
+            document.getElementById('block-size-1x1').classList.add('active');
+            currentBlockSize = 1;
+            localStorage.setItem('voxelEditorCurrentBlockSize', currentBlockSize);
+        }
+    }
+}
