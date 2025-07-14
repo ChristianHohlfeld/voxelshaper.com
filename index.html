@@ -880,6 +880,12 @@ let history = []; // Declared globally
 let historyPointer = -1; // Declared globally
 const MAX_HISTORY_SIZE = 100; // Limit history to prevent excessive memory usage
 
+// NEW: Global object to store voxels added/modified during the current drag operation
+// Map<globalVoxelKey, {color, initialColor}>
+// initialColor is needed for DRAW mode to know what color it was before the drag started.
+let currentDragVoxels = new Map();
+let previousFrameDragVoxels = new Set(); // Stores keys of voxels drawn in the *previous* onPointerMove frame
+
 // NEW: Global variables for image template
 let templateImageMesh = null;
 // Updated templateImageData structure to store scaled dimensions
@@ -1438,82 +1444,30 @@ function _recolorSingleVoxel(gx, gy, gz, newColorHex) {
     }
 }
 
-// NEW: Helper function to perform the actual voxel modification for a block
-// Now takes explicit dimX, dimY, dimZ
-function performVoxelModification(baseX, baseY, baseZ, mode, color, dimX, dimY, dimZ) {
-    for (let xOffset = 0; xOffset < dimX; xOffset++) {
-        for (let yOffset = 0; yOffset < dimY; yOffset++) {
-            for (let zOffset = 0; zOffset < dimZ; zOffset++) {
-                const x = baseX + xOffset;
-                const y = baseY + yOffset;
-                const z = baseZ + zOffset;
+// NEW: Helper function to perform the actual voxel modification for a single 1x1x1 voxel
+// This is now always called with 1x1x1 dimensions.
+function performVoxelModification(gx, gy, gz, mode, color) {
+    const globalKey = key(gx, gy, gz);
+    const hasVoxel = voxels.has(globalKey);
 
-                // Clamp coordinates to grid boundaries
-                const clampedX = Math.max(0, Math.min(GRID - 1, x));
-                const clampedY = Math.max(0, Math.min(GRID - 1, y));
-                const clampedZ = Math.max(0, Math.min(GRID - 1, z));
-
-                const globalKey = key(clampedX, clampedY, clampedZ);
-                const hasVoxel = voxels.has(globalKey);
-
-                switch (mode) {
-                    case Modes.ADD:
-                        // Only add if it doesn't exist or color is different
-                        if (!hasVoxel || voxels.get(globalKey).color !== color) {
-                            _addSingleVoxel(clampedX, clampedY, clampedZ, color);
-                        }
-                        break;
-                    case Modes.DELETE:
-                        if (hasVoxel) {
-                            _removeSingleVoxel(clampedX, clampedY, clampedZ);
-                        }
-                        break;
-                    case Modes.DRAW:
-                        if (hasVoxel && voxels.get(globalKey).color !== color) {
-                            _recolorSingleVoxel(clampedX, clampedY, clampedZ, color);
-                        }
-                        break;
-                }
+    switch (mode) {
+        case Modes.ADD:
+            // Only add if it doesn't exist or color is different
+            if (!hasVoxel || voxels.get(globalKey).color !== color) {
+                _addSingleVoxel(gx, gy, gz, color);
             }
-        }
+            break;
+        case Modes.DELETE:
+            if (hasVoxel) {
+                _removeSingleVoxel(gx, gy, gz);
+            }
+            break;
+        case Modes.DRAW:
+            if (hasVoxel && voxels.get(globalKey).color !== color) {
+                _recolorSingleVoxel(gx, gy, gz, color);
+            }
+            break;
     }
-}
-
-// NEW: DDA (Digital Differential Analyzer) for 3D Line Drawing
-function drawLineOfVoxels(start, end, mode, color, dimX, dimY, dimZ) {
-    // This function is now just a helper to determine the voxels on the line.
-    // The actual modification and history tracking are handled by performVoxelModification
-    // and the batch system.
-
-    let x = start.gx;
-    let y = start.gy;
-    let z = start.gz;
-    const x2 = end.gx;
-    const y2 = end.gy;
-    const z2 = end.gz;
-
-    const dx = x2 - x;
-    const dy = y2 - y;
-    const dz = z2 - z;
-
-    const steps = Math.max(Math.abs(dx), Math.abs(dy), Math.abs(dz));
-
-    if (steps === 0) {
-        performVoxelModification(x, y, z, mode, color, dimX, dimY, dimZ);
-    } else {
-        const x_inc = dx / steps;
-        const y_inc = dy / steps;
-        const z_inc = dz / steps;
-
-        for (let i = 0; i <= steps; i++) {
-            // Apply modification for the base of the block
-            performVoxelModification(Math.round(x), Math.round(y), Math.round(z), mode, color, dimX, dimY, dimZ);
-            x += x_inc;
-            y += y_inc;
-            z += z_inc;
-        }
-    }
-    // History is now handled by onPointerUp for the entire batch
 }
 
 
@@ -1647,20 +1601,17 @@ function closestPointOnLineToRay(rayOrigin, rayDirection, linePoint, lineDirecti
     // Vector from linePoint to rayOrigin
     const r = tempVector1.subVectors(rayOrigin, linePoint);
 
-    const d = rayDirection.dot(r);
-    const e = lineDirection.dot(r);
-
     const denominator = a * c - b * b;
 
     if (denominator === 0) { // Lines are parallel or collinear
         // In this case, just project rayOrigin onto the line
-        return linePoint.clone().add(lineDirection.clone().multiplyScalar(e / c));
+        return linePoint.clone().add(lineDirection.clone().multiplyScalar(r.dot(lineDirection) / c));
     }
 
     // Parameter 't' for the ray (P_ray = rayOrigin + t * rayDirection)
     // Parameter 's' for the line (P_line = linePoint + s * lineDirection)
     // We want to find 's' for the point on the line closest to the ray
-    const s = (a * e - b * d) / denominator;
+    const s = (a * r.dot(lineDirection) - b * r.dot(rayDirection)) / denominator;
 
     return linePoint.clone().add(lineDirection.clone().multiplyScalar(s));
 }
@@ -2880,7 +2831,9 @@ function onPointerDown(e) {
         initialDragVoxelCoords = null; // Zurücksetzen für Linienzeichnen
         voxelsAtDragStart = null; // Zurücksetzen des Snapshots
         dragAxisLock = null; // Zurücksetzen der Achsenfixierung
-        
+        currentDragVoxels.clear(); // NEW: Clear current drag voxels
+        previousFrameDragVoxels.clear(); // NEW: Clear previous frame drag voxels
+
         // Fix: Canvas fokussieren *bevor* Pointer Lock angefordert wird
         cvs.focus(); 
         cvs.requestPointerLock();
@@ -2918,6 +2871,7 @@ function onPointerDown(e) {
                 if (rawTargetVoxel) {
                     const { dimX, dimY, dimZ } = getCurrentBlockDimensions();
 
+                    // Clamp initialDragVoxelCoords to the grid boundaries considering block size
                     rawTargetVoxel.gx = Math.max(0, Math.min(GRID - dimX, rawTargetVoxel.gx));
                     rawTargetVoxel.gy = Math.max(0, Math.min(GRID - dimY, rawTargetVoxel.gy));
                     rawTargetVoxel.gz = Math.max(0, Math.min(GRID - dimZ, rawTargetVoxel.gz));
@@ -2925,7 +2879,21 @@ function onPointerDown(e) {
                     initialDragVoxelCoords = rawTargetVoxel; // Setze die geklemmten Koordinaten
                     
                     voxelsAtDragStart = new Map(voxels); // Snapshot der aktuellen Voxel für Linienzeichnen
-                    performVoxelModification(initialDragVoxelCoords.gx, initialDragVoxelCoords.gy, initialDragVoxelCoords.gz, currentMode, currentColor, dimX, dimY, dimZ);
+                    currentDragVoxels.clear(); // NEW: Clear current drag voxels for new drag operation
+                    previousFrameDragVoxels.clear(); // NEW: Clear previous frame drag voxels
+
+                    // Perform the initial action for the first voxel/block
+                    const initialVoxels = getVoxelsOnLine(initialDragVoxelCoords, initialDragVoxelCoords, currentMode, currentColor, dimX, dimY, dimZ);
+                    for (const voxel of initialVoxels) {
+                        const globalKey = key(voxel.gx, voxel.gy, voxel.gz);
+                        const hasVoxelBeforeDrag = voxelsAtDragStart.has(globalKey);
+                        const initialColor = hasVoxelBeforeDrag ? voxelsAtDragStart.get(globalKey).color : null;
+
+                        performVoxelModification(voxel.gx, voxel.gy, voxel.gz, currentMode, currentColor); // Perform for 1x1x1
+                        currentDragVoxels.set(globalKey, { color: currentColor, initialColor: initialColor });
+                        previousFrameDragVoxels.add(globalKey); // Add to previous frame for diffing
+                    }
+
                     lastActionVoxelCoords = { ...initialDragVoxelCoords }; // Setze die letzte Aktion für DDA
                     initialDragVoxelWorldPos = new THREE.Vector3(initialDragVoxelCoords.gx * VS + HALF, initialDragVoxelCoords.gy * VS + HALF, initialDragVoxelCoords.gz * VS + HALF);
                     distanceDisplay.style.display = 'block';
@@ -2936,6 +2904,8 @@ function onPointerDown(e) {
             initialDragVoxelCoords = null; // Zurücksetzen für neue Tipp-Sequenz
             voxelsAtDragStart = null; // Zurücksetzen des Snapshots
             initialDragVoxelWorldPos = null;
+            currentDragVoxels.clear(); // NEW: Clear current drag voxels
+            previousFrameDragVoxels.clear(); // NEW: Clear previous frame drag voxels
 
             if (currentMode === Modes.MEASURE) { // Behandle einzelnen Tipp für Messung
                 const clickedVoxel = calculateTargetVoxelCoords(e.clientX, e.clientY, currentMode, 'touch');
@@ -3067,9 +3037,22 @@ function onPointerDown(e) {
             console.log("onPointerDown: initialDragVoxelCoords (nach Klemmen) =", initialDragVoxelCoords);
 
             voxelsAtDragStart = new Map(voxels); // Snapshot der aktuellen Voxel
-            // Führe die initiale Voxel-Aktion sofort beim Drücken des Pointers für einzelne Klicks aus
-            performVoxelModification(initialDragVoxelCoords.gx, initialDragVoxelCoords.gy, initialDragVoxelCoords.gz, currentMode, currentColor, dimX, dimY, dimZ);
-            lastActionVoxelCoords = { ...initialDragVoxelCoords };
+            currentDragVoxels.clear(); // NEW: Clear current drag voxels for new drag operation
+            previousFrameDragVoxels.clear(); // NEW: Clear previous frame drag voxels
+
+            // Perform the initial action for the first voxel/block
+            const initialVoxels = getVoxelsOnLine(initialDragVoxelCoords, initialDragVoxelCoords, currentMode, currentColor, dimX, dimY, dimZ);
+            for (const voxel of initialVoxels) {
+                const globalKey = key(voxel.gx, voxel.gy, voxel.gz);
+                const hasVoxelBeforeDrag = voxelsAtDragStart.has(globalKey);
+                const initialColor = hasVoxelBeforeDrag ? voxelsAtDragStart.get(globalKey).color : null;
+
+                performVoxelModification(voxel.gx, voxel.gy, voxel.gz, currentMode, currentColor); // Perform for 1x1x1
+                currentDragVoxels.set(globalKey, { color: currentColor, initialColor: initialColor });
+                previousFrameDragVoxels.add(globalKey); // Add to previous frame for diffing
+            }
+
+            lastActionVoxelCoords = { ...initialDragVoxelCoords }; // Setze die letzte Aktion für DDA
             initialDragVoxelWorldPos = new THREE.Vector3(initialDragVoxelCoords.gx * VS + HALF, initialDragVoxelCoords.gy * VS + HALF, initialDragVoxelCoords.gz * VS + HALF);
             distanceDisplay.style.display = 'block';
         } else {
@@ -3077,6 +3060,8 @@ function onPointerDown(e) {
             initialClickPos = null;
             initialDragVoxelCoords = null;
             voxelsAtDragStart = null;
+            currentDragVoxels.clear(); // NEW: Clear current drag voxels
+            previousFrameDragVoxels.clear(); // NEW: Clear previous frame drag voxels
             distanceDisplay.style.display = 'none';
             initialDragVoxelWorldPos = null;
             console.warn("onPointerDown: Kein gültiges initiales Ziel-Voxel gefunden. Aktion unterdrückt.");
@@ -3161,21 +3146,44 @@ function onPointerMove(e) {
                 currentTargetVoxel.gy = Math.max(0, Math.min(GRID - dimY, currentTargetVoxel.gy));
                 currentTargetVoxel.gz = Math.max(0, Math.min(GRID - dimZ, currentTargetVoxel.gz));
 
-                // Setze den Zustand auf `voxelsAtDragStart` zurück, bevor die Linie neu gezeichnet wird
-                if (voxelsAtDragStart) {
-                    // Lösche aktuelle Voxel, um die projizierte Linie neu zu zeichnen
-                    for (const chunk of chunks.values()) {
-                        chunk.dispose();
+                // NEW: Incremental update for drag drawing
+                const voxelsToDrawThisFrame = getVoxelsOnLine(initialDragVoxelCoords, currentTargetVoxel, currentMode, currentColor, dimX, dimY, dimZ);
+                const currentFrameVoxelsSet = new Set(voxelsToDrawThisFrame.map(v => key(v.gx, v.gy, v.gz)));
+
+                // Identify voxels to remove (were in previousFrameDragVoxels but not in currentFrameVoxelsSet)
+                for (const globalKey of previousFrameDragVoxels) {
+                    if (!currentFrameVoxelsSet.has(globalKey)) {
+                        const [gx, gy, gz] = parseKey(globalKey);
+                        // Revert to original state or remove if it was added during this drag
+                        if (voxelsAtDragStart.has(globalKey)) {
+                            _addSingleVoxel(gx, gy, gz, voxelsAtDragStart.get(globalKey).color); // Revert to original color
+                        } else {
+                            _removeSingleVoxel(gx, gy, gz); // Remove if it was newly added in this drag
+                        }
+                        currentDragVoxels.delete(globalKey); // Remove from current drag tracking
                     }
-                    chunks.clear();
-                    voxels.clear();
-                    // Füge Original-Voxel wieder hinzu
-                    voxelsAtDragStart.forEach((data, k) => _addSingleVoxel(parseKey(k)[0], parseKey(k)[1], parseKey(k)[2], data.color));
                 }
-                
-                // Zeichne die Linie vom initialen Klickpunkt zum aktuellen Punkt
-                drawLineOfVoxelsSegment(initialDragVoxelCoords, currentTargetVoxel, currentMode, currentColor, dimX, dimY, dimZ);
-                lastActionVoxelCoords = { ...currentTargetVoxel }; // Aktualisiere die letzte Aktion für kontinuierliches Feedback
+
+                // Identify voxels to add/recolor (are in currentFrameVoxelsSet)
+                for (const voxel of voxelsToDrawThisFrame) {
+                    const globalKey = key(voxel.gx, voxel.gy, voxel.gz);
+                    if (!currentDragVoxels.has(globalKey)) {
+                        // New voxel in this frame's line, add it
+                        const hasVoxelBeforeDrag = voxelsAtDragStart.has(globalKey);
+                        const initialColor = hasVoxelBeforeDrag ? voxelsAtDragStart.get(globalKey).color : null;
+                        performVoxelModification(voxel.gx, voxel.gy, voxel.gz, currentMode, currentColor); // Perform for 1x1x1
+                        currentDragVoxels.set(globalKey, { color: currentColor, initialColor: initialColor });
+                    } else {
+                        // Voxel already in currentDragVoxels, check if color needs updating (DRAW mode)
+                        if (currentMode === Modes.DRAW && voxels.has(globalKey) && voxels.get(globalKey).color !== currentColor) {
+                            _recolorSingleVoxel(voxel.gx, voxel.gy, voxel.gz, currentColor);
+                            currentDragVoxels.get(globalKey).color = currentColor; // Update tracked color
+                        }
+                    }
+                }
+                previousFrameDragVoxels = currentFrameVoxelsSet; // Update for next frame
+
+                lastActionVoxelCoords = { ...currentTargetVoxel }; // Update the last action for continuous feedback
 
                 // Distanzanzeige aktualisieren
                 const currentVoxelWorldPos = new THREE.Vector3(currentTargetVoxel.gx * VS + HALF, currentTargetVoxel.gy * VS + HALF, currentTargetVoxel.gz * VS + HALF);
@@ -3197,7 +3205,7 @@ function onPointerMove(e) {
                 distanceDisplay.textContent = `Distanz: ${dist.toFixed(2)} mm`;
                 distanceDisplay.style.display = 'block';
                 // Vorschau-Voxel der Linie aktualisieren
-                previewLineVoxels = getVoxelsOnLine(measurementStartPoint, currentTargetVoxel);
+                previewLineVoxels = getVoxelsOnLine(measurementStartPoint, currentTargetVoxel, currentMode, currentColor, 1, 1, 1); // Pass 1x1x1 for preview
                 updatePreviewLineMesh();
             } else {
                 distanceDisplay.style.display = 'none';
@@ -3243,7 +3251,7 @@ function onPointerMove(e) {
                              new THREE.Vector3(tempTargetVoxel.gx * VS, tempTargetVoxel.gy * VS, tempTargetVoxel.gz * VS));
                 distanceDisplay.textContent = `Distanz: ${dist.toFixed(2)} mm`;
                 distanceDisplay.style.display = 'block';
-                previewLineVoxels = getVoxelsOnLine(measurementStartPoint, tempTargetVoxel);
+                previewLineVoxels = getVoxelsOnLine(measurementStartPoint, tempTargetVoxel, currentMode, currentColor, 1, 1, 1); // Pass 1x1x1 for preview
                 updatePreviewLineMesh();
             } else {
                 distanceDisplay.style.display = 'none';
@@ -3338,21 +3346,44 @@ function onPointerMove(e) {
 
             console.log("onPointerMove: currentTargetVoxel (nach Klemmen) =", currentTargetVoxel);
 
-            // Revert state to `voxelsAtDragStart` before redrawing the line
-            if (voxelsAtDragStart) {
-                // Clear current voxels to redraw the projected line
-                for (const chunk of chunks.values()) {
-                    chunk.dispose();
+            // NEW: Incremental update for drag drawing
+            const voxelsToDrawThisFrame = getVoxelsOnLine(initialDragVoxelCoords, currentTargetVoxel, currentMode, currentColor, dimX, dimY, dimZ);
+            const currentFrameVoxelsSet = new Set(voxelsToDrawThisFrame.map(v => key(v.gx, v.gy, v.gz)));
+
+            // Identify voxels to remove (were in previousFrameDragVoxels but not in currentFrameVoxelsSet)
+            for (const globalKey of previousFrameDragVoxels) {
+                if (!currentFrameVoxelsSet.has(globalKey)) {
+                    const [gx, gy, gz] = parseKey(globalKey);
+                    // Revert to original state or remove if it was added during this drag
+                    if (voxelsAtDragStart.has(globalKey)) {
+                        _addSingleVoxel(gx, gy, gz, voxelsAtDragStart.get(globalKey).color); // Revert to original color
+                    } else {
+                        _removeSingleVoxel(gx, gy, gz); // Remove if it was newly added in this drag
+                    }
+                    currentDragVoxels.delete(globalKey); // Remove from current drag tracking
                 }
-                chunks.clear();
-                voxels.clear();
-                // Füge Original-Voxel wieder hinzu
-                voxelsAtDragStart.forEach((data, k) => _addSingleVoxel(parseKey(k)[0], parseKey(k)[1], parseKey(k)[2], data.color));
             }
-            
-            // Zeichne die Linie vom initialen Klickpunkt zum aktuellen Punkt
-            drawLineOfVoxelsSegment(initialDragVoxelCoords, currentTargetVoxel, currentMode, currentColor, dimX, dimY, dimZ);
-            lastActionVoxelCoords = { ...currentTargetVoxel }; // Aktualisiere die letzte Aktion für kontinuierliches Feedback
+
+            // Identify voxels to add/recolor (are in currentFrameVoxelsSet)
+            for (const voxel of voxelsToDrawThisFrame) {
+                const globalKey = key(voxel.gx, voxel.gy, voxel.gz);
+                if (!currentDragVoxels.has(globalKey)) {
+                    // New voxel in this frame's line, add it
+                    const hasVoxelBeforeDrag = voxelsAtDragStart.has(globalKey);
+                    const initialColor = hasVoxelBeforeDrag ? voxelsAtDragStart.get(globalKey).color : null;
+                    performVoxelModification(voxel.gx, voxel.gy, voxel.gz, currentMode, currentColor); // Perform for 1x1x1
+                    currentDragVoxels.set(globalKey, { color: currentColor, initialColor: initialColor });
+                } else {
+                    // Voxel already in currentDragVoxels, check if color needs updating (DRAW mode)
+                    if (currentMode === Modes.DRAW && voxels.has(globalKey) && voxels.get(globalKey).color !== currentColor) {
+                        _recolorSingleVoxel(voxel.gx, voxel.gy, voxel.gz, currentColor);
+                        currentDragVoxels.get(globalKey).color = currentColor; // Update tracked color
+                    }
+                }
+            }
+            previousFrameDragVoxels = currentFrameVoxelsSet; // Update for next frame
+
+            lastActionVoxelCoords = { ...currentTargetVoxel }; // Update the last action for continuous feedback
 
             // Distanzanzeige aktualisieren
             const currentVoxelWorldPos = new THREE.Vector3(currentTargetVoxel.gx * VS + HALF, currentTargetVoxel.gy * VS + HALF, currentTargetVoxel.gz * VS + HALF);
@@ -3406,7 +3437,11 @@ function onPointerUp(e) {
                          const [gx, gy, gz] = parseKey(id);
                          return { gx, gy, gz, color: data.color };
                      });
-                     performVoxelModification(clickedVoxel.gx, clickedVoxel.gy, clickedVoxel.gz, currentMode, currentColor, dimX, dimY, dimZ);
+                     // For a single tap, perform the modification for the block directly
+                     const voxelsToModify = getVoxelsOnLine(clickedVoxel, clickedVoxel, currentMode, currentColor, dimX, dimY, dimZ);
+                     for(const voxel of voxelsToModify) {
+                         performVoxelModification(voxel.gx, voxel.gy, voxel.gz, currentMode, currentColor);
+                     }
                      const newState = [...voxels.entries()].map(([id, data]) => {
                          const [gx, gy, gz] = parseKey(id);
                          return { gx, gy, gz, color: data.color };
@@ -3416,6 +3451,21 @@ function onPointerUp(e) {
             }
         }
         if (doubleTapDragActive && currentMode !== Modes.MEASURE && initialDragVoxelCoords) {
+            // Revert all voxels that were part of currentDragVoxels to their state before the drag started
+            for (const [globalKey, data] of currentDragVoxels.entries()) {
+                const [gx, gy, gz] = parseKey(globalKey);
+                if (voxelsAtDragStart.has(globalKey)) {
+                    _addSingleVoxel(gx, gy, gz, voxelsAtDragStart.get(globalKey).color); // Revert to original color
+                } else {
+                    _removeSingleVoxel(gx, gy, gz); // Remove if it was newly added in this drag
+                }
+            }
+
+            const oldStateForHistory = [...voxelsAtDragStart.entries()].map(([id, data]) => {
+                const [gx, gy, gz] = parseKey(id);
+                return { gx, gy, gz, color: data.color };
+            });
+
             let rawFinalTargetVoxel = calculateTargetVoxelCoords(e.clientX, e.clientY, currentMode, 'touch');
             let finalTargetVoxel = null;
 
@@ -3443,27 +3493,23 @@ function onPointerUp(e) {
                 finalTargetVoxel.gy = Math.max(0, Math.min(GRID - dimY, finalTargetVoxel.gy));
                 finalTargetVoxel.gz = Math.max(0, Math.min(GRID - dimZ, finalTargetVoxel.gz));
 
-                // Revert state to `voxelsAtDragStart` before drawing the final line for history
-                if (voxelsAtDragStart) {
-                    // Clear current voxels to redraw the final line
-                    for (const chunk of chunks.values()) {
-                        chunk.dispose();
-                    }
-                    chunks.clear();
-                    voxels.clear();
-                    voxelsAtDragStart.forEach((data, k) => _addSingleVoxel(parseKey(k)[0], parseKey(k)[1], parseKey(k)[2], data.color));
+                // Now, redraw the *final* line segment and capture the newState for history
+                const finalVoxelsToDraw = getVoxelsOnLine(initialDragVoxelCoords, finalTargetVoxel, currentMode, currentColor, dimX, dimY, dimZ);
+                for (const voxel of finalVoxelsToDraw) {
+                    performVoxelModification(voxel.gx, voxel.gy, voxel.gz, currentMode, currentColor); // Perform for 1x1x1
                 }
-                const oldStateForHistory = [...voxelsAtDragStart.entries()].map(([id, data]) => {
-                    const [gx, gy, gz] = parseKey(id);
-                    return { gx, gy, gz, color: data.color };
-                });
-                drawLineOfVoxelsSegment(initialDragVoxelCoords, finalTargetVoxel, currentMode, currentColor, dimX, dimY, dimZ);
-                const newStateForHistory = [...voxels.entries()].map(([id, data]) => {
-                    const [gx, gy, gz] = parseKey(id);
-                    return { gx, gy, gz, color: data.color };
-                });
-                addCommand('batch', oldStateForHistory, newStateForHistory);
+            } else { // If no valid target, just the initial click
+                const finalVoxelsToDraw = getVoxelsOnLine(initialDragVoxelCoords, initialDragVoxelCoords, currentMode, currentColor, dimX, dimY, dimZ);
+                for (const voxel of finalVoxelsToDraw) {
+                    performVoxelModification(voxel.gx, voxel.gy, voxel.gz, currentMode, currentColor); // Perform for 1x1x1
+                }
             }
+
+            const newStateForHistory = [...voxels.entries()].map(([id, data]) => {
+                const [gx, gy, gz] = parseKey(id);
+                return { gx, gy, gz, color: data.color };
+            });
+            addCommand('batch', oldStateForHistory, newStateForHistory);
         }
         releasePointer(e.pointerId, e);
         // Hide distance display only if not in measurement mode or if measurement is completed
@@ -3472,6 +3518,8 @@ function onPointerUp(e) {
         }
         initialDragVoxelWorldPos = null;
         dragAxisLock = null; // Reset axis lock
+        currentDragVoxels.clear(); // NEW: Clear current drag voxels
+        previousFrameDragVoxels.clear(); // NEW: Clear previous frame drag voxels
         return;
     }
 
@@ -3499,95 +3547,93 @@ function onPointerUp(e) {
         }
 
         if (pointerIsDown && !isPointerLocked && initialDragVoxelCoords) {
-            // If it was a drag (not a single click), add the line to history
-            if (!wasSingleClick) {
-                let rawFinalTargetVoxel = calculateTargetVoxelCoords(e.clientX, e.clientY, currentMode, 'mouse');
-                let finalTargetVoxel = null;
+            // Revert all voxels that were part of currentDragVoxels to their state before the drag started
+            for (const [globalKey, data] of currentDragVoxels.entries()) {
+                const [gx, gy, gz] = parseKey(globalKey);
+                if (voxelsAtDragStart.has(globalKey)) {
+                    _addSingleVoxel(gx, gy, gz, voxelsAtDragStart.get(globalKey).color); // Revert to original color
+                } else {
+                    _removeSingleVoxel(gx, gy, gz); // Remove if it was newly added in this drag
+                }
+            }
 
-                if (rawFinalTargetVoxel) {
-                    if (isControlDragging && currentMode === Modes.ADD) {
-                        const initialWorldX = initialDragVoxelCoords.gx * VS + HALF;
-                        const initialWorldZ = initialDragDragVoxelCoords.gz * VS + HALF; // Fixed typo in variable name
+            const oldStateForHistory = [...voxelsAtDragStart.entries()].map(([id, data]) => {
+                const [gx, gy, gz] = parseKey(id);
+                return { gx, gy, gz, color: data.color };
+            });
 
-                        const linePoint = new THREE.Vector3(initialWorldX, 0, initialWorldZ);
-                        const lineDirection = new THREE.Vector3(0, 1, 0);
+            // Now, redraw the *final* line segment and capture the newState for history
+            let finalVoxelsToDraw = [];
+            let rawFinalTargetVoxel = calculateTargetVoxelCoords(e.clientX, e.clientY, currentMode, 'mouse');
+            let finalTargetVoxel = null;
 
-                        const raycaster = new THREE.Raycaster();
-                        const rect = cvs.getBoundingClientRect();
-                        const mouse = new THREE.Vector2(((e.clientX - rect.left) / rect.width) * 2 - 1,
-                                                        -((e.clientY - rect.top) / rect.height) * 2 + 1);
-                        raycaster.setFromCamera(mouse, cam);
-                        
-                        const closestWorldPoint = closestPointOnLineToRay(raycaster.ray.origin, raycaster.ray.direction, linePoint, lineDirection);
-                        
-                        finalTargetVoxel = {
-                            gx: initialDragVoxelCoords.gx,
-                            gy: Math.floor(closestWorldPoint.y / VS),
-                            gz: initialDragVoxelCoords.gz
-                        };
-                        finalTargetVoxel.gy = Math.max(0, Math.min(GRID - 1, finalTargetVoxel.gy));
-                    } else if (isShiftDragging) {
-                        finalTargetVoxel = getPointOnFixedPlane(e.clientX, e.clientY, currentDrawingAxis, activeDrawingLevel[currentDrawingAxis]);
-                        if (!finalTargetVoxel && rawFinalTargetVoxel) {
-                            finalTargetVoxel = rawFinalTargetVoxel;
-                        }
-                    } else if (dragAxisLock) { // Apply axis lock if set (and not Shift/Control)
-                        const snappedFinalTargetVoxel = { ...rawFinalTargetVoxel };
-                        if (dragAxisLock === 'x') {
-                            snappedFinalTargetVoxel.gy = initialDragVoxelCoords.gy;
-                            snappedFinalTargetVoxel.gz = initialDragVoxelCoords.gz;
-                        } else if (dragAxisLock === 'y') {
-                            snappedFinalTargetVoxel.gx = initialDragVoxelCoords.gx;
-                            snappedFinalTargetVoxel.gz = initialDragVoxelCoords.gz;
-                        } else if (dragAxisLock === 'z') {
-                            snappedFinalTargetVoxel.gx = initialDragVoxelCoords.gx;
-                            snappedFinalTargetVoxel.gy = initialDragVoxelCoords.gy;
-                        }
-                        finalTargetVoxel = snappedFinalTargetVoxel;
-                    } else { // No modifier, no axis lock, just raw movement
+            if (rawFinalTargetVoxel) {
+                if (isControlDragging && currentMode === Modes.ADD) {
+                    const initialWorldX = initialDragVoxelCoords.gx * VS + HALF;
+                    const initialWorldZ = initialDragVoxelCoords.gz * VS + HALF; // Corrected variable name
+
+                    const linePoint = new THREE.Vector3(initialWorldX, 0, initialWorldZ);
+                    const lineDirection = new THREE.Vector3(0, 1, 0);
+
+                    const raycaster = new THREE.Raycaster();
+                    const rect = cvs.getBoundingClientRect();
+                    const mouse = new THREE.Vector2(((e.clientX - rect.left) / rect.width) * 2 - 1,
+                                                    -((e.clientY - rect.top) / rect.height) * 2 + 1);
+                    raycaster.setFromCamera(mouse, cam);
+                    
+                    const closestWorldPoint = closestPointOnLineToRay(raycaster.ray.origin, raycaster.ray.direction, linePoint, lineDirection);
+                    
+                    finalTargetVoxel = {
+                        gx: initialDragVoxelCoords.gx,
+                        gy: Math.floor(closestWorldPoint.y / VS),
+                        gz: initialDragVoxelCoords.gz
+                    };
+                    finalTargetVoxel.gy = Math.max(0, Math.min(GRID - 1, finalTargetVoxel.gy));
+                } else if (isShiftDragging) {
+                    finalTargetVoxel = getPointOnFixedPlane(e.clientX, e.clientY, currentDrawingAxis, activeDrawingLevel[currentDrawingAxis]);
+                    if (!finalTargetVoxel && rawFinalTargetVoxel) {
                         finalTargetVoxel = rawFinalTargetVoxel;
                     }
-
-                    // Apply clamping directly to finalTargetVoxel
-                    if (finalTargetVoxel) {
-                        finalTargetVoxel.gx = Math.max(0, Math.min(GRID - dimX, finalTargetVoxel.gx));
-                        finalTargetVoxel.gy = Math.max(0, Math.min(GRID - dimY, finalTargetVoxel.gy));
-                        finalTargetVoxel.gz = Math.max(0, Math.min(GRID - dimZ, finalTargetVoxel.gz));
+                } else if (dragAxisLock) { // Apply axis lock if set (and not Shift/Control)
+                    const snappedFinalTargetVoxel = { ...rawFinalTargetVoxel };
+                    if (dragAxisLock === 'x') {
+                        snappedFinalTargetVoxel.gy = initialDragVoxelCoords.gy;
+                        snappedFinalTargetVoxel.gz = initialDragVoxelCoords.gz;
+                    } else if (dragAxisLock === 'y') {
+                        snappedFinalTargetVoxel.gx = initialDragVoxelCoords.gx;
+                        snappedFinalTargetVoxel.gz = initialDragVoxelCoords.gz;
+                    } else if (dragAxisLock === 'z') {
+                        snappedFinalTargetVoxel.gx = initialDragVoxelCoords.gx;
+                        snappedFinalTargetVoxel.gy = initialDragVoxelCoords.gy;
                     }
+                    finalTargetVoxel = snappedFinalTargetVoxel;
+                } else { // No modifier, no axis lock, just raw movement
+                    finalTargetVoxel = rawFinalTargetVoxel;
                 }
 
+                // Apply clamping directly to finalTargetVoxel
                 if (finalTargetVoxel) {
-                    // Revert state to `voxelsAtDragStart` before drawing the final line for history
-                    if (voxelsAtDragStart) {
-                        for (const chunk of chunks.values()) {
-                            chunk.dispose();
-                        }
-                        chunks.clear();
-                        voxels.clear();
-                        voxelsAtDragStart.forEach((data, k) => _addSingleVoxel(parseKey(k)[0], parseKey(k)[1], parseKey(k)[2], data.color));
-                    }
-                    const oldStateForHistory = [...voxelsAtDragStart.entries()].map(([id, data]) => {
-                        const [gx, gy, gz] = parseKey(id);
-                        return { gx, gy, gz, color: data.color };
-                    });
-                    drawLineOfVoxelsSegment(initialDragVoxelCoords, finalTargetVoxel, currentMode, currentColor, dimX, dimY, dimZ);
-                    const newStateForHistory = [...voxels.entries()].map(([id, data]) => {
-                        const [gx, gy, gz] = parseKey(id);
-                        return { gx, gy, gz, color: data.color };
-                    });
-                    addCommand('batch', oldStateForHistory, newStateForHistory);
+                    finalTargetVoxel.gx = Math.max(0, Math.min(GRID - dimX, finalTargetVoxel.gx));
+                    finalTargetVoxel.gy = Math.max(0, Math.min(GRID - dimY, finalTargetVoxel.gy));
+                    finalTargetVoxel.gz = Math.max(0, Math.min(GRID - dimZ, finalTargetVoxel.gz));
                 }
-            } else { // It was a single click, add as a batch to history
-                const oldState = [...voxelsAtDragStart.entries()].map(([id, data]) => {
-                    const [gx, gy, gz] = parseKey(id);
-                    return { gx, gy, gz, color: data.color };
-                });
-                const newState = [...voxels.entries()].map(([id, data]) => {
-                    const [gx, gy, gz] = parseKey(id);
-                    return { gx, gy, gz, color: data.color };
-                });
-                addCommand('batch', oldState, newState);
             }
+
+            if (finalTargetVoxel) {
+                finalVoxelsToDraw = getVoxelsOnLine(initialDragVoxelCoords, finalTargetVoxel, currentMode, currentColor, dimX, dimY, dimZ);
+            } else { // If no valid target, just the initial click
+                finalVoxelsToDraw = getVoxelsOnLine(initialDragVoxelCoords, initialDragVoxelCoords, currentMode, currentColor, dimX, dimY, dimZ);
+            }
+
+            for (const voxel of finalVoxelsToDraw) {
+                performVoxelModification(voxel.gx, voxel.gy, voxel.gz, currentMode, currentColor); // Perform for 1x1x1
+            }
+
+            const newStateForHistory = [...voxels.entries()].map(([id, data]) => {
+                const [gx, gy, gz] = parseKey(id);
+                return { gx, gy, gz, color: data.color };
+            });
+            addCommand('batch', oldStateForHistory, newStateForHistory);
         }
     }
 
@@ -3606,11 +3652,99 @@ function onPointerUp(e) {
     }
     initialDragVoxelWorldPos = null;
     dragAxisLock = null; // Reset axis lock
+    currentDragVoxels.clear(); // NEW: Clear current drag voxels
+    previousFrameDragVoxels.clear(); // NEW: Clear previous frame drag voxels
 }
 
 
 function onPointerLeave(e) {
     if (e.pointerType === 'mouse') {
+        // Only reset drag state if a drag was active
+        if (pointerIsDown && initialDragVoxelCoords) {
+            // Revert all voxels that were part of currentDragVoxels to their state before the drag started
+            for (const [globalKey, data] of currentDragVoxels.entries()) {
+                const [gx, gy, gz] = parseKey(globalKey);
+                if (voxelsAtDragStart.has(globalKey)) {
+                    _addSingleVoxel(gx, gy, gz, voxelsAtDragStart.get(globalKey).color); // Revert to original color
+                } else {
+                    _removeSingleVoxel(gx, gy, gz); // Remove if it was newly added in this drag
+                }
+            }
+            // Add the final state of the drag to history as a batch
+            const oldStateForHistory = [...voxelsAtDragStart.entries()].map(([id, data]) => {
+                const [gx, gy, gz] = parseKey(id);
+                return { gx, gy, gz, color: data.color };
+            });
+            // Recalculate the final line to ensure it's correct after potential mouseleave
+            const { dimX, dimY, dimZ } = getCurrentBlockDimensions();
+            let rawFinalTargetVoxel = calculateTargetVoxelCoords(e.clientX, e.clientY, currentMode, 'mouse');
+            let finalTargetVoxel = initialDragVoxelCoords; // Default to initial if no valid target on leave
+
+            if (rawFinalTargetVoxel) {
+                // Apply modifiers/axis lock to finalTargetVoxel
+                if (isControlDragging && currentMode === Modes.ADD) {
+                    const initialWorldX = initialDragVoxelCoords.gx * VS + HALF;
+                    const initialWorldZ = initialDragVoxelCoords.gz * VS + HALF;
+
+                    const linePoint = new THREE.Vector3(initialWorldX, 0, initialWorldZ);
+                    const lineDirection = new THREE.Vector3(0, 1, 0);
+
+                    const raycaster = new THREE.Raycaster();
+                    const rect = cvs.getBoundingClientRect();
+                    const mouse = new THREE.Vector2(((e.clientX - rect.left) / rect.width) * 2 - 1,
+                                                    -((e.clientY - rect.top) / rect.height) * 2 + 1);
+                    raycaster.setFromCamera(mouse, cam);
+                    
+                    const closestWorldPoint = closestPointOnLineToRay(raycaster.ray.origin, raycaster.ray.direction, linePoint, lineDirection);
+                    
+                    finalTargetVoxel = {
+                        gx: initialDragVoxelCoords.gx,
+                        gy: Math.floor(closestWorldPoint.y / VS),
+                        gz: initialDragVoxelCoords.gz
+                    };
+                    finalTargetVoxel.gy = Math.max(0, Math.min(GRID - 1, finalTargetVoxel.gy));
+                } else if (isShiftDragging) {
+                    finalTargetVoxel = getPointOnFixedPlane(e.clientX, e.clientY, currentDrawingAxis, activeDrawingLevel[currentDrawingAxis]);
+                    if (!finalTargetVoxel) { // Fallback if fixed plane intersection fails
+                        finalTargetVoxel = rawFinalTargetVoxel;
+                    }
+                } else if (dragAxisLock) {
+                    const snappedFinalTargetVoxel = { ...rawFinalTargetVoxel };
+                    if (dragAxisLock === 'x') {
+                        snappedFinalTargetVoxel.gy = initialDragVoxelCoords.gy;
+                        snappedFinalTargetVoxel.gz = initialDragVoxelCoords.gz;
+                    } else if (dragAxisLock === 'y') {
+                        snappedFinalTargetVoxel.gx = initialDragVoxelCoords.gx;
+                        snappedFinalTargetVoxel.gz = initialDragVoxelCoords.gz;
+                    } else if (dragAxisLock === 'z') {
+                        snappedFinalTargetVoxel.gx = initialDragVoxelCoords.gx;
+                        snappedFinalTargetVoxel.gy = initialDragVoxelCoords.gy;
+                    }
+                    finalTargetVoxel = snappedFinalTargetVoxel;
+                } else {
+                    finalTargetVoxel = rawFinalTargetVoxel;
+                }
+
+                // Apply clamping
+                if (finalTargetVoxel) {
+                    finalTargetVoxel.gx = Math.max(0, Math.min(GRID - dimX, finalTargetVoxel.gx));
+                    finalTargetVoxel.gy = Math.max(0, Math.min(GRID - dimY, finalTargetVoxel.gy));
+                    finalTargetVoxel.gz = Math.max(0, Math.min(GRID - dimZ, finalTargetVoxel.gz));
+                }
+            }
+
+            const finalVoxelsToDraw = getVoxelsOnLine(initialDragVoxelCoords, finalTargetVoxel, currentMode, currentColor, dimX, dimY, dimZ);
+            for (const voxel of finalVoxelsToDraw) {
+                performVoxelModification(voxel.gx, voxel.gy, voxel.gz, currentMode, currentColor);
+            }
+
+            const newStateForHistory = [...voxels.entries()].map(([id, data]) => {
+                const [gx, gy, gz] = parseKey(id);
+                return { gx, gy, gz, color: data.color };
+            });
+            addCommand('batch', oldStateForHistory, newStateForHistory);
+        }
+
         pointerIsDown = false;
         lastActionVoxelCoords = null;
         initialDragVoxelCoords = null; // Reset initial drag point
@@ -3622,6 +3756,8 @@ function onPointerLeave(e) {
         }
         initialDragVoxelWorldPos = null;
         dragAxisLock = null; // NEW: Reset drag axis lock
+        currentDragVoxels.clear(); // NEW: Clear current drag voxels
+        previousFrameDragVoxels.clear(); // NEW: Clear previous frame drag voxels
     }
 }
 
@@ -3704,9 +3840,11 @@ function getPointOnFixedPlane(clientX, clientY, axis, level) {
         else if (axis === 'x') gx = level;
         else if (axis === 'z') gz = level;
 
-        gx = Math.max(0, Math.min(GRID - 1, gx));
-        gy = Math.max(0, Math.min(GRID - 1, gy));
-        gz = Math.max(0, Math.min(GRID - 1, gz));
+        // Clamping here for the fixed plane
+        const { dimX, dimY, dimZ } = getCurrentBlockDimensions();
+        gx = Math.max(0, Math.min(GRID - dimX, gx));
+        gy = Math.max(0, Math.min(GRID - dimY, gy));
+        gz = Math.max(0, Math.min(GRID - dimZ, gz));
 
         return { gx, gy, gz };
     }
@@ -3776,71 +3914,102 @@ function setDynamicBlockDimensions() {
     }
 }
 
-// NEW: Helper function to get all voxels on a 3D line segment using DDA algorithm
-function getVoxelsOnLine(start, end) {
-    // Ensure coordinates are finite numbers
+/**
+ * NEW: Bresenham's 3D Line Algorithm to get all voxels on a line segment.
+ * This function will now return a Set of unique voxel keys.
+ * It also handles the block dimensions by expanding each 1x1x1 voxel into the specified block size.
+ *
+ * @param {object} start - {gx, gy, gz} starting voxel coordinates (base corner).
+ * @param {object} end - {gx, gy, gz} ending voxel coordinates (base corner).
+ * @param {string} mode - Current mode (ADD, DELETE, DRAW).
+ * @param {string} color - Current color.
+ * @param {number} dimX - Block dimension in X.
+ * @param {number} dimY - Block dimension in Y.
+ * @param {number} dimZ - Block dimension in Z.
+ * @returns {Array<object>} - Array of {gx, gy, gz, color} objects representing the voxels.
+ */
+function getVoxelsOnLine(start, end, mode, color, dimX, dimY, dimZ) {
     if (!Number.isFinite(start.gx) || !Number.isFinite(start.gy) || !Number.isFinite(start.gz) ||
         !Number.isFinite(end.gx) || !Number.isFinite(end.gy) || !Number.isFinite(end.gz)) {
         console.error("getVoxelsOnLine: Invalid (non-finite) start or end coordinates.", start, end);
-        return []; // Return empty array to prevent RangeError
+        return [];
     }
 
-    const voxels = [];
-    let x = start.gx;
-    let y = start.gy;
-    let z = start.gz;
+    const voxelsOnLineSet = new Set(); // Use a Set to ensure uniqueness of voxel keys
 
-    const dx = end.gx - x;
-    const dy = end.gy - y;
-    const dz = end.gz - z;
+    let x1 = start.gx;
+    let y1 = start.gy;
+    let z1 = start.gz;
+    let x2 = end.gx;
+    let y2 = end.gy;
+    let z2 = end.gz;
 
-    const steps = Math.max(Math.abs(dx), Math.abs(dy), Math.abs(dz));
+    let dx = Math.abs(x2 - x1);
+    let dy = Math.abs(y2 - y1);
+    let dz = Math.abs(z2 - z1);
 
-    if (steps === 0) {
-        voxels.push({ gx: x, gy: y, gz: z });
-        return voxels;
-    }
+    let sx = (x1 < x2) ? 1 : -1;
+    let sy = (y1 < y2) ? 1 : -1;
+    let sz = (z1 < z2) ? 1 : -1;
 
-    // Guard against extremely large steps, which might indicate a logic error
-    // Max steps should be GRID - 1. If it's much larger, something is wrong.
-    if (steps > GRID * 2) { // A generous upper bound, e.g., twice the max grid dimension
-        console.warn("getVoxelsOnLine: Calculated steps are unusually large, possibly indicating an issue. Steps:", steps, "GRID:", GRID);
-        // Attempt to cap steps to prevent excessive array creation
-        const clampedSteps = Math.min(steps, GRID * 2);
-        const x_inc_clamped = dx / clampedSteps;
-        const y_inc_clamped = dy / clampedSteps;
-        const z_inc_clamped = dz / clampedSteps;
+    let dm = Math.max(dx, dy, dz);
 
-        for (let i = 0; i <= clampedSteps; i++) {
-            voxels.push({ gx: Math.round(x), gy: Math.round(y), gz: Math.round(z) });
-            x += x_inc_clamped;
-            y += y_inc_clamped;
-            z += z_inc_clamped;
+    let x = x1, y = y1, z = z1;
+    let p1 = 2 * dy - dm;
+    let p2 = 2 * dz - dm;
+
+    for (let i = 0; i <= dm; i++) {
+        // Add current 1x1x1 voxel and expand it to block dimensions
+        for (let xOffset = 0; xOffset < dimX; xOffset++) {
+            for (let yOffset = 0; yOffset < dimY; yOffset++) {
+                for (let zOffset = 0; zOffset < dimZ; zOffset++) {
+                    const currentVoxelX = x + xOffset;
+                    const currentVoxelY = y + yOffset;
+                    const currentVoxelZ = z + zOffset;
+
+                    // Clamp to grid boundaries
+                    const clampedX = Math.max(0, Math.min(GRID - 1, currentVoxelX));
+                    const clampedY = Math.max(0, Math.min(GRID - 1, currentVoxelY));
+                    const clampedZ = Math.max(0, Math.min(GRID - 1, currentVoxelZ));
+
+                    voxelsOnLineSet.add(key(clampedX, clampedY, clampedZ));
+                }
+            }
         }
-        return voxels;
+
+        if (dm === dx) {
+            y += sy * (p1 > 0 ? 1 : 0);
+            p1 += 2 * dy;
+            z += sz * (p2 > 0 ? 1 : 0);
+            p2 += 2 * dz;
+        } else if (dm === dy) {
+            x += sx * (p1 > 0 ? 1 : 0);
+            p1 += 2 * dx;
+            z += sz * (p2 > 0 ? 1 : 0);
+            p2 += 2 * dz;
+        } else { // dm === dz
+            x += sx * (p1 > 0 ? 1 : 0);
+            p1 += 2 * dy;
+            y += sy * (p2 > 0 ? 1 : 0);
+            p2 += 2 * dx;
+        }
+
+        if (dm === dx) {
+            x += sx;
+        } else if (dm === dy) {
+            y += sy;
+        } else { // dm === dz
+            z += sz;
+        }
     }
 
-
-    const x_inc = dx / steps;
-    const y_inc = dy / steps;
-    const z_inc = dz / steps;
-
-    for (let i = 0; i <= steps; i++) {
-        voxels.push({ gx: Math.round(x), gy: Math.round(y), gz: Math.round(z) });
-        x += x_inc;
-        y += y_inc;
-        z += z_inc;
-    }
-    return voxels;
+    // Convert Set of keys back to array of objects
+    return Array.from(voxelsOnLineSet).map(k => {
+        const [gx, gy, gz] = parseKey(k);
+        return { gx, gy, gz, color: color };
+    });
 }
 
-// NEW: Helper function to draw a line segment of voxels and update the scene
-function drawLineOfVoxelsSegment(start, end, mode, color, dimX, dimY, dimZ) {
-    const voxelsToDraw = getVoxelsOnLine(start, end);
-    for (const voxel of voxelsToDraw) {
-        performVoxelModification(voxel.gx, voxel.gy, voxel.gz, mode, color, dimX, dimY, dimZ);
-    }
-}
 
 // NEW: Update the InstancedMesh for the preview line in measurement mode
 function updatePreviewLineMesh() {
