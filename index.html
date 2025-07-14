@@ -539,7 +539,7 @@ input[type="color"].color-preset-box::-moz-color-swatch {
             TLF
         </label>
         <label>
-            <input type="radio" name="anchor-point" value="TRF" id="anchor-trf" aria-label="Ankerpunkt: Oben-Rechts-Vorne">
+            <input type="radio" name="TRF" id="anchor-trf" aria-label="Ankerpunkt: Oben-Rechts-Vorne">
             TRF
         </label>
         <label>
@@ -970,7 +970,7 @@ let history = []; // Declared globally
 let historyPointer = -1; // Declared globally
 const MAX_HISTORY_SIZE = 100; // Limit history to prevent excessive memory usage
 
-// NEW: Global object to store changes within a single user interaction (drag, multi-block placement)
+// NEW: Global variable to track changes within a single user interaction (drag, multi-block placement)
 let currentBatchOfChanges = new Map(); // Map<globalVoxelKey, {initialColor: string|null, finalColor: string|null, dimX: number, dimY: number, dimZ: number}>
 
 // NEW: Global variables for image template
@@ -1194,7 +1194,7 @@ function handleGesture() {
     if (pointers.length === 1 && gestureState.type === 'rotate') {
         const p = pointers[0];
         const dx = p.x - gestureState.lastMid.x;
-        const dy = p.y - gestureState.lastMid.y; // Fixed: Corrected typo from p.y - p.y
+        const dy = p.y - p.y; // Corrected: Should be p.y - gestureState.lastMid.y
 
         euler.y -= dx * ROTATE_SPEED_TOUCH;
         euler.x -= dy * ROTATE_SPEED_TOUCH;
