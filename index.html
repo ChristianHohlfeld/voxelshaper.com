@@ -520,7 +520,7 @@ input[type="color"].color-preset-box::-moz-color-swatch {
         <div class="modal-buttons">
             <button id="messageModalCloseBtn" class="cancel">Schließen</button>
         </div>
-    </div>
+</div>
 </div>
 
 <!-- NEW: Mobile controls -->
@@ -715,6 +715,67 @@ var VoxelShaperIO = (function() {
 })();
 </script>
 
+<!-- Firebase SDKs -->
+<script type="module">
+    import { initializeApp } from "https://www.gstatic.com/firebasejs/11.10.0/firebase-app.js";
+    import { getAuth, signInAnonymously, signInWithCustomToken, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/11.10.0/firebase-auth.js";
+    import { getFirestore, doc, getDoc, collection } from "https://www.gstatic.com/firebasejs/11.10.0/firebase-firestore.js";
+
+    // Global Firebase variables accessible to other scripts
+    window.firebaseApp = null;
+    window.auth = null;
+    window.db = null;
+
+    // Initialize Firebase and authenticate
+    const initFirebase = async () => {
+        try {
+            const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
+            const firebaseConfig = JSON.parse(typeof __firebase_config !== 'undefined' ? __firebase_config : '{}');
+
+            if (!firebaseConfig.apiKey) {
+                console.warn("Firebase API Key is missing. Firebase services will not be fully functional.");
+                // Provide a dummy config if no API key, to prevent app crash
+                firebaseConfig.apiKey = "dummy-api-key";
+                firebaseConfig.authDomain = "dummy-project.firebaseapp.com";
+                firebaseConfig.projectId = "dummy-project";
+                firebaseConfig.storageBucket = "dummy-project.appspot.com";
+                firebaseConfig.messagingSenderId = "1234567890";
+                firebaseConfig.appId = "1:1234567890:web:abcdef1234567890";
+            }
+
+            window.firebaseApp = initializeApp(firebaseConfig);
+            window.auth = getAuth(window.firebaseApp);
+            window.db = getFirestore(window.firebaseApp);
+
+            // Authenticate with custom token or anonymously
+            if (typeof __initial_auth_token !== 'undefined' && __initial_auth_token) {
+                await signInWithCustomToken(window.auth, __initial_auth_token);
+                console.log("Firebase: Signed in with custom token.");
+            } else {
+                await signInAnonymously(window.auth);
+                console.log("Firebase: Signed in anonymously.");
+            }
+
+            // Listen for auth state changes (optional, but good practice)
+            onAuthStateChanged(window.auth, (user) => {
+                if (user) {
+                    console.log("Firebase Auth State Changed: User is signed in.", user.uid);
+                } else {
+                    console.log("Firebase Auth State Changed: User is signed out.");
+                }
+            });
+
+            console.log("Firebase initialized and authenticated.");
+        } catch (error) {
+            console.error("Firebase initialization or authentication failed:", error);
+            showMessageModal('Fehler', 'Firebase konnte nicht initialisiert werden. Einige Funktionen sind möglicherweise nicht verfügbar. Fehler: ' + error.message);
+        }
+    };
+
+    // Expose initFirebase to the global scope
+    window.initFirebase = initFirebase;
+</script>
+
 
 <script>
 /* ---------- Konstanten ---------- */
@@ -889,7 +950,7 @@ let previousFrameDragVoxels = new Set(); // Stores keys of voxels drawn in the *
 // NEW: Global variables for image template
 let templateImageMesh = null;
 // Updated templateImageData structure to store scaled dimensions
-let templateImageData = null; // { src: base64, position: [], rotation: [], [], scaledWidth: number, scaledHeight: number }
+let templateImageData = null; // { src: base64, position: [], rotation: [], scaledWidth: number, scaledHeight: number }
 
 // NEW: Mobile specific flags and variables
 let isMobile = window.matchMedia('(max-width: 768px)').matches;
@@ -2362,13 +2423,54 @@ function getCurrentBlockDimensions() {
     return { dimX, dimY, dimZ };
 }
 
+/**
+ * NEW: Function to load a project from Firestore using a model ID.
+ * @param {string} modelId - The ID of the model document in Firestore.
+ */
+async function loadProjectFromModelId(modelId) {
+    if (!window.db) {
+        console.error("Firestore DB not initialized. Cannot load model.");
+        showMessageModal('Fehler', 'Datenbank nicht bereit. Bitte versuchen Sie es später erneut.');
+        return;
+    }
+
+    try {
+        const modelRef = window.doc(window.db, "models", modelId);
+        const modelSnap = await window.getDoc(modelRef);
+
+        if (modelSnap.exists()) {
+            const modelData = modelSnap.data();
+            if (modelData.projectData) {
+                console.log(`Loading model ${modelId} from Firestore...`);
+                loadProjectData(modelData.projectData);
+                showMessageModal('Erfolg', `Modell "${modelData.title || 'Unbenannt'}" erfolgreich geladen.`);
+            } else {
+                console.error("Model document found, but no 'projectData' field:", modelId);
+                showMessageModal('Fehler', 'Modell gefunden, aber keine Projektdaten zum Laden.');
+                resetToDefaultProject();
+            }
+        } else {
+            console.warn("No model found with ID:", modelId);
+            showMessageModal('Fehler', 'Modell mit dieser ID nicht gefunden.');
+            resetToDefaultProject();
+        }
+    } catch (error) {
+        console.error("Error loading model from Firestore:", error);
+        showMessageModal('Fehler', 'Fehler beim Laden des Modells aus der Datenbank: ' + error.message);
+        resetToDefaultProject();
+    }
+}
+
 
 /* ---------- Initialisierung bei Fensterladung ---------- */
-window.onload = function() {
+window.onload = async function() { // Made window.onload async
     cvs = document.getElementById('voxelCanvas');
     containerDiv = document.getElementById('container');
     touchIndicator = document.getElementById('touch-indicator');
     distanceDisplay = document.getElementById('distanceDisplay'); // Get distance display element
+
+    // Initialize Firebase first
+    await window.initFirebase(); // Wait for Firebase to be ready
 
     // Scene
     scene = new THREE.Scene();
@@ -2729,26 +2831,36 @@ window.onload = function() {
     // Set initial active state for block size buttons
     updateBlockSizeButtonsActiveState();
 
-    // --- NEW: Check for projectJson URL parameter on load ---
+    // --- NEW: Check for modelId URL parameter on load ---
     const urlParams = new URLSearchParams(window.location.search);
-    const encodedJson = urlParams.get('projectJson');
+    const modelId = urlParams.get('modelId');
 
-    if (encodedJson) {
-        try {
-            const decodedJsonString = decodeURIComponent(encodedJson);
-            const projectData = JSON.parse(decodedJsonString);
-            loadProjectData(projectData); // Load project from URL
-            console.log("Project loaded from URL parameter.");
-        } catch (error) {
-            console.error("Error loading project from URL parameter:", error);
-            showMessageModal('Fehler', 'Fehler beim Laden des Projekts aus der URL. Ungültige oder beschädigte Projektdaten. Fehler: ' + error.message);
-            resetToDefaultProject(); // Reset to default if URL load fails
+    if (modelId) {
+        console.log(`Model ID found in URL: ${modelId}. Attempting to load project.`);
+        // Ensure Firebase is initialized before attempting to load the model
+        if (window.db) {
+            loadProjectFromModelId(modelId);
+        } else {
+            // If Firebase is not yet initialized (due to async nature of initFirebase),
+            // wait for it to be ready. This is a fallback and generally initFirebase
+            // should complete quickly.
+            const checkFirebaseInterval = setInterval(() => {
+                if (window.db) {
+                    clearInterval(checkFirebaseInterval);
+                    loadProjectFromModelId(modelId);
+                }
+            }, 100); // Check every 100ms
+            setTimeout(() => {
+                if (!window.db) {
+                    console.error("Firebase DB did not initialize in time to load model from URL.");
+                    showMessageModal('Fehler', 'Firebase konnte nicht rechtzeitig geladen werden, um das Modell zu öffnen.');
+                    resetToDefaultProject();
+                }
+            }, 5000); // Timeout after 5 seconds
         }
     } else {
         // If no URL parameter, load default project or from local storage
-        // This part remains as it was, ensuring the editor starts with a usable state
-        // if no URL parameter is provided.
-        console.log("No projectJson URL parameter found. Loading default or local storage project.");
+        console.log("No modelId URL parameter found. Loading default or local storage project.");
         // Existing logic for loading from local storage or starting fresh
         // (already handled by the initial variable assignments and UI updates)
     }
@@ -4058,8 +4170,6 @@ function updateBlockSizeButtonsActiveState() {
             localStorage.setItem('voxelEditorCurrentBlockSize', currentBlockSize);
         }
     }
-}
-
-</script>
+}</script>
 </body>
 </html>
