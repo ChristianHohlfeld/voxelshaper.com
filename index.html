@@ -11,10 +11,10 @@
       content="width=device-width,initial-scale=1.0,maximum-scale=1.0,user-scalable=no,viewport-fit=cover">
 <link rel="icon" type="image/png" href="data:image/png;base64,iVBORw0KGgoAAAANl..."/>
 
-<meta name="twitter:card" content="summary_large_image">\
-<meta name="twitter:title" content="VoxelShaper – Create in 3D, Effortlessly">\
-<meta name="twitter:description" content="A powerful, intuitive voxel-based 3D editor – made for makers, artists, and coders.">\
-<meta name="twitter:image" content="https://voxelshaper.com/preview.png">\
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:title" content="VoxelShaper – Create in 3D, Effortlessly">
+<meta name="twitter:description" content="A powerful, intuitive voxel-based 3D editor – made for makers, artists, and coders.">
+<meta name="twitter:image" content="https://voxelshaper.com/preview.png">
 <title>VoxelShaper – Voxel Editor & 3D Print Exporter</title>
 <style>
 /* CSS für den Body mit Safe-Area-Anpassungen */
@@ -2496,15 +2496,17 @@ function updateGroundPlaneSize() {
 
 // Helper to get current block dimensions based on active mode
 function getCurrentBlockDimensions() {
+    let dimX, dimY, dimZ; // Declare them here for clarity
+
     if (useDynamicBlockDim) {
-        return {
-            dimX: dynamicBlockDim.x,
-            dimY: dynamicBlockDim.y,
-            dimZ: dynamicBlockDim.z
-        };
+        dimX = dynamicBlockDim.x;
+        dimY = dynamicBlockDim.y;
+        dimZ = dynamicBlockDim.z;
     } else {
         // Fixed block size logic (2D square on active plane)
-        let dimX = 1, dimY = 1, dimZ = 1;
+        dimX = 1;
+        dimY = 1;
+        dimZ = 1;
         if (currentDrawingAxis === 'y') {
             dimX = currentBlockSize;
             dimZ = currentBlockSize;
@@ -2515,8 +2517,14 @@ function getCurrentBlockDimensions() {
             dimX = currentBlockSize;
             dimY = currentBlockSize;
         }
-        return { dimX, dimY, dimZ };
     }
+    // Ensure dimensions are at least 1
+    dimX = Math.max(1, dimX);
+    dimY = Math.max(1, dimY);
+    dimZ = Math.max(1, dimZ);
+
+    console.log("getCurrentBlockDimensions: ", { dimX, dimY, dimZ });
+    return { dimX, dimY, dimZ };
 }
 
 
@@ -4005,17 +4013,21 @@ function setDynamicBlockDimensions() {
 
 // NEW: Helper function to get all voxels on a 3D line segment using DDA algorithm
 function getVoxelsOnLine(start, end) {
+    // Ensure coordinates are finite numbers
+    if (!Number.isFinite(start.gx) || !Number.isFinite(start.gy) || !Number.isFinite(start.gz) ||
+        !Number.isFinite(end.gx) || !Number.isFinite(end.gy) || !Number.isFinite(end.gz)) {
+        console.error("getVoxelsOnLine: Invalid (non-finite) start or end coordinates.", start, end);
+        return []; // Return empty array to prevent RangeError
+    }
+
     const voxels = [];
     let x = start.gx;
     let y = start.gy;
     let z = start.gz;
-    const x2 = end.gx;
-    const y2 = end.gy;
-    const z2 = end.gz;
 
-    const dx = x2 - x;
-    const dy = y2 - y;
-    const dz = z2 - z;
+    const dx = end.gx - x;
+    const dy = end.gy - y;
+    const dz = end.gz - z;
 
     const steps = Math.max(Math.abs(dx), Math.abs(dy), Math.abs(dz));
 
@@ -4023,6 +4035,26 @@ function getVoxelsOnLine(start, end) {
         voxels.push({ gx: x, gy: y, gz: z });
         return voxels;
     }
+
+    // Guard against extremely large steps, which might indicate a logic error
+    // Max steps should be GRID - 1. If it's much larger, something is wrong.
+    if (steps > GRID * 2) { // A generous upper bound, e.g., twice the max grid dimension
+        console.warn("getVoxelsOnLine: Calculated steps are unusually large, possibly indicating an issue. Steps:", steps, "GRID:", GRID);
+        // Attempt to cap steps to prevent excessive array creation
+        const clampedSteps = Math.min(steps, GRID * 2);
+        const x_inc_clamped = dx / clampedSteps;
+        const y_inc_clamped = dy / clampedSteps;
+        const z_inc_clamped = dz / clampedSteps;
+
+        for (let i = 0; i <= clampedSteps; i++) {
+            voxels.push({ gx: Math.round(x), gy: Math.round(y), gz: Math.round(z) });
+            x += x_inc_clamped;
+            y += y_inc_clamped;
+            z += z_inc_clamped;
+        }
+        return voxels;
+    }
+
 
     const x_inc = dx / steps;
     const y_inc = dy / steps;
