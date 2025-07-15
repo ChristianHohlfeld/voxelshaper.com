@@ -211,6 +211,25 @@ input[type="color"].color-preset-box::-moz-color-swatch {
     justify-content: center;
 }
 
+/* NEW: Styles for the native <dialog> element */
+dialog.modal {
+    display: flex; /* Override default 'none' for dialog, will be controlled by showModal/close */
+    align-items: center;
+    justify-content: center;
+    background-color: rgba(0, 0, 0, 0.7); /* Overlay background */
+    border: none; /* Remove default dialog border */
+    padding: 0; /* Remove default dialog padding */
+    margin: 0; /* Remove default dialog margin */
+    width: 100%;
+    height: 100%;
+    max-width: none; /* Allow full width */
+    max-height: none; /* Allow full height */
+}
+
+dialog.modal::backdrop {
+    background-color: rgba(0, 0, 0, 0.7);
+}
+
 .modal-content {
     background-color: #3a3f47;
     margin: auto;
@@ -582,7 +601,7 @@ input[type="color"].color-preset-box::-moz-color-swatch {
 .toast-message.error { background-color: #f44336; } /* Red */
 .toast-message.warning { background-color: #ff9800; } /* Orange */
 
-/* NEW: Auth Modal Styles */
+/* NEW: Auth Modal Styles (adapted for <dialog>) */
 .auth-modal-content {
     background-color: #3a3f47;
     padding: 30px;
@@ -779,7 +798,7 @@ input[type="color"].color-preset-box::-moz-color-swatch {
 </div>
 
 <!-- NEW: Upload Project Modal -->
-<div id="uploadProjectModal" class="modal">
+<dialog id="uploadProjectModal" class="modal">
     <div class="upload-modal-content">
         <h3>Projekt auf Hub hochladen</h3>
         <label for="uploadTitle">Titel:</label>
@@ -806,10 +825,10 @@ input[type="color"].color-preset-box::-moz-color-swatch {
             <button id="uploadCancelBtn" class="upload-cancel">Abbrechen</button>
         </div>
     </div>
-</div>
+</dialog>
 
-<!-- NEW: Auth Modal -->
-<div id="authModal" class="modal">
+<!-- NEW: Auth Modal (now a <dialog> element) -->
+<dialog id="authModal" class="modal">
     <div class="auth-modal-content">
         <h3>Anmelden bei VoxelShaper Hub</h3>
         <div class="provider-buttons">
@@ -840,7 +859,7 @@ input[type="color"].color-preset-box::-moz-color-swatch {
             <button id="authModalCloseBtn">Schließen</button>
         </div>
     </div>
-</div>
+</dialog>
 
 
 <!-- NEW: Toast Container -->
@@ -2012,7 +2031,7 @@ function calculateTargetVoxelCoords(clientX, clientY, mode, pointerType) {
     const raycaster = new THREE.Raycaster();
     raycaster.setFromCamera(mouse, cam);
 
-    const objectsToIntersect = Array.from(chunks.values()).map(chunk => chunk.instancedMesh);
+    const objectsToIntersect = Array.from(chunks.값을()).map(chunk => chunk.instancedMesh);
     let targetVoxelCoords = null;
     let intersectionPoint = new THREE.Vector3();
 
@@ -2850,7 +2869,8 @@ function openUploadModal() {
     document.getElementById('uploadTags').value = projectTags.join(', ');
     document.querySelector(`input[name="uploadVisibility"][value="${projectVisibility}"]`).checked = true;
 
-    document.getElementById('uploadProjectModal').style.display = 'flex';
+    // Use showModal() for the dialog element
+    document.getElementById('uploadProjectModal').showModal();
 }
 
 // NEW: Function to handle project upload to Firestore
@@ -2956,17 +2976,20 @@ async function uploadProjectToHub() {
         console.error("Error uploading project:", error);
         showToast('Fehler beim Hochladen', `Fehler: ${error.message}`, 'error');
     } finally {
-        document.getElementById('uploadProjectModal').style.display = 'none';
+        // Use close() for the dialog element
+        document.getElementById('uploadProjectModal').close();
     }
 }
 // NEW: Auth Modal functions
 function openAuthModal() {
-    document.getElementById('authModal').style.display = 'flex';
+    // Use showModal() for the dialog element
+    document.getElementById('authModal').showModal();
     document.getElementById('emailLoginForm').style.display = 'none'; // Hide email form initially
 }
 
 function closeAuthModal() {
-    document.getElementById('authModal').style.display = 'none';
+    // Use close() for the dialog element
+    document.getElementById('authModal').close();
 }
 
 async function signInWithGoogle() {
@@ -3207,19 +3230,19 @@ window.onload = async function() { // Made async to await Firebase auth
 
     const clearConfirmationModal = document.getElementById('clearConfirmationModal');
     document.getElementById('clearBtn').addEventListener('click', () => {
-        clearConfirmationModal.style.display = 'flex';
+        clearConfirmationModal.showModal(); // Use showModal()
     });
     document.getElementById('saveAndClearBtn').addEventListener('click', () => {
         saveJSON();
         clearAll();
-        clearConfirmationModal.style.display = 'none';
+        clearConfirmationModal.close(); // Use close()
     });
     document.getElementById('clearWithoutSaveBtn').addEventListener('click', () => {
         clearAll();
-        clearConfirmationModal.style.display = 'none';
+        clearConfirmationModal.close(); // Use close()
     });
     document.getElementById('cancelClearBtn').addEventListener('click', () => {
-        clearConfirmationModal.style.display = 'none';
+        clearConfirmationModal.close(); // Use close()
     });
 
     // Removed messageModal and its listeners, replaced by showToast
@@ -3423,6 +3446,15 @@ window.firebase.setPersistence(auth, window.firebase.browserLocalPersistence)
   })
   .catch((error) => {
     console.error("Fehler bei setPersistence:", error);
+    // Show a user-friendly error message if persistence fails
+    const errorMessage = document.createElement('div');
+    errorMessage.className = 'alert alert-error fixed bottom-4 right-4 z-50 w-80';
+    errorMessage.innerHTML = `
+        <svg xmlns="http://www.w3.org/2000/svg" class="stroke-current shrink-0 h-6 w-6" fill="none" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 14l2-2m0 0l2-2m-2 2l-2-2m2 2l2 2m7-2a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
+        <span>Fehler bei der Anmeldungspersistenz: ${error.message}. Die Funktionalität könnte eingeschränkt sein.</span>
+    `;
+    document.body.appendChild(errorMessage);
+    setTimeout(() => errorMessage.remove(), 5000);
   });
 
 
@@ -3456,7 +3488,7 @@ window.firebase.setPersistence(auth, window.firebase.browserLocalPersistence)
     // Upload modal event listeners
     document.getElementById('uploadConfirmBtn').addEventListener('click', uploadProjectToHub);
     document.getElementById('uploadCancelBtn').addEventListener('click', () => {
-        document.getElementById('uploadProjectModal').style.display = 'none';
+        document.getElementById('uploadProjectModal').close(); // Use close()
     });
 
     // Auth modal event listeners
@@ -3606,7 +3638,6 @@ let lastX, lastY;
 let suppressNextTap = false; // NEW: To prevent tap after a drag gesture
 let initialDragVoxelCoords = null; // NEW: Stores the starting voxel for line drawing
 let voxelsAtDragStart = null; // NEW: Snapshot of voxels at the start of a drag operation
-
 
 /**
  * Handles pointer down events (mouse or touch).
