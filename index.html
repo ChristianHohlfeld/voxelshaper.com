@@ -3492,7 +3492,11 @@ window.onload = async function() {
                             console.log("Signed in anonymously.");
                         } catch (anonError) {
                             console.error("Failed to sign in anonymously:", anonError);
-                            showToast('Anmeldefehler', `Anonyme Anmeldung fehlgeschlagen: ${anonError.message}`, 'error', 5000);
+                            if (anonError.code === 'auth/admin-restricted-operation') {
+                                showToast('Anmeldefehler', 'Anonyme Anmeldung ist in den Firebase-Einstellungen nicht aktiviert. Bitte aktivieren Sie sie in der Firebase-Konsole unter "Authentication" -> "Sign-in method".', 'error', 10000);
+                            } else {
+                                showToast('Anmeldefehler', `Anonyme Anmeldung fehlgeschlagen: ${anonError.message}`, 'error', 5000);
+                            }
                         }
                     }
                 } else {
@@ -3502,7 +3506,11 @@ window.onload = async function() {
                         console.log("Signed in anonymously (no initial auth token).");
                     } catch (anonError) {
                         console.error("Failed to sign in anonymously:", anonError);
-                        showToast('Anmeldefehler', `Anonyme Anmeldung fehlgeschlagen: ${anonError.message}`, 'error', 5000);
+                        if (anonError.code === 'auth/admin-restricted-operation') {
+                            showToast('Anmeldefehler', 'Anonyme Anmeldung ist in den Firebase-Einstellungen nicht aktiviert. Bitte aktivieren Sie sie in der Firebase-Konsole unter "Authentication" -> "Sign-in method".', 'error', 10000);
+                        } else {
+                            showToast('Anmeldefehler', `Anonyme Anmeldung fehlgeschlagen: ${anonError.message}`, 'error', 5000);
+                        }
                     }
                 }
 
