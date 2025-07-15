@@ -140,6 +140,7 @@ input[type="color"]::-moz-color-swatch {
     border-radius: 50%;
 }
 
+
 .color-preset-box, input[type="color"].color-preset-box {
     width: 38px;
     height: 38px;
@@ -180,24 +181,11 @@ input[type="color"].color-preset-box::-moz-color-swatch {
     box-shadow: 0 0 8px rgba(144, 202, 249, 0.7);
 }
 
-.modal {
-    display: none;
-    position: fixed;
-    z-index: 1000;
-    left: 0;
-    top: 0;
-    width: 100%;
-    height: 100%;
-    background-color: rgba(0, 0, 0, 0.7);
+/* Styles for all app dialogs */
+.app-modal-dialog {
+    display: flex; /* Ensure it's flex when open */
     align-items: center;
     justify-content: center;
-}
-
-dialog.modal {
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    background-color: rgba(0, 0, 0, 0.7);
     border: none;
     padding: 0;
     margin: 0;
@@ -205,21 +193,27 @@ dialog.modal {
     height: 100%;
     max-width: none;
     max-height: none;
+    position: fixed; /* Ensure it's fixed over everything */
+    top: 0;
+    left: 0;
+    z-index: 1000; /* Ensure it's on top */
 }
 
-dialog.modal::backdrop {
+/* Styles for the modal backdrop */
+.app-modal-dialog::backdrop {
     background-color: rgba(0, 0, 0, 0.7);
 }
 
 .modal-content {
     background-color: #3a3f47;
-    margin: auto;
+    margin: auto; /* Keep margin auto for centering if dialog is not flex */
     padding: 30px;
     border-radius: 8px;
     text-align: center;
     box-shadow: 0 4px 8px rgba(0,0,0,.2);
     max-width: 400px;
     color: #e0e0e0;
+    pointer-events: auto; /* Allow clicks on content */
 }
 
 .modal-content h3 {
@@ -409,6 +403,7 @@ dialog.modal::backdrop {
     width: 90%;
     color: #e0e0e0;
     text-align: left;
+    pointer-events: auto; /* Allow clicks on content */
 }
 
 .upload-modal-content h3 {
@@ -520,6 +515,16 @@ dialog.modal::backdrop {
     overflow: hidden;
     text-overflow: ellipsis;
     max-width: 150px;
+    display: flex; /* To align avatar and text */
+    align-items: center;
+    gap: 5px;
+}
+
+#userIdDisplay img {
+    width: 24px;
+    height: 24px;
+    border-radius: 50%;
+    vertical-align: middle;
 }
 
 #toast-container {
@@ -579,6 +584,7 @@ dialog.modal::backdrop {
     width: 90%;
     color: #e0e0e0;
     text-align: center;
+    pointer-events: auto; /* Allow clicks on content */
 }
 
 .auth-modal-content h3 {
@@ -666,6 +672,11 @@ dialog.modal::backdrop {
     opacity: 0.9;
 }
 
+/* Ensure dialogs don't have outline on focus */
+.app-modal-dialog:focus {
+    outline: none;
+}
+
 </style>
 </head>
 <body>
@@ -713,7 +724,7 @@ dialog.modal::backdrop {
     <button id="measureDistanceBtn" aria-label="Abstand messen">Abstand messen</button>
 
     <button id="helpToggleBtn" aria-label="Hilfe umschalten">Hilfe</button>
-    <button id="resetCameraBtn" aria-label="Kamera zurücksetzen">Zur Szene zurückkehren</button>
+    <button id="resetCameraBtn" aria-label="Kamera zurücksetzen">Zur Szene zurückkehen</button>
 
     <button id="loadImageTemplateBtn" aria-label="Bild als Vorlage laden">Bild als Vorlage laden</button>
     <button id="removeImageTemplateBtn" style="display:none;" aria-label="Bildvorlage entfernen">Bildvorlage entfernen</button>
@@ -751,7 +762,7 @@ dialog.modal::backdrop {
     <div id="distanceDisplay">Distanz: 0.00 mm</div>
 </div>
 
-<div id="clearConfirmationModal" class="modal">
+<dialog id="clearConfirmationModal" class="app-modal-dialog">
     <div class="modal-content">
         <h3>Projekt löschen</h3>
         <p>Möchten Sie das aktuelle Projekt speichern, bevor Sie alle Voxel löschen?</p>
@@ -761,9 +772,9 @@ dialog.modal::backdrop {
             <button id="cancelClearBtn" class="cancel">Abbrechen</button>
         </div>
     </div>
-</div>
+</dialog>
 
-<dialog id="uploadProjectModal" class="modal">
+<dialog id="uploadProjectModal" class="app-modal-dialog">
     <div class="upload-modal-content">
         <h3>Projekt auf Hub hochladen</h3>
         <label for="uploadTitle">Titel:</label>
@@ -792,7 +803,7 @@ dialog.modal::backdrop {
     </div>
 </dialog>
 
-<dialog id="authModal" class="modal">
+<dialog id="authModal" class="app-modal-dialog">
     <div class="auth-modal-content">
         <h3>Anmelden bei VoxelShaper Hub</h3>
         <div class="provider-buttons">
@@ -834,6 +845,7 @@ dialog.modal::backdrop {
     <button class="mobile-btn" id="mobile-save" aria-label="Speichern">💾</button>
     <button class="mobile-btn" id="mobile-camera" aria-label="Kamera wechseln">📷</button>
     <button class="mobile-btn" id="mobile-assist" aria-label="Touch-Assist umschalten">🧲</button>
+    <button class="mobile-btn" id="mobile-login-logout" aria-label="Anmelden oder Abmelden">🔑</button>
 </div>
 
 
@@ -870,7 +882,7 @@ dialog.modal::backdrop {
         serverTimestamp
     };
 
-    const firebaseConfig = {
+    const firebaseConfig = typeof __firebase_config !== 'undefined' ? JSON.parse(__firebase_config) : {
         apiKey: "AIzaSyB9-mpyAu9W6oiVtB0fYG8E6YFvTAsjtAA",
         authDomain: "voxelshaper.firebaseapp.com",
         projectId: "voxelshaper",
@@ -1169,9 +1181,8 @@ let history = [];
 let historyPointer = -1;
 const MAX_HISTORY_SIZE = 100;
 
-// Removed `let` from these declarations to fix the SyntaxError
-let currentDragVoxels = new Map();
-let previousFrameDragVoxels = new Set(); 
+currentDragVoxels = new Map();
+previousFrameDragVoxels = new Set(); 
 
 let templateImageMesh = null;
 let templateImageData = null;
@@ -2317,6 +2328,35 @@ function loadProjectData(projectData) {
     }
 }
 
+async function loadProjectFromModelId(modelId) {
+    try {
+        showToast('Lade Projekt', `Lade Projekt mit ID: ${modelId}...`, 'info');
+        const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
+        const docRef = window.firebase.doc(db, `artifacts/${appId}/public/data/models`, modelId);
+        const docSnap = await window.firebase.getDoc(docRef);
+
+        if (docSnap.exists()) {
+            const projectData = docSnap.data().projectData;
+            if (projectData) {
+                projectRemixOf = modelId;
+                projectSourceJsonUrl = window.location.href;
+                loadProjectData(projectData);
+                showToast('Projekt geladen', `Projekt "${docSnap.data().title}" erfolgreich geladen.`, 'success');
+            } else {
+                showToast('Fehler', 'Projektdaten im Dokument nicht gefunden.', 'error');
+                resetToDefaultProject();
+            }
+        } else {
+            showToast('Fehler', `Kein Projekt mit ID ${modelId} gefunden.`, 'error');
+            resetToDefaultProject();
+        }
+    } catch (error) {
+        console.error("Error loading project from model ID:", error);
+        showToast('Fehler', `Fehler beim Laden des Projekts: ${error.message}`, 'error');
+        resetToDefaultProject();
+    }
+}
+
 function loadJSON(event) {
     const file = event.target.files[0];
     if (!file) return;
@@ -2584,14 +2624,15 @@ async function loginLogout() {
             showToast('Fehler beim Abmelden', `Fehler: ${error.message}`, 'error');
         }
     } else {
-     //   openAuthModal();
+        openAuthModal();
     }
 }
 
 function openUploadModal() {
+    console.log("VoxelShaper: openUploadModal called.");
     if (!currentUserId) {
         showToast('Anmeldung erforderlich', 'Bitte melden Sie sich an, um Ihr Projekt hochzuladen.', 'warning');
-       // openAuthModal();
+        openAuthModal(); // Only open auth modal if not logged in
         return;
     }
     document.getElementById('uploadTitle').value = projectTitle;
@@ -2599,7 +2640,16 @@ function openUploadModal() {
     document.getElementById('uploadTags').value = projectTags.join(', ');
     document.querySelector(`input[name="uploadVisibility"][value="${projectVisibility}"]`).checked = true;
 
-    document.getElementById('uploadProjectModal').showModal();
+    const uploadProjectModal = document.getElementById('uploadProjectModal');
+    if (!uploadProjectModal.open) {
+        uploadProjectModal.showModal();
+        // Set focus to the modal for keyboard input
+        setTimeout(() => {
+            uploadProjectModal.focus();
+        }, 100);
+    } else {
+        console.warn("VoxelShaper: Attempted to show uploadProjectModal but it's already open.");
+    }
 }
 
 async function uploadProjectToHub() {
@@ -2708,15 +2758,36 @@ async function uploadProjectToHub() {
 }
 
 function openAuthModal() {
-    document.getElementById('authModal').showModal();
-    document.getElementById('emailLoginForm').style.display = 'none';
+    console.log("VoxelShaper: openAuthModal called.");
+    const authModal = document.getElementById('authModal');
+    if (!authModal.open) {
+        // Stop pointer lock if active
+        if (document.pointerLockElement === cvs) {
+            document.exitPointerLock();
+        }
+        authModal.showModal();
+        document.getElementById('emailLoginForm').style.display = 'none';
+        // Set focus to the modal for keyboard input
+        setTimeout(() => {
+            authModal.focus();
+        }, 100);
+    } else {
+        console.warn("VoxelShaper: Attempted to show authModal but it's already open.");
+    }
 }
 
 function closeAuthModal() {
-    document.getElementById('authModal').close();
+    console.log('VoxelShaper: Auth Modal Close clicked');
+    const authModal = document.getElementById('authModal');
+    if (authModal.open) {
+        authModal.close();
+        cvs.focus(); // Return focus to canvas
+    } else {
+        console.warn("VoxelShaper: Attempted to close authModal but it's not open.");
+    }
 }
 
-async function signInWithGoogle() {
+window.signInWithGoogle = async function() {
     try {
         const provider = new window.firebase.GoogleAuthProvider();
         await window.firebase.signInWithPopup(auth, provider);
@@ -2729,7 +2800,7 @@ async function signInWithGoogle() {
     }
 }
 
-async function signInWithGithub() {
+window.signInWithGithub = async function() {
     try {
         const provider = new window.firebase.GithubAuthProvider();
         await window.firebase.signInWithPopup(auth, provider);
@@ -2741,7 +2812,7 @@ async function signInWithGithub() {
     }
 }
 
-async function signInEmailPassword() {
+window.signInEmailPassword = async function() {
     const email = document.getElementById('emailInput').value;
     const password = document.getElementById('passwordInput').value;
     try {
@@ -2754,7 +2825,7 @@ async function signInEmailPassword() {
     }
 }
 
-async function signUpEmailPassword() {
+window.signUpEmailPassword = async function() {
     const email = document.getElementById('emailInput').value;
     const password = document.getElementById('passwordInput').value;
     try {
@@ -2769,440 +2840,482 @@ async function signUpEmailPassword() {
 
 
 window.onload = async function() {
-    cvs = document.getElementById('voxelCanvas');
-    containerDiv = document.getElementById('container');
-    touchIndicator = document.getElementById('touch-indicator');
-    distanceDisplay = document.getElementById('distanceDisplay');
+    console.log("VoxelShaper: window.onload started.");
+    try {
+        cvs = document.getElementById('voxelCanvas');
+        containerDiv = document.getElementById('container');
+        touchIndicator = document.getElementById('touch-indicator');
+        distanceDisplay = document.getElementById('distanceDisplay');
 
-    scene = new THREE.Scene();
-    scene.background = new THREE.Color(0x282c34);
+        scene = new THREE.Scene();
+        scene.background = new THREE.Color(0x282c34);
 
-    const aspect = containerDiv.clientWidth / containerDiv.clientHeight;
-    cam = new THREE.PerspectiveCamera(75, aspect, 0.1, 1000);
-    resetCameraPosition();
-    euler = new THREE.Euler(0, 0, 0, 'YXZ');
+        const aspect = containerDiv.clientWidth / containerDiv.clientHeight;
+        cam = new THREE.PerspectiveCamera(75, aspect, 0.1, 1000);
+        resetCameraPosition();
+        euler = new THREE.Euler(0, 0, 0, 'YXZ');
 
-    ren = new THREE.WebGLRenderer({ canvas: cvs, antialias: true });
-    ren.setSize(containerDiv.clientWidth, containerDiv.clientHeight);
-    isMobile = window.matchMedia('(max-width: 768px)').matches;
-    if (isMobile) {
-        ren.setPixelRatio(Math.min(1.5, window.devicePixelRatio));
-    } else {
-        ren.setPixelRatio(window.devicePixelRatio);
-    }
-    ren.shadowMap.enabled = true;
-    ren.shadowMap.type = THREE.PCFSoftShadowMap;
-  
-    const ambientLight = new THREE.AmbientLight(0x202020);
-    scene.add(ambientLight);
-
-    mainDirectionalLight = new THREE.DirectionalLight(0xffffff, 1.0);
-    mainDirectionalLight.position.set(10, 20, 15);
-    mainDirectionalLight.castShadow = true;
-    mainDirectionalLight.shadow.mapSize.width = 2048;
-    mainDirectionalLight.shadow.mapSize.height = 2048;
-    mainDirectionalLight.shadow.camera.near = 0.5;
-    mainDirectionalLight.shadow.camera.far = 50;
-    mainDirectionalLight.shadow.camera.left = -30;
-    mainDirectionalLight.shadow.camera.right = 30;
-    mainDirectionalLight.shadow.camera.top = 30;
-    mainDirectionalLight.shadow.camera.bottom = -30;
-    mainDirectionalLight.shadow.bias = -0.0005;
-    mainDirectionalLight.shadow.normalBias = 0.02;
-    scene.add(mainDirectionalLight);
-
-    fillDirectionalLight = new THREE.DirectionalLight(0xffffff, 0.3);
-    fillDirectionalLight.position.set(-10, 10, -15);
-    scene.add(fillDirectionalLight);
-
-    hemisphereLight = new THREE.HemisphereLight(0xffffff, 0x444444, 0.6);
-    scene.add(hemisphereLight);
-
-    updateGroundPlaneSize();
-
-    scene.add(previewVoxelMesh);
-    updatePreviewVoxel(0,0,0,false);
-
-    const previewVoxelBaseGeometry = new THREE.BoxGeometry(VS, VS, VS);
-    const previewVoxelLineMaterial = new THREE.MeshBasicMaterial({ color: 0x00ff00, transparent: true, opacity: 0.3, depthTest: false });
-    previewLineInstancedMesh = new THREE.InstancedMesh(previewVoxelBaseGeometry, previewVoxelLineMaterial, maxPreviewInstances);
-    previewLineInstancedMesh.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
-    previewLineInstancedMesh.instanceColor = new THREE.InstancedBufferAttribute(new Float32Array(maxPreviewInstances * 3), 3);
-    previewLineInstancedMesh.instanceColor.setUsage(THREE.DynamicDrawUsage);
-    scene.add(previewLineInstancedMesh);
-
-
-    rebuildHelpers();
-
-    window.addEventListener('resize', onResize);
-    containerDiv.addEventListener('pointerdown', onPointerDown);
-    containerDiv.addEventListener('pointermove', onPointerMove);
-    containerDiv.addEventListener('pointerup', onPointerUp);
-    containerDiv.addEventListener('pointercancel', onPointerUp);
-    containerDiv.addEventListener('pointerleave', onPointerLeave);
-    containerDiv.addEventListener('wheel', onMouseWheel, { passive: false });
-    containerDiv.addEventListener('touchmove', (e) => {
-        if (activePointers.size > 0) e.preventDefault();
-    }, { passive: false });
-
-
-    document.addEventListener('keydown', onKeyDown);
-    document.addEventListener('keyup', onKeyUp);
-    document.addEventListener('pointerlockchange', onPointerLockChange, false);
-
-
-    containerDiv.addEventListener('contextmenu', (e) => e.preventDefault());
-
-    document.getElementById('grid-size-slider').addEventListener('input', (e) => {
-        const oldGrid = GRID;
-        const newGrid = parseInt(e.target.value);
-
-        const oldVoxelState = [...voxels.entries()].map(([id, data]) => {
-            const parts = parseKey(id);
-            return { gx: parts[0], gy: parts[1], gz: parts[2], color: data.color };
-        });
-
-        for (const chunk of chunks.values()) {
-            chunk.dispose();
+        ren = new THREE.WebGLRenderer({ canvas: cvs, antialias: true });
+        ren.setSize(containerDiv.clientWidth, containerDiv.clientHeight);
+        isMobile = window.matchMedia('(max-width: 768px)').matches;
+        if (isMobile) {
+            ren.setPixelRatio(Math.min(1.5, window.devicePixelRatio));
+        } else {
+            ren.setPixelRatio(window.devicePixelRatio);
         }
-        chunks.clear();
-        voxels.clear();
+        ren.shadowMap.enabled = true;
+        ren.shadowMap.type = THREE.PCFSoftShadowMap;
+      
+        const ambientLight = new THREE.AmbientLight(0x202020);
+        scene.add(ambientLight);
 
-        const voxelsToKeep = oldVoxelState.filter(v => 
-            v.gx < newGrid && v.gy < newGrid && v.gz < newGrid
-        );
+        mainDirectionalLight = new THREE.DirectionalLight(0xffffff, 1.0);
+        mainDirectionalLight.position.set(10, 20, 15);
+        mainDirectionalLight.castShadow = true;
+        mainDirectionalLight.shadow.mapSize.width = 2048;
+        mainDirectionalLight.shadow.mapSize.height = 2048;
+        mainDirectionalLight.shadow.camera.near = 0.5;
+        mainDirectionalLight.shadow.camera.far = 50;
+        mainDirectionalLight.shadow.camera.left = -30;
+        mainDirectionalLight.shadow.camera.right = 30;
+        mainDirectionalLight.shadow.camera.top = 30;
+        mainDirectionalLight.shadow.camera.bottom = -30;
+        mainDirectionalLight.shadow.bias = -0.0005;
+        mainDirectionalLight.shadow.normalBias = 0.02;
+        scene.add(mainDirectionalLight);
 
-        GRID = newGrid;
-        document.getElementById('grid-size-display').textContent = `${GRID}×${GRID}×${GRID}`;
-        localStorage.setItem('voxelEditorGridSize', GRID);
+        fillDirectionalLight = new THREE.DirectionalLight(0xffffff, 0.3);
+        fillDirectionalLight.position.set(-10, 10, -15);
+        scene.add(fillDirectionalLight);
 
-        voxelsToKeep.forEach(v => {
-            _addSingleVoxel(v.gx, v.gy, v.gz, v.color);
-        });
-        
-        const newVoxelState = [...voxels.entries()].map(([id, data]) => {
-            const [gx, gy, gz] = parseKey(id);
-            return { gx, gy, gz, color: data.color };
-        });
+        hemisphereLight = new THREE.HemisphereLight(0xffffff, 0x444444, 0.6);
+        scene.add(hemisphereLight);
 
-        addCommand('resizeGrid', oldVoxelState, newVoxelState, { oldGrid: oldGrid, newGrid: GRID });
+        updateGroundPlaneSize();
+
+        scene.add(previewVoxelMesh);
+        updatePreviewVoxel(0,0,0,false);
+
+        const previewVoxelBaseGeometry = new THREE.BoxGeometry(VS, VS, VS);
+        const previewVoxelLineMaterial = new THREE.MeshBasicMaterial({ color: 0x00ff00, transparent: true, opacity: 0.3, depthTest: false });
+        previewLineInstancedMesh = new THREE.InstancedMesh(previewVoxelBaseGeometry, previewVoxelLineMaterial, maxPreviewInstances);
+        previewLineInstancedMesh.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
+        previewLineInstancedMesh.instanceColor = new THREE.InstancedBufferAttribute(new Float32Array(maxPreviewInstances * 3), 3);
+        previewLineInstancedMesh.instanceColor.setUsage(THREE.DynamicDrawUsage);
+        scene.add(previewLineInstancedMesh);
+
 
         rebuildHelpers();
-        resetCameraPosition();
-        showToast('Gittergröße geändert', `Gittergröße auf ${GRID}x${GRID}x${GRID} geändert.`, 'info');
-    });
 
-    document.getElementById('color-picker').addEventListener('input', (e) => {
-        currentColor = e.target.value;
-        localStorage.setItem('voxelEditorColor', currentColor);
-        presetBoxes.forEach(box => box.classList.remove('active'));
-        activePresetIndex = -1;
-    });
-    document.getElementById('color-picker').addEventListener('blur', (e) => {
-        currentColor = e.target.value;
-        localStorage.setItem('voxelEditorColor', currentColor);
-    });
+        window.addEventListener('resize', onResize);
+        containerDiv.addEventListener('pointerdown', onPointerDown);
+        containerDiv.addEventListener('pointermove', onPointerMove);
+        containerDiv.addEventListener('pointerup', onPointerUp);
+        containerDiv.addEventListener('pointercancel', onPointerUp);
+        containerDiv.addEventListener('pointerleave', onPointerLeave);
+        containerDiv.addEventListener('wheel', onMouseWheel, { passive: false });
+        containerDiv.addEventListener('touchmove', (e) => {
+            if (activePointers.size > 0) e.preventDefault();
+        }, { passive: false });
 
 
-    presetBoxes = [
-        document.getElementById('color-preset-1'),
-        document.getElementById('color-preset-2'),
-        document.getElementById('color-preset-3')
-    ];
-    presetColors.forEach((color, index) => {
-            const box = presetBoxes[index];
-            box.value = color;
-            box.addEventListener('click', (e) => {
-                setActivePreset(index);
+        document.addEventListener('keydown', onKeyDown);
+        document.addEventListener('keyup', onKeyUp);
+        document.addEventListener('pointerlockchange', onPointerLockChange, false);
+
+
+        containerDiv.addEventListener('contextmenu', (e) => e.preventDefault());
+
+        document.getElementById('grid-size-slider').addEventListener('input', (e) => {
+            const oldGrid = GRID;
+            const newGrid = parseInt(e.target.value);
+
+            const oldVoxelState = [...voxels.entries()].map(([id, data]) => {
+                const parts = parseKey(id);
+                return { gx: parts[0], gy: parts[1], gz: parts[2], color: data.color };
             });
-            box.addEventListener('input', (e) => {
-                savePresetColor(index, e.target.value);
+
+            for (const chunk of chunks.values()) {
+                chunk.dispose();
+            }
+            chunks.clear();
+            voxels.clear();
+
+            const voxelsToKeep = oldVoxelState.filter(v => 
+                v.gx < newGrid && v.gy < newGrid && v.gz < newGrid
+            );
+
+            GRID = newGrid;
+            document.getElementById('grid-size-display').textContent = `${GRID}×${GRID}×${GRID}`;
+            localStorage.setItem('voxelEditorGridSize', GRID);
+
+            voxelsToKeep.forEach(v => {
+                _addSingleVoxel(v.gx, v.gy, v.gz, v.color);
             });
-        });
-    if (activePresetIndex !== -1) {
-        setActivePreset(activePresetIndex);
-    } else {
-        document.getElementById('color-picker').value = currentColor;
-    }
-
-
-    document.getElementById('modeToggle').addEventListener('click', cycleMode);
-    document.getElementById('current-mode').textContent = `Modus: ${currentMode}`;
-
-    const clearConfirmationModal = document.getElementById('clearConfirmationModal');
-    document.getElementById('clearBtn').addEventListener('click', () => {
-        clearConfirmationModal.showModal();
-    });
-    document.getElementById('saveAndClearBtn').addEventListener('click', () => {
-        saveJSON();
-        clearAll();
-        clearConfirmationModal.close();
-    });
-    document.getElementById('clearWithoutSaveBtn').addEventListener('click', () => {
-        clearAll();
-        clearConfirmationModal.close();
-    });
-    document.getElementById('cancelClearBtn').addEventListener('click', () => {
-        clearConfirmationModal.close();
-    });
-
-    document.getElementById('fillLevelBtn').addEventListener('click', fillActiveLevel);
-    document.getElementById('saveBtn').addEventListener('click', saveJSON);
-    document.getElementById('loadBtn').addEventListener('click', () => {
-        document.getElementById('fileInput').click();
-    });
-    document.getElementById('fileInput').addEventListener('change', loadJSON);
-    document.getElementById('exportStlBtn').addEventListener('click', exportSTL);
-
-    document.getElementById('exportObjBtn').addEventListener('click', exportOBJ);
-
-    document.getElementById('fly-speed-slider').addEventListener('input', (e) => {
-        moveSpeed = parseFloat(e.target.value);
-        document.getElementById('fly-speed-display').textContent = moveSpeed.toFixed(2);
-        localStorage.setItem('voxelEditorFlySpeed', moveSpeed);
-    });
-
-    document.getElementById('block-size-1x1').addEventListener('click', () => setFixedBlockSize(1));
-    document.getElementById('block-size-4x4').addEventListener('click', () => setFixedBlockSize(4));
-    document.getElementById('block-size-8x8').addEventListener('click', () => setFixedBlockSize(8));
-    document.getElementById('block-size-10x10').addEventListener('click', () => setFixedBlockSize(10));
-
-    const dynamicXInput = document.getElementById('dynamic-block-x');
-    const dynamicYInput = document.getElementById('dynamic-block-y');
-    const dynamicZInput = document.getElementById('dynamic-block-z');
-    const setDynamicBlockSizeBtn = document.getElementById('setDynamicBlockSizeBtn');
-
-    dynamicXInput.addEventListener('input', (e) => {
-        dynamicBlockDim.x = parseInt(e.target.value) || 1;
-        localStorage.setItem('voxelEditorDynamicBlockDimX', dynamicBlockDim.x);
-    });
-    dynamicYInput.addEventListener('input', (e) => {
-        dynamicBlockDim.y = parseInt(e.target.value) || 1;
-        localStorage.setItem('voxelEditorDynamicBlockDimY', dynamicBlockDim.y);
-    });
-    dynamicZInput.addEventListener('input', (e) => {
-        dynamicBlockDim.z = parseInt(e.target.value) || 1;
-        localStorage.setItem('voxelEditorDynamicBlockDimZ', dynamicBlockDim.z);
-    });
-
-    setDynamicBlockSizeBtn.addEventListener('click', () => {
-        setDynamicBlockDimensions();
-    });
-
-    [dynamicXInput, dynamicYInput, dynamicZInput].forEach(input => {
-        input.addEventListener('keydown', (e) => {
-            if (e.key === 'Tab') {
-                e.stopPropagation();
-            }
-        });
-        input.addEventListener('focus', () => {
-            isPointerLocked = false;
-            document.exitPointerLock();
-        });
-        input.addEventListener('blur', () => {
-            cvs.focus();
-        });
-    });
-
-    document.getElementById('measureDistanceBtn').addEventListener('click', () => {
-        currentMode = Modes.MEASURE;
-        document.getElementById('current-mode').textContent = `Modus: ${currentMode}`;
-        measurementStartPoint = null;
-        measurementEndPoint = null;
-        distanceDisplay.style.display = 'none';
-        updatePreviewVoxel(0, 0, 0, false);
-        previewLineInstancedMesh.count = 0;
-        previewLineInstancedMesh.instanceMatrix.needsUpdate = true;
-        previewLineVoxels = [];
-    });
-
-    const infoBox = document.getElementById('infoBox');
-    const helpToggleBtn = document.getElementById('helpToggleBtn');
-    let showInfoBox = localStorage.getItem('showInfoBox') === 'true'; 
-
-    function updateInfoBoxVisibility() {
-        infoBox.style.display = showInfoBox ? 'block' : 'none';
-        helpToggleBtn.textContent = showInfoBox ? 'Hilfe ausblenden' : 'Hilfe anzeigen';
-        localStorage.setItem('showInfoBox', showInfoBox);
-    }
-    helpToggleBtn.addEventListener('click', () => {
-        showInfoBox = !showInfoBox;
-        updateInfoBoxVisibility();
-    });
-    updateInfoBoxVisibility();
-
-    document.getElementById('resetCameraBtn').addEventListener('click', resetCameraPosition);
-
-    document.getElementById('loadImageTemplateBtn').addEventListener('click', loadImageTemplate);
-    document.getElementById('imageFileInput').addEventListener('change', handleImageFileSelect);
-    document.getElementById('removeImageTemplateBtn').addEventListener('click', removeImageTemplate);
-
-    const menuToggle = document.getElementById('menuToggle');
-    menuToggle.addEventListener('click', () => {
-        const controlsPanel = document.getElementById('controls');
-        if (controlsPanel.style.display === 'none' || controlsPanel.style.display === '') {
-            controlsPanel.style.display = 'flex';
-        } else {
-            controlsPanel.style.display = 'none';
-        }
-    });
-
-    const mediaQuery = window.matchMedia('(max-width: 768px)');
-    function handleMediaQueryChange(e) {
-        isMobile = e.matches;
-        const controlsPanel = document.getElementById('controls');
-        if (e.matches) {
-            controlsPanel.style.display = 'none';
-            menuToggle.style.display = 'block';
-        } else {
-            controlsPanel.style.display = 'flex';
-            menuToggle.style.display = 'none';
-        }
-        onResize();
-    }
-    mediaQuery.addListener(handleMediaQueryChange);
-    handleMediaQueryChange(mediaQuery);
-
-    document.getElementById('mobile-undo').addEventListener('click', undo);
-    document.getElementById('mobile-redo').addEventListener('click', redo);
-    document.getElementById('mobile-save').addEventListener('click', saveJSON);
-    document.getElementById('mobile-camera').addEventListener('click', () => {
-        resetCameraPosition();
-    });
-    document.getElementById('mobile-assist').addEventListener('click', () => {
-        touchAssistEnabled = !touchAssistEnabled;
-        const assistButton = document.getElementById('mobile-assist');
-        assistButton.style.borderColor = touchAssistEnabled ? '#90caf9' : 'white';
-        showToast('Touch Assist', `Magnetisches Zielen ist jetzt ${touchAssistEnabled ? 'aktiviert' : 'deaktiviert'}.`, 'info');
-    });
-
-    document.getElementById('grid-size-slider').value = GRID;
-    document.getElementById('grid-size-display').textContent = `${GRID}×${GRID}×${GRID}`;
-    document.getElementById('color-picker').value = currentColor;
-    document.getElementById('fly-speed-slider').value = moveSpeed;
-    document.getElementById('fly-speed-display').textContent = moveSpeed.toFixed(2);
-    document.getElementById('dynamic-block-x').value = dynamicBlockDim.x;
-    document.getElementById('dynamic-block-y').value = dynamicBlockDim.y;
-    document.getElementById('dynamic-block-z').value = dynamicBlockDim.z;
-
-    updateBlockSizeButtonsActiveState();
-
-    const firebaseConfig = window.firebaseConfig;
-
-    const app = window.firebase.initializeApp(firebaseConfig);
-    auth = window.firebase.getAuth(app);
-    db = window.firebase.getFirestore(app);
-
-    const loginLogoutBtn = document.getElementById('loginLogoutBtn');
-    const uploadToHubBtn = document.getElementById('uploadToHubBtn');
-    const userIdDisplay = document.getElementById('userIdDisplay');
-    const goToHubBtn = document.getElementById('goToHubBtn');
-  
-window.firebase.setPersistence(auth, window.firebase.browserLocalPersistence)
-    .then(() => {
-        window.firebase.onAuthStateChanged(auth, (user) => {
-            if (user) {
-                currentUserId = user.uid;
-                currentUser = user;
-                loginLogoutBtn.textContent = 'Abmelden';
-                userIdDisplay.textContent = `Angemeldet als: ${user.email || user.uid.substring(0, 8)}...`;
-                uploadToHubBtn.style.display = 'inline-block';
-            } else {
-                currentUserId = null;
-                currentUser = null;
-                loginLogoutBtn.textContent = 'Anmelden';
-                userIdDisplay.textContent = '';
-                uploadToHubBtn.style.display = 'none';
-                // KEIN openAuthModal() HIER - das war das Problem
-            }
-        });
-    })
-    .catch((error) => {
-        console.error("Fehler bei setPersistence:", error);
-        showToast('Anmeldefehler', `Fehler bei der Anmeldungspersistenz: ${error.message}. Die Funktionalität könnte eingeschränkt sein.`, 'error', 5000);
-    });
-
-    loginLogoutBtn.addEventListener('click', loginLogout);
-    uploadToHubBtn.addEventListener('click', openUploadModal);
-    goToHubBtn.addEventListener('click', () => {
-        window.open('https://hub.voxelshaper.com', '_blank');
-    });
-
-    document.getElementById('uploadConfirmBtn').addEventListener('click', uploadProjectToHub);
-    document.getElementById('uploadCancelBtn').addEventListener('click', () => {
-        document.getElementById('uploadProjectModal').close();
-    });
-
-    document.getElementById('authModalCloseBtn').addEventListener('click', closeAuthModal);
-    document.getElementById('signInGoogleBtn').addEventListener('click', signInWithGoogle);
-    document.getElementById('signInGithubBtn').addEventListener('click', signInWithGithub);
-    document.getElementById('showEmailLoginFormBtn').addEventListener('click', () => {
-        document.getElementById('emailLoginForm').style.display = 'block';
-    });
-    
-    document.getElementById('emailAuthForm').addEventListener('submit', (e) => {
-        e.preventDefault();
-        signInEmailPassword();
-    });
-    document.getElementById('emailSignUpBtn').addEventListener('click', signUpEmailPassword);
-
-
-    async function loadProjectFromModelId(modelId) {
-        showToast('Lade Projekt', 'Lade Modell von VoxelShaper Hub...', 'info');
-        try {
-            const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
-            const docRef = window.firebase.doc(db, `artifacts/${appId}/public/data/models`, modelId);
             
-            const docSnap = await window.firebase.getDoc(docRef);
+            const newVoxelState = [...voxels.entries()].map(([id, data]) => {
+                const [gx, gy, gz] = parseKey(id);
+                return { gx, gy, gz, color: data.color };
+            });
 
-            if (docSnap.exists()) {
-                const modelData = docSnap.data();
-                const projectData = modelData.projectData;
-                if (projectData) {
-                    projectRemixOf = modelId;
-                    projectSourceJsonUrl = `https://hub.voxelshaper.com?modelId=${modelId}`;
-                    loadProjectData(projectData);
-                    showToast('Projekt geladen', 'Modell erfolgreich vom Hub geladen!', 'success');
-                } else {
-                    showToast('Ladefehler', 'Projektdaten im Modell nicht gefunden.', 'error');
-                    resetToDefaultProject();
-                }
+            addCommand('resizeGrid', oldVoxelState, newVoxelState, { oldGrid: oldGrid, newGrid: GRID });
+
+            rebuildHelpers();
+            resetCameraPosition();
+            showToast('Gittergröße geändert', `Gittergröße auf ${GRID}x${GRID}x${GRID} geändert.`, 'info');
+        });
+
+        document.getElementById('color-picker').addEventListener('input', (e) => {
+            currentColor = e.target.value;
+            localStorage.setItem('voxelEditorColor', currentColor);
+            presetBoxes.forEach(box => box.classList.remove('active'));
+            activePresetIndex = -1;
+        });
+        document.getElementById('color-picker').addEventListener('blur', (e) => {
+            currentColor = e.target.value;
+            localStorage.setItem('voxelEditorColor', currentColor);
+        });
+
+
+        presetBoxes = [
+            document.getElementById('color-preset-1'),
+            document.getElementById('color-preset-2'),
+            document.getElementById('color-preset-3')
+        ];
+        presetColors.forEach((color, index) => {
+                const box = presetBoxes[index];
+                box.value = color;
+                box.addEventListener('click', (e) => {
+                    setActivePreset(index);
+                });
+                box.addEventListener('input', (e) => {
+                    savePresetColor(index, e.target.value);
+                });
+            });
+        if (activePresetIndex !== -1) {
+            setActivePreset(activePresetIndex);
+        } else {
+            document.getElementById('color-picker').value = currentColor;
+        }
+
+
+        document.getElementById('modeToggle').addEventListener('click', cycleMode);
+        document.getElementById('current-mode').textContent = `Modus: ${currentMode}`;
+
+        const clearConfirmationModal = document.getElementById('clearConfirmationModal');
+        document.getElementById('clearBtn').addEventListener('click', () => {
+            console.log('VoxelShaper: Attempting to show clearConfirmationModal');
+            if (!clearConfirmationModal.open) {
+                clearConfirmationModal.showModal();
             } else {
-                showToast('Ladefehler', 'Modell mit der angegebenen ID nicht gefunden.', 'error');
-                resetToDefaultProject();
+                console.warn("VoxelShaper: Attempted to show clearConfirmationModal but it's already open.");
             }
-        } catch (error) {
-            console.error("Error loading project from modelId:", error);
-            showToast('Ladefehler', `Fehler beim Laden des Modells: ${error.message}`, 'error');
-            resetToDefaultProject();
+        });
+        document.getElementById('saveAndClearBtn').addEventListener('click', () => {
+            console.log('VoxelShaper: Save & Clear clicked');
+            saveJSON();
+            clearAll();
+            if (clearConfirmationModal.open) {
+                clearConfirmationModal.close();
+            } else {
+                console.warn("VoxelShaper: Attempted to close clearConfirmationModal but it's not open.");
+            }
+        });
+        document.getElementById('clearWithoutSaveBtn').addEventListener('click', () => {
+            console.log('VoxelShaper: Clear without Save clicked');
+            clearAll();
+            if (clearConfirmationModal.open) {
+                clearConfirmationModal.close();
+            } else {
+                console.warn("VoxelShaper: Attempted to close clearConfirmationModal but it's not open.");
+            }
+        });
+        document.getElementById('cancelClearBtn').addEventListener('click', () => {
+            console.log('VoxelShaper: Cancel Clear clicked');
+            if (clearConfirmationModal.open) {
+                clearConfirmationModal.close();
+            } else {
+                console.warn("VoxelShaper: Attempted to close clearConfirmationModal but it's not open.");
+            }
+        });
+        clearConfirmationModal.addEventListener('cancel', () => {
+            console.log('VoxelShaper: clearConfirmationModal closed via Escape');
+            if (clearConfirmationModal.open) {
+                clearConfirmationModal.close();
+            } else {
+                console.warn("VoxelShaper: Attempted to close clearConfirmationModal via Escape but it's not open.");
+            }
+        });
+
+        document.getElementById('fillLevelBtn').addEventListener('click', fillActiveLevel);
+        document.getElementById('saveBtn').addEventListener('click', saveJSON);
+        document.getElementById('loadBtn').addEventListener('click', () => {
+            document.getElementById('fileInput').click();
+        });
+        document.getElementById('fileInput').addEventListener('change', loadJSON);
+        document.getElementById('exportStlBtn').addEventListener('click', exportSTL);
+
+        document.getElementById('exportObjBtn').addEventListener('click', exportOBJ);
+
+        document.getElementById('fly-speed-slider').addEventListener('input', (e) => {
+            moveSpeed = parseFloat(e.target.value);
+            document.getElementById('fly-speed-display').textContent = moveSpeed.toFixed(2);
+            localStorage.setItem('voxelEditorFlySpeed', moveSpeed);
+        });
+
+        document.getElementById('block-size-1x1').addEventListener('click', () => setFixedBlockSize(1));
+        document.getElementById('block-size-4x4').addEventListener('click', () => setFixedBlockSize(4));
+        document.getElementById('block-size-8x8').addEventListener('click', () => setFixedBlockSize(8));
+        document.getElementById('block-size-10x10').addEventListener('click', () => setFixedBlockSize(10));
+
+        const dynamicXInput = document.getElementById('dynamic-block-x');
+        const dynamicYInput = document.getElementById('dynamic-block-y');
+        const dynamicZInput = document.getElementById('dynamic-block-z');
+        const setDynamicBlockSizeBtn = document.getElementById('setDynamicBlockSizeBtn');
+
+        dynamicXInput.addEventListener('input', (e) => {
+            dynamicBlockDim.x = parseInt(e.target.value) || 1;
+            localStorage.setItem('voxelEditorDynamicBlockDimX', dynamicBlockDim.x);
+        });
+        dynamicYInput.addEventListener('input', (e) => {
+            dynamicBlockDim.y = parseInt(e.target.value) || 1;
+            localStorage.setItem('voxelEditorDynamicBlockDimY', dynamicBlockDim.y);
+        });
+        dynamicZInput.addEventListener('input', (e) => {
+            dynamicBlockDim.z = parseInt(e.target.value) || 1;
+            localStorage.setItem('voxelEditorDynamicBlockDimZ', dynamicBlockDim.z);
+        });
+
+        setDynamicBlockSizeBtn.addEventListener('click', () => {
+            setDynamicBlockDimensions();
+        });
+
+        [dynamicXInput, dynamicYInput, dynamicZInput].forEach(input => {
+            input.addEventListener('keydown', (e) => {
+                if (e.key === 'Tab') {
+                    e.stopPropagation();
+                }
+            });
+            input.addEventListener('focus', () => {
+                isPointerLocked = false;
+                document.exitPointerLock();
+            });
+            input.addEventListener('blur', () => {
+                cvs.focus();
+            });
+        });
+
+        document.getElementById('measureDistanceBtn').addEventListener('click', () => {
+            currentMode = Modes.MEASURE;
+            document.getElementById('current-mode').textContent = `Modus: ${currentMode}`;
+            measurementStartPoint = null;
+            measurementEndPoint = null;
+            distanceDisplay.style.display = 'none';
+            updatePreviewVoxel(0, 0, 0, false);
+            previewLineInstancedMesh.count = 0;
+            previewLineInstancedMesh.instanceMatrix.needsUpdate = true;
+            previewLineVoxels = [];
+        });
+
+        const infoBox = document.getElementById('infoBox');
+        const helpToggleBtn = document.getElementById('helpToggleBtn');
+        let showInfoBox = localStorage.getItem('showInfoBox') === 'true'; 
+
+        function updateInfoBoxVisibility() {
+            infoBox.style.display = showInfoBox ? 'block' : 'none';
+            helpToggleBtn.textContent = showInfoBox ? 'Hilfe ausblenden' : 'Hilfe anzeigen';
+            localStorage.setItem('showInfoBox', showInfoBox);
         }
-    }
+        helpToggleBtn.addEventListener('click', () => {
+            showInfoBox = !showInfoBox;
+            updateInfoBoxVisibility();
+        });
+        updateInfoBoxVisibility();
 
-    const urlParams = new URLSearchParams(window.location.search);
-    const modelId = urlParams.get('modelId');
-    const encodedJson = urlParams.get('projectJson');
+        document.getElementById('resetCameraBtn').addEventListener('click', resetCameraPosition);
 
-    if (modelId) {
-        await loadProjectFromModelId(modelId);
-    } else if (encodedJson) {
-        try {
-            const decodedJsonString = decodeURIComponent(encodedJson);
-            const projectData = JSON.parse(decodedJsonString);
-            projectRemixOf = 'Direct JSON Load';
-            projectSourceJsonUrl = window.location.href;
-            loadProjectData(projectData);
-            showToast('Projekt geladen', 'Projekt erfolgreich aus URL-Parameter geladen.', 'success');
-        } catch (error) {
-            console.error("Error loading project from URL parameter (projectJson):", error);
-            showToast('Fehler', 'Fehler beim Laden des Projekts aus der URL. Ungültige oder beschädigte Projektdaten. Fehler: ' + error.message, 'error');
-            resetToDefaultProject();
+        document.getElementById('loadImageTemplateBtn').addEventListener('click', loadImageTemplate);
+        document.getElementById('imageFileInput').addEventListener('change', handleImageFileSelect);
+        document.getElementById('removeImageTemplateBtn').addEventListener('click', removeImageTemplate);
+
+        const menuToggle = document.getElementById('menuToggle');
+        menuToggle.addEventListener('click', () => {
+            const controlsPanel = document.getElementById('controls');
+            if (controlsPanel.style.display === 'none' || controlsPanel.style.display === '') {
+                controlsPanel.style.display = 'flex';
+            } else {
+                controlsPanel.style.display = 'none';
+            }
+        });
+
+        const mediaQuery = window.matchMedia('(max-width: 768px)');
+        function handleMediaQueryChange(e) {
+            isMobile = e.matches;
+            const controlsPanel = document.getElementById('controls');
+            if (e.matches) {
+                controlsPanel.style.display = 'none';
+                menuToggle.style.display = 'block';
+            } else {
+                controlsPanel.style.display = 'flex';
+                menuToggle.style.display = 'none';
+            }
+            onResize();
         }
-    } else {
-        projectRemixOf = '';
-        projectSourceJsonUrl = '';
-    }
+        mediaQuery.addListener(handleMediaQueryChange);
+        handleMediaQueryChange(mediaQuery);
 
-    animate();
+        document.getElementById('mobile-undo').addEventListener('click', undo);
+        document.getElementById('mobile-redo').addEventListener('click', redo);
+        document.getElementById('mobile-save').addEventListener('click', saveJSON);
+        document.getElementById('mobile-camera').addEventListener('click', () => {
+            resetCameraPosition();
+        });
+        document.getElementById('mobile-assist').addEventListener('click', () => {
+            touchAssistEnabled = !touchAssistEnabled;
+            const assistButton = document.getElementById('mobile-assist');
+            assistButton.style.borderColor = touchAssistEnabled ? '#90caf9' : 'white';
+            showToast('Touch Assist', `Magnetisches Zielen ist jetzt ${touchAssistEnabled ? 'aktiviert' : 'deaktiviert'}.`, 'info');
+        });
+        // New mobile login/logout button event listener
+        document.getElementById('mobile-login-logout').addEventListener('click', loginLogout);
+
+
+        document.getElementById('grid-size-slider').value = GRID;
+        document.getElementById('grid-size-display').textContent = `${GRID}×${GRID}×${GRID}`;
+        document.getElementById('color-picker').value = currentColor;
+        document.getElementById('fly-speed-slider').value = moveSpeed;
+        document.getElementById('fly-speed-display').textContent = moveSpeed.toFixed(2);
+        document.getElementById('dynamic-block-x').value = dynamicBlockDim.x;
+        document.getElementById('dynamic-block-y').value = dynamicBlockDim.y;
+        document.getElementById('dynamic-block-z').value = dynamicBlockDim.z;
+
+        updateBlockSizeButtonsActiveState();
+
+        const firebaseConfig = window.firebaseConfig;
+
+        const app = window.firebase.initializeApp(firebaseConfig);
+        auth = window.firebase.getAuth(app);
+        db = window.firebase.getFirestore(app);
+
+        const loginLogoutBtn = document.getElementById('loginLogoutBtn');
+        const uploadToHubBtn = document.getElementById('uploadToHubBtn');
+        const userIdDisplay = document.getElementById('userIdDisplay');
+        const goToHubBtn = document.getElementById('goToHubBtn');
+      
+        // Initialize Firebase Auth and listen for auth state changes
+        window.firebase.setPersistence(auth, window.firebase.browserLocalPersistence)
+            .then(async () => {
+                window.firebase.onAuthStateChanged(auth, (user) => {
+                    if (user) {
+                        currentUserId = user.uid;
+                        currentUser = user;
+                        loginLogoutBtn.textContent = 'Abmelden';
+                        userIdDisplay.innerHTML = `<img src="${user.photoURL || 'https://placehold.co/24x24/cccccc/000000?text=U'}" alt="User Avatar"> ${user.uid}`;
+                        uploadToHubBtn.style.display = 'inline-block';
+                        document.getElementById('mobile-login-logout').textContent = '🚪'; // Door icon for logout
+                    } else {
+                        currentUserId = null;
+                        currentUser = null;
+                        loginLogoutBtn.textContent = 'Anmelden';
+                        userIdDisplay.innerHTML = ''; // Clear user info
+                        uploadToHubBtn.style.display = 'none';
+                        document.getElementById('mobile-login-logout').textContent = '🔑'; // Key icon for login
+                    }
+                });
+
+                // Attempt to sign in with custom token if available, otherwise anonymously
+                if (typeof __initial_auth_token !== 'undefined' && __initial_auth_token) {
+                    try {
+                        await window.firebase.signInWithCustomToken(auth, __initial_auth_token);
+                        console.log("Signed in with custom token.");
+                    } catch (error) {
+                        console.warn("Failed to sign in with custom token, attempting anonymous:", error);
+                        try {
+                            await window.firebase.signInAnonymously(auth);
+                            console.log("Signed in anonymously.");
+                        } catch (anonError) {
+                            console.error("Failed to sign in anonymously:", anonError);
+                            showToast('Anmeldefehler', `Anonyme Anmeldung fehlgeschlagen: ${anonError.message}`, 'error', 5000);
+                        }
+                    }
+                } else {
+                    try {
+                        await window.firebase.signInAnonymously(auth);
+                        console.log("Signed in anonymously (no initial auth token).");
+                    } catch (anonError) {
+                        console.error("Failed to sign in anonymously:", anonError);
+                        showToast('Anmeldefehler', `Anonyme Anmeldung fehlgeschlagen: ${anonError.message}`, 'error', 5000);
+                    }
+                }
+
+                const urlParams = new URLSearchParams(window.location.search);
+                const modelId = urlParams.get('modelId');
+                const encodedJson = urlParams.get('projectJson');
+
+                if (modelId) {
+                    await loadProjectFromModelId(modelId);
+                } else if (encodedJson) {
+                    try {
+                        const decodedJsonString = decodeURIComponent(encodedJson);
+                        const projectData = JSON.parse(decodedJsonString);
+                        projectRemixOf = 'Direct JSON Load';
+                        projectSourceJsonUrl = window.location.href;
+                        loadProjectData(projectData);
+                        showToast('Projekt geladen', 'Projekt erfolgreich aus URL-Parameter geladen.', 'success');
+                    } catch (error) {
+                        console.error("Error loading project from URL parameter (projectJson):", error);
+                        showToast('Fehler', 'Fehler beim Laden des Projekts aus der URL. Ungültige oder beschädigte Projektdaten. Fehler: ' + error.message, 'error');
+                        resetToDefaultProject();
+                    }
+                } else {
+                    projectRemixOf = '';
+                    projectSourceJsonUrl = '';
+                }
+
+                animate();
+
+            })
+            .catch((error) => {
+                console.error("Fehler bei setPersistence:", error);
+                showToast('Anmeldefehler', `Fehler bei der Anmeldungspersistenz: ${error.message}. Die Funktionalität könnte eingeschränkt sein.`, 'error', 5000);
+                // Still try to animate even if persistence fails, but auth might be broken
+                animate();
+            });
+
+        // Event listener for "Go to Hub" button
+        document.getElementById('goToHubBtn').addEventListener('click', () => {
+            window.open('https://hub.voxelshaper.com', '_blank');
+        });
+
+        // Event listener for auth modal backdrop click
+        document.getElementById('authModal').addEventListener('click', (e) => {
+            if (e.target === document.getElementById('authModal')) {
+                closeAuthModal();
+            }
+        });
+
+        // Correct event listener for auth modal close button
+        document.getElementById('authModalCloseBtn').addEventListener('click', closeAuthModal);
+
+        // Event listener for upload modal backdrop click
+        document.getElementById('uploadProjectModal').addEventListener('click', (e) => {
+            if (e.target === document.getElementById('uploadProjectModal')) {
+                document.getElementById('uploadProjectModal').close();
+                cvs.focus(); // Return focus to canvas
+            }
+        });
+
+        // Correct event listener for upload modal cancel button
+        document.getElementById('uploadCancelBtn').addEventListener('click', () => {
+            document.getElementById('uploadProjectModal').close();
+            cvs.focus(); // Return focus to canvas
+        });
+
+
+    } catch (error) {
+        console.error("VoxelShaper: An unexpected error occurred during initialization:", error);
+        showToast('Schwerer Fehler', `Ein unerwarteter Fehler ist aufgetreten: ${error.message}. Die App ist möglicherweise nicht funktionsfähig.`, 'error', 10000);
+    }
 };
 
 const frustum = new THREE.Frustum();
@@ -3249,7 +3362,6 @@ let lastX, lastY;
 let suppressNextTap = false;
 let initialDragVoxelCoords = null;
 let voxelsAtDragStart = null;
-// Removed `let` from these declarations to fix the SyntaxError
 currentDragVoxels = new Map();
 previousFrameDragVoxels = new Set(); 
 
@@ -3731,23 +3843,24 @@ function onPointerMove(e) {
                 const voxelsToDrawThisFrame = getVoxelsOnLine(initialDragVoxelCoords, finalTargetVoxelForDrawing, currentMode, currentColor, dimX, dimY, dimZ);
                 const currentFrameVoxelsSet = new Set(voxelsToDrawThisFrame.map(v => key(v.gx, v.gy, v.gz)));
 
-                for (const globalKey of previousFrameDragVoxels) {
-                    if (!currentFrameVoxelsSet.has(globalKey)) {
-                        const [gx, gy, gz] = parseKey(globalKey);
-                        if (voxelsAtDragStart.has(globalKey)) {
-                            _addSingleVoxel(gx, gy, gz, voxelsAtDragStart.get(globalKey).color);
-                        } else {
-                            _removeSingleVoxel(gx, gy, gz);
+                    for (const globalKey of previousFrameDragVoxels) {
+                        if (!currentFrameVoxelsSet.has(globalKey)) {
+                            const [gx, gy, gz] = parseKey(globalKey);
+                            if (voxelsAtDragStart.has(globalKey)) {
+                                _addSingleVoxel(gx, gy, gz, voxelsAtDragStart.get(globalKey).color);
+                            } else {
+                                _removeSingleVoxel(gx, gy, gz);
+                            }
+                            currentDragVoxels.delete(globalKey);
                         }
-                        currentDragVoxels.delete(globalKey);
                     }
-                }
 
                 for (const voxel of voxelsToDrawThisFrame) {
                     const globalKey = key(voxel.gx, voxel.gy, voxel.gz);
                     if (!currentDragVoxels.has(globalKey)) {
                         const hasVoxelBeforeDrag = voxelsAtDragStart.has(globalKey);
                         const initialColor = hasVoxelBeforeDrag ? voxelsAtDragStart.get(globalKey).color : null;
+
                         performVoxelModification(voxel.gx, voxel.gy, voxel.gz, currentMode, currentColor);
                         currentDragVoxels.set(globalKey, { color: currentColor, initialColor: initialColor });
                     } else {
@@ -4302,6 +4415,28 @@ function updatePreviewLineMesh() {
 
 const keyboard = {};
 function onKeyDown(e) {
+    // Only process if no modal is open
+    const authModalOpen = document.getElementById('authModal').open;
+    const uploadModalOpen = document.getElementById('uploadProjectModal').open;
+    const clearModalOpen = document.getElementById('clearConfirmationModal').open;
+    
+    if (authModalOpen || uploadModalOpen || clearModalOpen) {
+        // ESC key closes modals
+        if (e.key === 'Escape') {
+            if (authModalOpen) closeAuthModal();
+            if (uploadModalOpen) {
+                document.getElementById('uploadProjectModal').close();
+                cvs.focus();
+            }
+            if (clearModalOpen) {
+                document.getElementById('clearConfirmationModal').close();
+                cvs.focus();
+            }
+            e.preventDefault(); // Prevent default browser behavior for Escape
+        }
+        return; // Don't process other keyboard events if a modal is open
+    }
+
     keyboard[e.key] = true;
 
     if (e.key === 'Shift') {
@@ -4350,28 +4485,6 @@ function onKeyUp(e) {
 }
 
 function updateBlockSizeButtonsActiveState() {
-    document.querySelectorAll('.block-size-btn').forEach(btn => {
-        btn.classList.remove('active');
-    });
-
-    document.getElementById('setDynamicBlockSizeBtn').classList.remove('active');
-
-    if (useDynamicBlockDim) {
-        document.getElementById('setDynamicBlockSizeBtn').classList.add('active');
-    } else {
-        const activeBtn = document.getElementById(`block-size-${currentBlockSize}x${currentBlockSize}`);
-        if (activeBtn) {
-            activeBtn.classList.add('active');
-        } else {
-            document.getElementById('block-size-1x1').classList.add('active');
-            currentBlockSize = 1;
-            localStorage.setItem('voxelEditorCurrentBlockSize', currentBlockSize);
-        }
-    }
-}
-
-
-function updateBlockSizeButtonsActiveState() {
     // Remove active class from all fixed size buttons
     document.querySelectorAll('.block-size-btn').forEach(btn => {
         btn.classList.remove('active');
@@ -4395,7 +4508,6 @@ function updateBlockSizeButtonsActiveState() {
         }
     }
 }
-
 </script>
 </body>
 </html>
