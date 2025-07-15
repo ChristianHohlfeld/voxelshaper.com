@@ -183,9 +183,6 @@ input[type="color"].color-preset-box::-moz-color-swatch {
 
 /* Styles for all app dialogs */
 .app-modal-dialog {
-    display: flex; /* Ensure it's flex when open */
-    align-items: center;
-    justify-content: center;
     border: none;
     padding: 0;
     margin: 0;
@@ -197,6 +194,7 @@ input[type="color"].color-preset-box::-moz-color-swatch {
     top: 0;
     left: 0;
     z-index: 1000; /* Ensure it's on top */
+    background-color: transparent; /* Ensure dialog itself is transparent */
 }
 
 /* Styles for the modal backdrop */
@@ -2615,7 +2613,9 @@ function getCurrentBlockDimensions() {
 }
 
 async function loginLogout() {
+    console.log("VoxelShaper: loginLogout called. Current user:", auth.currentUser ? auth.currentUser.uid : "null");
     if (auth.currentUser) {
+        console.log("VoxelShaper: Signing out current user.");
         try {
             await window.firebase.signOut(auth);
             showToast('Abgemeldet', 'Sie wurden erfolgreich abgemeldet.', 'info');
@@ -2624,6 +2624,7 @@ async function loginLogout() {
             showToast('Fehler beim Abmelden', `Fehler: ${error.message}`, 'error');
         }
     } else {
+        console.log("VoxelShaper: User not logged in, opening auth modal.");
         openAuthModal();
     }
 }
@@ -2758,16 +2759,19 @@ async function uploadProjectToHub() {
 }
 
 function openAuthModal() {
-    console.log("VoxelShaper: openAuthModal called.");
     const authModal = document.getElementById('authModal');
+    if (auth.currentUser) {
+        console.log("VoxelShaper: openAuthModal called but user is already logged in. Aborting.");
+        return;
+    }
+    console.log("VoxelShaper: openAuthModal called. Modal open state (before showModal):", authModal.open);
     if (!authModal.open) {
-        // Stop pointer lock if active
         if (document.pointerLockElement === cvs) {
             document.exitPointerLock();
         }
         authModal.showModal();
+        console.log("VoxelShaper: authModal.showModal() called. Modal open state (after showModal):", authModal.open); // NEW LOG
         document.getElementById('emailLoginForm').style.display = 'none';
-        // Set focus to the modal for keyboard input
         setTimeout(() => {
             authModal.focus();
         }, 100);
@@ -2777,17 +2781,23 @@ function openAuthModal() {
 }
 
 function closeAuthModal() {
-    console.log('VoxelShaper: Auth Modal Close clicked');
     const authModal = document.getElementById('authModal');
+    console.log('VoxelShaper: closeAuthModal called. Modal open state (before close):', authModal.open);
+    console.trace('VoxelShaper: closeAuthModal call stack.'); // Add trace
+
     if (authModal.open) {
         authModal.close();
-        cvs.focus(); // Return focus to canvas
+        console.log('VoxelShaper: authModal.close() called. Modal open state (after close):', authModal.open); // NEW LOG
     } else {
-        console.warn("VoxelShaper: Attempted to close authModal but it's not open.");
+        console.warn("VoxelShaper: Attempted to close authModal but it's not open. Forcing hide.");
+        authModal.style.display = 'none'; // Force hide if .open is false but it's visible
     }
+    cvs.focus(); // Return focus to canvas
+    console.log('VoxelShaper: Auth Modal close attempt finished.');
 }
 
 window.signInWithGoogle = async function() {
+    console.log("VoxelShaper: Attempting Google sign-in.");
     try {
         const provider = new window.firebase.GoogleAuthProvider();
         await window.firebase.signInWithPopup(auth, provider);
@@ -2801,6 +2811,7 @@ window.signInWithGoogle = async function() {
 }
 
 window.signInWithGithub = async function() {
+    console.log("VoxelShaper: Attempting GitHub sign-in.");
     try {
         const provider = new window.firebase.GithubAuthProvider();
         await window.firebase.signInWithPopup(auth, provider);
@@ -2813,6 +2824,7 @@ window.signInWithGithub = async function() {
 }
 
 window.signInEmailPassword = async function() {
+    console.log("VoxelShaper: Attempting Email/Password sign-in.");
     const email = document.getElementById('emailInput').value;
     const password = document.getElementById('passwordInput').value;
     try {
@@ -2826,6 +2838,7 @@ window.signInEmailPassword = async function() {
 }
 
 window.signUpEmailPassword = async function() {
+    console.log("VoxelShaper: Attempting Email/Password sign-up.");
     const email = document.getElementById('emailInput').value;
     const password = document.getElementById('passwordInput').value;
     try {
@@ -3206,6 +3219,7 @@ window.onload = async function() {
         window.firebase.setPersistence(auth, window.firebase.browserLocalPersistence)
             .then(async () => {
                 window.firebase.onAuthStateChanged(auth, (user) => {
+                    console.log("VoxelShaper: Auth state changed. User:", user ? user.uid : "null", "Modal open:", document.getElementById('authModal').open);
                     if (user) {
                         currentUserId = user.uid;
                         currentUser = user;
@@ -3213,6 +3227,8 @@ window.onload = async function() {
                         userIdDisplay.innerHTML = `<img src="${user.photoURL || 'https://placehold.co/24x24/cccccc/000000?text=U'}" alt="User Avatar"> ${user.uid}`;
                         uploadToHubBtn.style.display = 'inline-block';
                         document.getElementById('mobile-login-logout').textContent = '🚪'; // Door icon for logout
+                        // Always try to close the modal when a user signs in.
+                        closeAuthModal();
                     } else {
                         currentUserId = null;
                         currentUser = null;
@@ -3226,11 +3242,13 @@ window.onload = async function() {
                 // Attempt to sign in with custom token if available, otherwise anonymously
                 if (typeof __initial_auth_token !== 'undefined' && __initial_auth_token) {
                     try {
+                        console.log("VoxelShaper: Attempting sign-in with custom token.");
                         await window.firebase.signInWithCustomToken(auth, __initial_auth_token);
                         console.log("Signed in with custom token.");
                     } catch (error) {
                         console.warn("Failed to sign in with custom token, attempting anonymous:", error);
                         try {
+                            console.log("VoxelShaper: Attempting anonymous sign-in.");
                             await window.firebase.signInAnonymously(auth);
                             console.log("Signed in anonymously.");
                         } catch (anonError) {
@@ -3240,6 +3258,7 @@ window.onload = async function() {
                     }
                 } else {
                     try {
+                        console.log("VoxelShaper: Attempting anonymous sign-in (no initial auth token).");
                         await window.firebase.signInAnonymously(auth);
                         console.log("Signed in anonymously (no initial auth token).");
                     } catch (anonError) {
@@ -3290,6 +3309,7 @@ window.onload = async function() {
         // Event listener for auth modal backdrop click
         document.getElementById('authModal').addEventListener('click', (e) => {
             if (e.target === document.getElementById('authModal')) {
+                console.log("VoxelShaper: Auth Modal Backdrop clicked.");
                 closeAuthModal();
             }
         });
@@ -3300,6 +3320,7 @@ window.onload = async function() {
         // Event listener for upload modal backdrop click
         document.getElementById('uploadProjectModal').addEventListener('click', (e) => {
             if (e.target === document.getElementById('uploadProjectModal')) {
+                console.log("VoxelShaper: Upload Modal Backdrop clicked.");
                 document.getElementById('uploadProjectModal').close();
                 cvs.focus(); // Return focus to canvas
             }
@@ -3307,6 +3328,7 @@ window.onload = async function() {
 
         // Correct event listener for upload modal cancel button
         document.getElementById('uploadCancelBtn').addEventListener('click', () => {
+            console.log("VoxelShaper: Upload Modal Cancel button clicked.");
             document.getElementById('uploadProjectModal').close();
             cvs.focus(); // Return focus to canvas
         });
