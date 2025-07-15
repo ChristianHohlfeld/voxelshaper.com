@@ -419,6 +419,121 @@ input[type="color"].color-preset-box::-moz-color-swatch {
     box-shadow: 0 0 8px rgba(144, 202, 249, 0.7);
 }
 
+/* NEW: Upload Modal Specific Styles */
+.upload-modal-content {
+    background-color: #3a3f47;
+    padding: 30px;
+    border-radius: 8px;
+    box-shadow: 0 4px 8px rgba(0,0,0,.2);
+    max-width: 500px;
+    width: 90%;
+    color: #e0e0e0;
+    text-align: left; /* Align text left for form fields */
+}
+
+.upload-modal-content h3 {
+    text-align: center;
+    margin-top: 0;
+    color: #90caf9;
+    margin-bottom: 20px;
+}
+
+.upload-modal-content label {
+    display: block;
+    margin-bottom: 8px;
+    font-weight: bold;
+}
+
+.upload-modal-content input[type="text"],
+.upload-modal-content textarea {
+    width: calc(100% - 20px); /* Adjust for padding */
+    padding: 10px;
+    margin-bottom: 15px;
+    border: 1px solid #555c66;
+    border-radius: 5px;
+    background-color: #2d3748;
+    color: #e0e0e0;
+    box-sizing: border-box; /* Include padding in width */
+}
+
+.upload-modal-content textarea {
+    resize: vertical;
+    min-height: 80px;
+}
+
+.upload-modal-content .radio-group {
+    display: flex;
+    gap: 20px;
+    margin-bottom: 15px;
+}
+
+.upload-modal-content .radio-group label {
+    display: flex;
+    align-items: center;
+    font-weight: normal;
+}
+
+.upload-modal-content .radio-group input[type="radio"] {
+    margin-right: 8px;
+}
+
+.upload-modal-buttons {
+    margin-top: 25px;
+    display: flex;
+    justify-content: space-around;
+    gap: 10px;
+}
+
+.upload-modal-buttons button {
+    padding: 10px 20px;
+    border: none;
+    border-radius: 5px;
+    cursor: pointer;
+    font-size: 1em;
+    flex-grow: 1;
+}
+
+.upload-modal-buttons button.upload-confirm {
+    background-color: #4CAF50; /* Green */
+    color: white;
+}
+
+.upload-modal-buttons button.upload-cancel {
+    background-color: #555c66; /* Grey */
+    color: #e0e0e0;
+}
+
+.upload-modal-buttons button:hover {
+    opacity: 0.9;
+}
+
+#loginLogoutBtn {
+    background-color: #007bff; /* Blue for login/logout */
+    color: white;
+}
+#loginLogoutBtn:hover {
+    background-color: #0056b3;
+}
+
+#uploadToHubBtn {
+    background-color: #ff9800; /* Orange for upload */
+    color: white;
+}
+#uploadToHubBtn:hover {
+    background-color: #fb8c00;
+}
+
+#userIdDisplay {
+    font-weight: bold;
+    color: #ADD8E6; /* Light blue */
+    margin-left: 10px;
+    margin-right: 10px;
+    white-space: nowrap; /* Prevent wrapping */
+    overflow: hidden; /* Hide overflow */
+    text-overflow: ellipsis; /* Show ellipsis for overflow */
+    max-width: 150px; /* Limit width */
+}
+
 </style>
 </head>
 <body>
@@ -473,6 +588,11 @@ input[type="color"].color-preset-box::-moz-color-swatch {
     <button id="loadImageTemplateBtn" aria-label="Bild als Vorlage laden">Bild als Vorlage laden</button>
     <button id="removeImageTemplateBtn" style="display:none;" aria-label="Bildvorlage entfernen">Bildvorlage entfernen</button>
     <input type="file" id="imageFileInput" accept="image/*" style="display:none;">
+
+    <!-- NEW: Login/Logout and Upload to Hub Buttons -->
+    <button id="loginLogoutBtn" aria-label="Anmelden oder Abmelden">Anmelden</button>
+    <span id="userIdDisplay"></span>
+    <button id="uploadToHubBtn" aria-label="Auf Hub hochladen" style="display:none;">Auf Hub hochladen</button>
 </div>
 
 <div id="container">
@@ -523,6 +643,37 @@ input[type="color"].color-preset-box::-moz-color-swatch {
     </div>
 </div>
 
+<!-- NEW: Upload Project Modal -->
+<div id="uploadProjectModal" class="modal">
+    <div class="upload-modal-content">
+        <h3>Projekt auf Hub hochladen</h3>
+        <label for="uploadTitle">Titel:</label>
+        <input type="text" id="uploadTitle" placeholder="Ein aussagekräftiger Titel für Ihr Projekt" maxlength="100">
+
+        <label for="uploadDescription">Beschreibung:</label>
+        <textarea id="uploadDescription" placeholder="Beschreiben Sie Ihr Projekt kurz" maxlength="500"></textarea>
+
+        <label for="uploadTags">Tags (Komma-getrennt):</label>
+        <input type="text" id="uploadTags" placeholder="z.B. Haus, Baum, Auto, Gebäude" maxlength="100">
+
+        <label>Sichtbarkeit:</label>
+        <div class="radio-group">
+            <label>
+                <input type="radio" name="uploadVisibility" value="public" checked> Öffentlich
+            </label>
+            <label>
+                <input type="radio" name="uploadVisibility" value="private"> Privat
+            </label>
+        </div>
+
+        <div class="upload-modal-buttons">
+            <button id="uploadConfirmBtn" class="upload-confirm">Hochladen</button>
+            <button id="uploadCancelBtn" class="upload-cancel">Abbrechen</button>
+        </div>
+    </div>
+</div>
+
+
 <!-- NEW: Mobile controls -->
 <div id="mobile-controls" class="mobile-only">
     <button class="mobile-btn" id="mobile-undo" aria-label="Rückgängig machen">↺</button>
@@ -541,8 +692,8 @@ input[type="color"].color-preset-box::-moz-color-swatch {
 <!-- Firebase SDK imports -->
 <script type="module">
     import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
-    import { getAuth, signInAnonymously, signInWithCustomToken } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
-    import { getFirestore, doc, getDoc, collection } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+    import { getAuth, signInAnonymously, signInWithCustomToken, onAuthStateChanged, signOut } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
+    import { getFirestore, doc, getDoc, collection, addDoc, serverTimestamp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
 
     // Expose Firebase functions to the global scope for use in the main script
     window.firebase = {
@@ -550,10 +701,14 @@ input[type="color"].color-preset-box::-moz-color-swatch {
         getAuth,
         signInAnonymously,
         signInWithCustomToken,
+        onAuthStateChanged,
+        signOut,
         getFirestore,
         doc,
         getDoc,
-        collection
+        collection,
+        addDoc,
+        serverTimestamp
     };
 
     // Firebase configuration from hub.html
@@ -950,6 +1105,11 @@ let projectTags = []; // Stored as an array of strings
 let projectRemixOf = '';
 let projectSourceJsonUrl = '';
 let projectVisibility = 'public'; // Default visibility
+
+// NEW: Firebase variables
+let auth;
+let db;
+let currentUserId = null; // Stores the Firebase User ID
 
 /* ---------- Chunking System Classes and Helpers ---------- */
 
@@ -2402,6 +2562,131 @@ function getCurrentBlockDimensions() {
     return { dimX, dimY, dimZ };
 }
 
+// NEW: Function to handle login/logout
+async function loginLogout() {
+    if (auth.currentUser) {
+        // User is logged in, sign out
+        try {
+            await window.firebase.signOut(auth);
+            showMessageModal('Abgemeldet', 'Sie wurden erfolgreich abgemeldet.');
+        } catch (error) {
+            console.error("Error signing out:", error);
+            showMessageModal('Fehler beim Abmelden', `Fehler: ${error.message}`);
+        }
+    } else {
+        // No user logged in, attempt anonymous sign-in
+        try {
+            await window.firebase.signInAnonymously(auth);
+            showMessageModal('Angemeldet', 'Sie sind jetzt anonym angemeldet.');
+        } catch (error) {
+            console.error("Error signing in anonymously:", error);
+            let errorMessage = 'Fehler bei der Anmeldung. Einige Funktionen sind möglicherweise eingeschränkt.';
+            if (error.code === 'auth/admin-restricted-operation') {
+                errorMessage = 'Fehler bei der Anmeldung: Anonyme Authentifizierung ist nicht aktiviert. Bitte aktivieren Sie die anonyme Authentifizierung in Ihrer Firebase-Konsole (Authentifizierung -> Anmeldemethode).';
+            } else {
+                errorMessage += ` Details: ${error.message}`;
+            }
+            showMessageModal('Anmeldefehler', errorMessage);
+        }
+    }
+}
+
+// NEW: Function to open the upload modal
+function openUploadModal() {
+    if (!currentUserId) {
+        showMessageModal('Anmeldung erforderlich', 'Bitte melden Sie sich an, um Ihr Projekt hochzuladen.');
+        return;
+    }
+    // Pre-fill fields if project metadata exists
+    document.getElementById('uploadTitle').value = projectTitle;
+    document.getElementById('uploadDescription').value = projectDescription;
+    document.getElementById('uploadTags').value = projectTags.join(', ');
+    document.querySelector(`input[name="uploadVisibility"][value="${projectVisibility}"]`).checked = true;
+
+    document.getElementById('uploadProjectModal').style.display = 'flex';
+}
+
+// NEW: Function to handle project upload to Firestore
+async function uploadProjectToHub() {
+    if (!currentUserId) {
+        showMessageModal('Fehler', 'Nicht angemeldet. Bitte melden Sie sich an, um hochzuladen.');
+        return;
+    }
+
+    const title = document.getElementById('uploadTitle').value.trim();
+    const description = document.getElementById('uploadDescription').value.trim();
+    const tags = document.getElementById('uploadTags').value.split(',').map(tag => tag.trim()).filter(tag => tag !== '');
+    const visibility = document.querySelector('input[name="uploadVisibility"]:checked').value;
+
+    if (!title) {
+        showMessageModal('Fehler', 'Bitte geben Sie einen Titel für Ihr Projekt ein.');
+        return;
+    }
+
+    showMessageModal('Lade hoch...', 'Ihr Projekt wird hochgeladen. Bitte warten Sie...');
+
+    try {
+        // Get the current project data using the existing saveJSON structure
+        const projectData = (function() {
+            const data = {};
+            voxels.forEach((value, k) => {
+                const [gx, gy, gz] = parseKey(k);
+                data[`${gx},${gy},${gz}`] = value.color;
+            });
+
+            const settings = {
+                gridSize: GRID,
+                cameraPosition: cam.position.toArray(),
+                cameraQuaternion: cam.quaternion.toArray(),
+                activeDrawingLevel: activeDrawingLevel,
+                currentDrawingAxis: currentDrawingAxis,
+                currentColor: currentColor,
+                presetColors: presetColors,
+                activePresetIndex: activePresetIndex,
+                moveSpeed: moveSpeed,
+                currentBlockSize: currentBlockSize,
+                dynamicBlockDim: dynamicBlockDim,
+                useDynamicBlockDim: useDynamicBlockDim,
+                templateImageData: templateImageData
+            };
+
+            return {
+                title: title,
+                description: description,
+                tags: tags,
+                visibility: visibility,
+                remixOf: projectRemixOf, // Keep existing remixOf
+                sourceJsonUrl: projectSourceJsonUrl, // Keep existing sourceJsonUrl
+                voxels: data,
+                settings: settings
+            };
+        })();
+
+        // Add to Firestore
+        const modelsCollectionRef = window.firebase.collection(db, "models");
+        const docRef = await window.firebase.addDoc(modelsCollectionRef, {
+            userId: currentUserId,
+            timestamp: window.firebase.serverTimestamp(),
+            projectData: projectData
+        });
+
+        // Update local project metadata with the new title, description, tags, visibility
+        projectTitle = title;
+        projectDescription = description;
+        projectTags = tags;
+        projectVisibility = visibility;
+
+        showMessageModal('Erfolgreich hochgeladen', `Ihr Projekt wurde erfolgreich hochgeladen! ID: ${docRef.id}`);
+        // Optionally, redirect to the hub with the new model ID
+        // window.location.href = `https://hub.voxelshaper.com?modelId=${docRef.id}`; // Example
+    } catch (error) {
+        console.error("Error uploading project:", error);
+        showMessageModal('Fehler beim Hochladen', `Fehler: ${error.message}`);
+    } finally {
+        document.getElementById('uploadProjectModal').style.display = 'none';
+    }
+}
+
 
 /* ---------- Initialisierung bei Fensterladung ---------- */
 window.onload = async function() { // Made async to await Firebase auth
@@ -2422,7 +2707,7 @@ window.onload = async function() { // Made async to await Firebase auth
 
     // Renderer
     ren = new THREE.WebGLRenderer({ canvas: cvs, antialias: true });
-    ren.setSize(containerDiv.clientWidth, containerDiv.clientWidth * 0.75); // Set initial size, aspect ratio 4:3
+    ren.setSize(containerDiv.clientWidth, containerDiv.clientHeight); // Use containerDiv.clientHeight for full height
     // NEW: Set pixel ratio based on device and mobile flag
     isMobile = window.matchMedia('(max-width: 768px)').matches;
     if (isMobile) {
@@ -2774,10 +3059,29 @@ window.onload = async function() { // Made async to await Firebase auth
     const firebaseConfig = window.firebaseConfig; // Use the globally exposed config
 
     const app = window.firebase.initializeApp(firebaseConfig);
-    const auth = window.firebase.getAuth(app);
-    const db = window.firebase.getFirestore(app);
+    auth = window.firebase.getAuth(app); // Assign to global auth
+    db = window.firebase.getFirestore(app); // Assign to global db
 
-    // Firebase authentication
+    const loginLogoutBtn = document.getElementById('loginLogoutBtn');
+    const uploadToHubBtn = document.getElementById('uploadToHubBtn');
+    const userIdDisplay = document.getElementById('userIdDisplay');
+
+    // Firebase authentication state observer
+    window.firebase.onAuthStateChanged(auth, (user) => {
+        if (user) {
+            currentUserId = user.uid;
+            loginLogoutBtn.textContent = 'Abmelden';
+            userIdDisplay.textContent = `Angemeldet als: ${user.uid}`;
+            uploadToHubBtn.style.display = 'inline-block'; // Show upload button
+        } else {
+            currentUserId = null;
+            loginLogoutBtn.textContent = 'Anmelden';
+            userIdDisplay.textContent = '';
+            uploadToHubBtn.style.display = 'none'; // Hide upload button
+        }
+    });
+
+    // Initial Firebase authentication attempt
     try {
         const initialAuthToken = typeof __initial_auth_token !== 'undefined' ? __initial_auth_token : null;
         if (initialAuthToken) {
@@ -2799,6 +3103,16 @@ window.onload = async function() { // Made async to await Firebase auth
         }
         showMessageModal('Anmeldefehler', errorMessage);
     }
+
+    // Event listeners for new buttons
+    loginLogoutBtn.addEventListener('click', loginLogout);
+    uploadToHubBtn.addEventListener('click', openUploadModal);
+
+    // Upload modal event listeners
+    document.getElementById('uploadConfirmBtn').addEventListener('click', uploadProjectToHub);
+    document.getElementById('uploadCancelBtn').addEventListener('click', () => {
+        document.getElementById('uploadProjectModal').style.display = 'none';
+    });
 
 
     // Function to load project from modelId
@@ -3289,6 +3603,7 @@ function onPointerMove(e) {
                         if (!currentDragVoxels.has(globalKey)) {
                             const hasVoxelBeforeDrag = voxelsAtDragStart.has(globalKey);
                             const initialColor = hasVoxelBeforeDrag ? voxelsAtDragStart.get(globalKey).color : null;
+
                             performVoxelModification(voxel.gx, voxel.gy, voxel.gz, currentMode, currentColor); // Perform for 1x1x1
                             currentDragVoxels.set(globalKey, { color: currentColor, initialColor: initialColor });
                         } else {
