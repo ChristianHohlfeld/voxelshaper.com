@@ -3338,13 +3338,13 @@ window.onload = async function() { // Made async to await Firebase auth
             loginLogoutBtn.textContent = 'Abmelden';
             userIdDisplay.textContent = `Angemeldet als: ${user.uid.substring(0, 8)}...`; // Show truncated ID
             uploadToHubBtn.style.display = 'inline-block'; // Show upload button
-            showToast('Angemeldet', `Willkommen, ${user.uid.substring(0, 8)}...`, 'success');
+            // showToast('Angemeldet', `Willkommen, ${user.uid.substring(0, 8)}...`, 'success'); // Only show on initial login, not every state change
         } else {
             currentUserId = null;
             loginLogoutBtn.textContent = 'Anmelden';
             userIdDisplay.textContent = '';
             uploadToHubBtn.style.display = 'none'; // Hide upload button
-            showToast('Abgemeldet', 'Sie sind jetzt abgemeldet.', 'info');
+            // showToast('Abgemeldet', 'Sie sind jetzt abgemeldet.', 'info'); // Only show on initial logout
         }
     });
 
@@ -3728,33 +3728,15 @@ function onPointerDown(e) {
         if (isControlDragging && currentMode === Modes.ADD) {
             // For Control-drag (stacking): initialDragVoxelCoords is the start point for stacking.
             // We need to project the mouse ray onto a vertical line from initialDragVoxelCoords.
-            if (rawTargetVoxel && initialDragVoxelCoords) {
-                const raycasterForStacking = new THREE.Raycaster();
-                raycasterForStacking.setFromCamera(mouse, cam); // Use the same mouse/camera as before
-
-                const stackingLineOrigin = new THREE.Vector3(initialDragVoxelCoords.gx * VS + HALF, 0, initialDragVoxelCoords.gz * VS + HALF);
-                const stackingLineDirection = new THREE.Vector3(0, 1, 0); // Vertical line
-
-                const closestPoint = raycasterForStacking.ray.closestPointToPoint(stackingLineOrigin.add(stackingLineDirection.multiplyScalar(GRID * VS / 2))); // Project onto a point on the line, then clamp
-                
-                // Re-calculate closest point on the actual line segment
-                const startPointWorld = new THREE.Vector3(initialDragVoxelCoords.gx * VS + HALF, 0 * VS + HALF, initialDragVoxelCoords.gz * VS + HALF);
-                const endPointWorld = new THREE.Vector3(initialDragVoxelCoords.gx * VS + HALF, (GRID -1) * VS + HALF, initialDragVoxelCoords.gz * VS + HALF);
-                const line = new THREE.Line3(startPointWorld, endPointWorld);
-                const pointOnLine = new THREE.Vector3();
-                line.closestPointToPoint(raycasterForStacking.ray.origin, true, pointOnLine); // Project ray origin onto the line
-                
-                // Now, project the intersection point onto the Y-axis of the initial voxel's column
-                const projectedY = Math.floor(pointOnLine.y / VS);
-                
+            if (rawTargetVoxel) { // Only proceed if a target voxel is found
                 initialDragVoxelCoords = {
-                    gx: initialDragVoxelCoords.gx,
-                    gy: projectedY, // Only Y changes
-                    gz: initialDragVoxelCoords.gz
+                    gx: rawTargetVoxel.gx,
+                    gy: rawTargetVoxel.gy,
+                    gz: rawTargetVoxel.gz
                 };
                 dragAxisLock = 'y'; // Explicitly lock to Y-axis for stacking
             } else {
-                // If no rawTargetVoxel, or initialDragVoxelCoords not set, cannot stack.
+                // If no rawTargetVoxel, cannot stack.
                 pointerIsDown = false;
                 initialClickPos = null;
                 initialDragVoxelCoords = null;
@@ -3885,8 +3867,10 @@ function onPointerMove(e) {
                         snappedTargetVoxel.gy = initialDragVoxelCoords.gy;
                         snappedTargetVoxel.gz = initialDragVoxelCoords.gz;
                     } else if (dragAxisLock === 'y') {
+                        // For control-drag (stacking), Y is derived from mouse, X/Z are fixed
                         snappedTargetVoxel.gx = initialDragVoxelCoords.gx;
                         snappedTargetVoxel.gz = initialDragVoxelCoords.gz;
+                        snappedTargetVoxel.gy = rawCurrentTargetVoxel.gy; // Use raw Y for stacking
                     } else if (dragAxisLock === 'z') {
                         snappedTargetVoxel.gx = initialDragVoxelCoords.gx;
                         snappedTargetVoxel.gy = initialDragVoxelCoords.gy;
@@ -4070,21 +4054,9 @@ function onPointerMove(e) {
                 } else if (dragAxisLock === 'y') {
                     // For control-drag, we need to ensure the Y-coordinate is derived from the mouse's vertical position
                     // relative to the initial click, while X and Z remain fixed to initialDragVoxelCoords.
-                    const raycasterForStacking = new THREE.Raycaster();
-                    const mouseForStacking = new THREE.Vector2(((e.clientX - rect.left) / rect.width) * 2 - 1,
-                                                            -((e.clientY - rect.top) / rect.height) * 2 + 1);
-                    raycasterForStacking.setFromCamera(mouseForStacking, cam);
-
-                    const startPointWorld = new THREE.Vector3(initialDragVoxelCoords.gx * VS + HALF, 0 * VS + HALF, initialDragVoxelCoords.gz * VS + HALF);
-                    const endPointWorld = new THREE.Vector3(initialDragVoxelCoords.gx * VS + HALF, (GRID -1) * VS + HALF, initialDragVoxelCoords.gz * VS + HALF);
-                    const line = new THREE.Line3(startPointWorld, endPointWorld);
-                    const pointOnLine = new THREE.Vector3();
-                    line.closestPointToPoint(raycasterForStacking.ray.origin, true, pointOnLine); // Project ray origin onto the line
-                    
                     snappedTargetVoxel.gx = initialDragVoxelCoords.gx;
-                    snappedTargetVoxel.gy = Math.floor(pointOnLine.y / VS); // Derive Y from mouse position
                     snappedTargetVoxel.gz = initialDragVoxelCoords.gz;
-
+                    snappedTargetVoxel.gy = rawCurrentTargetVoxel.gy; // Use raw Y for stacking
                 } else if (dragAxisLock === 'z') {
                     snappedTargetVoxel.gx = initialDragVoxelCoords.gx;
                     snappedTargetVoxel.gy = initialDragVoxelCoords.gy;
@@ -4241,21 +4213,9 @@ function onPointerUp(e) {
                         snappedFinalTargetVoxel.gy = initialDragVoxelCoords.gy;
                         snappedFinalTargetVoxel.gz = initialDragVoxelCoords.gz;
                     } else if (dragAxisLock === 'y') {
-                        const raycasterForStacking = new THREE.Raycaster();
-                        const mouseForStacking = new THREE.Vector2(((e.clientX - rect.left) / rect.width) * 2 - 1,
-                                                                -((e.clientY - rect.top) / rect.height) * 2 + 1);
-                        raycasterForStacking.setFromCamera(mouseForStacking, cam);
-
-                        const startPointWorld = new THREE.Vector3(initialDragVoxelCoords.gx * VS + HALF, 0 * VS + HALF, initialDragVoxelCoords.gz * VS + HALF);
-                        const endPointWorld = new THREE.Vector3(initialDragVoxelCoords.gx * VS + HALF, (GRID -1) * VS + HALF, initialDragVoxelCoords.gz * VS + HALF);
-                        const line = new THREE.Line3(startPointWorld, endPointWorld);
-                        const pointOnLine = new THREE.Vector3();
-                        line.closestPointToPoint(raycasterForStacking.ray.origin, true, pointOnLine);
-                        
                         snappedFinalTargetVoxel.gx = initialDragVoxelCoords.gx;
-                        snappedFinalTargetVoxel.gy = Math.floor(pointOnLine.y / VS);
                         snappedFinalTargetVoxel.gz = initialDragVoxelCoords.gz;
-
+                        snappedFinalTargetVoxel.gy = rawFinalTargetVoxel.gy; // Use raw Y for stacking
                     } else if (dragAxisLock === 'z') {
                         snappedFinalTargetVoxel.gx = initialDragVoxelCoords.gx;
                         snappedFinalTargetVoxel.gy = initialDragVoxelCoords.gy;
@@ -4348,21 +4308,9 @@ function onPointerUp(e) {
                         snappedFinalTargetVoxel.gy = initialDragVoxelCoords.gy;
                         snappedFinalTargetVoxel.gz = initialDragVoxelCoords.gz;
                     } else if (dragAxisLock === 'y') {
-                        const raycasterForStacking = new THREE.Raycaster();
-                        const mouseForStacking = new THREE.Vector2(((e.clientX - rect.left) / rect.width) * 2 - 1,
-                                                                -((e.clientY - rect.top) / rect.height) * 2 + 1);
-                        raycasterForStacking.setFromCamera(mouseForStacking, cam);
-
-                        const startPointWorld = new THREE.Vector3(initialDragVoxelCoords.gx * VS + HALF, 0 * VS + HALF, initialDragVoxelCoords.gz * VS + HALF);
-                        const endPointWorld = new THREE.Vector3(initialDragVoxelCoords.gx * VS + HALF, (GRID -1) * VS + HALF, initialDragVoxelCoords.gz * VS + HALF);
-                        const line = new THREE.Line3(startPointWorld, endPointWorld);
-                        const pointOnLine = new THREE.Vector3();
-                        line.closestPointToPoint(raycasterForStacking.ray.origin, true, pointOnLine);
-                        
                         snappedFinalTargetVoxel.gx = initialDragVoxelCoords.gx;
-                        snappedFinalTargetVoxel.gy = Math.floor(pointOnLine.y / VS);
                         snappedFinalTargetVoxel.gz = initialDragVoxelCoords.gz;
-
+                        snappedFinalTargetVoxel.gy = rawFinalTargetVoxel.gy; // Use raw Y for stacking
                     } else if (dragAxisLock === 'z') {
                         snappedFinalTargetVoxel.gx = initialDragVoxelCoords.gx;
                         snappedFinalTargetVoxel.gy = initialDragVoxelCoords.gy;
@@ -4451,21 +4399,9 @@ function onPointerLeave(e) {
                         snappedFinalTargetVoxel.gy = initialDragVoxelCoords.gy;
                         snappedFinalTargetVoxel.gz = initialDragVoxelCoords.gz;
                     } else if (dragAxisLock === 'y') {
-                        const raycasterForStacking = new THREE.Raycaster();
-                        const mouseForStacking = new THREE.Vector2(((e.clientX - rect.left) / rect.width) * 2 - 1,
-                                                                -((e.clientY - rect.top) / rect.height) * 2 + 1);
-                        raycasterForStacking.setFromCamera(mouseForStacking, cam);
-
-                        const startPointWorld = new THREE.Vector3(initialDragVoxelCoords.gx * VS + HALF, 0 * VS + HALF, initialDragVoxelCoords.gz * VS + HALF);
-                        const endPointWorld = new THREE.Vector3(initialDragVoxelCoords.gx * VS + HALF, (GRID -1) * VS + HALF, initialDragVoxelCoords.gz * VS + HALF);
-                        const line = new THREE.Line3(startPointWorld, endPointWorld);
-                        const pointOnLine = new THREE.Vector3();
-                        line.closestPointToPoint(raycasterForStacking.ray.origin, true, pointOnLine);
-                        
                         snappedFinalTargetVoxel.gx = initialDragVoxelCoords.gx;
-                        snappedFinalTargetVoxel.gy = Math.floor(pointOnLine.y / VS);
                         snappedFinalTargetVoxel.gz = initialDragVoxelCoords.gz;
-
+                        snappedFinalTargetVoxel.gy = rawFinalTargetVoxel.gy; // Use raw Y for stacking
                     } else if (dragAxisLock === 'z') {
                         snappedFinalTargetVoxel.gx = initialDragVoxelCoords.gx;
                         snappedFinalTargetVoxel.gy = initialDragVoxelCoords.gy;
@@ -4664,20 +4600,6 @@ function setDynamicBlockDimensions() {
     }
 }
 
-/**
- * NEW: Bresenham's 3D Line Algorithm to get all voxels on a line segment.
- * This function will now return an Array of unique voxel objects.
- * It also handles the block dimensions by expanding each 1x1x1 voxel into the specified block size.
- *
- * @param {object} start - {gx, gy, gz} starting voxel coordinates (base corner).
- * @param {object} end - {gx, gy, gz} ending voxel coordinates (base corner).
- * @param {string} mode - Current mode (ADD, DELETE, DRAW).
- * @param {string} color - Current color.
- * @param {number} dimX - Block dimension in X.
- * @param {number} dimY - Block dimension in Y.
- * @param {number} dimZ - Block dimension in Z.
- * @returns {Array<object>} - Array of {gx, gy, gz, color} objects representing the voxels.
- */
 function getVoxelsOnLine(start, end, mode, color, dimX, dimY, dimZ) {
     if (!Number.isFinite(start.gx) || !Number.isFinite(start.gy) || !Number.isFinite(start.gz) ||
         !Number.isFinite(end.gx) || !Number.isFinite(end.gy) || !Number.isFinite(end.gz)) {
