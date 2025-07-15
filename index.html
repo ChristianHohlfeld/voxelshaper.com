@@ -195,6 +195,9 @@ input[type="color"].color-preset-box::-moz-color-swatch {
     left: 0;
     z-index: 1000; /* Ensure it's on top */
     background-color: transparent; /* Ensure dialog itself is transparent */
+    display: flex; /* Added for centering */
+    align-items: center; /* Added for centering */
+    justify-content: center; /* Added for centering */
 }
 
 /* Styles for the modal backdrop */
@@ -204,7 +207,7 @@ input[type="color"].color-preset-box::-moz-color-swatch {
 
 .modal-content {
     background-color: #3a3f47;
-    margin: auto; /* Keep margin auto for centering if dialog is not flex */
+    /* margin: auto; Removed as flexbox handles centering */
     padding: 30px;
     border-radius: 8px;
     text-align: center;
@@ -1453,7 +1456,7 @@ function handleGesture() {
     if (pointers.length === 1 && gestureState.type === 'rotate') {
         const p = pointers[0];
         const dx = p.x - gestureState.lastMid.x;
-        const dy = p.y - p.y; // This line seems to be a copy-paste error, should be p.y - gestureState.lastMid.y
+        const dy = p.y - gestureState.lastMid.y; 
 
         euler.y -= dx * ROTATE_SPEED_TOUCH;
         euler.x += dy * ROTATE_SPEED_TOUCH;
@@ -2577,7 +2580,7 @@ function loadJSON(event) {
             loadProjectData(projectData);
         } catch (error) {
             console.error('Error parsing file JSON:', error);
-            showToast('Fehler', 'Fehler beim Parsen der Datei. Stellen Sie sicher, dass es sich um eine gültige JSON-Datei handelt. Fehler: ' + error.message, 'error');
+            showToast('Fehler', 'Fehler beim Parsen der Datei. Stellen Sie sicher, dass es sich um eine gültige Voxel-Projekt-JSON-Datei handelt. Fehler: ' + error.message, 'error');
             resetToDefaultProject();
         }
     };
@@ -3478,20 +3481,40 @@ window.onload = async function() {
                     }
                 });
 
-                // Attempt to sign in with custom token if available
+                // Attempt to sign in with custom token if available, otherwise anonymously
                 if (typeof __initial_auth_token !== 'undefined' && __initial_auth_token) {
                     try {
                         console.log("VoxelShaper: Attempting sign-in with custom token.");
                         await window.firebase.signInWithCustomToken(auth, __initial_auth_token);
                         console.log("Signed in with custom token.");
                     } catch (error) {
-                        console.warn("Failed to sign in with custom token:", error);
-                        // No anonymous sign-in fallback here, as per user's request.
-                        // If public data access is needed without auth, Firestore rules must allow it.
+                        console.warn("Failed to sign in with custom token, attempting anonymous:", error);
+                        try {
+                            console.log("VoxelShaper: Attempting anonymous sign-in.");
+                            await window.firebase.signInAnonymously(auth);
+                            console.log("Signed in anonymously.");
+                        } catch (anonError) {
+                            console.error("Failed to sign in anonymously:", anonError);
+                            if (anonError.code === 'auth/admin-restricted-operation') {
+                                showToast('Anmeldefehler', 'Anonyme Anmeldung ist in den Firebase-Einstellungen nicht aktiviert. Bitte aktivieren Sie sie in der Firebase-Konsole unter "Authentication" -> "Sign-in method".', 'error', 10000);
+                            } else {
+                                showToast('Anmeldefehler', `Anonyme Anmeldung fehlgeschlagen: ${anonError.message}`, 'error', 5000);
+                            }
+                        }
                     }
                 } else {
-                    console.log("VoxelShaper: No initial auth token provided. Proceeding without explicit sign-in.");
-                    // No anonymous sign-in fallback here, as per user's request.
+                    try {
+                        console.log("VoxelShaper: Attempting anonymous sign-in (no initial auth token).");
+                        await window.firebase.signInAnonymously(auth);
+                        console.log("Signed in anonymously (no initial auth token).");
+                    } catch (anonError) {
+                        console.error("Failed to sign in anonymously:", anonError);
+                        if (anonError.code === 'auth/admin-restricted-operation') {
+                            showToast('Anmeldefehler', 'Anonyme Anmeldung ist in den Firebase-Einstellungen nicht aktiviert. Bitte aktivieren Sie sie in der Firebase-Konsole unter "Authentication" -> "Sign-in method".', 'error', 10000);
+                        } else {
+                            showToast('Anmeldefehler', `Anonyme Anmeldung fehlgeschlagen: ${anonError.message}`, 'error', 5000);
+                        }
+                    }
                 }
 
                 // Check URL parameters for project loading (modelId or projectJson)
@@ -3546,6 +3569,16 @@ window.onload = async function() {
 
         // Correct event listener for auth modal close button
         document.getElementById('authModalCloseBtn').addEventListener('click', closeAuthModal);
+
+        // Event listeners for auth modal provider buttons
+        document.getElementById('signInGoogleBtn').addEventListener('click', window.signInWithGoogle);
+        document.getElementById('signInGithubBtn').addEventListener('click', window.signInWithGithub);
+        document.getElementById('emailSignInBtn').addEventListener('click', window.signInEmailPassword);
+        document.getElementById('emailSignUpBtn').addEventListener('click', window.signUpEmailPassword);
+        document.getElementById('showEmailLoginFormBtn').addEventListener('click', () => {
+            document.getElementById('emailLoginForm').style.display = 'block';
+        });
+
 
         // Event listener for upload modal backdrop click
         document.getElementById('uploadProjectModal').addEventListener('click', (e) => {
