@@ -828,10 +828,12 @@ input[type="color"].color-preset-box::-moz-color-swatch {
         </div>
 
         <div id="emailLoginForm" class="email-login-form" style="display:none;">
-            <input type="email" id="emailInput" placeholder="E-Mail" autocomplete="email">
-            <input type="password" id="passwordInput" placeholder="Passwort" autocomplete="current-password">
-            <button id="emailSignInBtn">Anmelden</button>
-            <button id="emailSignUpBtn" style="margin-top: 10px;">Registrieren</button>
+            <form id="emailAuthForm"> <!-- Added form tag -->
+                <input type="email" id="emailInput" placeholder="E-Mail" autocomplete="email">
+                <input type="password" id="passwordInput" placeholder="Passwort" autocomplete="current-password">
+                <button type="submit" id="emailSignInBtn">Anmelden</button> <!-- Changed to type="submit" -->
+                <button type="button" id="emailSignUpBtn" style="margin-top: 10px;">Registrieren</button> <!-- Changed to type="button" -->
+            </form>
         </div>
 
         <div class="close-button-container">
@@ -892,17 +894,15 @@ input[type="color"].color-preset-box::-moz-color-swatch {
     };
 
     // Firebase configuration from hub.html
-
-        // Your web app's Firebase configuration
-        const firebaseConfig = {
-            apiKey: "AIzaSyB9-mpyAu9W6oiVtB0fYG8E6YFvTAsjtAA",
-            authDomain: "voxelshaper.firebaseapp.com", // Changed to the main domain for cross-domain persistence
-            projectId: "voxelshaper",
-            storageBucket: "voxelshaper.firebasestorage.app", 
-            messagingSenderId: "1053689247573",
-            appId: "1:1053689247573:web:f7960c7f8c2e8849e8e1dc",
-            measurementId: "G-QJ5CNKZ5DR"
-        };
+    const firebaseConfig = {
+        apiKey: "AIzaSyB9-mpyAu9W6oiVtB0fYG8E6YFvTAsjtAA",
+        authDomain: "voxelshaper.firebaseapp.com",
+        projectId: "voxelshaper",
+        storageBucket: "voxelshaper.firebasestorage.app", 
+        messagingSenderId: "1053689247573",
+        appId: "1:1053689247573:web:f7960c7f8c2e8849e8e1dc",
+        measurementId: "G-QJ5CNKZ5DR"
+    };
 
     // Expose firebaseConfig to the global scope
     window.firebaseConfig = firebaseConfig;
@@ -1292,6 +1292,7 @@ let projectVisibility = 'public'; // Default visibility
 let auth;
 let db;
 let currentUserId = null; // Stores the Firebase User ID
+let currentUser = null; // Declare currentUser here for global access
 
 /* ---------- Chunking System Classes and Helpers ---------- */
 
@@ -1482,7 +1483,7 @@ function handleGesture() {
     if (pointers.length === 1 && gestureState.type === 'rotate') {
         const p = pointers[0];
         const dx = p.x - gestureState.lastMid.x;
-        const dy = p.y - gestureState.lastMid.y; // Corrected this line
+        const dy = p.y - p.y; // Corrected this line
 
         euler.y -= dx * ROTATE_SPEED_TOUCH;
         euler.x += dy * ROTATE_SPEED_TOUCH;
@@ -3398,21 +3399,22 @@ window.onload = async function() { // Made async to await Firebase auth
     const loginLogoutBtn = document.getElementById('loginLogoutBtn');
     const uploadToHubBtn = document.getElementById('uploadToHubBtn');
     const userIdDisplay = document.getElementById('userIdDisplay');
-  let currentUser = null;
+  
 
 // Firebase authentication with enforced local persistence for subdomain session sharing
-firebase.setPersistence(auth, firebase.internals.Auth.Persistence.LOCAL)
+// Corrected line: Use browserLocalPersistence directly
+window.firebase.setPersistence(auth, window.firebase.browserLocalPersistence)
   .then(() => {
     window.firebase.onAuthStateChanged(auth, (user) => {
       if (user) {
         currentUserId = user.uid;
-        currentUser = user;
+        currentUser = user; // Assign to global currentUser
         loginLogoutBtn.textContent = 'Abmelden';
         userIdDisplay.textContent = `Angemeldet als: ${user.uid.substring(0, 8)}...`;
         uploadToHubBtn.style.display = 'inline-block';
       } else {
         currentUserId = null;
-        currentUser = null;
+        currentUser = null; // Clear global currentUser
         loginLogoutBtn.textContent = 'Anmelden';
         userIdDisplay.textContent = '';
         uploadToHubBtn.style.display = 'none';
@@ -3464,7 +3466,12 @@ firebase.setPersistence(auth, firebase.internals.Auth.Persistence.LOCAL)
     document.getElementById('showEmailLoginFormBtn').addEventListener('click', () => {
         document.getElementById('emailLoginForm').style.display = 'block';
     });
-    document.getElementById('emailSignInBtn').addEventListener('click', signInEmailPassword);
+    
+    // Event listener for the email sign-in form submission
+    document.getElementById('emailAuthForm').addEventListener('submit', (e) => {
+        e.preventDefault(); // Prevent default form submission
+        signInEmailPassword();
+    });
     document.getElementById('emailSignUpBtn').addEventListener('click', signUpEmailPassword);
 
 
