@@ -2756,7 +2756,9 @@ window.onload = async function() { // Made async to await Firebase auth
     updateBlockSizeButtonsActiveState();
 
     // --- Firebase Initialization and Deep Link Handling ---
+    // Use the Firebase configuration provided by the environment
     const firebaseConfig = JSON.parse(typeof __firebase_config !== 'undefined' ? __firebase_config : '{}');
+
     const app = window.firebase.initializeApp(firebaseConfig);
     const auth = window.firebase.getAuth(app);
     const db = window.firebase.getFirestore(app);
@@ -2768,12 +2770,23 @@ window.onload = async function() { // Made async to await Firebase auth
             console.log("Firebase authenticated with custom token.");
         } catch (error) {
             console.error("Error signing in with custom token:", error);
-            showMessageModal('Anmeldefehler', 'Fehler bei der automatischen Anmeldung. Einige Funktionen sind möglicherweise eingeschränkt.');
-            await window.firebase.signInAnonymously(auth); // Fallback to anonymous
+            // Fallback to anonymous only if the custom token fails
+            try {
+                await window.firebase.signInAnonymously(auth);
+                console.log("Firebase authenticated anonymously after custom token failure.");
+            } catch (anonError) {
+                console.error("Error signing in anonymously:", anonError);
+                showMessageModal('Anmeldefehler', 'Fehler bei der automatischen Anmeldung. Einige Funktionen sind möglicherweise eingeschränkt. Fehler: ' + anonError.message);
+            }
         }
     } else {
-        await window.firebase.signInAnonymously(auth);
-        console.log("Firebase authenticated anonymously.");
+        try {
+            await window.firebase.signInAnonymously(auth);
+            console.log("Firebase authenticated anonymously (no custom token provided).");
+        } catch (anonError) {
+            console.error("Error signing in anonymously:", anonError);
+            showMessageModal('Anmeldefehler', 'Fehler bei der automatischen Anmeldung. Einige Funktionen sind möglicherweise eingeschränkt. Fehler: ' + anonError.message);
+        }
     }
 
 
@@ -2781,6 +2794,17 @@ window.onload = async function() { // Made async to await Firebase auth
     async function loadProjectFromModelId(modelId) {
         showMessageModal('Lade Projekt', 'Lade Modell von VoxelShaper Hub...');
         try {
+            // Ensure auth is ready before attempting Firestore operations
+            // This is a simplified check, a more robust solution would use onAuthStateChanged
+            if (!auth.currentUser) {
+                console.warn("Firebase authentication not ready, waiting...");
+                // Add a small delay or a more robust auth state listener if needed
+                await new Promise(resolve => setTimeout(resolve, 500)); 
+                if (!auth.currentUser) {
+                     throw new Error("Firebase authentication failed to initialize.");
+                }
+            }
+
             const docRef = window.firebase.doc(db, "models", modelId);
             const docSnap = await window.firebase.getDoc(docRef);
 
@@ -3418,7 +3442,7 @@ function onPointerMove(e) {
                 const voxelsToDrawThisFrame = getVoxelsOnLine(initialDragVoxelCoords, finalTargetVoxelForDrawing, currentMode, currentColor, dimX, dimY, dimZ);
                 const currentFrameVoxelsSet = new Set(voxelsToDrawThisFrame.map(v => key(v.gx, v.gy, v.gz)));
 
-                // Identify voxels to remove (were in previousFrameDragVoxels but not in currentFrameVoxelsSet)
+                    // Identify voxels to remove (were in previousFrameDragVoxels but not in currentFrameVoxelsSet)
                 for (const globalKey of previousFrameDragVoxels) {
                     if (!currentFrameVoxelsSet.has(globalKey)) {
                         const [gx, gy, gz] = parseKey(globalKey);
