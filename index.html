@@ -2865,68 +2865,88 @@ async function uploadProjectToHub() {
         return;
     }
 
-    showToast('Lade hoch...', 'Ihr Projekt wird hochgeladen. Bitte warten Sie...', 'info', 5000); // Longer toast for upload
+    showToast('Lade hoch...', 'Ihr Projekt wird hochgeladen. Bitte warten Sie...', 'info', 5000);
 
     try {
-        // Get the current project data using the existing saveJSON structure
-        const projectData = (function() {
-            const data = {};
-            voxels.forEach((value, k) => {
-                const [gx, gy, gz] = parseKey(k);
-                data[`${gx},${gy},${gz}`] = value.color;
-            });
-
-            const settings = {
-                gridSize: GRID,
-                cameraPosition: cam.position.toArray(),
-                cameraQuaternion: cam.quaternion.toArray(),
-                activeDrawingLevel: activeDrawingLevel,
-                currentDrawingAxis: currentDrawingAxis,
-                currentColor: currentColor,
-                presetColors: presetColors,
-                activePresetIndex: activePresetIndex,
-                moveSpeed: moveSpeed,
-                currentBlockSize: currentBlockSize,
-                dynamicBlockDim: dynamicBlockDim,
-                useDynamicBlockDim: useDynamicBlockDim,
-                templateImageData: templateImageData
-            };
-
-            return {
-                title: title,
-                description: description,
-                tags: tags,
-                visibility: visibility,
-                remixOf: projectRemixOf, // Keep existing remixOf
-                sourceJsonUrl: projectSourceJsonUrl, // Keep existing sourceJsonUrl
-                voxels: data,
-                settings: settings
-            };
-        })();
-
-        // Add to Firestore
-        const modelsCollectionRef = window.firebase.collection(db, "models");
-        const docRef = await window.firebase.addDoc(modelsCollectionRef, {
-            userId: currentUserId,
-            timestamp: window.firebase.serverTimestamp(),
-            projectData: projectData
+        // Generate voxel map
+        const voxelMap = {};
+        voxels.forEach((value, k) => {
+            const [gx, gy, gz] = parseKey(k);
+            voxelMap[`${gx},${gy},${gz}`] = value.color;
         });
 
-        // Update local project metadata with the new title, description, tags, visibility
+        const settings = {
+            gridSize: GRID,
+            cameraPosition: cam.position.toArray(),
+            cameraQuaternion: cam.quaternion.toArray(),
+            activeDrawingLevel: activeDrawingLevel,
+            currentDrawingAxis: currentDrawingAxis,
+            currentColor: currentColor,
+            presetColors: presetColors,
+            activePresetIndex: activePresetIndex,
+            moveSpeed: moveSpeed,
+            currentBlockSize: currentBlockSize,
+            dynamicBlockDim: dynamicBlockDim,
+            useDynamicBlockDim: useDynamicBlockDim,
+            templateImageData: templateImageData
+        };
+
+        // Compose the full Firestore document
+        const firestoreDocument = {
+            title: title,
+            description: description,
+            tags: tags,
+            visibility: visibility,
+            remixOf: projectRemixOf || "",
+            sourceJsonUrl: projectSourceJsonUrl || "",
+            fileName: `${title.replace(/\s+/g, "_")}.json`,
+            downloads: 0,
+            rating: 0,
+            ratingCount: 0,
+            verified: false,
+            userId: currentUserId,
+            uploaderEmail: currentUser?.email || "",
+            uploaderUid: currentUser?.uid || "",
+            uploaderPhotoURL: currentUser?.photoURL || "",
+            timestamp: window.firebase.serverTimestamp(),
+
+            projectData: {
+                description: "",
+                remixOf: "",
+                sourceJsonUrl: "",
+                settings: settings,
+                activeDrawingLevel: activeDrawingLevel,
+                activePresetIndex: activePresetIndex,
+                cameraPosition: settings.cameraPosition,
+                cameraQuaternion: settings.cameraQuaternion,
+                currentAnchorPoint: { x: "start", y: "start", z: "start" },
+                currentBlockSize: currentBlockSize,
+                currentColor: currentColor,
+                currentDrawingAxis: currentDrawingAxis,
+                dynamicBlockDim: dynamicBlockDim,
+                gridSize: GRID,
+                moveSpeed: moveSpeed,
+                presetColors: presetColors,
+                templateImageData: null,
+                useDynamicBlockDim: useDynamicBlockDim,
+                voxels: voxelMap
+            }
+        };
+
+        const modelsCollectionRef = window.firebase.collection(db, "models");
+        const docRef = await window.firebase.addDoc(modelsCollectionRef, firestoreDocument);
+
+        // Update local metadata
         projectTitle = title;
         projectDescription = description;
         projectTags = tags;
         projectVisibility = visibility;
-        // If this was a new project, its source is now the hub entry
+
         if (!projectSourceJsonUrl) {
             projectSourceJsonUrl = `https://hub.voxelshaper.com?modelId=${docRef.id}`;
         }
-        // If it was a remix, its remixOf is already set. If it was a new creation, it's now its own source.
-        // For simplicity, we don't set remixOf to its own ID here, as remixOf is for *other* sources.
 
         showToast('Erfolgreich hochgeladen', `Ihr Projekt wurde erfolgreich hochgeladen! ID: ${docRef.id}`, 'success');
-        // Optionally, redirect to the hub with the new model ID
-        // window.location.href = `https://hub.voxelshaper.com?modelId=${docRef.id}`; // Example
     } catch (error) {
         console.error("Error uploading project:", error);
         showToast('Fehler beim Hochladen', `Fehler: ${error.message}`, 'error');
@@ -2934,7 +2954,6 @@ async function uploadProjectToHub() {
         document.getElementById('uploadProjectModal').style.display = 'none';
     }
 }
-
 // NEW: Auth Modal functions
 function openAuthModal() {
     document.getElementById('authModal').style.display = 'flex';
