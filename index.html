@@ -866,7 +866,7 @@ input[type="color"].color-preset-box::-moz-color-swatch {
 <script type="module">
     import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
     import { getAuth,setPersistence,   browserLocalPersistence,  signInAnonymously, signInWithCustomToken, onAuthStateChanged, signOut,
-             GoogleAuthProvider, GithubAuthProvider, signInWithPopup,
+             GoogleAuthProvider, GithubAuthProvider, signInWithRedirect, // Changed to signInWithRedirect
              createUserWithEmailAndPassword, signInWithEmailAndPassword } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
     import { getFirestore, doc, getDoc, collection, addDoc, serverTimestamp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
 
@@ -882,7 +882,7 @@ input[type="color"].color-preset-box::-moz-color-swatch {
         signOut,
         GoogleAuthProvider,
         GithubAuthProvider,
-        signInWithPopup,
+        signInWithRedirect, // Changed to signInWithRedirect
         createUserWithEmailAndPassword,
         signInWithEmailAndPassword,
         getFirestore,
@@ -1372,7 +1372,7 @@ class VoxelChunk {
             const instanceId = this.instancedMesh.count++;
             this.voxels.set(localKey, { color: colorHex, instanceId });
             this.globalToLocalInstanceIdMap.set(globalKey, instanceId); // Map global key to instance ID within this chunk
-
+            
             const localX = gx % this.chunkSize;
             const localY = gy % this.chunkSize;
             const localZ = gz % this.chunkSize;
@@ -2972,9 +2972,10 @@ function closeAuthModal() {
 async function signInWithGoogle() {
     try {
         const provider = new window.firebase.GoogleAuthProvider();
-        await window.firebase.signInWithPopup(auth, provider);
-        showToast('Anmeldung erfolgreich', 'Mit Google angemeldet.', 'success');
-        closeAuthModal();
+        // Store current URL before redirect
+        localStorage.setItem("redirectAfterLogin", window.location.href);
+        await window.firebase.signInWithRedirect(auth, provider); // Changed to signInWithRedirect
+        // Code after this will not execute immediately due to redirect
     } catch (error) {
         console.error("Error signing in with Google:", error);
         showToast('Anmeldefehler', `Google: ${error.message}`, 'error');
@@ -2984,9 +2985,10 @@ async function signInWithGoogle() {
 async function signInWithGithub() {
     try {
         const provider = new window.firebase.GithubAuthProvider();
-        await window.firebase.signInWithPopup(auth, provider);
-        showToast('Anmeldung erfolgreich', 'Mit GitHub angemeldet.', 'success');
-        closeAuthModal();
+        // Store current URL before redirect
+        localStorage.setItem("redirectAfterLogin", window.location.href);
+        await window.firebase.signInWithRedirect(auth, provider); // Changed to signInWithRedirect
+        // Code after this will not execute immediately due to redirect
     } catch (error) {
         console.error("Error signing in with GitHub:", error);
         showToast('Anmeldefehler', `GitHub: ${error.message}`, 'error');
@@ -3606,7 +3608,6 @@ let lastX, lastY;
 let suppressNextTap = false; // NEW: To prevent tap after a drag gesture
 let initialDragVoxelCoords = null; // NEW: Stores the starting voxel for line drawing
 let voxelsAtDragStart = null; // NEW: Snapshot of voxels at the start of a drag operation
-
 
 /**
  * Handles pointer down events (mouse or touch).
