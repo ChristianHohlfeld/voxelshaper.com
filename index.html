@@ -3394,11 +3394,13 @@ window.onload = async function() { // Made async to await Firebase auth
     const loginLogoutBtn = document.getElementById('loginLogoutBtn');
     const uploadToHubBtn = document.getElementById('uploadToHubBtn');
     const userIdDisplay = document.getElementById('userIdDisplay');
+  let currentUser = null;
 
     // Firebase authentication state observer
     window.firebase.onAuthStateChanged(auth, (user) => {
         if (user) {
             currentUserId = user.uid;
+       currentUser = user;
             loginLogoutBtn.textContent = 'Abmelden';
             userIdDisplay.textContent = `Angemeldet als: ${user.uid.substring(0, 8)}...`; // Show truncated ID
             uploadToHubBtn.style.display = 'inline-block'; // Show upload button
