@@ -2678,7 +2678,8 @@ async function uploadProjectToHub() {
             voxelMap[`${gx},${gy},${gz}`] = value.color;
         });
 
-        const settings = {
+        // Create a temporary settings object for Firestore, excluding templateImageData
+        const firestoreSafeSettings = {
             gridSize: GRID,
             cameraPosition: cam.position.toArray(),
             cameraQuaternion: cam.quaternion.toArray(),
@@ -2691,7 +2692,7 @@ async function uploadProjectToHub() {
             currentBlockSize: currentBlockSize,
             dynamicBlockDim: dynamicBlockDim,
             useDynamicBlockDim: useDynamicBlockDim,
-            templateImageData: templateImageData
+            templateImageData: null // Explicitly set to null for Firestore upload
         };
 
         const firestoreDocument = {
@@ -2713,14 +2714,15 @@ async function uploadProjectToHub() {
             timestamp: window.firebase.serverTimestamp(),
 
             projectData: {
-                description: "",
-                remixOf: "",
-                sourceJsonUrl: "",
-                settings: settings,
+                description: description, // Use the actual description from input
+                remixOf: projectRemixOf || "",
+                sourceJsonUrl: projectSourceJsonUrl || "",
+                settings: firestoreSafeSettings, // Use the modified settings object here
+                // These fields are redundant if `settings` is comprehensive, but keeping for now
                 activeDrawingLevel: activeDrawingLevel,
                 activePresetIndex: activePresetIndex,
-                cameraPosition: settings.cameraPosition,
-                cameraQuaternion: settings.cameraQuaternion,
+                cameraPosition: firestoreSafeSettings.cameraPosition,
+                cameraQuaternion: firestoreSafeSettings.cameraQuaternion,
                 currentAnchorPoint: { x: "start", y: "start", z: "start" },
                 currentBlockSize: currentBlockSize,
                 currentColor: currentColor,
@@ -2729,8 +2731,7 @@ async function uploadProjectToHub() {
                 gridSize: GRID,
                 moveSpeed: moveSpeed,
                 presetColors: presetColors,
-                templateImageData: null,
-                useDynamicBlockDim: useDynamicBlockDim,
+                templateImageData: null, // Explicitly null here too
                 voxels: voxelMap
             }
         };
@@ -2790,7 +2791,8 @@ function closeAuthModal() {
         console.log('VoxelShaper: authModal.close() called. Modal open state (after close):', authModal.open); // NEW LOG
     } else {
         console.warn("VoxelShaper: Attempted to close authModal but it's not open. Forcing hide.");
-        authModal.style.display = 'none'; // Force hide if .open is false but it's visible
+        // Fallback to ensure it's hidden even if dialog.open is false but it's visually present
+        authModal.style.display = 'none'; 
     }
     cvs.focus(); // Return focus to canvas
     console.log('VoxelShaper: Auth Modal close attempt finished.');
@@ -2819,7 +2821,7 @@ window.signInWithGithub = async function() {
         closeAuthModal();
     } catch (error) {
         console.error("Error signing in with GitHub:", error);
-        showToast('Anmeldefehler', `GitHub: ${error.message}`, 'error');
+        showToast('Anmelmeldefehler', `GitHub: ${error.message}`, 'error');
     }
 }
 
