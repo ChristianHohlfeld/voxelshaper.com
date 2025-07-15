@@ -197,7 +197,7 @@ input[type="color"].color-preset-box::-moz-color-swatch {
     box-shadow: 0 0 8px rgba(144, 202, 249, 0.7);
 }
 
-/* Modal Styles */
+/* Modal Styles (kept for critical confirmations like Clear All) */
 .modal {
     display: none;
     position: fixed;
@@ -267,10 +267,9 @@ input[type="color"].color-preset-box::-moz-color-swatch {
     --------------------------------------------------- */
 #menuToggle{
     position: fixed;
-    /* top: 10px; <-- DIESE ZEILE WIRD GEÄNDERT! */
-    top: calc(10px + env(safe-area-inset-top)); /* <-- NEU: Verschiebt es um 10px + Safe-Area nach unten */
+    top: calc(10px + env(safe-area-inset-top));
     right: 10px;
-    z-index: 1500;             /* über allen Panels */
+    z-index: 1500;
     width: 42px; height: 42px;
     font-size: 1.4em;
     line-height: 42px;
@@ -299,8 +298,8 @@ input[type="color"].color-preset-box::-moz-color-swatch {
 /* Canvas & Container: KEINE default-Gesten */
 #container,
 #voxelCanvas{
-    touch-action: none;           /* iOS ≥13.4, Android, Desktop */
-    -ms-touch-action: none;       /* altes Edge/IE */
+    touch-action: none;
+    -ms-touch-action: none;
 
     /* ← neu: sorge dafür, dass die CSS-Border innen sitzt */
            box-sizing: border-box;
@@ -534,6 +533,152 @@ input[type="color"].color-preset-box::-moz-color-swatch {
     max-width: 150px; /* Limit width */
 }
 
+/* NEW: Toast Message Styles */
+#toast-container {
+    position: fixed;
+    top: calc(20px + env(safe-area-inset-top));
+    left: 50%;
+    transform: translateX(-50%);
+    z-index: 2000; /* Above modals */
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    pointer-events: none; /* Allow clicks to pass through to elements below */
+    width: 90%;
+    max-width: 400px;
+}
+
+.toast-message {
+    background-color: #3a3f47;
+    color: #e0e0e0;
+    padding: 15px 20px;
+    border-radius: 8px;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+    opacity: 0;
+    transition: opacity 0.3s ease-in-out, transform 0.3s ease-in-out;
+    transform: translateY(-20px);
+    pointer-events: auto; /* Re-enable clicks for the toast itself */
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+.toast-message.show {
+    opacity: 1;
+    transform: translateY(0);
+}
+
+.toast-message .close-btn {
+    background: none;
+    border: none;
+    color: #e0e0e0;
+    font-size: 1.2em;
+    cursor: pointer;
+    margin-left: 10px;
+}
+
+.toast-message.info { background-color: #3f51b5; } /* Indigo */
+.toast-message.success { background-color: #4CAF50; } /* Green */
+.toast-message.error { background-color: #f44336; } /* Red */
+.toast-message.warning { background-color: #ff9800; } /* Orange */
+
+/* NEW: Auth Modal Styles */
+.auth-modal-content {
+    background-color: #3a3f47;
+    padding: 30px;
+    border-radius: 8px;
+    box-shadow: 0 4px 8px rgba(0,0,0,.2);
+    max-width: 450px;
+    width: 90%;
+    color: #e0e0e0;
+    text-align: center;
+}
+
+.auth-modal-content h3 {
+    margin-top: 0;
+    color: #90caf9;
+    margin-bottom: 20px;
+}
+
+.auth-modal-content .provider-buttons button {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 100%;
+    padding: 12px;
+    margin-bottom: 10px;
+    border: none;
+    border-radius: 5px;
+    font-size: 1.1em;
+    cursor: pointer;
+    gap: 10px;
+}
+
+.auth-modal-content .provider-buttons button.google {
+    background-color: #DB4437; /* Google Red */
+    color: white;
+}
+.auth-modal-content .provider-buttons button.github {
+    background-color: #333; /* GitHub Dark */
+    color: white;
+}
+.auth-modal-content .provider-buttons button.email {
+    background-color: #4285F4; /* Email Blue (similar to Google) */
+    color: white;
+}
+
+.auth-modal-content .provider-buttons button:hover {
+    opacity: 0.9;
+}
+
+.auth-modal-content .email-login-form {
+    margin-top: 20px;
+    border-top: 1px solid #555c66;
+    padding-top: 20px;
+}
+
+.auth-modal-content .email-login-form input[type="email"],
+.auth-modal-content .email-login-form input[type="password"] {
+    width: calc(100% - 20px);
+    padding: 10px;
+    margin-bottom: 10px;
+    border: 1px solid #555c66;
+    border-radius: 5px;
+    background-color: #2d3748;
+    color: #e0e0e0;
+    box-sizing: border-box;
+}
+
+.auth-modal-content .email-login-form button {
+    width: 100%;
+    padding: 10px;
+    border: none;
+    border-radius: 5px;
+    background-color: #007bff;
+    color: white;
+    font-size: 1em;
+    cursor: pointer;
+}
+.auth-modal-content .email-login-form button:hover {
+    background-color: #0056b3;
+}
+
+.auth-modal-content .close-button-container {
+    margin-top: 20px;
+}
+
+.auth-modal-content .close-button-container button {
+    background-color: #555c66;
+    color: #e0e0e0;
+    padding: 10px 20px;
+    border: none;
+    border-radius: 5px;
+    cursor: pointer;
+}
+.auth-modal-content .close-button-container button:hover {
+    opacity: 0.9;
+}
+
 </style>
 </head>
 <body>
@@ -633,16 +778,6 @@ input[type="color"].color-preset-box::-moz-color-swatch {
     </div>
 </div>
 
-<div id="messageModal" class="modal">
-    <div class="modal-content">
-        <h3 id="messageModalTitle">Nachricht</h3>
-        <p id="messageModalText"></p>
-        <div class="modal-buttons">
-            <button id="messageModalCloseBtn" class="cancel">Schließen</button>
-        </div>
-    </div>
-</div>
-
 <!-- NEW: Upload Project Modal -->
 <div id="uploadProjectModal" class="modal">
     <div class="upload-modal-content">
@@ -673,6 +808,42 @@ input[type="color"].color-preset-box::-moz-color-swatch {
     </div>
 </div>
 
+<!-- NEW: Auth Modal -->
+<div id="authModal" class="modal">
+    <div class="auth-modal-content">
+        <h3>Anmelden bei VoxelShaper Hub</h3>
+        <div class="provider-buttons">
+            <button id="signInGoogleBtn" class="google">
+                <img src="https://www.gstatic.com/firebasejs/ui/2.0.0/images/auth/google.svg" alt="Google Icon" style="width:20px; height:20px;">
+                Mit Google anmelden
+            </button>
+            <button id="signInGithubBtn" class="github">
+                <img src="https://www.gstatic.com/firebasejs/ui/2.0.0/images/auth/github.svg" alt="GitHub Icon" style="width:20px; height:20px;">
+                Mit GitHub anmelden
+            </button>
+            <!-- Email/Password form can be toggled or shown directly -->
+            <button id="showEmailLoginFormBtn" class="email">
+                Mit E-Mail anmelden
+            </button>
+        </div>
+
+        <div id="emailLoginForm" class="email-login-form" style="display:none;">
+            <input type="email" id="emailInput" placeholder="E-Mail" autocomplete="email">
+            <input type="password" id="passwordInput" placeholder="Passwort" autocomplete="current-password">
+            <button id="emailSignInBtn">Anmelden</button>
+            <button id="emailSignUpBtn" style="margin-top: 10px;">Registrieren</button>
+        </div>
+
+        <div class="close-button-container">
+            <button id="authModalCloseBtn">Schließen</button>
+        </div>
+    </div>
+</div>
+
+
+<!-- NEW: Toast Container -->
+<div id="toast-container"></div>
+
 
 <!-- NEW: Mobile controls -->
 <div id="mobile-controls" class="mobile-only">
@@ -692,7 +863,9 @@ input[type="color"].color-preset-box::-moz-color-swatch {
 <!-- Firebase SDK imports -->
 <script type="module">
     import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
-    import { getAuth, signInAnonymously, signInWithCustomToken, onAuthStateChanged, signOut } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
+    import { getAuth, signInAnonymously, signInWithCustomToken, onAuthStateChanged, signOut,
+             GoogleAuthProvider, GithubAuthProvider, signInWithPopup,
+             createUserWithEmailAndPassword, signInWithEmailAndPassword } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
     import { getFirestore, doc, getDoc, collection, addDoc, serverTimestamp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
 
     // Expose Firebase functions to the global scope for use in the main script
@@ -703,6 +876,11 @@ input[type="color"].color-preset-box::-moz-color-swatch {
         signInWithCustomToken,
         onAuthStateChanged,
         signOut,
+        GoogleAuthProvider,
+        GithubAuthProvider,
+        signInWithPopup,
+        createUserWithEmailAndPassword,
+        signInWithEmailAndPassword,
         getFirestore,
         doc,
         getDoc,
@@ -1102,8 +1280,8 @@ let previewLineVoxels = [];
 let projectTitle = '';
 let projectDescription = '';
 let projectTags = []; // Stored as an array of strings
-let projectRemixOf = '';
-let projectSourceJsonUrl = '';
+let projectRemixOf = ''; // NEW: Stores the ID of the model this was remixed from
+let projectSourceJsonUrl = ''; // NEW: Stores the URL from which the project was loaded (if any)
 let projectVisibility = 'public'; // Default visibility
 
 // NEW: Firebase variables
@@ -2052,8 +2230,8 @@ function saveJSON() {
     const projectData = {
         title: projectTitle,
         description: projectDescription,
-        remixOf: projectRemixOf,
-        sourceJsonUrl: projectSourceJsonUrl,
+        remixOf: projectRemixOf, // Persist remixOf
+        sourceJsonUrl: projectSourceJsonUrl, // Persist sourceJsonUrl
         tags: projectTags,
         visibility: projectVisibility,
         voxels: data,
@@ -2070,6 +2248,7 @@ function saveJSON() {
     a.click();
     document.body.removeChild(a);
     URL.revokeObjectURL(url);
+    showToast('Speichern erfolgreich', 'Projekt als JSON-Datei gespeichert.', 'success');
 }
 
 function resetToDefaultProject() {
@@ -2142,12 +2321,13 @@ function resetToDefaultProject() {
     projectTitle = '';
     projectDescription = '';
     projectTags = [];
-    projectRemixOf = '';
-    projectSourceJsonUrl = '';
+    projectRemixOf = ''; // Clear remixOf for new project
+    projectSourceJsonUrl = ''; // Clear sourceJsonUrl for new project
     projectVisibility = 'public';
 
     rebuildHelpers();
     resetCameraPosition();
+    showToast('Projekt zurückgesetzt', 'Das Projekt wurde auf den Standardzustand zurückgesetzt.', 'info');
     console.log('Project reset to default state.');
 }
 
@@ -2167,8 +2347,8 @@ function loadProjectData(projectData) {
         projectTitle = projectData.title || '';
         projectDescription = projectData.description || '';
         projectTags = Array.isArray(projectData.tags) ? projectData.tags : (typeof projectData.tags === 'string' ? projectData.tags.split(',').map(tag => tag.trim()).filter(tag => tag !== '') : []);
-        projectRemixOf = projectData.remixOf || '';
-        projectSourceJsonUrl = projectData.sourceJsonUrl || '';
+        projectRemixOf = projectData.remixOf || ''; // Load remixOf
+        projectSourceJsonUrl = projectData.sourceJsonUrl || ''; // Load sourceJsonUrl
         projectVisibility = projectData.visibility || 'public'; // Default to public if not found
 
         // Load settings first to get the correct GRID size
@@ -2304,7 +2484,7 @@ function loadProjectData(projectData) {
         resetCameraPosition();
     } catch (error) {
         console.error('Error loading JSON file:', error);
-        showMessageModal('Fehler', 'Fehler beim Laden der Datei. Stellen Sie sicher, dass es sich um eine gültige Voxel-Projekt-JSON-Datei handelt. Fehler: ' + error.message);
+        showToast('Fehler', 'Fehler beim Laden der Datei. Stellen Sie sicher, dass es sich um eine gültige Voxel-Projekt-JSON-Datei handelt. Fehler: ' + error.message, 'error');
         resetToDefaultProject(); // Reset to safe state on error
     }
 }
@@ -2318,10 +2498,13 @@ function loadJSON(event) {
     reader.onload = (e) => {
         try {
             const projectData = JSON.parse(e.target.result);
+            // When loading from a local file, it's a new "source" for remixing
+            projectRemixOf = '';
+            projectSourceJsonUrl = ''; // Clear previous source
             loadProjectData(projectData);
         } catch (error) {
             console.error('Error parsing file JSON:', error);
-            showMessageModal('Fehler', 'Fehler beim Parsen der Datei. Stellen Sie sicher, dass es sich um eine gültige JSON-Datei handelt. Fehler: ' + error.message);
+            showToast('Fehler', 'Fehler beim Parsen der Datei. Stellen Sie sicher, dass es sich um eine gültige JSON-Datei handelt. Fehler: ' + error.message, 'error');
             resetToDefaultProject();
         }
     };
@@ -2331,7 +2514,7 @@ function loadJSON(event) {
 
 function exportSTL() {
     if (voxels.size === 0) {
-        showMessageModal('Export fehlgeschlagen', 'Keine Voxel zum Exportieren vorhanden!');
+        showToast('Export fehlgeschlagen', 'Keine Voxel zum Exportieren vorhanden!', 'warning');
         return;
     }
 
@@ -2373,7 +2556,7 @@ function exportSTL() {
     // Ensure the exporter is available
     if (typeof THREE.STLExporter === 'undefined') {
         console.error("STLExporter is not loaded. Make sure the script is included.");
-        showMessageModal('Export fehlgeschlagen', 'STLExporter-Bibliothek nicht geladen.');
+        showToast('Export fehlgeschlagen', 'STLExporter-Bibliothek nicht geladen.', 'error');
         return;
     }
 
@@ -2392,13 +2575,13 @@ function exportSTL() {
 
     tempBoxGeometry.dispose();
     if (mergedGeometry) mergedGeometry.dispose();
-    showMessageModal('Export erfolgreich', 'STL-Modell erfolgreich exportiert!');
+    showToast('Export erfolgreich', 'STL-Modell erfolgreich exportiert!', 'success');
 }
 
 // NEW: Function to export OBJ
 function exportOBJ() {
     if (voxels.size === 0) {
-        showMessageModal('Export fehlgeschlagen', 'Keine Voxel zum Exportieren vorhanden!');
+        showToast('Export fehlgeschlagen', 'Keine Voxel zum Exportieren vorhanden!', 'warning');
         return;
     }
 
@@ -2417,16 +2600,42 @@ function exportOBJ() {
     const objText = VoxelShaperIO.voxToOBJ(voxModel, VS); // Use VS (1) as cubeSize
 
     VoxelShaperIO.saveBlob(objText, 'voxel_model.obj');
-    showMessageModal('Export erfolgreich', 'OBJ-Modell erfolgreich exportiert!');
+    showToast('Export erfolgreich', 'OBJ-Modell erfolgreich exportiert!', 'success');
 }
 
-// NEW: Generic message modal
-function showMessageModal(title, message) {
-    const modal = document.getElementById('messageModal');
-    document.getElementById('messageModalTitle').textContent = title;
-    document.getElementById('messageModalText').textContent = message;
-    modal.style.display = 'flex';
+// NEW: Toast message function
+function showToast(title, message, type = 'info', duration = 3000) {
+    const toastContainer = document.getElementById('toast-container');
+    const toast = document.createElement('div');
+    toast.className = `toast-message ${type}`;
+    toast.innerHTML = `
+        <div>
+            <strong>${title}</strong><br>
+            <span>${message}</span>
+        </div>
+        <button class="close-btn">&times;</button>
+    `;
+
+    toastContainer.appendChild(toast);
+
+    // Trigger reflow to ensure transition plays
+    void toast.offsetWidth;
+    toast.classList.add('show');
+
+    const closeBtn = toast.querySelector('.close-btn');
+    closeBtn.addEventListener('click', () => {
+        toast.classList.remove('show');
+        toast.addEventListener('transitionend', () => toast.remove(), { once: true });
+    });
+
+    setTimeout(() => {
+        if (toast.parentNode) { // Check if toast hasn't been manually closed
+            toast.classList.remove('show');
+            toast.addEventListener('transitionend', () => toast.remove(), { once: true });
+        }
+    }, duration);
 }
+
 
 function resetCameraPosition() {
     cam.position.set(GRID * 1.0, GRID * 1.2, GRID * 1.5);
@@ -2488,6 +2697,7 @@ function handleImageFileSelect(event) {
             console.log("Saving template image data:", templateImageData);
 
             document.getElementById('removeImageTemplateBtn').style.display = 'inline-block';
+            showToast('Bildvorlage geladen', 'Bild als Vorlage erfolgreich geladen.', 'success');
         };
         img.src = base64Image;
     };
@@ -2504,8 +2714,7 @@ function removeImageTemplate(fromLoad = false) {
         templateImageData = null;
         document.getElementById('removeImageTemplateBtn').style.display = 'none';
         if (!fromLoad) {
-            // No history command needed for removal, as it's part of the project state
-            // and handled by save/load.
+            showToast('Bildvorlage entfernt', 'Bildvorlage erfolgreich entfernt.', 'info');
         }
     }
 }
@@ -2568,33 +2777,21 @@ async function loginLogout() {
         // User is logged in, sign out
         try {
             await window.firebase.signOut(auth);
-            showMessageModal('Abgemeldet', 'Sie wurden erfolgreich abgemeldet.');
+            showToast('Abgemeldet', 'Sie wurden erfolgreich abgemeldet.', 'info');
         } catch (error) {
             console.error("Error signing out:", error);
-            showMessageModal('Fehler beim Abmelden', `Fehler: ${error.message}`);
+            showToast('Fehler beim Abmelden', `Fehler: ${error.message}`, 'error');
         }
     } else {
-        // No user logged in, attempt anonymous sign-in
-        try {
-            await window.firebase.signInAnonymously(auth);
-            showMessageModal('Angemeldet', 'Sie sind jetzt anonym angemeldet.');
-        } catch (error) {
-            console.error("Error signing in anonymously:", error);
-            let errorMessage = 'Fehler bei der Anmeldung. Einige Funktionen sind möglicherweise eingeschränkt.';
-            if (error.code === 'auth/admin-restricted-operation') {
-                errorMessage = 'Fehler bei der Anmeldung: Anonyme Authentifizierung ist nicht aktiviert. Bitte aktivieren Sie die anonyme Authentifizierung in Ihrer Firebase-Konsole (Authentifizierung -> Anmeldemethode).';
-            } else {
-                errorMessage += ` Details: ${error.message}`;
-            }
-            showMessageModal('Anmeldefehler', errorMessage);
-        }
+        // No user logged in, open auth modal
+        openAuthModal();
     }
 }
 
 // NEW: Function to open the upload modal
 function openUploadModal() {
     if (!currentUserId) {
-        showMessageModal('Anmeldung erforderlich', 'Bitte melden Sie sich an, um Ihr Projekt hochzuladen.');
+        showToast('Anmeldung erforderlich', 'Bitte melden Sie sich an, um Ihr Projekt hochzuladen.', 'warning');
         return;
     }
     // Pre-fill fields if project metadata exists
@@ -2609,7 +2806,7 @@ function openUploadModal() {
 // NEW: Function to handle project upload to Firestore
 async function uploadProjectToHub() {
     if (!currentUserId) {
-        showMessageModal('Fehler', 'Nicht angemeldet. Bitte melden Sie sich an, um hochzuladen.');
+        showToast('Fehler', 'Nicht angemeldet. Bitte melden Sie sich an, um hochzuladen.', 'error');
         return;
     }
 
@@ -2619,11 +2816,11 @@ async function uploadProjectToHub() {
     const visibility = document.querySelector('input[name="uploadVisibility"]:checked').value;
 
     if (!title) {
-        showMessageModal('Fehler', 'Bitte geben Sie einen Titel für Ihr Projekt ein.');
+        showToast('Fehler', 'Bitte geben Sie einen Titel für Ihr Projekt ein.', 'warning');
         return;
     }
 
-    showMessageModal('Lade hoch...', 'Ihr Projekt wird hochgeladen. Bitte warten Sie...');
+    showToast('Lade hoch...', 'Ihr Projekt wird hochgeladen. Bitte warten Sie...', 'info', 5000); // Longer toast for upload
 
     try {
         // Get the current project data using the existing saveJSON structure
@@ -2675,15 +2872,81 @@ async function uploadProjectToHub() {
         projectDescription = description;
         projectTags = tags;
         projectVisibility = visibility;
+        // If this was a new project, its source is now the hub entry
+        if (!projectSourceJsonUrl) {
+            projectSourceJsonUrl = `https://hub.voxelshaper.com?modelId=${docRef.id}`;
+        }
+        // If it was a remix, its remixOf is already set. If it was a new creation, it's now its own source.
+        // For simplicity, we don't set remixOf to its own ID here, as remixOf is for *other* sources.
 
-        showMessageModal('Erfolgreich hochgeladen', `Ihr Projekt wurde erfolgreich hochgeladen! ID: ${docRef.id}`);
+        showToast('Erfolgreich hochgeladen', `Ihr Projekt wurde erfolgreich hochgeladen! ID: ${docRef.id}`, 'success');
         // Optionally, redirect to the hub with the new model ID
         // window.location.href = `https://hub.voxelshaper.com?modelId=${docRef.id}`; // Example
     } catch (error) {
         console.error("Error uploading project:", error);
-        showMessageModal('Fehler beim Hochladen', `Fehler: ${error.message}`);
+        showToast('Fehler beim Hochladen', `Fehler: ${error.message}`, 'error');
     } finally {
         document.getElementById('uploadProjectModal').style.display = 'none';
+    }
+}
+
+// NEW: Auth Modal functions
+function openAuthModal() {
+    document.getElementById('authModal').style.display = 'flex';
+    document.getElementById('emailLoginForm').style.display = 'none'; // Hide email form initially
+}
+
+function closeAuthModal() {
+    document.getElementById('authModal').style.display = 'none';
+}
+
+async function signInWithGoogle() {
+    try {
+        const provider = new window.firebase.GoogleAuthProvider();
+        await window.firebase.signInWithPopup(auth, provider);
+        showToast('Anmeldung erfolgreich', 'Mit Google angemeldet.', 'success');
+        closeAuthModal();
+    } catch (error) {
+        console.error("Error signing in with Google:", error);
+        showToast('Anmeldefehler', `Google: ${error.message}`, 'error');
+    }
+}
+
+async function signInWithGithub() {
+    try {
+        const provider = new window.firebase.GithubAuthProvider();
+        await window.firebase.signInWithPopup(auth, provider);
+        showToast('Anmeldung erfolgreich', 'Mit GitHub angemeldet.', 'success');
+        closeAuthModal();
+    } catch (error) {
+        console.error("Error signing in with GitHub:", error);
+        showToast('Anmeldefehler', `GitHub: ${error.message}`, 'error');
+    }
+}
+
+async function signInEmailPassword() {
+    const email = document.getElementById('emailInput').value;
+    const password = document.getElementById('passwordInput').value;
+    try {
+        await window.firebase.signInWithEmailAndPassword(auth, email, password);
+        showToast('Anmeldung erfolgreich', 'Mit E-Mail angemeldet.', 'success');
+        closeAuthModal();
+    } catch (error) {
+        console.error("Error signing in with Email/Password:", error);
+        showToast('Anmeldefehler', `E-Mail: ${error.message}`, 'error');
+    }
+}
+
+async function signUpEmailPassword() {
+    const email = document.getElementById('emailInput').value;
+    const password = document.getElementById('passwordInput').value;
+    try {
+        await window.firebase.createUserWithEmailAndPassword(auth, email, password);
+        showToast('Registrierung erfolgreich', 'Konto erstellt und angemeldet.', 'success');
+        closeAuthModal();
+    } catch (error) {
+        console.error("Error signing up with Email/Password:", error);
+        showToast('Registrierungsfehler', `E-Mail: ${error.message}`, 'error');
     }
 }
 
@@ -2828,6 +3091,7 @@ window.onload = async function() { // Made async to await Firebase auth
 
         rebuildHelpers();
         resetCameraPosition();
+        showToast('Gittergröße geändert', `Gittergröße auf ${GRID}x${GRID}x${GRID} geändert.`, 'info');
     });
 
     document.getElementById('color-picker').addEventListener('input', (e) => {
@@ -2889,9 +3153,10 @@ window.onload = async function() { // Made async to await Firebase auth
         clearConfirmationModal.style.display = 'none';
     });
 
-    document.getElementById('messageModalCloseBtn').addEventListener('click', () => {
-        document.getElementById('messageModal').style.display = 'none';
-    });
+    // Removed messageModal and its listeners, replaced by showToast
+    // document.getElementById('messageModalCloseBtn').addEventListener('click', () => {
+    //     document.getElementById('messageModal').style.display = 'none';
+    // });
 
 
     document.getElementById('fillLevelBtn').addEventListener('click', fillActiveLevel);
@@ -3038,7 +3303,7 @@ window.onload = async function() { // Made async to await Firebase auth
         touchAssistEnabled = !touchAssistEnabled;
         const assistButton = document.getElementById('mobile-assist');
         assistButton.style.borderColor = touchAssistEnabled ? '#90caf9' : 'white';
-        showMessageModal('Touch Assist', `Magnetisches Zielen ist jetzt ${touchAssistEnabled ? 'aktiviert' : 'deaktiviert'}.`);
+        showToast('Touch Assist', `Magnetisches Zielen ist jetzt ${touchAssistEnabled ? 'aktiviert' : 'deaktiviert'}.`, 'info');
     });
 
     // Initialize UI elements with loaded values
@@ -3071,13 +3336,15 @@ window.onload = async function() { // Made async to await Firebase auth
         if (user) {
             currentUserId = user.uid;
             loginLogoutBtn.textContent = 'Abmelden';
-            userIdDisplay.textContent = `Angemeldet als: ${user.uid}`;
+            userIdDisplay.textContent = `Angemeldet als: ${user.uid.substring(0, 8)}...`; // Show truncated ID
             uploadToHubBtn.style.display = 'inline-block'; // Show upload button
+            showToast('Angemeldet', `Willkommen, ${user.uid.substring(0, 8)}...`, 'success');
         } else {
             currentUserId = null;
             loginLogoutBtn.textContent = 'Anmelden';
             userIdDisplay.textContent = '';
             uploadToHubBtn.style.display = 'none'; // Hide upload button
+            showToast('Abgemeldet', 'Sie sind jetzt abgemeldet.', 'info');
         }
     });
 
@@ -3088,8 +3355,8 @@ window.onload = async function() { // Made async to await Firebase auth
             await window.firebase.signInWithCustomToken(auth, initialAuthToken);
             console.log("Firebase authenticated with custom token.");
         } else {
-            await window.firebase.signInAnonymously(auth);
-            console.log("Firebase authenticated anonymously.");
+            // No anonymous sign-in on load, user must explicitly click "Anmelden"
+            console.log("No initial auth token. User needs to sign in manually.");
         }
     } catch (error) {
         console.error("Error during Firebase authentication:", error);
@@ -3101,7 +3368,7 @@ window.onload = async function() { // Made async to await Firebase auth
         } else {
             errorMessage += ` Details: ${error.message}`;
         }
-        showMessageModal('Anmeldefehler', errorMessage);
+        showToast('Anmeldefehler', errorMessage, 'error');
     }
 
     // Event listeners for new buttons
@@ -3114,20 +3381,32 @@ window.onload = async function() { // Made async to await Firebase auth
         document.getElementById('uploadProjectModal').style.display = 'none';
     });
 
+    // Auth modal event listeners
+    document.getElementById('authModalCloseBtn').addEventListener('click', closeAuthModal);
+    document.getElementById('signInGoogleBtn').addEventListener('click', signInWithGoogle);
+    document.getElementById('signInGithubBtn').addEventListener('click', signInWithGithub);
+    document.getElementById('showEmailLoginFormBtn').addEventListener('click', () => {
+        document.getElementById('emailLoginForm').style.display = 'block';
+    });
+    document.getElementById('emailSignInBtn').addEventListener('click', signInEmailPassword);
+    document.getElementById('emailSignUpBtn').addEventListener('click', signUpEmailPassword);
+
 
     // Function to load project from modelId
     async function loadProjectFromModelId(modelId) {
-        showMessageModal('Lade Projekt', 'Lade Modell von VoxelShaper Hub...');
+        showToast('Lade Projekt', 'Lade Modell von VoxelShaper Hub...', 'info');
         try {
             // Ensure auth is ready before attempting Firestore operations
-            // This is a simplified check, a more robust solution would use onAuthStateChanged
-            // The main authentication block above should handle the primary sign-in.
-            // Here, we just need to ensure auth.currentUser is available.
             if (!auth.currentUser) {
-                console.warn("Firebase authentication not ready for Firestore operation. Attempting to proceed.");
-                // A small delay might help if auth is still resolving, but it's not a guaranteed fix.
-                // For robust apps, onAuthStateChanged is better.
-                await new Promise(resolve => setTimeout(resolve, 300)); 
+                console.warn("Firebase authentication not ready for Firestore operation. Attempting anonymous sign-in for load.");
+                try {
+                    await window.firebase.signInAnonymously(auth);
+                    console.log("Signed in anonymously for load operation.");
+                } catch (anonError) {
+                    console.error("Failed to sign in anonymously for load:", anonError);
+                    showToast('Anmeldefehler', 'Anmeldung für Ladevorgang fehlgeschlagen. Bitte manuell anmelden.', 'error');
+                    return;
+                }
             }
 
             const docRef = window.firebase.doc(db, "models", modelId);
@@ -3137,19 +3416,22 @@ window.onload = async function() { // Made async to await Firebase auth
                 const modelData = docSnap.data();
                 const projectData = modelData.projectData;
                 if (projectData) {
+                    // Set remixOf and sourceJsonUrl when loading from hub
+                    projectRemixOf = modelId;
+                    projectSourceJsonUrl = `https://hub.voxelshaper.com?modelId=${modelId}`;
                     loadProjectData(projectData);
-                    showMessageModal('Projekt geladen', 'Modell erfolgreich geladen!');
+                    showToast('Projekt geladen', 'Modell erfolgreich vom Hub geladen!', 'success');
                 } else {
-                    showMessageModal('Ladefehler', 'Projektdaten im Modell nicht gefunden.');
+                    showToast('Ladefehler', 'Projektdaten im Modell nicht gefunden.', 'error');
                     resetToDefaultProject();
                 }
             } else {
-                showMessageModal('Ladefehler', 'Modell mit der angegebenen ID nicht gefunden.');
+                showToast('Ladefehler', 'Modell mit der angegebenen ID nicht gefunden.', 'error');
                 resetToDefaultProject();
             }
         } catch (error) {
             console.error("Error loading project from modelId:", error);
-            showMessageModal('Ladefehler', `Fehler beim Laden des Modells: ${error.message}`);
+            showToast('Ladefehler', `Fehler beim Laden des Modells: ${error.message}`, 'error');
             resetToDefaultProject();
         }
     }
@@ -3166,16 +3448,23 @@ window.onload = async function() { // Made async to await Firebase auth
         try {
             const decodedJsonString = decodeURIComponent(encodedJson);
             const projectData = JSON.parse(decodedJsonString);
+            // Set remixOf and sourceJsonUrl when loading from direct JSON URL
+            projectRemixOf = 'Direct JSON Load';
+            projectSourceJsonUrl = window.location.href;
             loadProjectData(projectData); // Load project from URL
+            showToast('Projekt geladen', 'Projekt erfolgreich aus URL-Parameter geladen.', 'success');
             console.log("Project loaded from URL parameter (projectJson).");
         } catch (error) {
             console.error("Error loading project from URL parameter (projectJson):", error);
-            showMessageModal('Fehler', 'Fehler beim Laden des Projekts aus der URL. Ungültige oder beschädigte Projektdaten. Fehler: ' + error.message);
+            showToast('Fehler', 'Fehler beim Laden des Projekts aus der URL. Ungültige oder beschädigte Projektdaten. Fehler: ' + error.message, 'error');
             resetToDefaultProject(); // Reset to default if URL load fails
         }
     } else {
         // If no URL parameter, load default project or from local storage
         console.log("No projectJson or modelId URL parameter found. Loading default or local storage project.");
+        // Clear source fields for a fresh start
+        projectRemixOf = '';
+        projectSourceJsonUrl = '';
         // Existing logic for loading from local storage or starting fresh
         // (already handled by the initial variable assignments and UI updates)
     }
@@ -3438,10 +3727,45 @@ function onPointerDown(e) {
         // Adjust rawTargetVoxel based on modifiers for initialDragVoxelCoords
         if (isControlDragging && currentMode === Modes.ADD) {
             // For Control-drag (stacking): initialDragVoxelCoords is the start point for stacking.
-            // calculateTargetVoxelCoords already returns the "next" voxel in ADD mode if a hit occurs.
-            // This is the correct starting point for stacking.
-            initialDragVoxelCoords = rawTargetVoxel;
-            dragAxisLock = 'y'; // Explicitly lock to Y-axis for stacking
+            // We need to project the mouse ray onto a vertical line from initialDragVoxelCoords.
+            if (rawTargetVoxel && initialDragVoxelCoords) {
+                const raycasterForStacking = new THREE.Raycaster();
+                raycasterForStacking.setFromCamera(mouse, cam); // Use the same mouse/camera as before
+
+                const stackingLineOrigin = new THREE.Vector3(initialDragVoxelCoords.gx * VS + HALF, 0, initialDragVoxelCoords.gz * VS + HALF);
+                const stackingLineDirection = new THREE.Vector3(0, 1, 0); // Vertical line
+
+                const closestPoint = raycasterForStacking.ray.closestPointToPoint(stackingLineOrigin.add(stackingLineDirection.multiplyScalar(GRID * VS / 2))); // Project onto a point on the line, then clamp
+                
+                // Re-calculate closest point on the actual line segment
+                const startPointWorld = new THREE.Vector3(initialDragVoxelCoords.gx * VS + HALF, 0 * VS + HALF, initialDragVoxelCoords.gz * VS + HALF);
+                const endPointWorld = new THREE.Vector3(initialDragVoxelCoords.gx * VS + HALF, (GRID -1) * VS + HALF, initialDragVoxelCoords.gz * VS + HALF);
+                const line = new THREE.Line3(startPointWorld, endPointWorld);
+                const pointOnLine = new THREE.Vector3();
+                line.closestPointToPoint(raycasterForStacking.ray.origin, true, pointOnLine); // Project ray origin onto the line
+                
+                // Now, project the intersection point onto the Y-axis of the initial voxel's column
+                const projectedY = Math.floor(pointOnLine.y / VS);
+                
+                initialDragVoxelCoords = {
+                    gx: initialDragVoxelCoords.gx,
+                    gy: projectedY, // Only Y changes
+                    gz: initialDragVoxelCoords.gz
+                };
+                dragAxisLock = 'y'; // Explicitly lock to Y-axis for stacking
+            } else {
+                // If no rawTargetVoxel, or initialDragVoxelCoords not set, cannot stack.
+                pointerIsDown = false;
+                initialClickPos = null;
+                initialDragVoxelCoords = null;
+                voxelsAtDragStart = null;
+                currentDragVoxels.clear();
+                previousFrameDragVoxels.clear();
+                distanceDisplay.style.display = 'none';
+                initialDragVoxelWorldPos = null;
+                console.warn("onPointerDown (Control-Drag): No valid initial target voxel found. Action suppressed.");
+                return; // Exit
+            }
         } else if (isShiftDragging) {
             // For Shift-drag (on active plane): Project the ray onto the active plane.
             initialDragVoxelCoords = getPointOnFixedPlane(e.clientX, e.clientY, currentDrawingAxis, activeDrawingLevel[currentDrawingAxis]);
@@ -3744,8 +4068,23 @@ function onPointerMove(e) {
                     snappedTargetVoxel.gy = initialDragVoxelCoords.gy;
                     snappedTargetVoxel.gz = initialDragVoxelCoords.gz;
                 } else if (dragAxisLock === 'y') {
+                    // For control-drag, we need to ensure the Y-coordinate is derived from the mouse's vertical position
+                    // relative to the initial click, while X and Z remain fixed to initialDragVoxelCoords.
+                    const raycasterForStacking = new THREE.Raycaster();
+                    const mouseForStacking = new THREE.Vector2(((e.clientX - rect.left) / rect.width) * 2 - 1,
+                                                            -((e.clientY - rect.top) / rect.height) * 2 + 1);
+                    raycasterForStacking.setFromCamera(mouseForStacking, cam);
+
+                    const startPointWorld = new THREE.Vector3(initialDragVoxelCoords.gx * VS + HALF, 0 * VS + HALF, initialDragVoxelCoords.gz * VS + HALF);
+                    const endPointWorld = new THREE.Vector3(initialDragVoxelCoords.gx * VS + HALF, (GRID -1) * VS + HALF, initialDragVoxelCoords.gz * VS + HALF);
+                    const line = new THREE.Line3(startPointWorld, endPointWorld);
+                    const pointOnLine = new THREE.Vector3();
+                    line.closestPointToPoint(raycasterForStacking.ray.origin, true, pointOnLine); // Project ray origin onto the line
+                    
                     snappedTargetVoxel.gx = initialDragVoxelCoords.gx;
+                    snappedTargetVoxel.gy = Math.floor(pointOnLine.y / VS); // Derive Y from mouse position
                     snappedTargetVoxel.gz = initialDragVoxelCoords.gz;
+
                 } else if (dragAxisLock === 'z') {
                     snappedTargetVoxel.gx = initialDragVoxelCoords.gx;
                     snappedTargetVoxel.gy = initialDragVoxelCoords.gy;
@@ -3902,8 +4241,21 @@ function onPointerUp(e) {
                         snappedFinalTargetVoxel.gy = initialDragVoxelCoords.gy;
                         snappedFinalTargetVoxel.gz = initialDragVoxelCoords.gz;
                     } else if (dragAxisLock === 'y') {
+                        const raycasterForStacking = new THREE.Raycaster();
+                        const mouseForStacking = new THREE.Vector2(((e.clientX - rect.left) / rect.width) * 2 - 1,
+                                                                -((e.clientY - rect.top) / rect.height) * 2 + 1);
+                        raycasterForStacking.setFromCamera(mouseForStacking, cam);
+
+                        const startPointWorld = new THREE.Vector3(initialDragVoxelCoords.gx * VS + HALF, 0 * VS + HALF, initialDragVoxelCoords.gz * VS + HALF);
+                        const endPointWorld = new THREE.Vector3(initialDragVoxelCoords.gx * VS + HALF, (GRID -1) * VS + HALF, initialDragVoxelCoords.gz * VS + HALF);
+                        const line = new THREE.Line3(startPointWorld, endPointWorld);
+                        const pointOnLine = new THREE.Vector3();
+                        line.closestPointToPoint(raycasterForStacking.ray.origin, true, pointOnLine);
+                        
                         snappedFinalTargetVoxel.gx = initialDragVoxelCoords.gx;
+                        snappedFinalTargetVoxel.gy = Math.floor(pointOnLine.y / VS);
                         snappedFinalTargetVoxel.gz = initialDragVoxelCoords.gz;
+
                     } else if (dragAxisLock === 'z') {
                         snappedFinalTargetVoxel.gx = initialDragVoxelCoords.gx;
                         snappedFinalTargetVoxel.gy = initialDragVoxelCoords.gy;
@@ -3996,8 +4348,21 @@ function onPointerUp(e) {
                         snappedFinalTargetVoxel.gy = initialDragVoxelCoords.gy;
                         snappedFinalTargetVoxel.gz = initialDragVoxelCoords.gz;
                     } else if (dragAxisLock === 'y') {
+                        const raycasterForStacking = new THREE.Raycaster();
+                        const mouseForStacking = new THREE.Vector2(((e.clientX - rect.left) / rect.width) * 2 - 1,
+                                                                -((e.clientY - rect.top) / rect.height) * 2 + 1);
+                        raycasterForStacking.setFromCamera(mouseForStacking, cam);
+
+                        const startPointWorld = new THREE.Vector3(initialDragVoxelCoords.gx * VS + HALF, 0 * VS + HALF, initialDragVoxelCoords.gz * VS + HALF);
+                        const endPointWorld = new THREE.Vector3(initialDragVoxelCoords.gx * VS + HALF, (GRID -1) * VS + HALF, initialDragVoxelCoords.gz * VS + HALF);
+                        const line = new THREE.Line3(startPointWorld, endPointWorld);
+                        const pointOnLine = new THREE.Vector3();
+                        line.closestPointToPoint(raycasterForStacking.ray.origin, true, pointOnLine);
+                        
                         snappedFinalTargetVoxel.gx = initialDragVoxelCoords.gx;
+                        snappedFinalTargetVoxel.gy = Math.floor(pointOnLine.y / VS);
                         snappedFinalTargetVoxel.gz = initialDragVoxelCoords.gz;
+
                     } else if (dragAxisLock === 'z') {
                         snappedFinalTargetVoxel.gx = initialDragVoxelCoords.gx;
                         snappedFinalTargetVoxel.gy = initialDragVoxelCoords.gy;
@@ -4086,8 +4451,21 @@ function onPointerLeave(e) {
                         snappedFinalTargetVoxel.gy = initialDragVoxelCoords.gy;
                         snappedFinalTargetVoxel.gz = initialDragVoxelCoords.gz;
                     } else if (dragAxisLock === 'y') {
+                        const raycasterForStacking = new THREE.Raycaster();
+                        const mouseForStacking = new THREE.Vector2(((e.clientX - rect.left) / rect.width) * 2 - 1,
+                                                                -((e.clientY - rect.top) / rect.height) * 2 + 1);
+                        raycasterForStacking.setFromCamera(mouseForStacking, cam);
+
+                        const startPointWorld = new THREE.Vector3(initialDragVoxelCoords.gx * VS + HALF, 0 * VS + HALF, initialDragVoxelCoords.gz * VS + HALF);
+                        const endPointWorld = new THREE.Vector3(initialDragVoxelCoords.gx * VS + HALF, (GRID -1) * VS + HALF, initialDragVoxelCoords.gz * VS + HALF);
+                        const line = new THREE.Line3(startPointWorld, endPointWorld);
+                        const pointOnLine = new THREE.Vector3();
+                        line.closestPointToPoint(raycasterForStacking.ray.origin, true, pointOnLine);
+                        
                         snappedFinalTargetVoxel.gx = initialDragVoxelCoords.gx;
+                        snappedFinalTargetVoxel.gy = Math.floor(pointOnLine.y / VS);
                         snappedFinalTargetVoxel.gz = initialDragVoxelCoords.gz;
+
                     } else if (dragAxisLock === 'z') {
                         snappedFinalTargetVoxel.gx = initialDragVoxelCoords.gx;
                         snappedFinalTargetVoxel.gy = initialDragVoxelCoords.gy;
