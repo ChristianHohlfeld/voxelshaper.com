@@ -538,6 +538,25 @@ input[type="color"].color-preset-box::-moz-color-swatch {
 <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/utils/BufferGeometryUtils.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/exporters/STLExporter.js"></script>
 
+<!-- Firebase SDK imports -->
+<script type="module">
+    import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
+    import { getAuth, signInAnonymously, signInWithCustomToken } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
+    import { getFirestore, doc, getDoc, collection } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+
+    // Expose Firebase functions to the global scope for use in the main script
+    window.firebase = {
+        initializeApp,
+        getAuth,
+        signInAnonymously,
+        signInWithCustomToken,
+        getFirestore,
+        doc,
+        getDoc,
+        collection
+    };
+</script>
+
 <!-- VoxelShaperIO Library (embedded) -->
 <script>
 var VoxelShaperIO = (function() {
@@ -2371,7 +2390,7 @@ function getCurrentBlockDimensions() {
 
 
 /* ---------- Initialisierung bei Fensterladung ---------- */
-window.onload = function() {
+window.onload = async function() { // Made async to await Firebase auth
     cvs = document.getElementById('voxelCanvas');
     containerDiv = document.getElementById('container');
     touchIndicator = document.getElementById('touch-indicator');
@@ -2736,30 +2755,82 @@ window.onload = function() {
     // Set initial active state for block size buttons
     updateBlockSizeButtonsActiveState();
 
-    // --- NEW: Check for projectJson URL parameter on load ---
-    const urlParams = new URLSearchParams(window.location.search);
-    const encodedJson = urlParams.get('projectJson');
+    // --- Firebase Initialization and Deep Link Handling ---
+    const firebaseConfig = JSON.parse(typeof __firebase_config !== 'undefined' ? __firebase_config : '{}');
+    const app = window.firebase.initializeApp(firebaseConfig);
+    const auth = window.firebase.getAuth(app);
+    const db = window.firebase.getFirestore(app);
 
-    if (encodedJson) {
+    // Authenticate anonymously or with custom token
+    if (typeof __initial_auth_token !== 'undefined') {
+        try {
+            await window.firebase.signInWithCustomToken(auth, __initial_auth_token);
+            console.log("Firebase authenticated with custom token.");
+        } catch (error) {
+            console.error("Error signing in with custom token:", error);
+            showMessageModal('Anmeldefehler', 'Fehler bei der automatischen Anmeldung. Einige Funktionen sind möglicherweise eingeschränkt.');
+            await window.firebase.signInAnonymously(auth); // Fallback to anonymous
+        }
+    } else {
+        await window.firebase.signInAnonymously(auth);
+        console.log("Firebase authenticated anonymously.");
+    }
+
+
+    // Function to load project from modelId
+    async function loadProjectFromModelId(modelId) {
+        showMessageModal('Lade Projekt', 'Lade Modell von VoxelShaper Hub...');
+        try {
+            const docRef = window.firebase.doc(db, "models", modelId);
+            const docSnap = await window.firebase.getDoc(docRef);
+
+            if (docSnap.exists()) {
+                const modelData = docSnap.data();
+                const projectData = modelData.projectData;
+                if (projectData) {
+                    loadProjectData(projectData);
+                    showMessageModal('Projekt geladen', 'Modell erfolgreich geladen!');
+                } else {
+                    showMessageModal('Ladefehler', 'Projektdaten im Modell nicht gefunden.');
+                    resetToDefaultProject();
+                }
+            } else {
+                showMessageModal('Ladefehler', 'Modell mit der angegebenen ID nicht gefunden.');
+                resetToDefaultProject();
+            }
+        } catch (error) {
+            console.error("Error loading project from modelId:", error);
+            showMessageModal('Ladefehler', `Fehler beim Laden des Modells: ${error.message}`);
+            resetToDefaultProject();
+        }
+    }
+
+    // --- Check for URL parameters on load ---
+    const urlParams = new URLSearchParams(window.location.search);
+    const modelId = urlParams.get('modelId');
+    const encodedJson = urlParams.get('projectJson'); // Keep existing projectJson logic
+
+    if (modelId) {
+        console.log("Found modelId in URL:", modelId);
+        await loadProjectFromModelId(modelId);
+    } else if (encodedJson) {
         try {
             const decodedJsonString = decodeURIComponent(encodedJson);
             const projectData = JSON.parse(decodedJsonString);
             loadProjectData(projectData); // Load project from URL
-            console.log("Project loaded from URL parameter.");
+            console.log("Project loaded from URL parameter (projectJson).");
         } catch (error) {
-            console.error("Error loading project from URL parameter:", error);
+            console.error("Error loading project from URL parameter (projectJson):", error);
             showMessageModal('Fehler', 'Fehler beim Laden des Projekts aus der URL. Ungültige oder beschädigte Projektdaten. Fehler: ' + error.message);
             resetToDefaultProject(); // Reset to default if URL load fails
         }
     } else {
         // If no URL parameter, load default project or from local storage
-        // This part remains as it was, ensuring the editor starts with a usable state
-        // if no URL parameter is provided.
-        console.log("No projectJson URL parameter found. Loading default or local storage project.");
+        console.log("No projectJson or modelId URL parameter found. Loading default or local storage project.");
         // Existing logic for loading from local storage or starting fresh
         // (already handled by the initial variable assignments and UI updates)
     }
-    // --- END NEW URL PARAMETER LOGIC ---
+    // --- END Firebase Initialization and Deep Link Handling ---
 
     animate();
 }; // END window.onload
