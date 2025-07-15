@@ -1,3 +1,4 @@
+
 <!DOCTYPE html>
 <html lang="de">
 <head>
@@ -2524,7 +2525,7 @@ function loadProjectData(projectData) {
         resetCameraPosition(); // Reset camera to fit the loaded model
     } catch (error) {
         console.error('Error loading JSON file:', error);
-        showToast('Fehler', 'Fehler beim Laden der Datei. Stellen Sie sicher, dass es sich um eine gültige Voxel-Projekt-JSON-Datei handelt. Fehler: ' + error.message, 'error');
+        showToast('Fehler', 'Fehler beim Laden der Datei. Stellen Sie sicher, dass es sich um eine gültige JSON-Datei handelt. Fehler: ' + error.message, 'error');
         resetToDefaultProject(); // Fallback to default project on error
     }
 }
@@ -2580,7 +2581,7 @@ function loadJSON(event) {
             loadProjectData(projectData);
         } catch (error) {
             console.error('Error parsing file JSON:', error);
-            showToast('Fehler', 'Fehler beim Parsen der Datei. Stellen Sie sicher, dass es sich um eine gültige Voxel-Projekt-JSON-Datei handelt. Fehler: ' + error.message, 'error');
+            showToast('Fehler', 'Fehler beim Parsen der Datei. Stellen Sie sicher, dass es sich um eine gültige JSON-Datei handelt. Fehler: ' + error.message, 'error');
             resetToDefaultProject();
         }
     };
@@ -2884,7 +2885,7 @@ async function loginLogout() {
         }
     } else {
         // User is not logged in, open authentication modal
-        //openAuthModal();
+        openAuthModal();
     }
 }
 
@@ -2895,7 +2896,7 @@ async function loginLogout() {
 function openUploadModal() {
     if (!currentUserId) {
         showToast('Anmeldung erforderlich', 'Bitte melden Sie sich an, um Ihr Projekt hochzuladen.', 'warning');
-        //openAuthModal(); // Prompt for login if not authenticated
+        openAuthModal(); // Prompt for login if not authenticated
         return;
     }
     // Populate modal fields with current project metadata
@@ -3481,16 +3482,10 @@ window.onload = async function() {
                     }
                 });
 
-                // Attempt to sign in with custom token if available, otherwise anonymously
-                if (typeof __initial_auth_token !== 'undefined' && __initial_auth_token) {
-                    try {
-                        console.log("VoxelShaper: Attempting sign-in with custom token.");
-                        await window.firebase.signInWithCustomToken(auth, __initial_auth_token);
-                        console.log("Signed in with custom token.");
-                    } catch (error) {
-                        console.warn("Failed to sign in with custom token:", error);
-                    }
-                }
+                // NO AUTOMATIC SIGN-IN ATTEMPT HERE.
+                // The application will start without a logged-in user unless
+                // a session was previously persisted by Firebase.
+
                 // Check URL parameters for project loading (modelId or projectJson)
                 const urlParams = new URLSearchParams(window.location.search);
                 const modelId = urlParams.get('modelId');
@@ -3516,12 +3511,25 @@ window.onload = async function() {
                     projectSourceJsonUrl = '';
                 }
 
+                // Defensive closing of all modals to ensure they are not open on load
+                document.getElementById('clearConfirmationModal').close();
+                document.getElementById('uploadProjectModal').close();
+                document.getElementById('authModal').close();
+                console.log("VoxelShaper: All modals defensively closed at end of onload.");
+
                 animate(); // Start the animation loop
 
             })
             .catch((error) => {
                 console.error("Fehler bei setPersistence:", error);
                 showToast('Anmeldefehler', `Fehler bei der Anmeldungspersistenz: ${error.message}. Die Funktionalität könnte eingeschränkt sein.`, 'error', 5000);
+                
+                // Defensive closing even if persistence fails
+                document.getElementById('clearConfirmationModal').close();
+                document.getElementById('uploadProjectModal').close();
+                document.getElementById('authModal').close();
+                console.log("VoxelShaper: All modals defensively closed in catch block.");
+
                 animate(); // Still try to animate even if persistence fails
             });
 
@@ -3553,6 +3561,8 @@ window.onload = async function() {
             document.getElementById('emailLoginForm').style.display = 'block';
         });
 
+        // Event listener for upload button (desktop)
+        document.getElementById('uploadToHubBtn').addEventListener('click', openUploadModal);
 
         // Event listener for upload modal backdrop click
         document.getElementById('uploadProjectModal').addEventListener('click', (e) => {
