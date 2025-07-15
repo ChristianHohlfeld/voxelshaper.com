@@ -195,12 +195,12 @@ input[type="color"].color-preset-box::-moz-color-swatch {
     left: 0;
     z-index: 1000; /* Ensure it's on top */
     background-color: transparent; /* Ensure dialog itself is transparent */
-    display: none; /* Hidden by default */
+    /* display: flex; Removed this line to allow dialog.close() to work */
     align-items: center; /* Added for centering */
     justify-content: center; /* Added for centering */
 }
 
-/* Show dialog when 'open' attribute is present */
+/* Add this rule to make dialog use flexbox only when it's open */
 .app-modal-dialog[open] {
     display: flex;
 }
@@ -869,7 +869,8 @@ input[type="color"].color-preset-box::-moz-color-swatch {
     window.firebase = {
         initializeApp,
         getAuth,
-        signInWithCustomToken, // Removed signInAnonymously
+        // signInAnonymously, // Anonymes Login entfernt
+        signInWithCustomToken,
         onAuthStateChanged,
         setPersistence,
         browserLocalPersistence, 
@@ -1555,7 +1556,7 @@ function releasePointer(id, eventType) {
             distanceDisplay.style.display = 'none';
         }
         initialDragVoxelWorldPos = null;
-        dragAxisLock = null; // Reset axis lock
+        dragAxisLock = null;
         
         // Clear preview line
         previewLineInstancedMesh.count = 0;
@@ -2898,8 +2899,8 @@ async function loginLogout() {
  */
 function openUploadModal() {
     if (!currentUserId) {
-        showToast('Anmeldung erforderlich', 'Bitte melden Sie sich an, um Ihr Projekt hochzuladen.', 'warning');
-        openAuthModal(); // Prompt for login if not authenticated
+        // Wenn der Benutzer nicht angemeldet ist, zeige den Anmeldedialog
+        openAuthModal();
         return;
     }
     // Populate modal fields with current project metadata
@@ -3104,20 +3105,32 @@ window.signUpEmailPassword = async function() {
     }
 }
 
-/**
- * Function to close all modals. Made globally available for the emergency button.
- */
+// Close all modals immediately on page load
 function closeAllModals() {
     try {
-        document.getElementById('clearConfirmationModal')?.close();
-        document.getElementById('uploadProjectModal')?.close();
-        document.getElementById('authModal')?.close();
+        console.log("VoxelShaper: Attempting to close all modals.");
+        const clearModal = document.getElementById('clearConfirmationModal');
+        const uploadModal = document.getElementById('uploadProjectModal');
+        const authModal = document.getElementById('authModal');
+
+        if (clearModal && clearModal.open) {
+            clearModal.close();
+            console.log("VoxelShaper: clearConfirmationModal closed.");
+        }
+        if (uploadModal && uploadModal.open) {
+            uploadModal.close();
+            console.log("VoxelShaper: uploadProjectModal closed.");
+        }
+        if (authModal && authModal.open) {
+            authModal.close();
+            console.log("VoxelShaper: authModal closed.");
+        }
     } catch (error) {
-        console.error("Error closing modals:", error);
+        console.error("VoxelShaper: Error closing modals:", error);
     }
 }
-window.closeAllModals = closeAllModals; // Make globally available
 
+window.closeAllModals = closeAllModals;  // Make globally available
 
 /**
  * Main initialization function, called when the window loads.
@@ -3125,8 +3138,8 @@ window.closeAllModals = closeAllModals; // Make globally available
 window.onload = async function() {
     console.log("VoxelShaper: window.onload started.");
     
-    // Close all modals immediately on page load (before any other initialization)
-    closeAllModals();
+    closeAllModals();  // Initial closing of all modals
+    console.log("VoxelShaper: All modals defensively closed at start of onload.");
 
     try {
         // Get canvas and container elements
@@ -3298,23 +3311,24 @@ window.onload = async function() {
         document.getElementById('current-mode').textContent = `Modus: ${currentMode}`;
 
         // Clear confirmation modal logic
+        const clearConfirmationModal = document.getElementById('clearConfirmationModal');
         document.getElementById('clearBtn').addEventListener('click', () => {
-            document.getElementById('clearConfirmationModal').showModal();
+            clearConfirmationModal.showModal();
         });
         document.getElementById('saveAndClearBtn').addEventListener('click', () => {
             saveJSON();
             clearAll();
-            document.getElementById('clearConfirmationModal').close();
+            clearConfirmationModal.close();
         });
         document.getElementById('clearWithoutSaveBtn').addEventListener('click', () => {
             clearAll();
-            document.getElementById('clearConfirmationModal').close();
+            clearConfirmationModal.close();
         });
         document.getElementById('cancelClearBtn').addEventListener('click', () => {
-            document.getElementById('clearConfirmationModal').close();
+            clearConfirmationModal.close();
         });
-        document.getElementById('clearConfirmationModal').addEventListener('cancel', () => { // Handle ESC key
-            document.getElementById('clearConfirmationModal').close();
+        clearConfirmationModal.addEventListener('cancel', () => { // Handle ESC key
+            clearConfirmationModal.close();
         });
 
         document.getElementById('fillLevelBtn').addEventListener('click', fillActiveLevel);
@@ -3480,35 +3494,62 @@ window.onload = async function() {
         const userIdDisplay = document.getElementById('userIdDisplay');
         const goToHubBtn = document.getElementById('goToHubBtn');
       
-        // Initialize Firebase Auth and listen for auth state changes
+        // Firebase Auth Initialisierung und Listener für Authentifizierungsstatusänderungen
         window.firebase.setPersistence(auth, window.firebase.browserLocalPersistence)
             .then(async () => {
+                // Wenn __initial_auth_token vorhanden ist, verwende es zur Anmeldung.
+                // Ansonsten wird KEIN automatisches anonymes Login durchgeführt.
+                if (typeof __initial_auth_token !== 'undefined' && __initial_auth_token) {
+                    try {
+                        await window.firebase.signInWithCustomToken(auth, __initial_auth_token);
+                        console.log("VoxelShaper: Mit benutzerdefiniertem Token angemeldet.");
+                    } catch (error) {
+                        console.error("VoxelShaper: Fehler bei der Anmeldung mit benutzerdefiniertem Token:", error);
+                        showToast('Anmeldefehler', `Fehler bei der Anmeldung mit Token: ${error.message}`, 'error', 5000);
+                    }
+                } else {
+                    console.log("VoxelShaper: Kein initiales Auth-Token vorhanden. Benutzer wird nicht automatisch angemeldet.");
+                    // Sicherstellen, dass currentUserId und currentUser null sind, wenn kein Token vorhanden ist
+                    currentUserId = null;
+                    currentUser = null;
+                    loginLogoutBtn.textContent = 'Anmelden';
+                    userIdDisplay.innerHTML = '';
+                    uploadToHubBtn.style.display = 'none';
+                    document.getElementById('mobile-login-logout').textContent = '🔑';
+                }
+
+                // Listener für Authentifizierungsstatusänderungen
                 window.firebase.onAuthStateChanged(auth, (user) => {
-                    console.log("VoxelShaper: Auth state changed. User:", user ? user.uid : "null");
+                    console.log("VoxelShaper: Auth-Status geändert. Benutzer:", user ? user.uid : "null");
                     if (user) {
                         currentUserId = user.uid;
                         currentUser = user;
                         loginLogoutBtn.textContent = 'Abmelden';
                         userIdDisplay.innerHTML = `<img src="${user.photoURL || 'https://placehold.co/24x24/cccccc/000000?text=U'}" alt="User Avatar"> ${user.uid}`;
                         uploadToHubBtn.style.display = 'inline-block';
-                        document.getElementById('mobile-login-logout').textContent = '🚪'; // Door icon for logout
-                        document.getElementById('authModal').close(); // Close auth modal on successful login
+                        document.getElementById('mobile-login-logout').textContent = '🚪'; // Tür-Symbol für Abmelden
+                        document.getElementById('authModal').close(); // Anmeldedialog bei erfolgreicher Anmeldung schließen
                     } else {
                         currentUserId = null;
                         currentUser = null;
                         loginLogoutBtn.textContent = 'Anmelden';
-                        userIdDisplay.innerHTML = ''; // Clear user info
+                        userIdDisplay.innerHTML = ''; // Benutzerinformationen löschen
                         uploadToHubBtn.style.display = 'none';
-                        document.getElementById('mobile-login-logout').textContent = '🔑'; // Key icon for login
+                        document.getElementById('mobile-login-logout').textContent = '🔑'; // Schlüssel-Symbol für Anmelden
                     }
                 });
 
-                // Check URL parameters for project loading (modelId or projectJson)
+                // URL-Parameter für das Laden von Projekten überprüfen (modelId oder projectJson)
                 const urlParams = new URLSearchParams(window.location.search);
                 const modelId = urlParams.get('modelId');
                 const encodedJson = urlParams.get('projectJson');
 
                 if (modelId) {
+                    // WICHTIGER HINWEIS: Modelle vom Hub (Firestore) erfordern gemäß den aktuellen Firebase-Sicherheitsregeln
+                    // (`allow read, write: if request.auth != null;`) eine Authentifizierung.
+                    // Da das anonyme Login entfernt wurde, können nur Benutzer, die über Google/GitHub/E-Mail angemeldet sind,
+                    // öffentliche Modelle vom Hub laden. Wenn Modelle ohne jegliche Anmeldung lesbar sein sollen,
+                    // müssen die Firebase-Sicherheitsregeln auf deiner Seite angepasst werden (z.B. `allow read: if true;`).
                     await loadProjectFromModelId(modelId);
                 } else if (encodedJson) {
                     try {
@@ -3532,31 +3573,32 @@ window.onload = async function() {
 
             })
             .catch((error) => {
-                console.error("Fehler bei setPersistence:", error);
+                console.error("VoxelShaper: Fehler bei setPersistence:", error);
                 showToast('Anmeldefehler', `Fehler bei der Anmeldungspersistenz: ${error.message}. Die Funktionalität könnte eingeschränkt sein.`, 'error', 5000);
-                animate(); // Still try to animate even if persistence fails
+                
+                animate(); // Animation trotzdem starten, auch wenn Persistenz fehlschlägt
             });
 
-        // Event listener for "Go to Hub" button
+        // Event Listener für "Zum Hub wechseln" Button
         document.getElementById('goToHubBtn').addEventListener('click', () => {
             window.open('https://hub.voxelshaper.com', '_blank');
         });
 
-        // Event listener for login/logout button (desktop)
+        // Event Listener für Login/Logout Button (Desktop)
         loginLogoutBtn.addEventListener('click', loginLogout);
 
-        // Event listener for auth modal backdrop click (to close when clicking outside)
+        // Event Listener für Klick auf den Hintergrund des Auth-Modals (zum Schließen bei Klick außerhalb)
         document.getElementById('authModal').addEventListener('click', (e) => {
             if (e.target === document.getElementById('authModal')) {
                 document.getElementById('authModal').close();
-                cvs.focus(); // Return focus to canvas
+                cvs.focus(); // Fokus zurück zum Canvas
             }
         });
 
-        // Correct event listener for auth modal close button
+        // Korrekter Event Listener für den Schließen-Button des Auth-Modals
         document.getElementById('authModalCloseBtn').addEventListener('click', closeAuthModal);
 
-        // Event listeners for auth modal provider buttons
+        // Event Listener für die Provider-Buttons des Auth-Modals
         document.getElementById('signInGoogleBtn').addEventListener('click', window.signInWithGoogle);
         document.getElementById('signInGithubBtn').addEventListener('click', window.signInWithGithub);
         document.getElementById('emailSignInBtn').addEventListener('click', window.signInEmailPassword);
@@ -3565,26 +3607,26 @@ window.onload = async function() {
             document.getElementById('emailLoginForm').style.display = 'block';
         });
 
-        // Event listener for upload button (desktop)
+        // Event Listener für den Upload-Button (Desktop)
         document.getElementById('uploadToHubBtn').addEventListener('click', openUploadModal);
 
-        // Event listener for upload modal backdrop click
+        // Event Listener für Klick auf den Hintergrund des Upload-Modals
         document.getElementById('uploadProjectModal').addEventListener('click', (e) => {
             if (e.target === document.getElementById('uploadProjectModal')) {
                 document.getElementById('uploadProjectModal').close();
-                cvs.focus(); // Return focus to canvas
+                cvs.focus(); // Fokus zurück zum Canvas
             }
         });
 
-        // Correct event listener for upload modal cancel button
+        // Korrekter Event Listener für den Abbrechen-Button des Upload-Modals
         document.getElementById('uploadCancelBtn').addEventListener('click', () => {
             document.getElementById('uploadProjectModal').close();
-            cvs.focus(); // Return focus to canvas
+            cvs.focus(); // Fokus zurück zum Canvas
         });
 
 
     } catch (error) {
-        console.error("VoxelShaper: An unexpected error occurred during initialization:", error);
+        console.error("VoxelShaper: Ein unerwarteter Fehler ist während der Initialisierung aufgetreten:", error);
         showToast('Schwerer Fehler', `Ein unerwarteter Fehler ist aufgetreten: ${error.message}. Die App ist möglicherweise nicht funktionsfähig.`, 'error', 10000);
     }
 };
@@ -4287,8 +4329,8 @@ function onPointerUp(e) {
             });
 
             let rawFinalTargetVoxel = calculateTargetVoxelCoords(e.clientX, e.clientY, currentMode, 'touch');
-            let finalTargetVoxel = null;
-            
+            let finalTargetVoxel = null; // Initialize as null
+
             if (rawFinalTargetVoxel) {
                 if (dragAxisLock) { // If an axis lock was established during the drag
                     const snappedFinalTargetVoxel = { ...rawFinalTargetVoxel };
