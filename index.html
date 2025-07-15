@@ -3488,35 +3488,10 @@ window.onload = async function() {
                         await window.firebase.signInWithCustomToken(auth, __initial_auth_token);
                         console.log("Signed in with custom token.");
                     } catch (error) {
-                        console.warn("Failed to sign in with custom token, attempting anonymous:", error);
-                        try {
-                            console.log("VoxelShaper: Attempting anonymous sign-in.");
-                            await window.firebase.signInAnonymously(auth);
-                            console.log("Signed in anonymously.");
-                        } catch (anonError) {
-                            console.error("Failed to sign in anonymously:", anonError);
-                            if (anonError.code === 'auth/admin-restricted-operation') {
-                                showToast('Anmeldefehler', 'Anonyme Anmeldung ist in den Firebase-Einstellungen nicht aktiviert. Bitte aktivieren Sie sie in der Firebase-Konsole unter "Authentication" -> "Sign-in method".', 'error', 10000);
-                            } else {
-                                showToast('Anmeldefehler', `Anonyme Anmeldung fehlgeschlagen: ${anonError.message}`, 'error', 5000);
-                            }
-                        }
-                    }
-                } else {
-                    try {
-                        console.log("VoxelShaper: Attempting anonymous sign-in (no initial auth token).");
-                        await window.firebase.signInAnonymously(auth);
-                        console.log("Signed in anonymously (no initial auth token).");
-                    } catch (anonError) {
-                        console.error("Failed to sign in anonymously:", anonError);
-                        if (anonError.code === 'auth/admin-restricted-operation') {
-                            showToast('Anmeldefehler', 'Anonyme Anmeldung ist in den Firebase-Einstellungen nicht aktiviert. Bitte aktivieren Sie sie in der Firebase-Konsole unter "Authentication" -> "Sign-in method".', 'error', 10000);
-                        } else {
-                            showToast('Anmeldefehler', `Anonyme Anmeldung fehlgeschlagen: ${anonError.message}`, 'error', 5000);
+                        console.warn("Failed to sign in with custom token:", error);
                         }
                     }
                 }
-
                 // Check URL parameters for project loading (modelId or projectJson)
                 const urlParams = new URLSearchParams(window.location.search);
                 const modelId = urlParams.get('modelId');
