@@ -2226,17 +2226,62 @@ function saveJSON() {
         templateImageData: templateImageData // NEW: Save template image data
     };
 
-    // Use the internal project metadata variables directly
-    const projectData = {
-        title: projectTitle,
-        description: projectDescription,
-        remixOf: projectRemixOf, // Persist remixOf
-        sourceJsonUrl: projectSourceJsonUrl, // Persist sourceJsonUrl
-        tags: projectTags,
-        visibility: projectVisibility,
-        voxels: data,
-        settings: settings
-    };
+const projectData = {
+  title: projectTitle,
+  description: projectDescription,
+  remixOf: projectRemixOf,
+  sourceJsonUrl: projectSourceJsonUrl,
+  tags: projectTags,
+  visibility: projectVisibility,
+
+  downloads: 0,
+  rating: 0,
+  ratingCount: 0,
+  verified: false,
+
+  fileName: `${projectTitle.replace(/\s+/g, "_")}.json`,
+  timestamp: new Date(),
+
+  uploaderEmail: currentUser?.email || "",
+  uploaderUid: currentUser?.uid || "",
+  uploaderPhotoURL: currentUser?.photoURL || "",
+
+  projectData: {
+    description: "",
+    remixOf: "",
+    sourceJsonUrl: "",
+    settings: settings,
+    activeDrawingLevel: activeDrawingLevel,
+    activePresetIndex: activePresetIndex,
+    cameraPosition: [
+      cam.position.x,
+      cam.position.y,
+      cam.position.z
+    ],
+    cameraQuaternion: [
+      cam.quaternion.x,
+      cam.quaternion.y,
+      cam.quaternion.z,
+      cam.quaternion.w
+    ],
+    currentAnchorPoint: {
+      x: "start",
+      y: "start",
+      z: "start"
+    },
+    currentBlockSize: currentBlockSize,
+    currentColor: currentColor,
+    currentDrawingAxis: currentDrawingAxis,
+    dynamicBlockDim: dynamicBlockDim,
+    gridSize: GRID,
+    moveSpeed: moveSpeed,
+    presetColors: presetColors,
+    templateImageData: null,
+    useDynamicBlockDim: useDynamicBlockDim,
+    voxels: data
+  }
+};
+
 
     const json = JSON.stringify(projectData, null, 2);
     const blob = new Blob([json], { type: 'application/json' });
