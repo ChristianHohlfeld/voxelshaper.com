@@ -4,11 +4,9 @@
   <meta charset="utf-8" />
   <title>Login Redirect</title>
   <script type="module">
-    // Firebase SDKs importieren
     import { initializeApp } from "https://www.gstatic.com/firebasejs/11.10.0/firebase-app.js";
     import { getAuth, getRedirectResult, browserLocalPersistence, setPersistence } from "https://www.gstatic.com/firebasejs/11.10.0/firebase-auth.js";
 
-    // Ihre Firebase-Konfiguration (muss mit der in index.html übereinstimmen)
     const firebaseConfig = {
       apiKey: "AIzaSyB9-mpyAu9W6oiVtB0fYG8E6YFvTAsjtAA",
       authDomain: "voxelshaper.firebaseapp.com",
@@ -19,50 +17,46 @@
       measurementId: "G-QJ5CNKZ5DR"
     };
 
-    // Firebase initialisieren
     const app = initializeApp(firebaseConfig);
     const auth = getAuth(app);
 
-    // Persistenz setzen (wichtig für die Sitzungsverwaltung)
-    // browserLocalPersistence speichert die Sitzung im localStorage des aktuellen Origins.
+    console.log("auth.html: Script started."); // ADD THIS
+    console.log("auth.html: Current URL:", window.location.href); // ADD THIS
+
     setPersistence(auth, browserLocalPersistence)
       .then(() => {
-        // Ergebnis des Redirect-Logins abrufen
+        console.log("auth.html: Persistence set to browserLocalPersistence. Attempting to getRedirectResult..."); // ADD THIS
         getRedirectResult(auth)
           .then((result) => {
             if (result && result.user) {
-              // Optional: Hier könnten Sie Benutzerinformationen speichern,
-              // z.B. in localStorage, obwohl Firebase Auth dies bereits
-              // für diesen Origin tut.
-              // localStorage.setItem("userEmail", result.user.email);
-              console.log("Redirect-Login erfolgreich:", result.user);
+              console.log("auth.html: Redirect-Login successful. User:", result.user); // ADD THIS
+              console.log("auth.html: User UID:", result.user.uid); // ADD THIS - Check if UID is present
 
-              // Zurück zur ursprünglichen Seite leiten
-              const target = localStorage.getItem("redirectAfterLogin") || "https://voxelshaper.com/"; // Fallback zur Hauptseite
-              localStorage.removeItem("redirectAfterLogin"); // Aufräumen
+              const target = localStorage.getItem("redirectAfterLogin") || "https://voxelshaper.com/";
+              localStorage.removeItem("redirectAfterLogin");
+              console.log("auth.html: Redirecting back to:", target); // ADD THIS
               window.location.href = target;
             } else {
-              // Kein Redirect-Ergebnis oder Benutzer nicht angemeldet (z.B. Seite direkt aufgerufen)
-              console.log("Kein Redirect-Ergebnis oder Benutzer nicht angemeldet.");
-              const target = localStorage.getItem("redirectAfterLogin") || "https://voxelshaper.com/"; // Fallback zur Hauptseite
-              localStorage.removeItem("redirectAfterLogin"); // Aufräumen
+              console.log("auth.html: No redirect result or user not signed in via redirect."); // ADD THIS
+              const target = localStorage.getItem("redirectAfterLogin") || "https://voxelshaper.com/";
+              localStorage.removeItem("redirectAfterLogin");
+              console.log("auth.html: Redirecting back to (no user):", target); // ADD THIS
               window.location.href = target;
             }
           })
           .catch((error) => {
-            // Fehler beim Redirect-Login
-            console.error("Fehler beim Redirect-Login:", error);
-            // Optional: Fehlermeldung anzeigen oder zurück zur Hauptseite leiten
-            const target = localStorage.getItem("redirectAfterLogin") || "https://voxelshaper.com/"; // Fallback zur Hauptseite
-            localStorage.removeItem("redirectAfterLogin"); // Aufräumen
+            console.error("auth.html: Error getting redirect result:", error); // ADD THIS
+            const target = localStorage.getItem("redirectAfterLogin") || "https://voxelshaper.com/";
+            localStorage.removeItem("redirectAfterLogin");
+            console.log("auth.html: Redirecting back to (on error):", target); // ADD THIS
             window.location.href = target;
           });
       })
       .catch((error) => {
-        console.error("Fehler bei setPersistence in auth.html:", error);
-        // Auch hier versuchen, zurückzuleiten, auch wenn Persistenz fehlschlägt
+        console.error("auth.html: Error setting persistence:", error); // ADD THIS
         const target = localStorage.getItem("redirectAfterLogin") || "https://voxelshaper.com/";
         localStorage.removeItem("redirectAfterLogin");
+        console.log("auth.html: Redirecting back to (on persistence error):", target); // ADD THIS
         window.location.href = target;
       });
   </script>
