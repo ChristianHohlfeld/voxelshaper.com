@@ -3398,8 +3398,7 @@ window.onload = async function() { // Made async to await Firebase auth
     const userIdDisplay = document.getElementById('userIdDisplay');
   let currentUser = null;
 
-// Firebase authentication with enforced local persistence for subdomain session sharing
-firebase.setPersistence(auth, firebase.internals.Auth.Persistence.LOCAL)
+firebase.setPersistence(auth, browserLocalPersistence) // CORRECTED LINE
   .then(() => {
     window.firebase.onAuthStateChanged(auth, (user) => {
       if (user) {
