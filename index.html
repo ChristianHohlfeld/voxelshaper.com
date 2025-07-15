@@ -957,7 +957,7 @@ var VoxelShaperIO = (function() {
             // Initialize default palette if not provided
             if (this.palette.every(val => val === 0)) {
                 this.palette[1] = hexToRgba("#FF0000"); // Red
-                this.palette[2] = hexToRgba("#00FF00"); // Green
+                this.palette[2] = hexToRmento("#00FF00"); // Green
                 this.palette[3] = hexToRgba("#0000FF"); // Blue
                 // ... add more default colors as needed
             }
@@ -2031,7 +2031,7 @@ function calculateTargetVoxelCoords(clientX, clientY, mode, pointerType) {
     const raycaster = new THREE.Raycaster();
     raycaster.setFromCamera(mouse, cam);
 
-    const objectsToIntersect = Array.from(chunks.값을()).map(chunk => chunk.instancedMesh);
+    const objectsToIntersect = Array.from(chunks.values()).map(chunk => chunk.instancedMesh);
     let targetVoxelCoords = null;
     let intersectionPoint = new THREE.Vector3();
 
@@ -2913,6 +2913,8 @@ async function uploadProjectToHub() {
             currentBlockSize: currentBlockSize,
             dynamicBlockDim: dynamicBlockDim,
             useDynamicBlockDim: useDynamicBlockDim,
+            // IMPORTANT: templateImageData should ideally be stored in Firebase Storage, not Firestore
+            // For this example, it's kept as is to match the existing structure, but be aware of 1MB limit.
             templateImageData: templateImageData
         };
 
@@ -2936,9 +2938,9 @@ async function uploadProjectToHub() {
             timestamp: window.firebase.serverTimestamp(),
 
             projectData: {
-                description: "",
-                remixOf: "",
-                sourceJsonUrl: "",
+                description: "", // This seems redundant with top-level description
+                remixOf: "", // This seems redundant with top-level remixOf
+                sourceJsonUrl: "", // This seems redundant with top-level sourceJsonUrl
                 settings: settings,
                 activeDrawingLevel: activeDrawingLevel,
                 activePresetIndex: activePresetIndex,
@@ -2952,13 +2954,17 @@ async function uploadProjectToHub() {
                 gridSize: GRID,
                 moveSpeed: moveSpeed,
                 presetColors: presetColors,
-                templateImageData: null,
+                templateImageData: null, // Set to null here if you are storing it separately or not in projectData
                 useDynamicBlockDim: useDynamicBlockDim,
                 voxels: voxelMap
             }
         };
 
-        const modelsCollectionRef = window.firebase.collection(db, "models");
+        // Use the __app_id for collection path if available, otherwise use a default or direct 'models'
+        // This assumes __app_id is globally available from the Canvas environment
+        const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
+        const modelsCollectionRef = window.firebase.collection(db, `artifacts/${appId}/public/data/models`); // Recommended path for public data
+
         const docRef = await window.firebase.addDoc(modelsCollectionRef, firestoreDocument);
 
         // Update local metadata
@@ -3433,7 +3439,7 @@ window.firebase.setPersistence(auth, window.firebase.browserLocalPersistence)
         currentUserId = user.uid;
         currentUser = user; // Assign to global currentUser
         loginLogoutBtn.textContent = 'Abmelden';
-        userIdDisplay.textContent = `Angemeldet als: ${user.uid.substring(0, 8)}...`;
+        userIdDisplay.textContent = `Angemeldet als: ${user.uid}`; // Show full UID
         uploadToHubBtn.style.display = 'inline-block';
       } else {
         currentUserId = null;
@@ -3524,7 +3530,10 @@ window.firebase.setPersistence(auth, window.firebase.browserLocalPersistence)
                 }
             }
 
-            const docRef = window.firebase.doc(db, "models", modelId);
+            // Use the __app_id for collection path if available, otherwise use a default or direct 'models'
+            const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
+            const docRef = window.firebase.doc(db, `artifacts/${appId}/public/data/models`, modelId); // Recommended path for public data
+            
             const docSnap = await window.firebase.getDoc(docRef);
 
             if (docSnap.exists()) {
@@ -3638,6 +3647,8 @@ let lastX, lastY;
 let suppressNextTap = false; // NEW: To prevent tap after a drag gesture
 let initialDragVoxelCoords = null; // NEW: Stores the starting voxel for line drawing
 let voxelsAtDragStart = null; // NEW: Snapshot of voxels at the start of a drag operation
+let currentDragVoxels = new Map(); // Define currentDragVoxels globally
+let previousFrameDragVoxels = new Set(); // Define previousFrameDragVoxels globally
 
 /**
  * Handles pointer down events (mouse or touch).
@@ -3918,7 +3929,6 @@ function onPointerDown(e) {
         }
     }
 }
-
 
 /**
  * Handles pointer move events (mouse or touch).
