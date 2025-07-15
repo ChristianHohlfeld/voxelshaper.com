@@ -2613,9 +2613,7 @@ function getCurrentBlockDimensions() {
 }
 
 async function loginLogout() {
-    console.log("VoxelShaper: loginLogout called. Current user:", auth.currentUser ? auth.currentUser.uid : "null");
     if (auth.currentUser) {
-        console.log("VoxelShaper: Signing out current user.");
         try {
             await window.firebase.signOut(auth);
             showToast('Abgemeldet', 'Sie wurden erfolgreich abgemeldet.', 'info');
@@ -2624,16 +2622,14 @@ async function loginLogout() {
             showToast('Fehler beim Abmelden', `Fehler: ${error.message}`, 'error');
         }
     } else {
-        console.log("VoxelShaper: User not logged in, opening auth modal.");
         openAuthModal();
     }
 }
 
 function openUploadModal() {
-    console.log("VoxelShaper: openUploadModal called.");
     if (!currentUserId) {
         showToast('Anmeldung erforderlich', 'Bitte melden Sie sich an, um Ihr Projekt hochzuladen.', 'warning');
-        openAuthModal(); // Only open auth modal if not logged in
+        openAuthModal();
         return;
     }
     document.getElementById('uploadTitle').value = projectTitle;
@@ -2641,16 +2637,7 @@ function openUploadModal() {
     document.getElementById('uploadTags').value = projectTags.join(', ');
     document.querySelector(`input[name="uploadVisibility"][value="${projectVisibility}"]`).checked = true;
 
-    const uploadProjectModal = document.getElementById('uploadProjectModal');
-    if (!uploadProjectModal.open) {
-        uploadProjectModal.showModal();
-        // Set focus to the modal for keyboard input
-        setTimeout(() => {
-            uploadProjectModal.focus();
-        }, 100);
-    } else {
-        console.warn("VoxelShaper: Attempted to show uploadProjectModal but it's already open.");
-    }
+    document.getElementById('uploadProjectModal').showModal();
 }
 
 async function uploadProjectToHub() {
@@ -2760,46 +2747,16 @@ async function uploadProjectToHub() {
 }
 
 function openAuthModal() {
-    const authModal = document.getElementById('authModal');
-    if (auth.currentUser) {
-        console.log("VoxelShaper: openAuthModal called but user is already logged in. Aborting.");
-        return;
-    }
-    console.log("VoxelShaper: openAuthModal called. Modal open state (before showModal):", authModal.open);
-    if (!authModal.open) {
-        if (document.pointerLockElement === cvs) {
-            document.exitPointerLock();
-        }
-        authModal.showModal();
-        console.log("VoxelShaper: authModal.showModal() called. Modal open state (after showModal):", authModal.open); // NEW LOG
-        document.getElementById('emailLoginForm').style.display = 'none';
-        setTimeout(() => {
-            authModal.focus();
-        }, 100);
-    } else {
-        console.warn("VoxelShaper: Attempted to show authModal but it's already open.");
-    }
+    document.getElementById('authModal').showModal();
+    document.getElementById('emailLoginForm').style.display = 'none';
 }
 
 function closeAuthModal() {
-    const authModal = document.getElementById('authModal');
-    console.log('VoxelShaper: closeAuthModal called. Modal open state (before close):', authModal.open);
-    console.trace('VoxelShaper: closeAuthModal call stack.'); // Add trace
-
-    if (authModal.open) {
-        authModal.close();
-        console.log('VoxelShaper: authModal.close() called. Modal open state (after close):', authModal.open); // NEW LOG
-    } else {
-        console.warn("VoxelShaper: Attempted to close authModal but it's not open. Forcing hide.");
-        // Fallback to ensure it's hidden even if dialog.open is false but it's visually present
-        authModal.style.display = 'none'; 
-    }
-    cvs.focus(); // Return focus to canvas
-    console.log('VoxelShaper: Auth Modal close attempt finished.');
+    document.getElementById('authModal').close();
+    cvs.focus();
 }
 
 window.signInWithGoogle = async function() {
-    console.log("VoxelShaper: Attempting Google sign-in.");
     try {
         const provider = new window.firebase.GoogleAuthProvider();
         await window.firebase.signInWithPopup(auth, provider);
@@ -2813,7 +2770,6 @@ window.signInWithGoogle = async function() {
 }
 
 window.signInWithGithub = async function() {
-    console.log("VoxelShaper: Attempting GitHub sign-in.");
     try {
         const provider = new window.firebase.GithubAuthProvider();
         await window.firebase.signInWithPopup(auth, provider);
@@ -2826,7 +2782,6 @@ window.signInWithGithub = async function() {
 }
 
 window.signInEmailPassword = async function() {
-    console.log("VoxelShaper: Attempting Email/Password sign-in.");
     const email = document.getElementById('emailInput').value;
     const password = document.getElementById('passwordInput').value;
     try {
@@ -2840,7 +2795,6 @@ window.signInEmailPassword = async function() {
 }
 
 window.signUpEmailPassword = async function() {
-    console.log("VoxelShaper: Attempting Email/Password sign-up.");
     const email = document.getElementById('emailInput').value;
     const password = document.getElementById('passwordInput').value;
     try {
@@ -3019,47 +2973,22 @@ window.onload = async function() {
 
         const clearConfirmationModal = document.getElementById('clearConfirmationModal');
         document.getElementById('clearBtn').addEventListener('click', () => {
-            console.log('VoxelShaper: Attempting to show clearConfirmationModal');
-            if (!clearConfirmationModal.open) {
-                clearConfirmationModal.showModal();
-            } else {
-                console.warn("VoxelShaper: Attempted to show clearConfirmationModal but it's already open.");
-            }
+            clearConfirmationModal.showModal();
         });
         document.getElementById('saveAndClearBtn').addEventListener('click', () => {
-            console.log('VoxelShaper: Save & Clear clicked');
             saveJSON();
             clearAll();
-            if (clearConfirmationModal.open) {
-                clearConfirmationModal.close();
-            } else {
-                console.warn("VoxelShaper: Attempted to close clearConfirmationModal but it's not open.");
-            }
+            clearConfirmationModal.close();
         });
         document.getElementById('clearWithoutSaveBtn').addEventListener('click', () => {
-            console.log('VoxelShaper: Clear without Save clicked');
             clearAll();
-            if (clearConfirmationModal.open) {
-                clearConfirmationModal.close();
-            } else {
-                console.warn("VoxelShaper: Attempted to close clearConfirmationModal but it's not open.");
-            }
+            clearConfirmationModal.close();
         });
         document.getElementById('cancelClearBtn').addEventListener('click', () => {
-            console.log('VoxelShaper: Cancel Clear clicked');
-            if (clearConfirmationModal.open) {
-                clearConfirmationModal.close();
-            } else {
-                console.warn("VoxelShaper: Attempted to close clearConfirmationModal but it's not open.");
-            }
+            clearConfirmationModal.close();
         });
         clearConfirmationModal.addEventListener('cancel', () => {
-            console.log('VoxelShaper: clearConfirmationModal closed via Escape');
-            if (clearConfirmationModal.open) {
-                clearConfirmationModal.close();
-            } else {
-                console.warn("VoxelShaper: Attempted to close clearConfirmationModal via Escape but it's not open.");
-            }
+            clearConfirmationModal.close();
         });
 
         document.getElementById('fillLevelBtn').addEventListener('click', fillActiveLevel);
@@ -3191,7 +3120,6 @@ window.onload = async function() {
             assistButton.style.borderColor = touchAssistEnabled ? '#90caf9' : 'white';
             showToast('Touch Assist', `Magnetisches Zielen ist jetzt ${touchAssistEnabled ? 'aktiviert' : 'deaktiviert'}.`, 'info');
         });
-        // New mobile login/logout button event listener
         document.getElementById('mobile-login-logout').addEventListener('click', loginLogout);
 
 
@@ -3221,7 +3149,7 @@ window.onload = async function() {
         window.firebase.setPersistence(auth, window.firebase.browserLocalPersistence)
             .then(async () => {
                 window.firebase.onAuthStateChanged(auth, (user) => {
-                    console.log("VoxelShaper: Auth state changed. User:", user ? user.uid : "null", "Modal open:", document.getElementById('authModal').open);
+                    console.log("VoxelShaper: Auth state changed. User:", user ? user.uid : "null");
                     if (user) {
                         currentUserId = user.uid;
                         currentUser = user;
@@ -3229,8 +3157,7 @@ window.onload = async function() {
                         userIdDisplay.innerHTML = `<img src="${user.photoURL || 'https://placehold.co/24x24/cccccc/000000?text=U'}" alt="User Avatar"> ${user.uid}`;
                         uploadToHubBtn.style.display = 'inline-block';
                         document.getElementById('mobile-login-logout').textContent = '🚪'; // Door icon for logout
-                        // Always try to close the modal when a user signs in.
-                        closeAuthModal();
+                        document.getElementById('authModal').close(); // Close auth modal on successful login
                     } else {
                         currentUserId = null;
                         currentUser = null;
@@ -3308,11 +3235,14 @@ window.onload = async function() {
             window.open('https://hub.voxelshaper.com', '_blank');
         });
 
+        // Event listener for login/logout button (desktop)
+        loginLogoutBtn.addEventListener('click', loginLogout);
+
         // Event listener for auth modal backdrop click
         document.getElementById('authModal').addEventListener('click', (e) => {
             if (e.target === document.getElementById('authModal')) {
-                console.log("VoxelShaper: Auth Modal Backdrop clicked.");
-                closeAuthModal();
+                document.getElementById('authModal').close();
+                cvs.focus(); // Return focus to canvas
             }
         });
 
@@ -3322,7 +3252,6 @@ window.onload = async function() {
         // Event listener for upload modal backdrop click
         document.getElementById('uploadProjectModal').addEventListener('click', (e) => {
             if (e.target === document.getElementById('uploadProjectModal')) {
-                console.log("VoxelShaper: Upload Modal Backdrop clicked.");
                 document.getElementById('uploadProjectModal').close();
                 cvs.focus(); // Return focus to canvas
             }
@@ -3330,7 +3259,6 @@ window.onload = async function() {
 
         // Correct event listener for upload modal cancel button
         document.getElementById('uploadCancelBtn').addEventListener('click', () => {
-            console.log("VoxelShaper: Upload Modal Cancel button clicked.");
             document.getElementById('uploadProjectModal').close();
             cvs.focus(); // Return focus to canvas
         });
@@ -4439,28 +4367,6 @@ function updatePreviewLineMesh() {
 
 const keyboard = {};
 function onKeyDown(e) {
-    // Only process if no modal is open
-    const authModalOpen = document.getElementById('authModal').open;
-    const uploadModalOpen = document.getElementById('uploadProjectModal').open;
-    const clearModalOpen = document.getElementById('clearConfirmationModal').open;
-    
-    if (authModalOpen || uploadModalOpen || clearModalOpen) {
-        // ESC key closes modals
-        if (e.key === 'Escape') {
-            if (authModalOpen) closeAuthModal();
-            if (uploadModalOpen) {
-                document.getElementById('uploadProjectModal').close();
-                cvs.focus();
-            }
-            if (clearModalOpen) {
-                document.getElementById('clearConfirmationModal').close();
-                cvs.focus();
-            }
-            e.preventDefault(); // Prevent default browser behavior for Escape
-        }
-        return; // Don't process other keyboard events if a modal is open
-    }
-
     keyboard[e.key] = true;
 
     if (e.key === 'Shift') {
@@ -4532,6 +4438,3 @@ function updateBlockSizeButtonsActiveState() {
         }
     }
 }
-</script>
-</body>
-</html>
