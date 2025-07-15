@@ -3478,40 +3478,20 @@ window.onload = async function() {
                     }
                 });
 
-                // Attempt to sign in with custom token if available, otherwise anonymously
+                // Attempt to sign in with custom token if available
                 if (typeof __initial_auth_token !== 'undefined' && __initial_auth_token) {
                     try {
                         console.log("VoxelShaper: Attempting sign-in with custom token.");
                         await window.firebase.signInWithCustomToken(auth, __initial_auth_token);
                         console.log("Signed in with custom token.");
                     } catch (error) {
-                        console.warn("Failed to sign in with custom token, attempting anonymous:", error);
-                        try {
-                            console.log("VoxelShaper: Attempting anonymous sign-in.");
-                            await window.firebase.signInAnonymously(auth);
-                            console.log("Signed in anonymously.");
-                        } catch (anonError) {
-                            console.error("Failed to sign in anonymously:", anonError);
-                            if (anonError.code === 'auth/admin-restricted-operation') {
-                                showToast('Anmeldefehler', 'Anonyme Anmeldung ist in den Firebase-Einstellungen nicht aktiviert. Bitte aktivieren Sie sie in der Firebase-Konsole unter "Authentication" -> "Sign-in method".', 'error', 10000);
-                            } else {
-                                showToast('Anmeldefehler', `Anonyme Anmeldung fehlgeschlagen: ${anonError.message}`, 'error', 5000);
-                            }
-                        }
+                        console.warn("Failed to sign in with custom token:", error);
+                        // No anonymous sign-in fallback here, as per user's request.
+                        // If public data access is needed without auth, Firestore rules must allow it.
                     }
                 } else {
-                    try {
-                        console.log("VoxelShaper: Attempting anonymous sign-in (no initial auth token).");
-                        await window.firebase.signInAnonymously(auth);
-                        console.log("Signed in anonymously (no initial auth token).");
-                    } catch (anonError) {
-                        console.error("Failed to sign in anonymously:", anonError);
-                        if (anonError.code === 'auth/admin-restricted-operation') {
-                            showToast('Anmeldefehler', 'Anonyme Anmeldung ist in den Firebase-Einstellungen nicht aktiviert. Bitte aktivieren Sie sie in der Firebase-Konsole unter "Authentication" -> "Sign-in method".', 'error', 10000);
-                        } else {
-                            showToast('Anmeldefehler', `Anonyme Anmeldung fehlgeschlagen: ${anonError.message}`, 'error', 5000);
-                        }
-                    }
+                    console.log("VoxelShaper: No initial auth token provided. Proceeding without explicit sign-in.");
+                    // No anonymous sign-in fallback here, as per user's request.
                 }
 
                 // Check URL parameters for project loading (modelId or projectJson)
