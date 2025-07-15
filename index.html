@@ -17,7 +17,6 @@
 <meta name="twitter:image" content="https://voxelshaper.com/preview.png">
 <title>VoxelShaper – Voxel Editor & 3D Print Exporter</title>
 <style>
-/* CSS für den Body mit Safe-Area-Anpassungen */
 body {
     margin: 0;
     overflow: hidden;
@@ -27,30 +26,22 @@ body {
     height: 100vh;
     background: #282c34;
     color: #e0e0e0;
-
-    /* --- WICHTIG: ANPASSUNGEN FÜR SICHERE BEREICHE --- */
-    /* Verschiebt den Inhalt nach unten, um Platz für die Statusleiste/Notch zu schaffen */
     padding-top: env(safe-area-inset-top);
-    /* Fügt Polsterung für den unteren Bereich hinzu (z.B. für Home-Indikatoren auf iPhones) */
     padding-bottom: env(safe-area-inset-bottom);
     padding-left: env(safe-area-inset-left);
     padding-right: env(safe-area-inset-right);
-    /* Entscheidend: Stellt sicher, dass das Padding in der 100vh Höhe enthalten ist */
     box-sizing: border-box;
-    /* NEW: Prevent full page zoom on mobile */
     touch-action: pan-x pan-y;
-    /* NEW: Prevent text selection */
     -webkit-user-select: none;
     -moz-user-select: none;
     user-select: none;
 }
 
-/* verhindert, dass das OS den Canvas als Text selektiert */
 canvas, body, #container{
     -webkit-user-select: none;
     -moz-user-select: none;
     user-select: none;
-    -webkit-touch-callout: none;    /* iOS Kontextmenü */
+    -webkit-touch-callout: none;
 }
 #controls{padding:14px;background:#3a3f47;border-bottom:1px solid #4a4f57;display:flex;flex-wrap:wrap;gap:12px;justify-content:center;align-items:center}
 #controls button,#controls label{padding:8px 18px;border:none;border-radius:5px;font-size:1em;background:#555c66;color:#e0e0e0;cursor:pointer}
@@ -59,23 +50,22 @@ canvas, body, #container{
 #current-mode{
     font-weight:700;
     color:#81c784;
-    min-width: 160px; /* Fixed width */
-    max-width: 160px; /* Fixed width */
-    text-align: center; /* Center the text */
+    min-width: 160px;
+    max-width: 160px;
+    text-align: center;
 }
 #container{
     flex:1;
     position:relative;
-    border: 2px solid transparent; /* Default border for the container */
-    box-sizing: border-box; /* Ensure border doesn't push content out */
-    overflow: hidden; /* Prevent canvas border from overflowing if issues persist */
-    /* Prevent accidental zooming */
+    border: 2px solid transparent;
+    box-sizing: border-box;
+    overflow: hidden;
     touch-action: none;
 }
 canvas{
     width:100%;
     height:100%;
-    display: block; /* Ensure canvas behaves as a block element */
+    display: block;
     box-sizing: border-box;
 }
 .info-box{
@@ -87,13 +77,10 @@ canvas{
     font-size:.85em;
     background:rgba(0,0,0,.6);
     pointer-events:none;
-    /* Default to hidden, will be controlled by JS based on local storage */
-    /* Removed display: none; from here to allow desktop visibility */
 }
 .info-box strong{color:#90caf9}
 #fileInput{display:none}
 
-/* Slider-Stil */
 input[type="range"] {
     -webkit-appearance: none;
     width: 150px;
@@ -125,7 +112,6 @@ input[type="range"]::-moz-range-thumb {
     background: #90caf9;
     cursor: pointer;
 }
-/* Color Picker Styling - MADE ROUND */
 input[type="color"] {
     -webkit-appearance: none;
     -moz-appearance: none;
@@ -133,7 +119,7 @@ input[type="color"] {
     width: 38px;
     height: 38px;
     border: none;
-    border-radius: 50%; /* Made round */
+    border-radius: 50%;
     background-color: transparent;
     cursor: pointer;
     padding: 0;
@@ -144,7 +130,7 @@ input[type="color"]::-webkit-color-swatch-wrapper {
 }
 input[type="color"]::-webkit-color-swatch {
     border: 1px solid #555c66;
-    border-radius: 50%; /* Made round */
+    border-radius: 50%;
 }
 input[type="color"]::-moz-color-swatch-wrapper {
     padding: 0;
@@ -154,19 +140,16 @@ input[type="color"]::-moz-color-swatch {
     border-radius: 50%;
 }
 
-/* Style for the preset color boxes - KEPT RECTANGULAR */
-/* NEW: Apply to input[type="color"] as well */
 .color-preset-box, input[type="color"].color-preset-box {
     width: 38px;
     height: 38px;
-    border-radius: 5px; /* Kept rectangular */
+    border-radius: 5px;
     border: 2px solid #555c66;
     cursor: pointer;
     display: inline-block;
     vertical-align: middle;
     box-sizing: border-box;
     transition: transform 0.1s ease-in-out, border-color 0.2s ease-in-out, box-shadow 0.2s ease-in-out;
-    /* Ensure input type color specific styles are overridden for rectangular shape */
     -webkit-appearance: none;
     -moz-appearance: none;
     appearance: none;
@@ -177,8 +160,8 @@ input[type="color"].color-preset-box::-webkit-color-swatch-wrapper {
     padding: 0;
 }
 input[type="color"].color-preset-box::-webkit-color-swatch {
-    border: none; /* Remove inner border from default swatch */
-    border-radius: 3px; /* Slightly smaller radius than outer for visual effect */
+    border: none;
+    border-radius: 3px;
 }
 input[type="color"].color-preset-box::-moz-color-swatch-wrapper {
     padding: 0;
@@ -197,7 +180,6 @@ input[type="color"].color-preset-box::-moz-color-swatch {
     box-shadow: 0 0 8px rgba(144, 202, 249, 0.7);
 }
 
-/* Modal Styles (kept for critical confirmations like Clear All) */
 .modal {
     display: none;
     position: fixed;
@@ -211,19 +193,18 @@ input[type="color"].color-preset-box::-moz-color-swatch {
     justify-content: center;
 }
 
-/* NEW: Styles for the native <dialog> element */
 dialog.modal {
-    display: flex; /* Override default 'none' for dialog, will be controlled by showModal/close */
+    display: flex;
     align-items: center;
     justify-content: center;
-    background-color: rgba(0, 0, 0, 0.7); /* Overlay background */
-    border: none; /* Remove default dialog border */
-    padding: 0; /* Remove default dialog padding */
-    margin: 0; /* Remove default dialog margin */
+    background-color: rgba(0, 0, 0, 0.7);
+    border: none;
+    padding: 0;
+    margin: 0;
     width: 100%;
     height: 100%;
-    max-width: none; /* Allow full width */
-    max-height: none; /* Allow full height */
+    max-width: none;
+    max-height: none;
 }
 
 dialog.modal::backdrop {
@@ -257,23 +238,22 @@ dialog.modal::backdrop {
     padding: 10px 20px;
     border: none;
     border-radius: 5px;
-    cursor: pointer;
     font-size: 1em;
     flex-grow: 1;
 }
 
 .modal-buttons button.confirm-save {
-    background-color: #4CAF50; /* Green */
+    background-color: #4CAF50;
     color: white;
 }
 
 .modal-buttons button.confirm-no-save {
-    background-color: #f44336; /* Red */
+    background-color: #f44336;
     color: white;
 }
 
 .modal-buttons button.cancel {
-    background-color: #555c66; /* Grey */
+    background-color: #555c66;
     color: #e0e0e0;
 }
 
@@ -281,9 +261,6 @@ dialog.modal::backdrop {
     opacity: 0.9;
 }
 
-/* ---------------------------------------------------
-    HAMBURGER-BUTTON
-    --------------------------------------------------- */
 #menuToggle{
     position: fixed;
     top: calc(10px + env(safe-area-inset-top));
@@ -302,29 +279,20 @@ dialog.modal::backdrop {
 }
 #menuToggle:hover{background:#6a727f}
 
-/* ---------------------------------------------------
-    Responsive-Regel: Auf Viewports ≤ 768 px wird
-    das Bedienfeld anfangs versteckt.
-    --------------------------------------------------- */
 @media (max-width:768px){
     #controls{display:none;}
-    /* Mobile button sizing */
     button {
         min-width: 44px;
-        min-height: 44px; /* Meet touch target guidelines */
+        min-height: 44px;
     }
 }
-/* Canvas & Container: KEINE default-Gesten */
 #container,
 #voxelCanvas{
     touch-action: none;
     -ms-touch-action: none;
-
-    /* ← neu: sorge dafür, dass die CSS-Border innen sitzt */
-           box-sizing: border-box;
+    box-sizing: border-box;
 }
 
-/* NEW: Accessibility - Screen Reader Only */
 .sr-only {
   position: absolute;
   width: 1px;
@@ -336,7 +304,6 @@ dialog.modal::backdrop {
   border: 0;
 }
 
-/* NEW: Touch Indicator */
 .touch-indicator {
     position: absolute;
     width: 40px;
@@ -346,8 +313,8 @@ dialog.modal::backdrop {
     transform: translate(-50%, -50%);
     pointer-events: none;
     animation: pulse 0.5s;
-    display: none; /* Hidden by default */
-    z-index: 2000; /* Ensure it's on top */
+    display: none;
+    z-index: 2000;
 }
 
 
@@ -357,12 +324,11 @@ dialog.modal::backdrop {
     100% { transform: translate(-50%, -50%) scale(1); opacity: 0.5; }
 }
 
-/* NEW: Mobile-specific controls */
 .mobile-only {
-    display: none; /* Hidden by default */
+    display: none;
     position: absolute;
-    bottom: calc(20px + env(safe-area-inset-bottom)); /* Adjust for safe area */
-    right: calc(20px + env(safe-area-inset-right)); /* Adjust for safe area */
+    bottom: calc(20px + env(safe-area-inset-bottom));
+    right: calc(20px + env(safe-area-inset-right));
     flex-direction: column;
     gap: 12px;
     z-index: 1000;
@@ -370,7 +336,7 @@ dialog.modal::backdrop {
 
 @media (max-width: 768px) {
     .mobile-only {
-        display: flex; /* Show on mobile */
+        display: flex;
     }
     
     .mobile-btn {
@@ -392,7 +358,6 @@ dialog.modal::backdrop {
     }
 }
 
-/* NEW: Distance Display Style */
 #distanceDisplay {
     position: absolute;
     bottom: 18px;
@@ -402,13 +367,12 @@ dialog.modal::backdrop {
     color: #e0e0e0;
     border-radius: 5px;
     font-size: 0.9em;
-    display: none; /* Hidden by default, shown on drag */
-    z-index: 900; /* Below modals, above canvas */
+    display: none;
+    z-index: 900;
 }
 
-/* Style for dynamic block size inputs */
 .dynamic-block-input {
-    width: 60px; /* Smaller width for number inputs */
+    width: 60px;
     padding: 8px;
     border: none;
     border-radius: 5px;
@@ -416,10 +380,9 @@ dialog.modal::backdrop {
     background: #555c66;
     color: #e0e0e0;
     text-align: center;
-    -moz-appearance: textfield; /* Remove Firefox spinner */
+    -moz-appearance: textfield;
 }
 
-/* Hide number input arrows for Chrome, Safari, Edge, Opera */
 .dynamic-block-input::-webkit-outer-spin-button,
 .dynamic-block-input::-webkit-inner-spin-button {
     -webkit-appearance: none;
@@ -437,7 +400,6 @@ dialog.modal::backdrop {
     box-shadow: 0 0 8px rgba(144, 202, 249, 0.7);
 }
 
-/* NEW: Upload Modal Specific Styles */
 .upload-modal-content {
     background-color: #3a3f47;
     padding: 30px;
@@ -446,7 +408,7 @@ dialog.modal::backdrop {
     max-width: 500px;
     width: 90%;
     color: #e0e0e0;
-    text-align: left; /* Align text left for form fields */
+    text-align: left;
 }
 
 .upload-modal-content h3 {
@@ -464,14 +426,14 @@ dialog.modal::backdrop {
 
 .upload-modal-content input[type="text"],
 .upload-modal-content textarea {
-    width: calc(100% - 20px); /* Adjust for padding */
+    width: calc(100% - 20px);
     padding: 10px;
     margin-bottom: 15px;
     border: 1px solid #555c66;
     border-radius: 5px;
     background-color: #2d3748;
     color: #e0e0e0;
-    box-sizing: border-box; /* Include padding in width */
+    box-sizing: border-box;
 }
 
 .upload-modal-content textarea {
@@ -512,12 +474,12 @@ dialog.modal::backdrop {
 }
 
 .upload-modal-buttons button.upload-confirm {
-    background-color: #4CAF50; /* Green */
+    background-color: #4CAF50;
     color: white;
 }
 
 .upload-modal-buttons button.upload-cancel {
-    background-color: #555c66; /* Grey */
+    background-color: #555c66;
     color: #e0e0e0;
 }
 
@@ -526,7 +488,7 @@ dialog.modal::backdrop {
 }
 
 #loginLogoutBtn {
-    background-color: #007bff; /* Blue for login/logout */
+    background-color: #007bff;
     color: white;
 }
 #loginLogoutBtn:hover {
@@ -534,35 +496,42 @@ dialog.modal::backdrop {
 }
 
 #uploadToHubBtn {
-    background-color: #ff9800; /* Orange for upload */
+    background-color: #ff9800;
     color: white;
 }
 #uploadToHubBtn:hover {
     background-color: #fb8c00;
 }
 
-#userIdDisplay {
-    font-weight: bold;
-    color: #ADD8E6; /* Light blue */
-    margin-left: 10px;
-    margin-right: 10px;
-    white-space: nowrap; /* Prevent wrapping */
-    overflow: hidden; /* Hide overflow */
-    text-overflow: ellipsis; /* Show ellipsis for overflow */
-    max-width: 150px; /* Limit width */
+#goToHubBtn {
+    background-color: #6200EE; /* Deep Purple */
+    color: white;
+}
+#goToHubBtn:hover {
+    background-color: #3700B3; /* Darker Purple */
 }
 
-/* NEW: Toast Message Styles */
+#userIdDisplay {
+    font-weight: bold;
+    color: #ADD8E6;
+    margin-left: 10px;
+    margin-right: 10px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    max-width: 150px;
+}
+
 #toast-container {
     position: fixed;
     top: calc(20px + env(safe-area-inset-top));
     left: 50%;
     transform: translateX(-50%);
-    z-index: 2000; /* Above modals */
+    z-index: 2000;
     display: flex;
     flex-direction: column;
     gap: 10px;
-    pointer-events: none; /* Allow clicks to pass through to elements below */
+    pointer-events: none;
     width: 90%;
     max-width: 400px;
 }
@@ -576,7 +545,7 @@ dialog.modal::backdrop {
     opacity: 0;
     transition: opacity 0.3s ease-in-out, transform 0.3s ease-in-out;
     transform: translateY(-20px);
-    pointer-events: auto; /* Re-enable clicks for the toast itself */
+    pointer-events: auto;
     display: flex;
     justify-content: space-between;
     align-items: center;
@@ -596,12 +565,11 @@ dialog.modal::backdrop {
     margin-left: 10px;
 }
 
-.toast-message.info { background-color: #3f51b5; } /* Indigo */
-.toast-message.success { background-color: #4CAF50; } /* Green */
-.toast-message.error { background-color: #f44336; } /* Red */
-.toast-message.warning { background-color: #ff9800; } /* Orange */
+.toast-message.info { background-color: #3f51b5; }
+.toast-message.success { background-color: #4CAF50; }
+.toast-message.error { background-color: #f44336; }
+.toast-message.warning { background-color: #ff9800; }
 
-/* NEW: Auth Modal Styles (adapted for <dialog>) */
 .auth-modal-content {
     background-color: #3a3f47;
     padding: 30px;
@@ -634,15 +602,15 @@ dialog.modal::backdrop {
 }
 
 .auth-modal-content .provider-buttons button.google {
-    background-color: #DB4437; /* Google Red */
+    background-color: #DB4437;
     color: white;
 }
 .auth-modal-content .provider-buttons button.github {
-    background-color: #333; /* GitHub Dark */
+    background-color: #333;
     color: white;
 }
 .auth-modal-content .provider-buttons button.email {
-    background-color: #4285F4; /* Email Blue (similar to Google) */
+    background-color: #4285F4;
     color: white;
 }
 
@@ -709,7 +677,6 @@ dialog.modal::backdrop {
     <span id="grid-size-display">10×10×10</span>
     <label for="color-picker">Farbe:</label>
     <input type="color" id="color-picker" value="#ffffff" aria-label="Aktuelle Farbe wählen">
-    <!-- NEW: Preset color inputs are now type="color" -->
     <input type="color" id="color-preset-1" class="color-preset-box" value="#8B4513" aria-label="Voreingestellte Farbe 1">
     <input type="color" id="color-preset-2" class="color-preset-box" value="#708237" aria-label="Voreingestellte Farbe 2">
     <input type="color" id="color-preset-3" class="color-preset-box" value="#6495ED" aria-label="Voreingestellte Farbe 3">
@@ -748,15 +715,14 @@ dialog.modal::backdrop {
     <button id="helpToggleBtn" aria-label="Hilfe umschalten">Hilfe</button>
     <button id="resetCameraBtn" aria-label="Kamera zurücksetzen">Zur Szene zurückkehren</button>
 
-    <!-- Image Template Controls -->
     <button id="loadImageTemplateBtn" aria-label="Bild als Vorlage laden">Bild als Vorlage laden</button>
     <button id="removeImageTemplateBtn" style="display:none;" aria-label="Bildvorlage entfernen">Bildvorlage entfernen</button>
     <input type="file" id="imageFileInput" accept="image/*" style="display:none;">
 
-    <!-- NEW: Login/Logout and Upload to Hub Buttons -->
     <button id="loginLogoutBtn" aria-label="Anmelden oder Abmelden">Anmelden</button>
     <span id="userIdDisplay"></span>
     <button id="uploadToHubBtn" aria-label="Auf Hub hochladen" style="display:none;">Auf Hub hochladen</button>
+    <button id="goToHubBtn" aria-label="Zum VoxelShaper Hub wechseln">Zum Hub</button>
 </div>
 
 <div id="container">
@@ -797,7 +763,6 @@ dialog.modal::backdrop {
     </div>
 </div>
 
-<!-- NEW: Upload Project Modal -->
 <dialog id="uploadProjectModal" class="modal">
     <div class="upload-modal-content">
         <h3>Projekt auf Hub hochladen</h3>
@@ -827,7 +792,6 @@ dialog.modal::backdrop {
     </div>
 </dialog>
 
-<!-- NEW: Auth Modal (now a <dialog> element) -->
 <dialog id="authModal" class="modal">
     <div class="auth-modal-content">
         <h3>Anmelden bei VoxelShaper Hub</h3>
@@ -840,18 +804,17 @@ dialog.modal::backdrop {
                 <img src="https://www.gstatic.com/firebasejs/ui/2.0.0/images/auth/github.svg" alt="GitHub Icon" style="width:20px; height:20px;">
                 Mit GitHub anmelden
             </button>
-            <!-- Email/Password form can be toggled or shown directly -->
             <button id="showEmailLoginFormBtn" class="email">
                 Mit E-Mail anmelden
             </button>
         </div>
 
         <div id="emailLoginForm" class="email-login-form" style="display:none;">
-            <form id="emailAuthForm"> <!-- Added form tag -->
+            <form id="emailAuthForm">
                 <input type="email" id="emailInput" placeholder="E-Mail" autocomplete="email">
                 <input type="password" id="passwordInput" placeholder="Passwort" autocomplete="current-password">
-                <button type="submit" id="emailSignInBtn">Anmelden</button> <!-- Changed to type="submit" -->
-                <button type="button" id="emailSignUpBtn" style="margin-top: 10px;">Registrieren</button> <!-- Changed to type="button" -->
+                <button type="submit" id="emailSignInBtn">Anmelden</button>
+                <button type="button" id="emailSignUpBtn" style="margin-top: 10px;">Registrieren</button>
             </form>
         </div>
 
@@ -862,17 +825,14 @@ dialog.modal::backdrop {
 </dialog>
 
 
-<!-- NEW: Toast Container -->
 <div id="toast-container"></div>
 
 
-<!-- NEW: Mobile controls -->
 <div id="mobile-controls" class="mobile-only">
     <button class="mobile-btn" id="mobile-undo" aria-label="Rückgängig machen">↺</button>
     <button class="mobile-btn" id="mobile-redo" aria-label="Wiederholen">↻</button>
     <button class="mobile-btn" id="mobile-save" aria-label="Speichern">💾</button>
     <button class="mobile-btn" id="mobile-camera" aria-label="Kamera wechseln">📷</button>
-    <!-- Removed mobile-extrude-mode button -->
     <button class="mobile-btn" id="mobile-assist" aria-label="Touch-Assist umschalten">🧲</button>
 </div>
 
@@ -881,7 +841,6 @@ dialog.modal::backdrop {
 <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/utils/BufferGeometryUtils.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/exporters/STLExporter.js"></script>
 
-<!-- Firebase SDK imports -->
 <script type="module">
     import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
     import { getAuth,setPersistence,   browserLocalPersistence,  signInAnonymously, signInWithCustomToken, onAuthStateChanged, signOut,
@@ -889,7 +848,6 @@ dialog.modal::backdrop {
              createUserWithEmailAndPassword, signInWithEmailAndPassword } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
     import { getFirestore, doc, getDoc, collection, addDoc, serverTimestamp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
 
-    // Expose Firebase functions to the global scope for use in the main script
     window.firebase = {
         initializeApp,
         getAuth,
@@ -912,7 +870,6 @@ dialog.modal::backdrop {
         serverTimestamp
     };
 
-    // Firebase configuration from hub.html
     const firebaseConfig = {
         apiKey: "AIzaSyB9-mpyAu9W6oiVtB0fYG8E6YFvTAsjtAA",
         authDomain: "voxelshaper.firebaseapp.com",
@@ -923,23 +880,19 @@ dialog.modal::backdrop {
         measurementId: "G-QJ5CNKZ5DR"
     };
 
-    // Expose firebaseConfig to the global scope
     window.firebaseConfig = firebaseConfig;
 </script>
 
-<!-- VoxelShaperIO Library (embedded) -->
 <script>
 var VoxelShaperIO = (function() {
-    // Helper to convert hex to RGBA for VOX palette
     function hexToRgba(hex) {
-        if (!hex || hex.length !== 7) return 0x00000000; // Default to transparent black
+        if (!hex || hex.length !== 7) return 0x00000000;
         const r = parseInt(hex.substring(1, 3), 16);
         const g = parseInt(hex.substring(3, 5), 16);
         const b = parseInt(hex.substring(5, 7), 16);
-        return (r << 24) | (g << 16) | (b << 8) | 0xFF; // RGBA
+        return (r << 24) | (g << 16) | (b << 8) | 0xFF;
     }
 
-    // Helper to convert RGBA to hex
     function rgbaToHex(rgba) {
         const r = (rgba >>> 24) & 0xFF;
         const g = (rgba >>> 16) & 0xFF;
@@ -952,19 +905,16 @@ var VoxelShaperIO = (function() {
             this.sizeX = sizeX;
             this.sizeY = sizeY;
             this.sizeZ = sizeZ;
-            this.voxels = voxels; // Array of {x, y, z, c} where c is palette index
-            this.palette = palette; // Uint32Array of RGBA colors
-            // Initialize default palette if not provided
+            this.voxels = voxels;
+            this.palette = palette;
             if (this.palette.every(val => val === 0)) {
-                this.palette[1] = hexToRgba("#FF0000"); // Red
-                this.palette[2] = hexToRmento("#00FF00"); // Green
-                this.palette[3] = hexToRgba("#0000FF"); // Blue
-                // ... add more default colors as needed
+                this.palette[1] = hexToRgba("#FF0000");
+                this.palette[2] = hexToRgba("#00FF00");
+                this.palette[3] = hexToRgba("#0000FF");
             }
         }
     }
 
-    // Basic OBJ exporter (simplified, no materials)
     function voxToOBJ(voxModel, cubeSize = 1) {
         let obj = `# VoxelShaper OBJ Export\n`;
         let vertexCount = 0;
@@ -974,7 +924,6 @@ var VoxelShaperIO = (function() {
             const y = v.y * cubeSize;
             const z = v.z * cubeSize;
 
-            // Vertices for a cube
             obj += `v ${x} ${y} ${z}\n`;
             obj += `v ${x + cubeSize} ${y} ${z}\n`;
             obj += `v ${x + cubeSize} ${y + cubeSize} ${z}\n`;
@@ -984,18 +933,11 @@ var VoxelShaperIO = (function() {
             obj += `v ${x + cubeSize} ${y + cubeSize} ${z + cubeSize}\n`;
             obj += `v ${x} ${y + cubeSize} ${z + cubeSize}\n`;
 
-            // Faces (simplified, assuming no normals/texture coords for now)
-            // Front face
             obj += `f ${vertexCount + 1} ${vertexCount + 2} ${vertexCount + 3} ${vertexCount + 4}\n`;
-            // Back face
             obj += `f ${vertexCount + 5} ${vertexCount + 8} ${vertexCount + 7} ${vertexCount + 6}\n`;
-            // Top face
             obj += `f ${vertexCount + 4} ${vertexCount + 3} ${vertexCount + 7} ${vertexCount + 8}\n`;
-            // Bottom face
             obj += `f ${vertexCount + 1} ${vertexCount + 5} ${vertexCount + 6} ${vertexCount + 2}\n`;
-            // Right face
             obj += `f ${vertexCount + 2} ${vertexCount + 6} ${vertexCount + 7} ${vertexCount + 3}\n`;
-            // Left face
             obj += `f ${vertexCount + 5} ${vertexCount + 1} ${vertexCount + 4} ${vertexCount + 8}\n`;
 
             vertexCount += 8;
@@ -1003,7 +945,6 @@ var VoxelShaperIO = (function() {
         return obj;
     }
 
-    // Helper for writing binary data
     class DataViewWriter {
         constructor(initialCapacity = 1024) {
             this.buffer = new ArrayBuffer(initialCapacity);
@@ -1030,13 +971,13 @@ var VoxelShaperIO = (function() {
 
         writeInt32(value) {
             this._ensureCapacity(4);
-            this.dataView.setInt32(this.position, value, true); // Little-endian
+            this.dataView.setInt32(this.position, value, true);
             this.position += 4;
         }
 
         writeUint32(value) {
             this._ensureCapacity(4);
-            this.dataView.setUint32(this.position, value, true); // Little-endian
+            this.dataView.setUint32(this.position, value, true);
             this.position += 4;
         }
 
@@ -1050,7 +991,6 @@ var VoxelShaperIO = (function() {
         }
     }
 
-    // Helper for reading binary data
     class DataViewReader {
         constructor(arrayBuffer) {
             this.buffer = arrayBuffer;
@@ -1067,13 +1007,13 @@ var VoxelShaperIO = (function() {
         }
 
         readInt32() {
-            const value = this.dataView.getInt32(this.position, true); // Little-endian
+            const value = this.dataView.getInt32(this.position, true);
             this.position += 4;
             return value;
         }
 
         readUint32() {
-            const value = this.dataView.getUint32(this.position, true); // Little-endian
+            const value = this.dataView.getUint32(this.position, true);
             this.position += 4;
             return value;
         }
@@ -1099,43 +1039,25 @@ var VoxelShaperIO = (function() {
         VoxModel,
         voxToOBJ,
         saveBlob,
-        rgbaToHex // Export rgbaToHex for debugging
+        rgbaToHex
     };
 })();
 </script>
 
 
 <script>
-/* ---------- Konstanten ---------- */
 const VS = 1, HALF = VS * 0.5;
-const CHUNK_SIZE = 16; // Each chunk is CHUNK_SIZE x CHUNK_SIZE x CHUNK_SIZE voxels
+const CHUNK_SIZE = 16;
 
-/* ==============================================================
-   FAST NUMERIC VOXEL-KEY  (max. GRID 0-1023 in jeder Achse)
-   --------------------------------------------------------------
-   – 30-Bit-Packing:  x<<20 | y<<10 | z
-   – 100 % kollisionsfrei, >10× schneller als String-Hash,
-     0 % GC-Druck
-   ============================================================== */
-// 10 Bit pro Achse  →  0 … 1023
 const VOX_BITS = 10;
-const VOX_MASK = (1 << VOX_BITS) - 1;   // 0x3FF
-const SHIFT_X  = VOX_BITS * 2;          // 20
-const SHIFT_Y  = VOX_BITS;              // 10
-// SHIFT_Z = 0
+const VOX_MASK = (1 << VOX_BITS) - 1;
+const SHIFT_X  = VOX_BITS * 2;
+const SHIFT_Y  = VOX_BITS;
 
-/**
- * Kombiniert (x,y,z) zu einem einzigen 30-Bit-Integer-Key.
- * - Alle Koordinaten müssen 0 ≤ coord ≤ 1023 sein.
- */
 function key(x, y, z) {
-    // >>> 0 zwingt in den 32-Bit-Integer-Bereich
     return ((x << SHIFT_X) | (y << SHIFT_Y) | z) >>> 0;
 }
 
-/**
- * Invers zu `key()` – liefert [x, y, z].
- */
 function parseKey(k) {
     return [
         (k >>> SHIFT_X) & VOX_MASK,
@@ -1144,28 +1066,22 @@ function parseKey(k) {
     ];
 }
 
-/* ---------- globale Variablen ---------- */
-let isHoldDrawingActive = false;   // NEW: Verfolgt, ob ein Long-Press-Zeichnen aktiv ist
-const LONG_PRESS_DELAY_MS = 500;   // NEW: Wartezeit (in Millisekunden) für Long-Press-Erkennung
-const VOXEL_DRAG_THRESHOLD = 2; // NEW: Voxel-based threshold for axis locking during drag (Increased from 0.5)
+let isHoldDrawingActive = false;
+const LONG_PRESS_DELAY_MS = 500;
+const VOXEL_DRAG_THRESHOLD = 2;
 
-/* ----------------------------------------------
-   GLOBAL – neue Hilfs-Variablen
----------------------------------------------- */
-// --- Touch Gesture Constants ---
-const PINCH_ZOOM_MULT = 40;     // Zoom-Geschwindigkeit ↑
-const TAP_DIST_TH = 10;         // max. Bewegung (px) für 'Tap'
-const MOVE_PX = 10;             // ab hier gilt es als Drag
-const DT_MS = 250;              // max. Abstand Taps (ms)
-const PAN_PIX_TH = 10;          // ab px Bewegung → Pan
-const PINCH_REL_TH = 0.08;      // ≥8 % Distanzänderung → Pinch
-const ROTATE_SPEED_TOUCH = 0.004; // Drehgeschwindigkeit für Touch
-const PAN_SPEED_TOUCH = 0.1;   // Pan-Geschwindigkeit für Touch
+const PINCH_ZOOM_MULT = 40;
+const TAP_DIST_TH = 10;
+const MOVE_PX = 10;
+const DT_MS = 250;
+const PAN_PIX_TH = 10;
+const PINCH_REL_TH = 0.08;
+const ROTATE_SPEED_TOUCH = 0.004;
+const PAN_SPEED_TOUCH = 0.1;
 
-// --- Touch State ---
-let activePointers = new Map(); // Map<pointerId, {x, y, pointerType}>
+let activePointers = new Map();
 let gestureState = {
-    type: 'none', // 'none', 'tap', 'pan', 'pinch', 'rotate'
+    type: 'none',
     startDist: 0,
     startMid: { x: 0, y: 0 },
     lastMid: { x: 0, y: 0 },
@@ -1173,39 +1089,34 @@ let gestureState = {
     startTime: 0,
     initialPointerCount: 0,
 };
-let tapCandidate = null; // {x, y, time}
-let doubleTapDragActive = false; // Flag for double-tap-and-drag drawing
-let touchIndicator; // DOM element for visual feedback
+let tapCandidate = null;
+let doubleTapDragActive = false;
+let touchIndicator;
 
 let scene, cam, ren, gridHelper, boxHelper;
-let rotSpeed = 0.004;   // Globale Drehgeschwindigkeit für Maus
+let rotSpeed = 0.004;
 
-let euler; // Declare euler globally
-const voxels = new Map();   // Map<globalVoxelKey,{color}> - Stores ALL voxels for save/load/history
-const chunks = new Map();   // Map<chunkKey, VoxelChunk> - Stores active chunks for rendering
+let euler;
+const voxels = new Map();
+const chunks = new Map();
 
 let cvs;
-let containerDiv; // Reference to the container div
-let activeDrawingLevel = { x: 0, y: 0, z: 0 }; // Objekt für aktive Ebenen
-let currentDrawingAxis = 'y'; // Aktuelle Achse für Alt+Mausrad
+let containerDiv;
+let activeDrawingLevel = { x: 0, y: 0, z: 0 };
+let currentDrawingAxis = 'y';
 
-// NEW: Global object to store fixed plane parameters for drag operations
 let fixedDragPlaneParams = { level: null, axis: null };
 
-// Lade die Farbe aus dem Local Storage oder nutze Weiß als Standard
 let currentColor = localStorage.getItem('voxelEditorColor') || '#ffffff';
 let moveSpeed = parseFloat(localStorage.getItem('voxelEditorFlySpeed')) || 0.1;
-// Lade die Gittergröße aus dem Local Storage oder nutze 10 als Standard
 let GRID = parseInt(localStorage.getItem('voxelEditorGridSize') || '10');
 
-// Load other settings from local storage or set defaults
 activeDrawingLevel.x = parseInt(localStorage.getItem('voxelEditorActiveDrawingLevelX') || '0');
 activeDrawingLevel.y = parseInt(localStorage.getItem('voxelEditorActiveDrawingLevelY') || '0');
 activeDrawingLevel.z = parseInt(localStorage.getItem('voxelEditorActiveDrawingLevelZ') || '0');
 currentDrawingAxis = localStorage.getItem('voxelEditorCurrentDrawingAxis') || 'y';
-let currentBlockSize = parseInt(localStorage.getItem('voxelEditorCurrentBlockSize') || '1'); // Declared here
+let currentBlockSize = parseInt(localStorage.getItem('voxelEditorCurrentBlockSize') || '1');
 
-// NEW: Dynamic block dimensions
 let dynamicBlockDim = {
     x: parseInt(localStorage.getItem('voxelEditorDynamicBlockDimX') || '1'),
     y: parseInt(localStorage.getItem('voxelEditorDynamicBlockDimY') || '1'),
@@ -1213,107 +1124,83 @@ let dynamicBlockDim = {
 };
 let useDynamicBlockDim = localStorage.getItem('voxelEditorUseDynamicBlockDim') === 'true';
 
-// Preset colors - NEW, more natural colors
 const presetColors = [
-    localStorage.getItem('voxelPresetColor1') || '#8B4513', // Erdton (SaddleBrown)
-    localStorage.getItem('voxelPresetColor2') || '#708237', // Grasgrün (OliveDrab)
-    localStorage.getItem('voxelPresetColor3') || '#6495ED'  // Wasserblau (CornflowerBlue)
+    localStorage.getItem('voxelPresetColor1') || '#8B4513',
+    localStorage.getItem('voxelPresetColor2') || '#708237',
+    localStorage.getItem('voxelPresetColor3') || '#6495ED'
 ];
-let activePresetIndex = -1; // -1 means no preset is "active" initially, 0 for the first preset, etc.
-let presetBoxes = []; // Global array to store references to preset color boxes
+let activePresetIndex = -1;
+let presetBoxes = [];
 
-// Referenzen für Lichter, die Schatten werfen, um sie später anpassen zu können
 let mainDirectionalLight;
-let fillDirectionalLight; // NEW: Zweites gerichtetes Licht
-let hemisphereLight;      // NEW: Hemisphärenlicht
-let groundPlane;          // NEW: Bodenplatte
+let fillDirectionalLight;
+let hemisphereLight;
+let groundPlane;
 
-// Globale Variablen für Dragging-Status
-let isShiftDragging = false;   // physische Shift-Taste
+let isShiftDragging = false;
 
-function shiftActive(){        // true, wenn Shift an
+function shiftActive(){
     return isShiftDragging;
 }
 let isControlDragging = false;
-// Removed 'rotate' global variable as it's redundant with pointer lock
-let isPointerLocked = false; // NEW: Track pointer lock status
-let lastActionVoxelCoords = null; // NEW: Tracks the last voxel acted upon for drag drawing
-let initialClickPos = null; // To differentiate click from drag
-let firstMoveAfterLock = true; // NEW: Flag to ignore first movement after pointer lock
+let isPointerLocked = false;
+let lastActionVoxelCoords = null;
+let initialClickPos = null;
+let firstMoveAfterLock = true;
 
-// Performance optimization: InstancedMesh
-// Removed global instancedMesh, now managed by chunks
-const dummy = new THREE.Object3D(); // For setting instance matrices
-const tempColor = new THREE.Color(); // For setting instance colors
+const dummy = new THREE.Object3D();
+const tempColor = new THREE.Color();
 
-// NEU: Globale Variable für den Vorschau-Voxel
 const previewVoxelGeometry = new THREE.BoxGeometry(VS, VS, VS);
-const previewVoxelMaterial = new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.5, depthTest: false }); // depthTest: false, damit er immer sichtbar ist
-// NEW: Z-Fighting fix for preview voxel
+const previewVoxelMaterial = new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.5, depthTest: false });
 previewVoxelMaterial.polygonOffset = true;
 previewVoxelMaterial.polygonOffsetFactor = -1;
-let previewVoxelMesh = new THREE.Mesh(previewVoxelGeometry, previewVoxelMaterial); // Initialize here
-// ENDE NEU
+let previewVoxelMesh = new THREE.Mesh(previewVoxelGeometry, previewVoxelMaterial);
 
-// Modus-Enum
 const Modes = {
     ADD: 'Hinzufügen',
     DELETE: 'Löschen',
     DRAW: 'Zeichnen',
-    MEASURE: 'Messen', // NEW
+    MEASURE: 'Messen',
 };
-let currentMode = Modes.ADD; // Standardmodus
+let currentMode = Modes.ADD;
 
-// Undo/Redo History
-let history = []; // Declared globally
-let historyPointer = -1; // Declared globally
-const MAX_HISTORY_SIZE = 100; // Limit history to prevent excessive memory usage
+let history = [];
+let historyPointer = -1;
+const MAX_HISTORY_SIZE = 100;
 
-// NEW: Global object to store voxels added/modified during the current drag operation
-// Map<globalVoxelKey, {color, initialColor}>
-// initialColor is needed for DRAW mode to know what color it was before the drag started.
+// Removed `let` from these declarations to fix the SyntaxError
 let currentDragVoxels = new Map();
-let previousFrameDragVoxels = new Set(); // Stores keys of voxels drawn in the *previous* onPointerMove frame
+let previousFrameDragVoxels = new Set(); 
 
-// NEW: Global variables for image template
 let templateImageMesh = null;
-// Updated templateImageData structure to store scaled dimensions
-let templateImageData = null; // { src: base64, position: [], rotation: [], [], scaledWidth: number, scaledHeight: number }
+let templateImageData = null;
 
-// NEW: Mobile specific flags and variables
 let isMobile = window.matchMedia('(max-width: 768px)').matches;
-let touchAssistEnabled = false; // For magnetic targeting
+let touchAssistEnabled = false;
 
-// NEW: Distance measurement variables
 let distanceDisplay;
 let initialDragVoxelWorldPos = null;
-let dragAxisLock = null; // Stores the axis locked for line drawing ('x', 'y', 'z' or null)
+let dragAxisLock = null;
 
-// NEW: Global variables for measurement
-let measurementStartPoint = null; // {gx, gy, gz} of the first clicked voxel
-let measurementEndPoint = null; // {gx, gy, gz} of the second clicked voxel
+let measurementStartPoint = null;
+let measurementEndPoint = null;
 
-// Global for preview line InstancedMesh for measurement mode
 let previewLineInstancedMesh;
-const maxPreviewInstances = 180 * 3; // Max possible length of a line in a grid (GRID * 3, assuming max GRID is 180)
-// Global array for preview voxels in measurement mode
+const maxPreviewInstances = 180 * 3;
 let previewLineVoxels = [];
 
-// NEW: Project metadata variables
 let projectTitle = '';
 let projectDescription = '';
-let projectTags = []; // Stored as an array of strings
-let projectRemixOf = ''; // NEW: Stores the ID of the model this was remixed from
-let projectSourceJsonUrl = ''; // NEW: Stores the URL from which the project was loaded (if any)
-let projectVisibility = 'public'; // Default visibility
+let projectTags = [];
+let projectRemixOf = '';
+let projectSourceJsonUrl = '';
+let projectVisibility = 'public';
 
-// NEW: Firebase variables
 let auth;
 let db;
-let currentUserId = null; // Stores the Firebase User ID
-let currentUser = null; // Declare currentUser here for global access
-
-/* ---------- Chunking System Classes and Helpers ---------- */
+let currentUserId = null;
+let currentUser = null;
 
 function getChunkCoords(gx, gy, gz) {
     return {
@@ -1333,48 +1220,41 @@ class VoxelChunk {
         this.chunkY = chunkY;
         this.chunkZ = chunkZ;
         this.scene = scene;
-        this.chunkSize = chunkSize; // FIX: Store chunkSize correctly
+        this.chunkSize = chunkSize;
 
-        // Global offset for this chunk
         this.offsetX = chunkX * chunkSize * VS;
         this.offsetY = chunkY * chunkSize * VS;
         this.offsetZ = chunkZ * chunkSize * VS;
 
-        // Map from local voxel key (within this chunk) to {color, instanceId}
         this.voxels = new Map();
-        // Map from global voxel key to local instanceId within this chunk's InstancedMesh
         this.globalToLocalInstanceIdMap = new Map();
 
         const maxInstancesInChunk = chunkSize * chunkSize * chunkSize;
         const voxelBaseGeometry = new THREE.BoxGeometry(VS, VS, VS);
         const meshMaterial = new THREE.MeshLambertMaterial();
 
-        // Reverted to standard Three.js InstancedMesh color handling
         this.instancedMesh = new THREE.InstancedMesh(voxelBaseGeometry, meshMaterial, maxInstancesInChunk);
-        // REMOVED: this.instancedMesh.geometry.setAttribute('instanceMatrix', this.instancedMesh.instanceMatrix); // This line caused the error
         this.instancedMesh.instanceColor = new THREE.InstancedBufferAttribute(new Float32Array(maxInstancesInChunk * 3), 3);
 
         this.instancedMesh.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
         this.instancedMesh.instanceColor.setUsage(THREE.DynamicDrawUsage);
         this.instancedMesh.castShadow = true;
         this.instancedMesh.receiveShadow = true;
-        this.instancedMesh.count = 0; // Initially no instances
-        this.instancedMesh.position.set(this.offsetX, this.offsetY, this.offsetZ); // Position the chunk mesh
+        this.instancedMesh.count = 0;
+        this.instancedMesh.position.set(this.offsetX, this.offsetY, this.offsetZ);
         this.scene.add(this.instancedMesh);
 
-        // Bounding box for frustum culling
         this.boundingBox = new THREE.Box3(
             new THREE.Vector3(this.offsetX, this.offsetY, this.offsetZ),
             new THREE.Vector3(this.offsetX + chunkSize * VS, this.offsetY + chunkSize * VS, this.offsetZ + chunkSize * VS)
         );
     }
 
-    // Helper to get local voxel key within chunk
     getLocalKey(gx, gy, gz) {
         const lx = gx % this.chunkSize;
         const ly = gy % this.chunkSize;
         const lz = gz % this.chunkSize;
-        return key(lx, ly, lz); // Use the global key function for local keys too
+        return key(lx, ly, lz);
     }
 
     addVoxel(gx, gy, gz, colorHex) {
@@ -1382,15 +1262,13 @@ class VoxelChunk {
         const globalKey = key(gx, gy, gz);
 
         if (this.voxels.has(localKey)) {
-            // Update existing voxel
             const instanceId = this.voxels.get(localKey).instanceId;
             this.voxels.set(localKey, { color: colorHex, instanceId });
             this.updateInstanceColor(instanceId, colorHex);
         } else {
-            // Add new voxel
             const instanceId = this.instancedMesh.count++;
             this.voxels.set(localKey, { color: colorHex, instanceId });
-            this.globalToLocalInstanceIdMap.set(globalKey, instanceId); // Map global key to instance ID within this chunk
+            this.globalToLocalInstanceIdMap.set(globalKey, instanceId);
 
             const localX = gx % this.chunkSize;
             const localY = gy % this.chunkSize;
@@ -1416,10 +1294,8 @@ class VoxelChunk {
         this.voxels.delete(localKey);
         this.globalToLocalInstanceIdMap.delete(globalKey);
 
-        // Swap the last instance with the removed one to maintain dense buffer
         const lastInstanceId = this.instancedMesh.count - 1;
         if (removedInstanceId !== lastInstanceId) {
-            // Find the local key of the voxel that was at the lastInstanceId
             let lastVoxelLocalKey = null;
             for (const [lKey, data] of this.voxels.entries()) {
                 if (data.instanceId === lastInstanceId) {
@@ -1429,7 +1305,6 @@ class VoxelChunk {
             }
             
             if (lastVoxelLocalKey !== null) {
-                // Copy matrix and color from last instance to removed instance's slot
                 const tempMatrix = new THREE.Matrix4();
                 this.instancedMesh.getMatrixAt(lastInstanceId, tempMatrix);
                 this.instancedMesh.setMatrixAt(removedInstanceId, tempMatrix);
@@ -1437,9 +1312,7 @@ class VoxelChunk {
                 const lastVoxelColor = this.voxels.get(lastVoxelLocalKey).color;
                 this.updateInstanceColor(removedInstanceId, lastVoxelColor);
 
-                // Update the instanceId in the last voxel's data
                 this.voxels.get(lastVoxelLocalKey).instanceId = removedInstanceId;
-                // Update the globalToLocalInstanceIdMap for the moved voxel
                 const [lx, ly, lz] = parseKey(lastVoxelLocalKey);
                 const globalX = this.chunkX * this.chunkSize + lx;
                 const globalY = this.chunkY * this.chunkSize + ly;
@@ -1463,7 +1336,6 @@ class VoxelChunk {
 
     updateInstanceColor(instanceId, hex) {
         const c = new THREE.Color(hex);
-        // Set color using r, g, b components (0-1 range)
         this.instancedMesh.instanceColor.setXYZ(instanceId, c.r, c.g, c.b);
         this.instancedMesh.instanceColor.needsUpdate = true;
     }
@@ -1479,14 +1351,10 @@ class VoxelChunk {
 }
 
 
-/* ---------- Hilfsfunktionen (alle vor window.onload verschoben) ---------- */
-
 function onResize() {
-    // Use containerDiv for sizing
     cam.aspect = containerDiv.clientWidth / containerDiv.clientHeight;
     cam.updateProjectionMatrix();
     ren.setSize(containerDiv.clientWidth, containerDiv.clientHeight);
-    // NEW: Adjust pixel ratio for mobile performance
     if (isMobile) {
         ren.setPixelRatio(Math.min(1.5, window.devicePixelRatio));
     } else {
@@ -1498,11 +1366,10 @@ function handleGesture() {
     const pointers = [...activePointers.values()];
     if (pointers.length === 0) return;
 
-    // --- Single-finger drag for camera rotation ---
     if (pointers.length === 1 && gestureState.type === 'rotate') {
         const p = pointers[0];
         const dx = p.x - gestureState.lastMid.x;
-        const dy = p.y - p.y; // Corrected this line
+        const dy = p.y - p.y;
 
         euler.y -= dx * ROTATE_SPEED_TOUCH;
         euler.x += dy * ROTATE_SPEED_TOUCH;
@@ -1513,14 +1380,12 @@ function handleGesture() {
         return;
     }
 
-    // --- Multi-finger gestures (pan/pinch) ---
     if (pointers.length >= 2) {
         const [p0, p1] = pointers;
         const midX = (p0.x + p1.x) * 0.5;
         const midY = (p0.y + p1.y) * 0.5;
         const dist = Math.hypot(p1.x - p0.x, p1.y - p0.y);
 
-        // --- Determine gesture type on first move ---
         if (gestureState.type === 'none') {
             const dMid = Math.hypot(midX - gestureState.startMid.x, midY - gestureState.startMid.y);
             const relDelta = Math.abs(dist - gestureState.startDist) / gestureState.startDist;
@@ -1530,21 +1395,18 @@ function handleGesture() {
             } else if (dMid > PAN_PIX_TH) {
                 gestureState.type = 'pan';
             }
-            return; // Wait for next move event to execute
+            return;
         }
 
-        // --- Execute Pinch (Zoom) ---
         else if (gestureState.type === 'pinch') {
             const scale = dist / gestureState.lastDist;
-            // Invert pinch zoom direction
-            const zoomDelta = (scale - 1) * PINCH_ZOOM_MULT * moveSpeed; // MODIFIED: (scale - 1) instead of (1 - scale)
+            const zoomDelta = (scale - 1) * PINCH_ZOOM_MULT * moveSpeed;
             cam.position.addScaledVector(
                 cam.getWorldDirection(new THREE.Vector3()),
                 zoomDelta
             );
             gestureState.lastDist = dist;
         }
-        // --- Execute Pan (Strafe) ---
         else if (gestureState.type === 'pan') {
             const panFactor = PAN_SPEED_TOUCH * moveSpeed;
             const dx = (midX - gestureState.lastMid.x) * panFactor;
@@ -1552,7 +1414,6 @@ function handleGesture() {
 
             const dir = cam.getWorldDirection(new THREE.Vector3());
             const right = new THREE.Vector3().crossVectors(dir, cam.up).normalize();
-            // Use world up for vertical panning to avoid disorienting movement
             const upVec = new THREE.Vector3(0, 1, 0);
 
             cam.position.addScaledVector(right, -dx);
@@ -1564,15 +1425,14 @@ function handleGesture() {
 }
 
 
-function releasePointer(id, eventType) { // Add eventType parameter
+function releasePointer(id, eventType) {
     activePointers.delete(id);
 
-    // NEW: Handle three-finger swipe for undo/redo
     if (gestureState.initialPointerCount >= 3 && activePointers.size === 0 && initialClickPos && eventType.pointerType === 'touch') {
         const dx = eventType.clientX - initialClickPos.x;
         const absDx = Math.abs(dx);
 
-        if (absDx > 50) { // Horizontal swipe threshold
+        if (absDx > 50) {
             if (dx > 0) redo();
             else undo();
         }
@@ -1590,17 +1450,13 @@ function releasePointer(id, eventType) { // Add eventType parameter
         doubleTapDragActive = false;
         lastActionVoxelCoords = null;
         touchIndicator.style.display = 'none';
-        // Also reset fixed drag plane params for touch
         fixedDragPlaneParams = { level: null, axis: null };
-        // Hide distance display on touch up
-        // Only hide if not in measurement mode or if measurement is completed
         if (currentMode !== Modes.MEASURE || (currentMode === Modes.MEASURE && measurementStartPoint === null && measurementEndPoint === null)) {
             distanceDisplay.style.display = 'none';
         }
         initialDragVoxelWorldPos = null;
-        dragAxisLock = null; // Reset drag axis lock
+        dragAxisLock = null;
         
-        // Clear preview line voxels on touch up
         previewLineInstancedMesh.count = 0;
         previewLineInstancedMesh.instanceMatrix.needsUpdate = true;
         previewLineVoxels = [];
@@ -1646,10 +1502,8 @@ function updateGridHelperPosition() {
 }
 
 function cycleMode() {
-    // Check if any input element has focus
     const activeElement = document.activeElement;
     if (activeElement && (activeElement.tagName === 'INPUT' || activeElement.tagName === 'SELECT' || activeElement.tagName === 'TEXTAREA')) {
-        // If an input element has focus, prevent mode change and return focus to canvas
         cvs.focus();
         return;
     }
@@ -1662,15 +1516,13 @@ function cycleMode() {
             currentMode = Modes.DRAW;
             break;
         case Modes.DRAW:
-            currentMode = Modes.MEASURE; // Cycle to Measure mode
+            currentMode = Modes.MEASURE;
             break;
-        case Modes.MEASURE: // NEW: Cycle back to ADD mode
+        case Modes.MEASURE:
             currentMode = Modes.ADD;
-            // Reset measurement state when exiting measure mode
             measurementStartPoint = null;
             measurementEndPoint = null;
             distanceDisplay.style.display = 'none';
-            // Clear preview line voxels
             previewLineInstancedMesh.count = 0;
             previewLineInstancedMesh.instanceMatrix.needsUpdate = true;
             previewLineVoxels = [];
@@ -1679,16 +1531,15 @@ function cycleMode() {
     document.getElementById('current-mode').textContent = `Modus: ${currentMode}`;
     fixedDragPlaneParams = { level: null, axis: null };
     lastActionVoxelCoords = null;
-    updatePreviewVoxel(0, 0, 0, false); // Hide preview when changing mode
+    updatePreviewVoxel(0, 0, 0, false);
 }
 
 function setActivePreset(index) {
     if (index >= 0 && index < presetColors.length) {
         currentColor = presetColors[index];
         document.getElementById('color-picker').value = currentColor;
-        localStorage.setItem('voxelEditorColor', currentColor); // Save as current selected color
+        localStorage.setItem('voxelEditorColor', currentColor);
 
-        // Update active class for visual feedback
         presetBoxes.forEach((box, i) => {
             if (i === index) {
                 box.classList.add('active');
@@ -1696,36 +1547,28 @@ function setActivePreset(index) {
                 box.classList.remove('active');
             }
         });
-        activePresetIndex = index; // Store which preset is active
+        activePresetIndex = index;
     }
 }
 
-// New function to save current color to a preset slot
-function savePresetColor(index, colorValue) { // Modified to accept colorValue
+function savePresetColor(index, colorValue) {
     if (index >= 0 && index < presetColors.length) {
-        presetColors[index] = colorValue; // Update the array with the new color
-        localStorage.setItem(`voxelPresetColor${index + 1}`, colorValue); // Persist to local storage
-        // The input type="color" itself will update its background color
-        // No need to call setActivePreset here, as it's a direct edit of the preset
-        console.log(`Preset color ${index + 1} saved: ${colorValue}`);
+        presetColors[index] = colorValue;
+        localStorage.setItem(`voxelPresetColor${index + 1}`, colorValue);
     }
 }
 
-// NEW: Helper function to apply a state (set of voxels)
 function applyVoxelState(state) {
-    // Clear all current voxels
     for (const chunk of chunks.values()) {
         chunk.dispose();
     }
     chunks.clear();
     voxels.clear();
 
-    // Add voxels from the provided state
     state.forEach(v => _addSingleVoxel(v.gx, v.gy, v.gz, v.color));
 }
 
 function addCommand(type, oldState = null, newState = null, commandData = null) {
-    // Clear redo history
     if (historyPointer < history.length - 1) {
         history.splice(historyPointer + 1);
     }
@@ -1733,7 +1576,6 @@ function addCommand(type, oldState = null, newState = null, commandData = null) 
     history.push({ type, oldState, newState, commandData });
     historyPointer++;
 
-    // Limit history size
     if (history.length > MAX_HISTORY_SIZE) {
         history.shift();
         historyPointer--;
@@ -1743,7 +1585,7 @@ function addCommand(type, oldState = null, newState = null, commandData = null) 
 function executeCommand(command, reverse = false) {
     const { type, oldState, newState, commandData } = command;
     switch (type) {
-        case 'batch': // Handle batch commands for drag/multi-block operations
+        case 'batch':
             if (reverse) {
                 applyVoxelState(oldState);
             } else {
@@ -1754,7 +1596,7 @@ function executeCommand(command, reverse = false) {
             if (reverse) {
                 applyVoxelState(oldState);
             } else {
-                clearAllInternal(true); // Clear directly without history
+                clearAllInternal(true);
             }
             break;
         case 'fillLevel':
@@ -1774,12 +1616,12 @@ function executeCommand(command, reverse = false) {
             applyVoxelState(reverse ? oldState : newState);
             break;
     }
-    rebuildHelpers(); // Ensure helpers reflect the new state
+    rebuildHelpers();
 }
 
 function undo() {
     if (historyPointer >= 0) {
-        executeCommand(history[historyPointer], true); // true for reverse
+        executeCommand(history[historyPointer], true);
         historyPointer--;
     }
 }
@@ -1787,11 +1629,10 @@ function undo() {
 function redo() {
     if (historyPointer < history.length - 1) {
         historyPointer++;
-        executeCommand(history[historyPointer], false); // false for forward
+        executeCommand(history[historyPointer], false);
     }
 }
 
-// Internal helper: Directly adds a single voxel to the scene and global map
 function _addSingleVoxel(gx, gy, gz, colorHex) {
     const globalKey = key(gx, gy, gz);
     voxels.set(globalKey, { color: colorHex });
@@ -1806,7 +1647,6 @@ function _addSingleVoxel(gx, gy, gz, colorHex) {
     chunk.addVoxel(gx, gy, gz, colorHex);
 }
 
-// Internal helper: Directly removes a single voxel from the scene and global map
 function _removeSingleVoxel(gx, gy, gz) {
     const globalKey = key(gx, gy, gz);
     if (!voxels.has(globalKey)) return;
@@ -1825,7 +1665,6 @@ function _removeSingleVoxel(gx, gy, gz) {
     }
 }
 
-// Internal helper: Directly recolors a single voxel in the scene and global map
 function _recolorSingleVoxel(gx, gy, gz, newColorHex) {
     const globalKey = key(gx, gy, gz);
     if (!voxels.has(globalKey)) return;
@@ -1839,15 +1678,12 @@ function _recolorSingleVoxel(gx, gy, gz, newColorHex) {
     }
 }
 
-// NEW: Helper function to perform the actual voxel modification for a single 1x1x1 voxel
-// This is now always called with 1x1x1 dimensions.
 function performVoxelModification(gx, gy, gz, mode, color) {
     const globalKey = key(gx, gy, gz);
     const hasVoxel = voxels.has(globalKey);
 
     switch (mode) {
         case Modes.ADD:
-            // Only add if it doesn't exist or color is different
             if (!hasVoxel || voxels.get(globalKey).color !== color) {
                 _addSingleVoxel(gx, gy, gz, color);
             }
@@ -1865,20 +1701,15 @@ function performVoxelModification(gx, gy, gz, mode, color) {
     }
 }
 
-
-// NEU: Hilfsfunktion zum Aktualisieren des Vorschau-Voxels
-// Now takes explicit dimX, dimY, dimZ, but for MEASURE mode, it will override to 1x1x1
 function updatePreviewVoxel(x, y, z, visible, dimX = 1, dimY = 1, dimZ = 1) {
     if (previewVoxelMesh) {
         if (visible) {
-            // For MEASURE mode, always show a 1x1x1 preview
             if (currentMode === Modes.MEASURE) {
                 dimX = 1;
                 dimY = 1;
                 dimZ = 1;
             }
 
-            // Dispose old geometry if dimensions change
             if (previewVoxelMesh.geometry.parameters.width !== dimX * VS ||
                 previewVoxelMesh.geometry.parameters.height !== dimY * VS ||
                 previewVoxelMesh.geometry.parameters.depth !== dimZ * VS) {
@@ -1887,8 +1718,6 @@ function updatePreviewVoxel(x, y, z, visible, dimX = 1, dimY = 1, dimZ = 1) {
                 previewVoxelMesh.geometry = tempGeometry;
             }
 
-
-            // Calculate the center of the block relative to its (x,y,z) base corner
             const centerX = x * VS + (dimX * VS) / 2;
             const centerY = y * VS + (dimY * VS) / 2;
             const centerZ = z * VS + (dimZ * VS) / 2;
@@ -1896,23 +1725,19 @@ function updatePreviewVoxel(x, y, z, visible, dimX = 1, dimY = 1, dimZ = 1) {
             previewVoxelMesh.position.set(centerX, centerY, centerZ);
 
             previewVoxelMesh.visible = true;
-            previewVoxelMaterial.color.set(currentColor); // Vorschau-Farbe an aktuelle Farbe anpassen
-            // Optional: Passe die Opazität basierend auf dem Modus an
+            previewVoxelMaterial.color.set(currentColor);
             if (currentMode === Modes.DELETE) {
-                previewVoxelMaterial.opacity = 0.2; // Weniger sichtbar beim Löschen
+                previewVoxelMaterial.opacity = 0.2;
             } else {
-                previewVoxelMaterial.opacity = 0.5; // Standard Opazität
+                previewVoxelMaterial.opacity = 0.5;
             }
         } else {
             previewVoxelMesh.visible = false;
         }
     }
 }
-// ENDE NEU
 
-// NEW helper function to set the fixed drag plane parameters
 function setFixedDragPlane(clientX, clientY, mode) {
-    // Only set fixed drag plane for ADD mode
     if (mode !== Modes.ADD) {
         fixedDragPlaneParams = { level: null, axis: null };
         return;
@@ -1924,33 +1749,26 @@ function setFixedDragPlane(clientX, clientY, mode) {
     const raycaster = new THREE.Raycaster();
     raycaster.setFromCamera(mouse, cam);
     
-    // Raycast against all active chunk meshes
     const objectsToIntersect = Array.from(chunks.values()).map(chunk => chunk.instancedMesh);
     const intersects = raycaster.intersectObjects(objectsToIntersect);
 
     if (intersects.length > 0) {
         const hit = intersects[0];
-        // The face normal is in world coordinates for the hit face
         const hitNormal = hit.face.normal.clone();
         
-        // BUGFIX: Move the intersection point slightly *inside* the hit voxel
-        // This ensures that flooring the coordinate gives the coordinate of the HIT voxel, not the next one.
         const hitPoint = hit.point.clone().sub(hitNormal.multiplyScalar(0.01));
 
-        // Convert world position to grid coordinates
         const hitVoxelX = Math.floor(hitPoint.x / VS);
         const hitVoxelY = Math.floor(hitPoint.y / VS);
         const hitVoxelZ = Math.floor(hitPoint.z / VS);
 
         let level, axis;
 
-        // The normal needs to be reset for axis detection after being used for the offset calculation
         const axisNormal = hit.face.normal;
         const absX = Math.abs(axisNormal.x);
         const absY = Math.abs(axisNormal.y);
         const absZ = Math.abs(axisNormal.z);
 
-        // When adding, we want to place on the *next* layer relative to the hit voxel
         if (absY > absX && absY > absZ) { 
             axis = 'y';
             level = hitVoxelY + Math.round(axisNormal.y);
@@ -1964,19 +1782,16 @@ function setFixedDragPlane(clientX, clientY, mode) {
         fixedDragPlaneParams.level = level;
         fixedDragPlaneParams.axis = axis;
     } else {
-        // If no voxel is hit, default to the current active drawing level and axis
         fixedDragPlaneParams.axis = currentDrawingAxis;
         fixedDragPlaneParams.level = activeDrawingLevel[currentDrawingAxis];
     }
 }
 
-// NEW: Magnetic targeting helper for touch assist
 function getNearestVoxelCenter(intersectionPoint) {
     const gx = Math.floor(intersectionPoint.x / VS);
     const gy = Math.floor(intersectionPoint.y / VS);
     const gz = Math.floor(intersectionPoint.z / VS);
 
-    // Calculate the center of the grid cell
     return new THREE.Vector3(
         gx * VS + HALF,
         gy * VS + HALF,
@@ -1984,44 +1799,27 @@ function getNearestVoxelCenter(intersectionPoint) {
     );
 }
 
-// Helper function to find the closest point on a line (defined by point and direction) to a ray
 const tempVector1 = new THREE.Vector3();
 const tempVector2 = new THREE.Vector3();
 
 function closestPointOnLineToRay(rayOrigin, rayDirection, linePoint, lineDirection) {
-    const a = rayDirection.dot(rayDirection); // |rayDirection|^2
-    const b = rayDirection.dot(lineDirection); // dot product of directions
-    const c = lineDirection.dot(lineDirection); // |lineDirection|^2
+    const a = rayDirection.dot(rayDirection);
+    const b = rayDirection.dot(lineDirection);
+    const c = lineDirection.dot(lineDirection);
 
-    // Vector from linePoint to rayOrigin
     const r = tempVector1.subVectors(rayOrigin, linePoint);
 
     const denominator = a * c - b * b;
 
-    if (denominator === 0) { // Lines are parallel or collinear
-        // In this case, just project rayOrigin onto the line
+    if (denominator === 0) {
         return linePoint.clone().add(lineDirection.clone().multiplyScalar(r.dot(lineDirection) / c));
     }
 
-    // Parameter 't' for the ray (P_ray = rayOrigin + t * rayDirection)
-    // Parameter 's' for the line (P_line = linePoint + s * lineDirection)
-    // We want to find 's' for the point on the line closest to the ray
     const s = (a * r.dot(lineDirection) - b * r.dot(rayDirection)) / denominator;
 
     return linePoint.clone().add(lineDirection.clone().multiplyScalar(s));
 }
 
-
-/**
- * Berechnet die Ziel-Voxel-Koordinaten basierend auf der Mausposition und dem Modus.
- * Diese Funktion gibt die rohen Gitterkoordinaten zurück, ohne Ankerpunkt-Offset oder Klemmen.
- *
- * @param {number} clientX - X-Koordinate des Mauszeigers im Client-Bereich.
- * @param {number} clientY - Y-Koordinate des Mauszeigers im Client-Bereich.
- * @param {string} mode - Aktueller Modus (ADD, DELETE, DRAW, MEASURE).
- * @param {string} pointerType - Typ des Pointers ('mouse' oder 'touch').
- * @returns {object|null} - Objekt mit gx, gy, gz oder null, wenn kein Ziel gefunden wurde.
- */
 function calculateTargetVoxelCoords(clientX, clientY, mode, pointerType) {
     if (isPointerLocked) return null;
 
@@ -2042,22 +1840,17 @@ function calculateTargetVoxelCoords(clientX, clientY, mode, pointerType) {
         const hitNormal = hit.face.normal.clone();
         intersectionPoint.copy(hit.point);
 
-        // Berechne die Koordinaten des *getroffenen* Voxels.
-        // Verschiebe den Schnittpunkt leicht *innerhalb* des getroffenen Voxels, um das Abrunden zu erleichtern.
-        const hitPointInside = hit.point.clone().sub(hitNormal.multiplyScalar(0.001)); // Kleinerer Offset für Präzision
+        const hitPointInside = hit.point.clone().sub(hitNormal.multiplyScalar(0.001));
         const hitVoxelX = Math.floor(hitPointInside.x / VS);
         const hitVoxelY = Math.floor(hitPointInside.y / VS);
         const hitVoxelZ = Math.floor(hitPointInside.z / VS);
 
         if (mode === Modes.ADD) {
-            // Im Hinzufügen-Modus ist das Ziel das Voxel *neben* dem getroffenen
-            // in Richtung der Normalen.
             let normalX = 0, normalY = 0, normalZ = 0;
             const absX = Math.abs(hit.face.normal.x);
             const absY = Math.abs(hit.face.normal.y);
             const absZ = Math.abs(hit.face.normal.z);
 
-            // Bestimme die dominante Normalkomponente, um eine saubere achsenparallele Platzierung zu gewährleisten
             if (absX > absY && absX > absZ) {
                 normalX = Math.sign(hit.face.normal.x);
             } else if (absY > absX && absY > absZ) {
@@ -2065,7 +1858,6 @@ function calculateTargetVoxelCoords(clientX, clientY, mode, pointerType) {
             } else if (absZ > absX && absZ > absY) {
                 normalZ = Math.sign(hit.face.normal.z);
             }
-            // Fallback für Kanten-/Eckfälle, bei denen mehrere Komponenten gleich oder nahezu gleich sein könnten
             if (normalX === 0 && normalY === 0 && normalZ === 0) {
                 if (Math.abs(hit.face.normal.y) > 0.01) normalY = Math.sign(hit.face.normal.y);
                 else if (Math.abs(hit.face.normal.x) > 0.01) normalX = Math.sign(hit.face.normal.x);
@@ -2077,13 +1869,11 @@ function calculateTargetVoxelCoords(clientX, clientY, mode, pointerType) {
                 gy: hitVoxelY + normalY,
                 gz: hitVoxelZ + normalZ
             };
-        } else { // DELETE, DRAW, MEASURE
-            // In anderen Modi ist das Ziel das *getroffene* Voxel selbst.
+        } else {
             targetVoxelCoords = { gx: hitVoxelX, gy: hitVoxelY, gz: hitVoxelZ };
         }
-    } else { // Kein Voxel getroffen
+    } else {
         if (mode === Modes.ADD) {
-            // Wenn kein Voxel getroffen wird, verwende im Hinzufügen-Modus die aktive Zeichenebene.
             let planeNormal = new THREE.Vector3();
             let planeConstant = 0;
             if (currentDrawingAxis === 'y') {
@@ -2109,7 +1899,6 @@ function calculateTargetVoxelCoords(clientX, clientY, mode, pointerType) {
 
                 targetVoxelCoords = { gx, gy, gz };
             } else {
-                // KRITISCHER FALLBACK: Wenn der Strahl die Ebene nicht schneidet, Standard auf die Mitte der aktiven Zeichenebene.
                 targetVoxelCoords = {
                     gx: Math.floor(GRID / 2),
                     gy: Math.floor(GRID / 2),
@@ -2120,10 +1909,8 @@ function calculateTargetVoxelCoords(clientX, clientY, mode, pointerType) {
                 else if (currentDrawingAxis === 'z') targetVoxelCoords.gz = activeDrawingLevel.z;
             }
         }
-        // Wenn nicht im Hinzufügen-Modus und keine Schnittmenge, bleibt targetVoxelCoords null.
     }
 
-    // Wende Touch-Assist (magnetische Zielerfassung) an, wenn für Touch-Geräte aktiviert
     if (targetVoxelCoords && pointerType === 'touch' && touchAssistEnabled && intersectionPoint) {
         const snappedPos = getNearestVoxelCenter(intersectionPoint);
         targetVoxelCoords.gx = Math.round(snappedPos.x / VS - HALF);
@@ -2131,42 +1918,37 @@ function calculateTargetVoxelCoords(clientX, clientY, mode, pointerType) {
         targetVoxelCoords.gz = Math.round(snappedPos.z / VS - HALF);
     }
     
-    // Ankerpunkt-Offset und Klemmen werden vom Aufrufer (onPointerDown/onPointerMove) angewendet.
     return targetVoxelCoords;
 }
 
 
 function clearAllInternal(fromHistory = false) {
     if (!fromHistory) {
-        // Capture old state for undo
         const oldState = [...voxels.entries()].map(([id, data]) => {
             const parts = parseKey(id);
             return { gx: parts[0], gy: parts[1], gz: parts[2], color: data.color };
         });
         addCommand('clearAll', oldState, []);
     }
-    // Dispose all chunks and clear the chunks map
     for (const chunk of chunks.values()) {
         chunk.dispose();
     }
     chunks.clear();
-    voxels.clear(); // Clear global voxel map
-    rebuildHelpers(); // Ensure helpers are reset or updated appropriately
+    voxels.clear();
+    rebuildHelpers();
 }
 
 function clearAll() {
-    clearAllInternal(false); // User initiated clear, adds to history
+    clearAllInternal(false);
 }
 
 
 function fillActiveLevel() {
-    // Capture the current state before the fill for undo/redo
     const oldState = [...voxels.entries()].map(([id, data]) => {
         const parts = parseKey(id);
         return { gx: parts[0], gy: parts[1], gz: parts[2], color: data.color };
     });
 
-    // Clear existing voxels on the plane for fill, without adding to history
     const voxelsToRemove = [];
     for (let x = 0; x < GRID; x++) {
         for (let z = 0; z < GRID; z++) {
@@ -2177,12 +1959,12 @@ function fillActiveLevel() {
                 gz = z;
             } else if (currentDrawingAxis === 'x') {
                 gx = activeDrawingLevel.x;
-                gy = x; // Use x as y-coordinate for horizontal plane
-                gz = z; // Use z as z-coordinate
+                gy = x;
+                gz = z;
             }
             else if (currentDrawingAxis === 'z') {
                 gx = x;
-                gy = z; // Use z as y-coordinate for horizontal plane
+                gy = z;
                 gz = activeDrawingLevel.z;
             }
             const k = key(gx, gy, gz);
@@ -2191,14 +1973,12 @@ function fillActiveLevel() {
             }
         }
     }
-    // Remove all existing voxels on the plane
     voxelsToRemove.forEach(k => {
         const [gx, gy, gz] = parseKey(k);
         _removeSingleVoxel(gx, gy, gz);
     });
 
 
-    // Add new voxels for the fill
     const newState = [];
     for (let x = 0; x < GRID; x++) {
         for (let z = 0; z < GRID; z++) {
@@ -2222,16 +2002,15 @@ function fillActiveLevel() {
         }
     }
 
-    // Add a single command for the entire fill operation
     addCommand('fillLevel', oldState, newState);
 }
 
 
 function saveJSON() {
     const data = {};
-    voxels.forEach((value, k) => { // k is now a number
-        const [gx,gy,gz] = parseKey(k); // Parse the numeric key back to coords
-        data[`${gx},${gy},${gz}`] = value.color; // Save as string key
+    voxels.forEach((value, k) => {
+        const [gx,gy,gz] = parseKey(k);
+        data[`${gx},${gy},${gz}`] = value.color;
     });
 
     const settings = {
@@ -2243,11 +2022,11 @@ function saveJSON() {
         currentColor: currentColor,
         presetColors: presetColors,
         activePresetIndex: activePresetIndex,
-        moveSpeed: moveSpeed, // Save fly speed
-        currentBlockSize: currentBlockSize, // Save current block size
-        dynamicBlockDim: dynamicBlockDim, // NEW: Save dynamic block dimensions
-        useDynamicBlockDim: useDynamicBlockDim, // NEW: Save dynamic block flag
-        templateImageData: templateImageData // NEW: Save template image data
+        moveSpeed: moveSpeed,
+        currentBlockSize: currentBlockSize,
+        dynamicBlockDim: dynamicBlockDim,
+        useDynamicBlockDim: useDynamicBlockDim,
+        templateImageData: templateImageData
     };
 
 const projectData = {
@@ -2321,7 +2100,7 @@ const projectData = {
 }
 
 function resetToDefaultProject() {
-    clearAllInternal(true); // Clear everything without adding to history
+    clearAllInternal(true);
     GRID = 10;
     document.getElementById('grid-size-slider').value = GRID;
     document.getElementById('grid-size-display').textContent = `${GRID}×${GRID}×${GRID}`;
@@ -2344,22 +2123,20 @@ function resetToDefaultProject() {
     localStorage.setItem('voxelEditorFlySpeed', moveSpeed);
 
     currentBlockSize = 1;
-    setFixedBlockSize(currentBlockSize); // Use setFixedBlockSize
+    setFixedBlockSize(currentBlockSize);
     localStorage.setItem('voxelEditorCurrentBlockSize', currentBlockSize);
 
-    // NEW: Reset dynamic block size
     dynamicBlockDim = { x: 1, y: 1, z: 1 };
     useDynamicBlockDim = false;
     localStorage.setItem('voxelEditorDynamicBlockDimX', dynamicBlockDim.x);
     localStorage.setItem('voxelEditorDynamicBlockDimY', dynamicBlockDim.y);
-    localStorage.setItem('voxelEditorDynamicBlockDimZ', dynamicBlockDim.z); // Fixed typo in local storage key
+    localStorage.setItem('voxelEditorDynamicBlockDimZ', dynamicBlockDim.z);
     localStorage.setItem('voxelEditorUseDynamicBlockDim', useDynamicBlockDim);
     document.getElementById('dynamic-block-x').value = dynamicBlockDim.x;
     document.getElementById('dynamic-block-y').value = dynamicBlockDim.y;
     document.getElementById('dynamic-block-z').value = dynamicBlockDim.z;
-    updateBlockSizeButtonsActiveState(); // Update active state for buttons
+    updateBlockSizeButtonsActiveState();
 
-    // Reset preset colors to defaults
     presetColors[0] = '#8B4513';
     presetColors[1] = '#708237';
     presetColors[2] = '#6495ED';
@@ -2367,71 +2144,60 @@ function resetToDefaultProject() {
     localStorage.setItem('voxelPresetColor2', presetColors[1]);
     localStorage.setItem('voxelPresetColor3', presetColors[2]);
     presetBoxes.forEach((box, i) => {
-        // For input type="color", setting value directly updates its visual
         box.value = presetColors[i];
         box.classList.remove('active');
     });
     activePresetIndex = -1;
 
-    removeImageTemplate(true); // Remove template without history logging
+    removeImageTemplate(true);
 
     history.length = 0;
     historyPointer = -1;
 
-    // Reset measurement state
     measurementStartPoint = null;
     measurementEndPoint = null;
     distanceDisplay.style.display = 'none';
-    previewLineInstancedMesh.count = 0; // Clear preview line
+    previewLineInstancedMesh.count = 0;
     previewLineInstancedMesh.instanceMatrix.needsUpdate = true;
     previewLineVoxels = [];
 
-    // NEW: Reset project metadata fields (internal variables only)
     projectTitle = '';
     projectDescription = '';
     projectTags = [];
-    projectRemixOf = ''; // Clear remixOf for new project
-    projectSourceJsonUrl = ''; // Clear sourceJsonUrl for new project
+    projectRemixOf = '';
+    projectSourceJsonUrl = '';
     projectVisibility = 'public';
 
     rebuildHelpers();
     resetCameraPosition();
     showToast('Projekt zurückgesetzt', 'Das Projekt wurde auf den Standardzustand zurückgesetzt.', 'info');
-    console.log('Project reset to default state.');
 }
 
-// Refactored function to load project data from a parsed JSON object
 function loadProjectData(projectData) {
     try {
         const loadedVoxels = projectData.voxels;
         const loadedSettings = projectData.settings;
 
-        // Clear current state and history before loading new project
-        clearAllInternal(true); // Clear without adding to history
+        clearAllInternal(true);
 
-        // Remove existing template image if any
-        removeImageTemplate(true); // true to prevent history logging for this internal operation
+        removeImageTemplate(true);
 
-        // NEW: Load project metadata fields into internal variables
         projectTitle = projectData.title || '';
         projectDescription = projectData.description || '';
         projectTags = Array.isArray(projectData.tags) ? projectData.tags : (typeof projectData.tags === 'string' ? projectData.tags.split(',').map(tag => tag.trim()).filter(tag => tag !== '') : []);
-        projectRemixOf = projectData.remixOf || ''; // Load remixOf
-        projectSourceJsonUrl = projectData.sourceJsonUrl || ''; // Load sourceJsonUrl
-        projectVisibility = projectData.visibility || 'public'; // Default to public if not found
+        projectRemixOf = projectData.remixOf || '';
+        projectSourceJsonUrl = projectData.sourceJsonUrl || '';
+        projectVisibility = projectData.visibility || 'public';
 
-        // Load settings first to get the correct GRID size
         if (loadedSettings) {
             GRID = loadedSettings.gridSize !== undefined ? loadedSettings.gridSize : 10;
             document.getElementById('grid-size-slider').value = GRID;
             document.getElementById('grid-size-display').textContent = `${GRID}×${GRID}×${GRID}`;
-            localStorage.setItem('voxelEditorGridSize', GRID); // Ensure it's saved back
-            console.log("Loaded GRID size from JSON:", GRID);
+            localStorage.setItem('voxelEditorGridSize', GRID);
         } else {
             console.warn("No settings found in JSON, using default GRID size.");
         }
 
-        // Load voxels into the global map and create chunks as needed
         for (const k in loadedVoxels) {
             const colorValue = loadedVoxels[k];
             const parts = k.split(',').map(Number); 
@@ -2440,14 +2206,12 @@ function loadProjectData(projectData) {
                 const gy = parts[1];
                 const gz = parts[2];
 
-                // Only add if within the bounds of the newly loaded GRID size
                 if (gx >= 0 && gx < GRID && gy >= 0 && gy < GRID && gz >= 0 && gz < GRID) {
-                    _addSingleVoxel(gx, gy, gz, colorValue); // Use internal helper
+                    _addSingleVoxel(gx, gy, gz, colorValue);
                 }
             }
         }
 
-        // Continue loading other settings after GRID is set and InstancedMesh is re-initialized
         if (loadedSettings) {
             if (loadedSettings.cameraPosition) {
                 cam.position.fromArray(loadedSettings.cameraPosition);
@@ -2474,7 +2238,6 @@ function loadProjectData(projectData) {
             if (loadedSettings.presetColors) {
                 for(let i = 0; i < loadedSettings.presetColors.length && i < presetColors.length; i++) {
                     presetColors[i] = loadedSettings.presetColors[i];
-                    // For input type="color", setting value directly updates its visual
                     document.getElementById(`color-preset-${i + 1}`).value = presetColors[i];
                     localStorage.setItem(`voxelPresetColor${i + 1}`, presetColors[i]);
                 }
@@ -2489,11 +2252,10 @@ function loadProjectData(projectData) {
             }
 
             if (loadedSettings.currentBlockSize !== undefined) {
-                setFixedBlockSize(loadedSettings.currentBlockSize); // Use setFixedBlockSize
+                setFixedBlockSize(loadedSettings.currentBlockSize);
                 localStorage.setItem('voxelEditorCurrentBlockSize', currentBlockSize);
             }
 
-            // NEW: Load dynamic block dimensions and flag
             if (loadedSettings.dynamicBlockDim) {
                 dynamicBlockDim = { ...loadedSettings.dynamicBlockDim };
                 document.getElementById('dynamic-block-x').value = dynamicBlockDim.x;
@@ -2507,12 +2269,11 @@ function loadProjectData(projectData) {
                 useDynamicBlockDim = loadedSettings.useDynamicBlockDim;
                 localStorage.setItem('voxelEditorUseDynamicBlockDim', useDynamicBlockDim);
             }
-            updateBlockSizeButtonsActiveState(); // Update active state for buttons
+            updateBlockSizeButtonsActiveState();
 
 
             if (loadedSettings.templateImageData) {
                 templateImageData = loadedSettings.templateImageData;
-                console.log("Loading template image data:", templateImageData);
                 const loader = new THREE.TextureLoader();
                 loader.load(templateImageData.src, (texture) => {
                     const material = new THREE.MeshBasicMaterial({ map: texture, side: THREE.DoubleSide, transparent: true, depthWrite: false });
@@ -2541,24 +2302,21 @@ function loadProjectData(projectData) {
         history.length = 0;
         historyPointer = -1;
 
-        // Reset measurement state on load
         measurementStartPoint = null;
         measurementEndPoint = null;
         distanceDisplay.style.display = 'none';
-        previewLineInstancedMesh.count = 0; // Clear preview line
+        previewLineInstancedMesh.count = 0;
         previewLineInstancedMesh.instanceMatrix.needsUpdate = true;
         previewLineVoxels = [];
 
-        console.log('Project loaded successfully.');
         resetCameraPosition();
     } catch (error) {
         console.error('Error loading JSON file:', error);
         showToast('Fehler', 'Fehler beim Laden der Datei. Stellen Sie sicher, dass es sich um eine gültige Voxel-Projekt-JSON-Datei handelt. Fehler: ' + error.message, 'error');
-        resetToDefaultProject(); // Reset to safe state on error
+        resetToDefaultProject();
     }
 }
 
-// Original loadJSON function, now calls loadProjectData
 function loadJSON(event) {
     const file = event.target.files[0];
     if (!file) return;
@@ -2567,9 +2325,8 @@ function loadJSON(event) {
     reader.onload = (e) => {
         try {
             const projectData = JSON.parse(e.target.result);
-            // When loading from a local file, it's a new "source" for remixing
             projectRemixOf = '';
-            projectSourceJsonUrl = ''; // Clear previous source
+            projectSourceJsonUrl = '';
             loadProjectData(projectData);
         } catch (error) {
             console.error('Error parsing file JSON:', error);
@@ -2597,7 +2354,7 @@ function exportSTL() {
         
         dummy.position.set(x * VS + HALF, y * VS + HALF, z * VS + HALF);
         dummy.updateMatrix();
-        tempMatrix.copy(dummy.matrix); // Use dummy for matrix calculation
+        tempMatrix.copy(dummy.matrix);
 
         tempColorExport.set(data.color);
 
@@ -2619,10 +2376,8 @@ function exportSTL() {
         mergedGeometry = new THREE.BufferGeometry();
     }
 
-    // Create a temporary mesh for the exporter
-    const tempMesh = new THREE.Mesh(mergedGeometry); // No material needed for STL export
+    const tempMesh = new THREE.Mesh(mergedGeometry);
     
-    // Ensure the exporter is available
     if (typeof THREE.STLExporter === 'undefined') {
         console.error("STLExporter is not loaded. Make sure the script is included.");
         showToast('Export fehlgeschlagen', 'STLExporter-Bibliothek nicht geladen.', 'error');
@@ -2647,7 +2402,6 @@ function exportSTL() {
     showToast('Export erfolgreich', 'STL-Modell erfolgreich exportiert!', 'success');
 }
 
-// NEW: Function to export OBJ
 function exportOBJ() {
     if (voxels.size === 0) {
         showToast('Export fehlgeschlagen', 'Keine Voxel zum Exportieren vorhanden!', 'warning');
@@ -2659,20 +2413,19 @@ function exportOBJ() {
 
     voxels.forEach((data, k) => {
         const [x, y, z] = parseKey(k);
-        voxelsToExport.push({ x, y, z, c: 1 }); // VoxelShaperIO.voxToOBJ doesn't use color index directly for OBJ
+        voxelsToExport.push({ x, y, z, c: 1 });
         maxX = Math.max(maxX, x);
         maxY = Math.max(maxY, y);
         maxZ = Math.max(maxZ, z);
     });
 
     const voxModel = new VoxelShaperIO.VoxModel(maxX + 1, maxY + 1, maxZ + 1, voxelsToExport);
-    const objText = VoxelShaperIO.voxToOBJ(voxModel, VS); // Use VS (1) as cubeSize
+    const objText = VoxelShaperIO.voxToOBJ(voxModel, VS);
 
     VoxelShaperIO.saveBlob(objText, 'voxel_model.obj');
     showToast('Export erfolgreich', 'OBJ-Modell erfolgreich exportiert!', 'success');
 }
 
-// NEW: Toast message function
 function showToast(title, message, type = 'info', duration = 3000) {
     const toastContainer = document.getElementById('toast-container');
     const toast = document.createElement('div');
@@ -2687,7 +2440,6 @@ function showToast(title, message, type = 'info', duration = 3000) {
 
     toastContainer.appendChild(toast);
 
-    // Trigger reflow to ensure transition plays
     void toast.offsetWidth;
     toast.classList.add('show');
 
@@ -2698,7 +2450,7 @@ function showToast(title, message, type = 'info', duration = 3000) {
     });
 
     setTimeout(() => {
-        if (toast.parentNode) { // Check if toast hasn't been manually closed
+        if (toast.parentNode) {
             toast.classList.remove('show');
             toast.addEventListener('transitionend', () => toast.remove(), { once: true });
         }
@@ -2714,12 +2466,10 @@ function resetCameraPosition() {
     }
 }
 
-// NEW: Function to load image as template
 function loadImageTemplate() {
     document.getElementById('imageFileInput').click();
 }
 
-// NEW: Handle image file selection
 function handleImageFileSelect(event) {
     const file = event.target.files[0];
     if (!file) return;
@@ -2751,7 +2501,7 @@ function handleImageFileSelect(event) {
                 (GRID * VS) / 2,
                 -0.5 * VS
             );
-            templateImageMesh.rotation.y = Math.PI; // Rotate 180 degrees around Y-axis
+            templateImageMesh.rotation.y = Math.PI;
             templateImageMesh.renderOrder = -1;
             scene.add(templateImageMesh);
 
@@ -2763,7 +2513,6 @@ function handleImageFileSelect(event) {
                 scaledWidth: planeWidth,
                 scaledHeight: planeHeight
             };
-            console.log("Saving template image data:", templateImageData);
 
             document.getElementById('removeImageTemplateBtn').style.display = 'inline-block';
             showToast('Bildvorlage geladen', 'Bild als Vorlage erfolgreich geladen.', 'success');
@@ -2773,7 +2522,6 @@ function handleImageFileSelect(event) {
     reader.readAsDataURL(file);
 }
 
-// NEW: Function to remove the image template
 function removeImageTemplate(fromLoad = false) {
     if (templateImageMesh) {
         scene.remove(templateImageMesh);
@@ -2788,35 +2536,23 @@ function removeImageTemplate(fromLoad = false) {
     }
 }
 
-// NEW: Function to update the ground plane size based on current GRID
 function updateGroundPlaneSize() {
-    // Remove the ground plane if it's not needed or exists
     if (groundPlane) {
         scene.remove(groundPlane);
         groundPlane.geometry.dispose();
         groundPlane.material.dispose();
         groundPlane = null;
     }
-    // If you want a ground plane, re-add it here, e.g.:
-    // const groundGeometry = new THREE.PlaneGeometry(GRID * VS, GRID * VS);
-    // const groundMaterial = new THREE.MeshLambertMaterial({ color: 0x555555 });
-    // groundPlane = new THREE.Mesh(groundGeometry, groundMaterial);
-    // groundPlane.rotation.x = -Math.PI / 2;
-    // groundPlane.position.y = -0.01; // Slightly below grid
-    // groundPlane.receiveShadow = true;
-    // scene.add(groundPlane);
 }
 
-// Helper to get current block dimensions based on active mode
 function getCurrentBlockDimensions() {
-    let dimX, dimY, dimZ; // Declare them here for clarity
+    let dimX, dimY, dimZ;
 
     if (useDynamicBlockDim) {
         dimX = dynamicBlockDim.x;
         dimY = dynamicBlockDim.y;
         dimZ = dynamicBlockDim.z;
     } else {
-        // Fixed block size logic (2D square on active plane)
         dimX = 1;
         dimY = 1;
         dimZ = 1;
@@ -2826,24 +2562,20 @@ function getCurrentBlockDimensions() {
         } else if (currentDrawingAxis === 'x') {
             dimY = currentBlockSize;
             dimZ = currentBlockSize;
-        } else { // currentDrawingAxis === 'z'
+        } else {
             dimX = currentBlockSize;
             dimY = currentBlockSize;
         }
     }
-    // Ensure dimensions are at least 1
     dimX = Math.max(1, dimX);
     dimY = Math.max(1, dimY);
     dimZ = Math.max(1, dimZ);
 
-    console.log("getCurrentBlockDimensions: ", { dimX, dimY, dimZ });
     return { dimX, dimY, dimZ };
 }
 
-// NEW: Function to handle login/logout
 async function loginLogout() {
     if (auth.currentUser) {
-        // User is logged in, sign out
         try {
             await window.firebase.signOut(auth);
             showToast('Abgemeldet', 'Sie wurden erfolgreich abgemeldet.', 'info');
@@ -2852,28 +2584,24 @@ async function loginLogout() {
             showToast('Fehler beim Abmelden', `Fehler: ${error.message}`, 'error');
         }
     } else {
-        // No user logged in, open auth modal
         openAuthModal();
     }
 }
 
-// NEW: Function to open the upload modal
 function openUploadModal() {
     if (!currentUserId) {
         showToast('Anmeldung erforderlich', 'Bitte melden Sie sich an, um Ihr Projekt hochzuladen.', 'warning');
+        openAuthModal();
         return;
     }
-    // Pre-fill fields if project metadata exists
     document.getElementById('uploadTitle').value = projectTitle;
     document.getElementById('uploadDescription').value = projectDescription;
     document.getElementById('uploadTags').value = projectTags.join(', ');
     document.querySelector(`input[name="uploadVisibility"][value="${projectVisibility}"]`).checked = true;
 
-    // Use showModal() for the dialog element
     document.getElementById('uploadProjectModal').showModal();
 }
 
-// NEW: Function to handle project upload to Firestore
 async function uploadProjectToHub() {
     if (!currentUserId) {
         showToast('Fehler', 'Nicht angemeldet. Bitte melden Sie sich an, um hochzuladen.', 'error');
@@ -2893,7 +2621,6 @@ async function uploadProjectToHub() {
     showToast('Lade hoch...', 'Ihr Projekt wird hochgeladen. Bitte warten Sie...', 'info', 5000);
 
     try {
-        // Generate voxel map
         const voxelMap = {};
         voxels.forEach((value, k) => {
             const [gx, gy, gz] = parseKey(k);
@@ -2913,12 +2640,9 @@ async function uploadProjectToHub() {
             currentBlockSize: currentBlockSize,
             dynamicBlockDim: dynamicBlockDim,
             useDynamicBlockDim: useDynamicBlockDim,
-            // IMPORTANT: templateImageData should ideally be stored in Firebase Storage, not Firestore
-            // For this example, it's kept as is to match the existing structure, but be aware of 1MB limit.
             templateImageData: templateImageData
         };
 
-        // Compose the full Firestore document
         const firestoreDocument = {
             title: title,
             description: description,
@@ -2938,9 +2662,9 @@ async function uploadProjectToHub() {
             timestamp: window.firebase.serverTimestamp(),
 
             projectData: {
-                description: "", // This seems redundant with top-level description
-                remixOf: "", // This seems redundant with top-level remixOf
-                sourceJsonUrl: "", // This seems redundant with top-level sourceJsonUrl
+                description: "",
+                remixOf: "",
+                sourceJsonUrl: "",
                 settings: settings,
                 activeDrawingLevel: activeDrawingLevel,
                 activePresetIndex: activePresetIndex,
@@ -2954,20 +2678,17 @@ async function uploadProjectToHub() {
                 gridSize: GRID,
                 moveSpeed: moveSpeed,
                 presetColors: presetColors,
-                templateImageData: null, // Set to null here if you are storing it separately or not in projectData
+                templateImageData: null,
                 useDynamicBlockDim: useDynamicBlockDim,
                 voxels: voxelMap
             }
         };
 
-        // Use the __app_id for collection path if available, otherwise use a default or direct 'models'
-        // This assumes __app_id is globally available from the Canvas environment
         const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
-        const modelsCollectionRef = window.firebase.collection(db, `artifacts/${appId}/public/data/models`); // Recommended path for public data
+        const modelsCollectionRef = window.firebase.collection(db, `artifacts/${appId}/public/data/models`);
 
         const docRef = await window.firebase.addDoc(modelsCollectionRef, firestoreDocument);
 
-        // Update local metadata
         projectTitle = title;
         projectDescription = description;
         projectTags = tags;
@@ -2982,19 +2703,16 @@ async function uploadProjectToHub() {
         console.error("Error uploading project:", error);
         showToast('Fehler beim Hochladen', `Fehler: ${error.message}`, 'error');
     } finally {
-        // Use close() for the dialog element
         document.getElementById('uploadProjectModal').close();
     }
 }
-// NEW: Auth Modal functions
+
 function openAuthModal() {
-    // Use showModal() for the dialog element
     document.getElementById('authModal').showModal();
-    document.getElementById('emailLoginForm').style.display = 'none'; // Hide email form initially
+    document.getElementById('emailLoginForm').style.display = 'none';
 }
 
 function closeAuthModal() {
-    // Use close() for the dialog element
     document.getElementById('authModal').close();
 }
 
@@ -3004,7 +2722,8 @@ async function signInWithGoogle() {
         await window.firebase.signInWithPopup(auth, provider);
         showToast('Anmeldung erfolgreich', 'Mit Google angemeldet.', 'success');
         closeAuthModal();
-    } catch (error) {
+    }
+    catch (error) {
         console.error("Error signing in with Google:", error);
         showToast('Anmeldefehler', `Google: ${error.message}`, 'error');
     }
@@ -3049,37 +2768,31 @@ async function signUpEmailPassword() {
 }
 
 
-/* ---------- Initialisierung bei Fensterladung ---------- */
-window.onload = async function() { // Made async to await Firebase auth
+window.onload = async function() {
     cvs = document.getElementById('voxelCanvas');
     containerDiv = document.getElementById('container');
     touchIndicator = document.getElementById('touch-indicator');
-    distanceDisplay = document.getElementById('distanceDisplay'); // Get distance display element
+    distanceDisplay = document.getElementById('distanceDisplay');
 
-    // Scene
     scene = new THREE.Scene();
     scene.background = new THREE.Color(0x282c34);
 
-    // Camera
     const aspect = containerDiv.clientWidth / containerDiv.clientHeight;
     cam = new THREE.PerspectiveCamera(75, aspect, 0.1, 1000);
     resetCameraPosition();
     euler = new THREE.Euler(0, 0, 0, 'YXZ');
 
-    // Renderer
     ren = new THREE.WebGLRenderer({ canvas: cvs, antialias: true });
-    ren.setSize(containerDiv.clientWidth, containerDiv.clientHeight); // Use containerDiv.clientHeight for full height
-    // NEW: Set pixel ratio based on device and mobile flag
+    ren.setSize(containerDiv.clientWidth, containerDiv.clientHeight);
     isMobile = window.matchMedia('(max-width: 768px)').matches;
     if (isMobile) {
-        ren.setPixelRatio(Math.min(1.5, window.devicePixelRatio)); // Cap pixel ratio for mobile performance
+        ren.setPixelRatio(Math.min(1.5, window.devicePixelRatio));
     } else {
         ren.setPixelRatio(window.devicePixelRatio);
     }
     ren.shadowMap.enabled = true;
     ren.shadowMap.type = THREE.PCFSoftShadowMap;
   
-    // Lights
     const ambientLight = new THREE.AmbientLight(0x202020);
     scene.add(ambientLight);
 
@@ -3110,7 +2823,6 @@ window.onload = async function() { // Made async to await Firebase auth
     scene.add(previewVoxelMesh);
     updatePreviewVoxel(0,0,0,false);
 
-    // NEW: Initialize preview line InstancedMesh for measurement mode
     const previewVoxelBaseGeometry = new THREE.BoxGeometry(VS, VS, VS);
     const previewVoxelLineMaterial = new THREE.MeshBasicMaterial({ color: 0x00ff00, transparent: true, opacity: 0.3, depthTest: false });
     previewLineInstancedMesh = new THREE.InstancedMesh(previewVoxelBaseGeometry, previewVoxelLineMaterial, maxPreviewInstances);
@@ -3120,10 +2832,8 @@ window.onload = async function() { // Made async to await Firebase auth
     scene.add(previewLineInstancedMesh);
 
 
-    // Helpers
     rebuildHelpers();
 
-    // Event Listeners
     window.addEventListener('resize', onResize);
     containerDiv.addEventListener('pointerdown', onPointerDown);
     containerDiv.addEventListener('pointermove', onPointerMove);
@@ -3131,7 +2841,6 @@ window.onload = async function() { // Made async to await Firebase auth
     containerDiv.addEventListener('pointercancel', onPointerUp);
     containerDiv.addEventListener('pointerleave', onPointerLeave);
     containerDiv.addEventListener('wheel', onMouseWheel, { passive: false });
-    // NEW: Prevent mobile scrolling on touchmove if pointers are active
     containerDiv.addEventListener('touchmove', (e) => {
         if (activePointers.size > 0) e.preventDefault();
     }, { passive: false });
@@ -3142,40 +2851,31 @@ window.onload = async function() { // Made async to await Firebase auth
     document.addEventListener('pointerlockchange', onPointerLockChange, false);
 
 
-    // Prevent context menu on right click
     containerDiv.addEventListener('contextmenu', (e) => e.preventDefault());
 
-    // UI event listeners
     document.getElementById('grid-size-slider').addEventListener('input', (e) => {
         const oldGrid = GRID;
-        const newGrid = parseInt(e.target.value); // Get the new grid size first
+        const newGrid = parseInt(e.target.value);
 
-        // Capture old state before clearing
         const oldVoxelState = [...voxels.entries()].map(([id, data]) => {
             const parts = parseKey(id);
             return { gx: parts[0], gy: parts[1], gz: parts[2], color: data.color };
         });
 
-        // Clear all existing chunks and global voxels map
         for (const chunk of chunks.values()) {
             chunk.dispose();
         }
         chunks.clear();
         voxels.clear();
 
-        // Determine which voxels should be kept in the new grid size
         const voxelsToKeep = oldVoxelState.filter(v => 
             v.gx < newGrid && v.gy < newGrid && v.gz < newGrid
         );
 
-        // Update GRID *after* filtering voxels, but before re-adding them
         GRID = newGrid;
         document.getElementById('grid-size-display').textContent = `${GRID}×${GRID}×${GRID}`;
         localStorage.setItem('voxelEditorGridSize', GRID);
-        console.log("Grid size changed to:", GRID);
-        console.log("Saving 'voxelEditorGridSize' to localStorage:", localStorage.getItem('voxelEditorGridSize'));
 
-        // Re-add kept voxels to rebuild chunks
         voxelsToKeep.forEach(v => {
             _addSingleVoxel(v.gx, v.gy, v.gz, v.color);
         });
@@ -3198,11 +2898,9 @@ window.onload = async function() { // Made async to await Firebase auth
         presetBoxes.forEach(box => box.classList.remove('active'));
         activePresetIndex = -1;
     });
-    // NEW: Add blur listener for color picker
     document.getElementById('color-picker').addEventListener('blur', (e) => {
         currentColor = e.target.value;
         localStorage.setItem('voxelEditorColor', currentColor);
-        // No need to update preset active state here, as it's a direct edit
     });
 
 
@@ -3213,14 +2911,11 @@ window.onload = async function() { // Made async to await Firebase auth
     ];
     presetColors.forEach((color, index) => {
             const box = presetBoxes[index];
-            box.value = color; // Set initial value for input type="color"
+            box.value = color;
             box.addEventListener('click', (e) => {
-                // Clicking the preset box sets the main color picker to its color
-                // No modifier key needed for saving anymore, as it's a direct input
                 setActivePreset(index);
             });
             box.addEventListener('input', (e) => {
-                // Changing the color via the preset's own color picker
                 savePresetColor(index, e.target.value);
             });
         });
@@ -3236,33 +2931,27 @@ window.onload = async function() { // Made async to await Firebase auth
 
     const clearConfirmationModal = document.getElementById('clearConfirmationModal');
     document.getElementById('clearBtn').addEventListener('click', () => {
-        clearConfirmationModal.showModal(); // Use showModal()
+        clearConfirmationModal.showModal();
     });
     document.getElementById('saveAndClearBtn').addEventListener('click', () => {
         saveJSON();
         clearAll();
-        clearConfirmationModal.close(); // Use close()
+        clearConfirmationModal.close();
     });
     document.getElementById('clearWithoutSaveBtn').addEventListener('click', () => {
         clearAll();
-        clearConfirmationModal.close(); // Use close()
+        clearConfirmationModal.close();
     });
     document.getElementById('cancelClearBtn').addEventListener('click', () => {
-        clearConfirmationModal.close(); // Use close()
+        clearConfirmationModal.close();
     });
-
-    // Removed messageModal and its listeners, replaced by showToast
-    // document.getElementById('messageModalCloseBtn').addEventListener('click', () => {
-    //     document.getElementById('messageModal').style.display = 'none';
-    // });
-
 
     document.getElementById('fillLevelBtn').addEventListener('click', fillActiveLevel);
     document.getElementById('saveBtn').addEventListener('click', saveJSON);
     document.getElementById('loadBtn').addEventListener('click', () => {
         document.getElementById('fileInput').click();
     });
-    document.getElementById('fileInput').addEventListener('change', loadJSON); // This now calls the refactored loadJSON
+    document.getElementById('fileInput').addEventListener('change', loadJSON);
     document.getElementById('exportStlBtn').addEventListener('click', exportSTL);
 
     document.getElementById('exportObjBtn').addEventListener('click', exportOBJ);
@@ -3273,13 +2962,11 @@ window.onload = async function() { // Made async to await Firebase auth
         localStorage.setItem('voxelEditorFlySpeed', moveSpeed);
     });
 
-    // Block Size buttons
     document.getElementById('block-size-1x1').addEventListener('click', () => setFixedBlockSize(1));
     document.getElementById('block-size-4x4').addEventListener('click', () => setFixedBlockSize(4));
     document.getElementById('block-size-8x8').addEventListener('click', () => setFixedBlockSize(8));
     document.getElementById('block-size-10x10').addEventListener('click', () => setFixedBlockSize(10));
 
-    // NEW: Dynamic block size inputs and button
     const dynamicXInput = document.getElementById('dynamic-block-x');
     const dynamicYInput = document.getElementById('dynamic-block-y');
     const dynamicZInput = document.getElementById('dynamic-block-z');
@@ -3302,45 +2989,35 @@ window.onload = async function() { // Made async to await Firebase auth
         setDynamicBlockDimensions();
     });
 
-    // NEW: Add keydown listener to dynamic block inputs to prevent Tab from changing mode
     [dynamicXInput, dynamicYInput, dynamicZInput].forEach(input => {
         input.addEventListener('keydown', (e) => {
             if (e.key === 'Tab') {
-                e.stopPropagation(); // Prevent Tab from bubbling up to document.onKeyDown
+                e.stopPropagation();
             }
         });
         input.addEventListener('focus', () => {
-            // When an input is focused, ensure WASD doesn't control camera
-            // This is implicitly handled by pointerlock, but good to be explicit
             isPointerLocked = false;
-            document.exitPointerLock(); // Exit pointer lock if active
+            document.exitPointerLock();
         });
         input.addEventListener('blur', () => {
-            // Return focus to canvas after blur, so WASD can control camera again
             cvs.focus();
         });
     });
 
-
-    // NEW: Measure distance button
     document.getElementById('measureDistanceBtn').addEventListener('click', () => {
         currentMode = Modes.MEASURE;
         document.getElementById('current-mode').textContent = `Modus: ${currentMode}`;
-        // Reset any ongoing measurement
         measurementStartPoint = null;
         measurementEndPoint = null;
         distanceDisplay.style.display = 'none';
-        updatePreviewVoxel(0, 0, 0, false); // Hide preview when changing mode
-        // Clear preview line voxels
+        updatePreviewVoxel(0, 0, 0, false);
         previewLineInstancedMesh.count = 0;
         previewLineInstancedMesh.instanceMatrix.needsUpdate = true;
         previewLineVoxels = [];
     });
 
-    // Info Box (Help) Toggle Logic
     const infoBox = document.getElementById('infoBox');
     const helpToggleBtn = document.getElementById('helpToggleBtn');
-    // Changed: Default to false if not explicitly true in localStorage
     let showInfoBox = localStorage.getItem('showInfoBox') === 'true'; 
 
     function updateInfoBoxVisibility() {
@@ -3352,7 +3029,7 @@ window.onload = async function() { // Made async to await Firebase auth
         showInfoBox = !showInfoBox;
         updateInfoBoxVisibility();
     });
-    updateInfoBoxVisibility(); // Call on load to set initial visibility
+    updateInfoBoxVisibility();
 
     document.getElementById('resetCameraBtn').addEventListener('click', resetCameraPosition);
 
@@ -3360,8 +3037,6 @@ window.onload = async function() { // Made async to await Firebase auth
     document.getElementById('imageFileInput').addEventListener('change', handleImageFileSelect);
     document.getElementById('removeImageTemplateBtn').addEventListener('click', removeImageTemplate);
 
-
-    // Hamburger menu toggle for mobile
     const menuToggle = document.getElementById('menuToggle');
     menuToggle.addEventListener('click', () => {
         const controlsPanel = document.getElementById('controls');
@@ -3372,10 +3047,9 @@ window.onload = async function() { // Made async to await Firebase auth
         }
     });
 
-    // Check media query on load and resize
     const mediaQuery = window.matchMedia('(max-width: 768px)');
     function handleMediaQueryChange(e) {
-        isMobile = e.matches; // Update isMobile flag
+        isMobile = e.matches;
         const controlsPanel = document.getElementById('controls');
         if (e.matches) {
             controlsPanel.style.display = 'none';
@@ -3384,18 +3058,16 @@ window.onload = async function() { // Made async to await Firebase auth
             controlsPanel.style.display = 'flex';
             menuToggle.style.display = 'none';
         }
-        onResize(); // Also call onResize to adjust pixel ratio
+        onResize();
     }
     mediaQuery.addListener(handleMediaQueryChange);
     handleMediaQueryChange(mediaQuery);
 
-    // NEW: Mobile controls event listeners
     document.getElementById('mobile-undo').addEventListener('click', undo);
     document.getElementById('mobile-redo').addEventListener('click', redo);
     document.getElementById('mobile-save').addEventListener('click', saveJSON);
     document.getElementById('mobile-camera').addEventListener('click', () => {
-        // Toggle between camera modes or reset camera view
-        resetCameraPosition(); // Simple reset for now
+        resetCameraPosition();
     });
     document.getElementById('mobile-assist').addEventListener('click', () => {
         touchAssistEnabled = !touchAssistEnabled;
@@ -3404,7 +3076,6 @@ window.onload = async function() { // Made async to await Firebase auth
         showToast('Touch Assist', `Magnetisches Zielen ist jetzt ${touchAssistEnabled ? 'aktiviert' : 'deaktiviert'}.`, 'info');
     });
 
-    // Initialize UI elements with loaded values
     document.getElementById('grid-size-slider').value = GRID;
     document.getElementById('grid-size-display').textContent = `${GRID}×${GRID}×${GRID}`;
     document.getElementById('color-picker').value = currentColor;
@@ -3414,90 +3085,53 @@ window.onload = async function() { // Made async to await Firebase auth
     document.getElementById('dynamic-block-y').value = dynamicBlockDim.y;
     document.getElementById('dynamic-block-z').value = dynamicBlockDim.z;
 
-    // Set initial active state for block size buttons
     updateBlockSizeButtonsActiveState();
 
-    // --- Firebase Initialization and Deep Link Handling ---
-    // Use the Firebase configuration provided by the environment
-    const firebaseConfig = window.firebaseConfig; // Use the globally exposed config
+    const firebaseConfig = window.firebaseConfig;
 
     const app = window.firebase.initializeApp(firebaseConfig);
-    auth = window.firebase.getAuth(app); // Assign to global auth
-    db = window.firebase.getFirestore(app); // Assign to global db
+    auth = window.firebase.getAuth(app);
+    db = window.firebase.getFirestore(app);
 
     const loginLogoutBtn = document.getElementById('loginLogoutBtn');
     const uploadToHubBtn = document.getElementById('uploadToHubBtn');
     const userIdDisplay = document.getElementById('userIdDisplay');
+    const goToHubBtn = document.getElementById('goToHubBtn');
   
+    window.firebase.setPersistence(auth, window.firebase.browserLocalPersistence)
+        .then(() => {
+            window.firebase.onAuthStateChanged(auth, (user) => {
+                if (user) {
+                    currentUserId = user.uid;
+                    currentUser = user;
+                    loginLogoutBtn.textContent = 'Abmelden';
+                    userIdDisplay.textContent = `Angemeldet als: ${user.uid}`;
+                    uploadToHubBtn.style.display = 'inline-block';
+                } else {
+                    currentUserId = null;
+                    currentUser = null;
+                    loginLogoutBtn.textContent = 'Anmelden';
+                    userIdDisplay.textContent = '';
+                    uploadToHubBtn.style.display = 'none';
+                }
+            });
+        })
+        .catch((error) => {
+            console.error("Fehler bei setPersistence:", error);
+            showToast('Anmeldefehler', `Fehler bei der Anmeldungspersistenz: ${error.message}. Die Funktionalität könnte eingeschränkt sein.`, 'error', 5000);
+        });
 
-// Firebase authentication with enforced local persistence for subdomain session sharing
-// Corrected line: Use browserLocalPersistence directly
-window.firebase.setPersistence(auth, window.firebase.browserLocalPersistence)
-  .then(() => {
-    window.firebase.onAuthStateChanged(auth, (user) => {
-      if (user) {
-        currentUserId = user.uid;
-        currentUser = user; // Assign to global currentUser
-        loginLogoutBtn.textContent = 'Abmelden';
-        userIdDisplay.textContent = `Angemeldet als: ${user.uid}`; // Show full UID
-        uploadToHubBtn.style.display = 'inline-block';
-      } else {
-        currentUserId = null;
-        currentUser = null; // Clear global currentUser
-        loginLogoutBtn.textContent = 'Anmelden';
-        userIdDisplay.textContent = '';
-        uploadToHubBtn.style.display = 'none';
-      }
-    });
-  })
-  .catch((error) => {
-    console.error("Fehler bei setPersistence:", error);
-    // Show a user-friendly error message if persistence fails
-    const errorMessage = document.createElement('div');
-    errorMessage.className = 'alert alert-error fixed bottom-4 right-4 z-50 w-80';
-    errorMessage.innerHTML = `
-        <svg xmlns="http://www.w3.org/2000/svg" class="stroke-current shrink-0 h-6 w-6" fill="none" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 14l2-2m0 0l2-2m-2 2l-2-2m2 2l2 2m7-2a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
-        <span>Fehler bei der Anmeldungspersistenz: ${error.message}. Die Funktionalität könnte eingeschränkt sein.</span>
-    `;
-    document.body.appendChild(errorMessage);
-    setTimeout(() => errorMessage.remove(), 5000);
-  });
-
-
-    // Initial Firebase authentication attempt
-    try {
-        const initialAuthToken = typeof __initial_auth_token !== 'undefined' ? __initial_auth_token : null;
-        if (initialAuthToken) {
-            await window.firebase.signInWithCustomToken(auth, initialAuthToken);
-            console.log("Firebase authenticated with custom token.");
-        } else {
-            // No anonymous sign-in on load, user must explicitly click "Anmelden"
-            console.log("No initial auth token. User needs to sign in manually.");
-        }
-    } catch (error) {
-        console.error("Error during Firebase authentication:", error);
-        let errorMessage = 'Fehler bei der Anmeldung. Einige Funktionen sind möglicherweise eingeschränkt.';
-        if (error.code === 'auth/custom-token-mismatch') {
-            errorMessage = 'Fehler bei der Anmeldung: Ungültiges Authentifizierungstoken. Bitte versuchen Sie, die Seite neu zu laden oder wenden Sie sich an den Support.';
-        } else if (error.code === 'auth/admin-restricted-operation') {
-            errorMessage = 'Fehler bei der Anmeldung: Anonyme Authentifizierung ist nicht aktiviert. Bitte aktivieren Sie die anonyme Authentifizierung in Ihrer Firebase-Konsole (Authentifizierung -> Anmeldemethode).';
-        } else {
-            errorMessage += ` Details: ${error.message}`;
-        }
-        showToast('Anmeldefehler', errorMessage, 'error');
-    }
-
-    // Event listeners for new buttons
     loginLogoutBtn.addEventListener('click', loginLogout);
     uploadToHubBtn.addEventListener('click', openUploadModal);
-
-    // Upload modal event listeners
-    document.getElementById('uploadConfirmBtn').addEventListener('click', uploadProjectToHub);
-    document.getElementById('uploadCancelBtn').addEventListener('click', () => {
-        document.getElementById('uploadProjectModal').close(); // Use close()
+    goToHubBtn.addEventListener('click', () => {
+        window.open('https://hub.voxelshaper.com', '_blank');
     });
 
-    // Auth modal event listeners
+    document.getElementById('uploadConfirmBtn').addEventListener('click', uploadProjectToHub);
+    document.getElementById('uploadCancelBtn').addEventListener('click', () => {
+        document.getElementById('uploadProjectModal').close();
+    });
+
     document.getElementById('authModalCloseBtn').addEventListener('click', closeAuthModal);
     document.getElementById('signInGoogleBtn').addEventListener('click', signInWithGoogle);
     document.getElementById('signInGithubBtn').addEventListener('click', signInWithGithub);
@@ -3505,34 +3139,18 @@ window.firebase.setPersistence(auth, window.firebase.browserLocalPersistence)
         document.getElementById('emailLoginForm').style.display = 'block';
     });
     
-    // Event listener for the email sign-in form submission
     document.getElementById('emailAuthForm').addEventListener('submit', (e) => {
-        e.preventDefault(); // Prevent default form submission
+        e.preventDefault();
         signInEmailPassword();
     });
     document.getElementById('emailSignUpBtn').addEventListener('click', signUpEmailPassword);
 
 
-    // Function to load project from modelId
     async function loadProjectFromModelId(modelId) {
         showToast('Lade Projekt', 'Lade Modell von VoxelShaper Hub...', 'info');
         try {
-            // Ensure auth is ready before attempting Firestore operations
-            if (!auth.currentUser) {
-                console.warn("Firebase authentication not ready for Firestore operation. Attempting anonymous sign-in for load.");
-                try {
-                    await window.firebase.signInAnonymously(auth);
-                    console.log("Signed in anonymously for load operation.");
-                } catch (anonError) {
-                    console.error("Failed to sign in anonymously for load:", anonError);
-                    showToast('Anmeldefehler', 'Anmeldung für Ladevorgang fehlgeschlagen. Bitte manuell anmelden.', 'error');
-                    return;
-                }
-            }
-
-            // Use the __app_id for collection path if available, otherwise use a default or direct 'models'
             const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
-            const docRef = window.firebase.doc(db, `artifacts/${appId}/public/data/models`, modelId); // Recommended path for public data
+            const docRef = window.firebase.doc(db, `artifacts/${appId}/public/data/models`, modelId);
             
             const docSnap = await window.firebase.getDoc(docRef);
 
@@ -3540,7 +3158,6 @@ window.firebase.setPersistence(auth, window.firebase.browserLocalPersistence)
                 const modelData = docSnap.data();
                 const projectData = modelData.projectData;
                 if (projectData) {
-                    // Set remixOf and sourceJsonUrl when loading from hub
                     projectRemixOf = modelId;
                     projectSourceJsonUrl = `https://hub.voxelshaper.com?modelId=${modelId}`;
                     loadProjectData(projectData);
@@ -3560,48 +3177,35 @@ window.firebase.setPersistence(auth, window.firebase.browserLocalPersistence)
         }
     }
 
-    // --- Check for URL parameters on load ---
     const urlParams = new URLSearchParams(window.location.search);
     const modelId = urlParams.get('modelId');
-    const encodedJson = urlParams.get('projectJson'); // Keep existing projectJson logic
+    const encodedJson = urlParams.get('projectJson');
 
     if (modelId) {
-        console.log("Found modelId in URL:", modelId);
         await loadProjectFromModelId(modelId);
     } else if (encodedJson) {
         try {
             const decodedJsonString = decodeURIComponent(encodedJson);
             const projectData = JSON.parse(decodedJsonString);
-            // Set remixOf and sourceJsonUrl when loading from direct JSON URL
             projectRemixOf = 'Direct JSON Load';
             projectSourceJsonUrl = window.location.href;
-            loadProjectData(projectData); // Load project from URL
+            loadProjectData(projectData);
             showToast('Projekt geladen', 'Projekt erfolgreich aus URL-Parameter geladen.', 'success');
-            console.log("Project loaded from URL parameter (projectJson).");
         } catch (error) {
             console.error("Error loading project from URL parameter (projectJson):", error);
             showToast('Fehler', 'Fehler beim Laden des Projekts aus der URL. Ungültige oder beschädigte Projektdaten. Fehler: ' + error.message, 'error');
-            resetToDefaultProject(); // Reset to default if URL load fails
+            resetToDefaultProject();
         }
     } else {
-        // If no URL parameter, load default project or from local storage
-        console.log("No projectJson or modelId URL parameter found. Loading default or local storage project.");
-        // Clear source fields for a fresh start
         projectRemixOf = '';
         projectSourceJsonUrl = '';
-        // Existing logic for loading from local storage or starting fresh
-        // (already handled by the initial variable assignments and UI updates)
     }
-    // --- END Firebase Initialization and Deep Link Handling ---
 
     animate();
-}; // END window.onload
+};
 
-
-/* ---------- Animations-Loop ---------- */
 const frustum = new THREE.Frustum();
 const tempCameraMatrix = new THREE.Matrix4();
-// NEW: Bounding box for frustum culling
 const voxelBoundingBox = new THREE.Box3();
 const voxelMin = new THREE.Vector3(-HALF, -HALF, -HALF);
 const voxelMax = new THREE.Vector3(HALF, HALF, HALF);
@@ -3609,11 +3213,10 @@ const voxelMax = new THREE.Vector3(HALF, HALF, HALF);
 function animate() {
     requestAnimationFrame(animate);
 
-    // Continuous keyboard movement when pointer is locked (fly mode)
     if (isPointerLocked) {
         const forward = cam.getWorldDirection(new THREE.Vector3());
         const right = new THREE.Vector3().crossVectors(forward, cam.up).normalize();
-        const up = new THREE.Vector3(0, 1, 0); // World up direction
+        const up = new THREE.Vector3(0, 1, 0);
 
         const currentMoveSpeed = moveSpeed * 5;
 
@@ -3625,8 +3228,7 @@ function animate() {
         if (keyboard['e']) cam.position.addScaledVector(up, currentMoveSpeed);
     }
 
-    // Frustum Culling for Chunks
-    cam.updateMatrixWorld(); // Ensure camera matrices are up-to-date
+    cam.updateMatrixWorld();
     tempCameraMatrix.multiplyMatrices(cam.projectionMatrix, cam.matrixWorldInverse);
     frustum.setFromProjectionMatrix(tempCameraMatrix);
 
@@ -3641,52 +3243,38 @@ function animate() {
     ren.render(scene, cam);
 }
 
-/* ---------- Mouse / Pointer Input ---------- */
 let pointerIsDown = false;
 let lastX, lastY;
-let suppressNextTap = false; // NEW: To prevent tap after a drag gesture
-let initialDragVoxelCoords = null; // NEW: Stores the starting voxel for line drawing
-let voxelsAtDragStart = null; // NEW: Snapshot of voxels at the start of a drag operation
-let currentDragVoxels = new Map(); // Define currentDragVoxels globally
-let previousFrameDragVoxels = new Set(); // Define previousFrameDragVoxels globally
+let suppressNextTap = false;
+let initialDragVoxelCoords = null;
+let voxelsAtDragStart = null;
+// Removed `let` from these declarations to fix the SyntaxError
+currentDragVoxels = new Map();
+previousFrameDragVoxels = new Set(); 
 
-/**
- * Handles pointer down events (mouse or touch).
- * This is the starting point for voxel actions and camera control.
- *
- * @param {PointerEvent} e - The PointerEvent object.
- * @returns {void}
- */
 function onPointerDown(e) {
-    // Prevent context menu on right click
     if (e.button === 2) {
         e.preventDefault();
     }
 
-    // --- Desktop: Right-click for Pointer Lock Camera Control ---
     if (e.pointerType === 'mouse' && e.button === 2) {
-        // If right mouse button is pressed, we want to control the camera.
-        // Immediately reset all active left-click drawing states.
         pointerIsDown = false;
         lastActionVoxelCoords = null;
-        initialDragVoxelCoords = null; // Reset for line drawing
-        voxelsAtDragStart = null; // Reset snapshot
-        dragAxisLock = null; // Reset axis lock
-        currentDragVoxels.clear(); // Clear current drag voxels
-        previousFrameDragVoxels.clear(); // Clear previous frame drag voxels
+        initialDragVoxelCoords = null;
+        voxelsAtDragStart = null;
+        dragAxisLock = null;
+        currentDragVoxels.clear();
+        previousFrameDragVoxels.clear();
 
-        // Fix: Focus canvas *before* requesting Pointer Lock
         cvs.focus(); 
         cvs.requestPointerLock();
-        return; // Important: Exit, as this pointer event is for camera control
+        return;
     }
 
-    // If pointer is locked (i.e., RMB is already controlling camera), ignore other clicks.
     if (isPointerLocked) return;
 
-    dragAxisLock = null; // Reset axis lock on new pointer down
+    dragAxisLock = null;
 
-    // --- Touch Input Handling ---
     if (e.pointerType === 'touch') {
         if (suppressNextTap) {
             suppressNextTap = false;
@@ -3699,56 +3287,50 @@ function onPointerDown(e) {
         touchIndicator.style.top = `${e.clientY}px`;
 
         const now = performance.now();
-        // Check for double-tap and drag for drawing
         if (tapCandidate && (now - tapCandidate.time < DT_MS) && (Math.hypot(e.clientX - tapCandidate.x, e.clientY - tapCandidate.y) < TAP_DIST_TH)) {
             doubleTapDragActive = true;
             tapCandidate = null;
             
-            // For line drawing, set the start point on double-tap drag
-            // Only draw lines if not in MEASURE mode
             if (currentMode !== Modes.MEASURE) {
-                // Get raw target voxel coordinates
                 let rawTargetVoxel = calculateTargetVoxelCoords(e.clientX, e.clientY, currentMode, 'touch');
                 if (rawTargetVoxel) {
                     const { dimX, dimY, dimZ } = getCurrentBlockDimensions();
 
-                    // Clamp initialDragVoxelCoords to the grid boundaries considering block size
                     rawTargetVoxel.gx = Math.max(0, Math.min(GRID - dimX, rawTargetVoxel.gx));
                     rawTargetVoxel.gy = Math.max(0, Math.min(GRID - dimY, rawTargetVoxel.gy));
                     rawTargetVoxel.gz = Math.max(0, Math.min(GRID - dimZ, rawTargetVoxel.gz));
 
-                    initialDragVoxelCoords = rawTargetVoxel; // Set clamped coordinates
+                    initialDragVoxelCoords = rawTargetVoxel;
                     
-                    voxelsAtDragStart = new Map(voxels); // Snapshot of current voxels for line drawing
-                    currentDragVoxels.clear(); // Clear current drag voxels for new drag operation
-                    previousFrameDragVoxels.clear(); // Clear previous frame drag voxels
+                    voxelsAtDragStart = new Map(voxels);
+                    currentDragVoxels.clear();
+                    previousFrameDragVoxels.clear();
 
-                    // Perform the initial action for the first voxel/block
                     const initialVoxels = getVoxelsOnLine(initialDragVoxelCoords, initialDragVoxelCoords, currentMode, currentColor, dimX, dimY, dimZ);
                     for (const voxel of initialVoxels) {
                         const globalKey = key(voxel.gx, voxel.gy, voxel.gz);
                         const hasVoxelBeforeDrag = voxelsAtDragStart.has(globalKey);
                         const initialColor = hasVoxelBeforeDrag ? voxelsAtDragStart.get(globalKey).color : null;
 
-                        performVoxelModification(voxel.gx, voxel.gy, voxel.gz, currentMode, currentColor); // Perform for 1x1x1
+                        performVoxelModification(voxel.gx, voxel.gy, voxel.gz, currentMode, currentColor);
                         currentDragVoxels.set(globalKey, { color: currentColor, initialColor: initialColor });
-                        previousFrameDragVoxels.add(globalKey); // Add to previous frame for diffing
+                        previousFrameDragVoxels.add(globalKey);
                     }
 
-                    lastActionVoxelCoords = { ...initialDragVoxelCoords }; // Set last action for DDA
+                    lastActionVoxelCoords = { ...initialDragVoxelCoords };
                     initialDragVoxelWorldPos = new THREE.Vector3(initialDragVoxelCoords.gx * VS + HALF, initialDragVoxelCoords.gy * VS + HALF, initialDragVoxelCoords.gz * VS + HALF);
                     distanceDisplay.style.display = 'block';
                 }
             }
-        } else { // Single tap or start of multi-finger gesture
+        } else {
             tapCandidate = { x: e.clientX, y: e.clientY, time: now };
-            initialDragVoxelCoords = null; // Reset for new tap sequence
-            voxelsAtDragStart = null; // Reset snapshot
+            initialDragVoxelCoords = null;
+            voxelsAtDragStart = null;
             initialDragVoxelWorldPos = null;
-            currentDragVoxels.clear(); // Clear current drag voxels
-            previousFrameDragVoxels.clear(); // Clear previous frame drag voxels
+            currentDragVoxels.clear();
+            previousFrameDragVoxels.clear();
 
-            if (currentMode === Modes.MEASURE) { // Handle single tap for measurement
+            if (currentMode === Modes.MEASURE) {
                 const clickedVoxel = calculateTargetVoxelCoords(e.clientX, e.clientY, currentMode, 'touch');
                 if (clickedVoxel) {
                     const { dimX, dimY, dimZ } = getCurrentBlockDimensions();
@@ -3758,9 +3340,8 @@ function onPointerDown(e) {
 
                     if (measurementStartPoint === null) {
                         measurementStartPoint = { ...clickedVoxel };
-                        measurementEndPoint = null; // Reset endpoint
-                        distanceDisplay.style.display = 'none'; // Hide until second point
-                        // Update preview line
+                        measurementEndPoint = null;
+                        distanceDisplay.style.display = 'none';
                         previewLineVoxels = [{ gx: measurementStartPoint.gx, gy: measurementStartPoint.gy, gz: measurementStartPoint.gz }];
                         updatePreviewLineMesh();
                     } else {
@@ -3769,17 +3350,14 @@ function onPointerDown(e) {
                                      new THREE.Vector3(measurementEndPoint.gx * VS, measurementEndPoint.gy * VS, measurementEndPoint.gz * VS));
                         distanceDisplay.textContent = `Distanz: ${dist.toFixed(2)} mm`;
                         distanceDisplay.style.display = 'block';
-                        // Clear preview line after measurement
                         previewLineInstancedMesh.count = 0;
                         previewLineInstancedMesh.instanceMatrix.needsUpdate = true;
                         previewLineVoxels = [];
-                        // Prepare for next measurement
                         measurementStartPoint = null;
                         measurementEndPoint = null;
                     }
                 }
-                // Do not set pointerIsDown for measurement clicks
-                return; // Exit, as we handled the measurement click
+                return;
             }
         }
 
@@ -3787,30 +3365,28 @@ function onPointerDown(e) {
         gestureState.initialPointerCount = pointers.length;
 
         if (pointers.length === 1) {
-            gestureState.type = 'rotate'; // One-finger drag for rotation
+            gestureState.type = 'rotate';
             gestureState.lastMid = { x: e.clientX, y: e.clientY };
         } else if (pointers.length >= 2) {
-            // Multi-finger gestures (pan/pinch)
             const [p0, p1] = pointers;
             const midX = (p0.x + p1.x) * 0.5;
             const midY = (p0.y + p1.y) * 0.5;
             const dist = Math.hypot(p1.x - p0.x, p1.y - p0.y);
-            gestureState.type = 'none'; // Determined on first move
+            gestureState.type = 'none';
             gestureState.startMid = { x: midX, y: midY };
             gestureState.lastMid = { x: midX, y: midY };
             gestureState.startDist = dist;
             gestureState.lastDist = dist;
         }
-        initialClickPos = { x: e.clientX, y: e.clientY }; // For differentiating tap/drag
+        initialClickPos = { x: e.clientX, y: e.clientY };
         return;
     }
 
-    // --- Desktop: Left-click for Voxel Interaction / Measurement ---
-    if (e.pointerType === 'mouse' && e.button === 0) { // Ensure it's the left mouse button
+    if (e.pointerType === 'mouse' && e.button === 0) {
         pointerIsDown = true;
-        lastX = e.clientX; // Save for preview updates
-        lastY = e.clientY; // Save for preview updates
-        initialClickPos = { x: e.clientX, y: e.clientY }; // For differentiating click vs. drag
+        lastX = e.clientX;
+        lastY = e.clientY;
+        initialClickPos = { x: e.clientX, y: e.clientY };
 
         if (currentMode === Modes.MEASURE) {
             const clickedVoxel = calculateTargetVoxelCoords(e.clientX, e.clientY, currentMode, 'mouse');
@@ -3822,9 +3398,8 @@ function onPointerDown(e) {
 
                 if (measurementStartPoint === null) {
                     measurementStartPoint = { ...clickedVoxel };
-                    measurementEndPoint = null; // Reset endpoint
-                    distanceDisplay.style.display = 'none'; // Hide until second point
-                    // Update preview line
+                    measurementEndPoint = null;
+                    distanceDisplay.style.display = 'none';
                     previewLineVoxels = [{ gx: measurementStartPoint.gx, gy: measurementStartPoint.gy, gz: measurementStartPoint.gz }];
                     updatePreviewLineMesh();
                 } else {
@@ -3833,35 +3408,28 @@ function onPointerDown(e) {
                                  new THREE.Vector3(measurementEndPoint.gx * VS, measurementEndPoint.gy * VS, measurementEndPoint.gz * VS));
                     distanceDisplay.textContent = `Distanz: ${dist.toFixed(2)} mm`;
                     distanceDisplay.style.display = 'block';
-                    // Clear preview line after measurement
                     previewLineInstancedMesh.count = 0;
                     previewLineInstancedMesh.instanceMatrix.needsUpdate = true;
                     previewLineVoxels = [];
-                    // Prepare for next measurement
                     measurementStartPoint = null;
                     measurementEndPoint = null;
                 }
             }
-            pointerIsDown = false; // Measurement clicks are not "drag" actions for drawing
-            return; // Exit, as we handled the measurement click
+            pointerIsDown = false;
+            return;
         }
         
-        // Get raw target voxel coordinates from raycast
         let rawTargetVoxel = calculateTargetVoxelCoords(e.clientX, e.clientY, currentMode, 'mouse');
         
-        // Adjust rawTargetVoxel based on modifiers for initialDragVoxelCoords
         if (isControlDragging && currentMode === Modes.ADD) {
-            // For Control-drag (stacking): initialDragVoxelCoords is the start point for stacking.
-            // We need to project the mouse ray onto a vertical line from initialDragVoxelCoords.
-            if (rawTargetVoxel) { // Only proceed if a target voxel is found
+            if (rawTargetVoxel) {
                 initialDragVoxelCoords = {
                     gx: rawTargetVoxel.gx,
                     gy: rawTargetVoxel.gy,
                     gz: rawTargetVoxel.gz
                 };
-                dragAxisLock = 'y'; // Explicitly lock to Y-axis for stacking
+                dragAxisLock = 'y';
             } else {
-                // If no rawTargetVoxel, cannot stack.
                 pointerIsDown = false;
                 initialClickPos = null;
                 initialDragVoxelCoords = null;
@@ -3870,50 +3438,41 @@ function onPointerDown(e) {
                 previousFrameDragVoxels.clear();
                 distanceDisplay.style.display = 'none';
                 initialDragVoxelWorldPos = null;
-                console.warn("onPointerDown (Control-Drag): No valid initial target voxel found. Action suppressed.");
-                return; // Exit
+                return;
             }
         } else if (isShiftDragging) {
-            // For Shift-drag (on active plane): Project the ray onto the active plane.
             initialDragVoxelCoords = getPointOnFixedPlane(e.clientX, e.clientY, currentDrawingAxis, activeDrawingLevel[currentDrawingAxis]);
-            if (!initialDragVoxelCoords && rawTargetVoxel) { // Fallback: If plane intersection fails, but a voxel was hit
+            if (!initialDragVoxelCoords && rawTargetVoxel) {
                 initialDragVoxelCoords = rawTargetVoxel;
             }
-            dragAxisLock = null; // No axis lock for Shift-drag, it's plane-locked initially, but can become axis-locked
+            dragAxisLock = null;
         } else {
-            // Normal click/drag: Use the raw target voxel directly as the initial drag point
             initialDragVoxelCoords = rawTargetVoxel;
-            dragAxisLock = null; // No axis lock for free-form drag initially
+            dragAxisLock = null;
         }
-
-        console.log("onPointerDown: initialDragVoxelCoords (before clamping) =", initialDragVoxelCoords);
 
         if (initialDragVoxelCoords) {
             const { dimX, dimY, dimZ } = getCurrentBlockDimensions();
-            // Apply clamping *once* to the initialDragVoxelCoords
             initialDragVoxelCoords.gx = Math.max(0, Math.min(GRID - dimX, initialDragVoxelCoords.gx));
             initialDragVoxelCoords.gy = Math.max(0, Math.min(GRID - dimY, initialDragVoxelCoords.gy));
             initialDragVoxelCoords.gz = Math.max(0, Math.min(GRID - dimZ, initialDragVoxelCoords.gz));
 
-            console.log("onPointerDown: initialDragVoxelCoords (after clamping) =", initialDragVoxelCoords);
+            voxelsAtDragStart = new Map(voxels);
+            currentDragVoxels.clear();
+            previousFrameDragVoxels.clear();
 
-            voxelsAtDragStart = new Map(voxels); // Snapshot of current voxels
-            currentDragVoxels.clear(); // Clear current drag voxels for new drag operation
-            previousFrameDragVoxels.clear(); // Clear previous frame drag voxels
-
-            // Perform the initial action for the first voxel/block
             const initialVoxels = getVoxelsOnLine(initialDragVoxelCoords, initialDragVoxelCoords, currentMode, currentColor, dimX, dimY, dimZ);
             for (const voxel of initialVoxels) {
                 const globalKey = key(voxel.gx, voxel.gy, voxel.gz);
                 const hasVoxelBeforeDrag = voxelsAtDragStart.has(globalKey);
                 const initialColor = hasVoxelBeforeDrag ? voxelsAtDragStart.get(globalKey).color : null;
 
-                performVoxelModification(voxel.gx, voxel.gy, voxel.gz, currentMode, currentColor); // Perform for 1x1x1
+                performVoxelModification(voxel.gx, voxel.gy, voxel.gz, currentMode, currentColor);
                 currentDragVoxels.set(globalKey, { color: currentColor, initialColor: initialColor });
-                previousFrameDragVoxels.add(globalKey); // Add to previous frame for diffing
+                previousFrameDragVoxels.add(globalKey);
             }
 
-            lastActionVoxelCoords = { ...initialDragVoxelCoords }; // Set last action for DDA
+            lastActionVoxelCoords = { ...initialDragVoxelCoords };
             initialDragVoxelWorldPos = new THREE.Vector3(initialDragVoxelCoords.gx * VS + HALF, initialDragVoxelCoords.gy * VS + HALF, initialDragVoxelCoords.gz * VS + HALF);
             distanceDisplay.style.display = 'block';
         } else {
@@ -3921,26 +3480,18 @@ function onPointerDown(e) {
             initialClickPos = null;
             initialDragVoxelCoords = null;
             voxelsAtDragStart = null;
-            currentDragVoxels.clear(); // Clear current drag voxels
-            previousFrameDragVoxels.clear(); // Clear previous frame drag voxels
+            currentDragVoxels.clear();
+            previousFrameDragVoxels.clear();
             distanceDisplay.style.display = 'none';
             initialDragVoxelWorldPos = null;
-            console.warn("onPointerDown: No valid initial target voxel found. Action suppressed.");
         }
     }
 }
 
-/**
- * Handles pointer move events (mouse or touch).
- * This is used for camera control, voxel preview, and drag drawing.
- *
- * @param {PointerEvent} e - The PointerEvent object.
- * @returns {void}
- */
+
 function onPointerMove(e) {
     e.preventDefault();
 
-    // --- 1. Pointer Lock Camera Control (RMB) ---
     if (isPointerLocked) {
         if (firstMoveAfterLock) {
             firstMoveAfterLock = false;
@@ -3952,33 +3503,29 @@ function onPointerMove(e) {
         euler.x -= dy * rotSpeed;
         euler.x = Math.max(-Math.PI / 2, Math.min(Math.PI / 2, euler.x));
         cam.quaternion.setFromEuler(euler);
-        return; // IMPORTANT: Exit, as the pointer is locked for camera control
+        return;
     }
 
-    // Declare dimensions here, so they are available for all branches
     const { dimX, dimY, dimZ } = getCurrentBlockDimensions();
 
-    // --- 2. Touch Input Handling (Gestures or Drag Drawing) ---
     if (e.pointerType === 'touch') {
-        if (!activePointers.has(e.pointerId)) return; // Pointer not tracked
+        if (!activePointers.has(e.pointerId)) return;
 
-        activePointers.set(e.pointerId, { x: e.clientX, y: e.clientY, pointerType: e.pointerType }); // Update pointer position
+        activePointers.set(e.pointerId, { x: e.clientX, y: e.clientY, pointerType: e.pointerType });
         touchIndicator.style.left = `${e.clientX}px`;
         touchIndicator.style.top = `${e.clientY}px`;
 
-        if (doubleTapDragActive && currentMode !== Modes.MEASURE) { // Only draw lines if not in MEASURE mode
+        if (doubleTapDragActive && currentMode !== Modes.MEASURE) {
             let rawCurrentTargetVoxel = calculateTargetVoxelCoords(e.clientX, e.clientY, currentMode, 'touch');
             let finalTargetVoxelForDrawing = null;
             
-            if (rawCurrentTargetVoxel && initialDragVoxelCoords) { // Ensure initial point for line drawing is set
-                // Determine dragAxisLock only if not already set (for mobile, we might want some initial locking)
+            if (rawCurrentTargetVoxel && initialDragVoxelCoords) {
                 if (dragAxisLock === null) {
                     const dx = Math.abs(rawCurrentTargetVoxel.gx - initialDragVoxelCoords.gx);
                     const dy = Math.abs(rawCurrentTargetVoxel.gy - initialDragVoxelCoords.gy);
                     const dz = Math.abs(rawCurrentTargetVoxel.gz - initialDragVoxelCoords.gz);
 
                     if (dx > VOXEL_DRAG_THRESHOLD || dy > VOXEL_DRAG_THRESHOLD || dz > VOXEL_DRAG_THRESHOLD) {
-                        // For touch, just lock to the dominant axis
                         if (dx >= dy && dx >= dz) dragAxisLock = 'x';
                         else if (dy >= dx && dy >= dz) dragAxisLock = 'y';
                         else dragAxisLock = 'z';
@@ -3991,32 +3538,28 @@ function onPointerMove(e) {
                         snappedTargetVoxel.gy = initialDragVoxelCoords.gy;
                         snappedTargetVoxel.gz = initialDragVoxelCoords.gz;
                     } else if (dragAxisLock === 'y') {
-                        // For control-drag (stacking), Y is derived from mouse, X/Z are fixed
                         snappedTargetVoxel.gx = initialDragVoxelCoords.gx;
                         snappedTargetVoxel.gz = initialDragVoxelCoords.gz;
-                        snappedTargetVoxel.gy = rawCurrentTargetVoxel.gy; // Use raw Y for stacking
+                        snappedTargetVoxel.gy = rawCurrentTargetVoxel.gy;
                     } else if (dragAxisLock === 'z') {
                         snappedTargetVoxel.gx = initialDragVoxelCoords.gx;
                         snappedTargetVoxel.gy = initialDragVoxelCoords.gy;
                     }
                     finalTargetVoxelForDrawing = snappedTargetVoxel;
                 } else {
-                    finalTargetVoxelForDrawing = rawCurrentTargetVoxel; // For preview, if no lock yet
+                    finalTargetVoxelForDrawing = rawCurrentTargetVoxel;
                 }
 
-                // Apply clamping to finalTargetVoxelForDrawing
                 if (finalTargetVoxelForDrawing) {
                     finalTargetVoxelForDrawing.gx = Math.max(0, Math.min(GRID - dimX, finalTargetVoxelForDrawing.gx));
                     finalTargetVoxelForDrawing.gy = Math.max(0, Math.min(GRID - dimY, finalTargetVoxelForDrawing.gy));
                     finalTargetVoxelForDrawing.gz = Math.max(0, Math.min(GRID - dimZ, finalTargetVoxelForDrawing.gz));
                 }
 
-                // Only perform drawing if an axis lock has been established
                 if (dragAxisLock && finalTargetVoxelForDrawing) {
                     const voxelsToDrawThisFrame = getVoxelsOnLine(initialDragVoxelCoords, finalTargetVoxelForDrawing, currentMode, currentColor, dimX, dimY, dimZ);
                     const currentFrameVoxelsSet = new Set(voxelsToDrawThisFrame.map(v => key(v.gx, v.gy, v.gz)));
 
-                    // Identify voxels to remove (were in previousFrameDragVoxels but not in currentFrameVoxelsSet)
                     for (const globalKey of previousFrameDragVoxels) {
                         if (!currentFrameVoxelsSet.has(globalKey)) {
                             const [gx, gy, gz] = parseKey(globalKey);
@@ -4029,14 +3572,13 @@ function onPointerMove(e) {
                         }
                     }
 
-                    // Identify voxels to add/recolor (are in currentFrameVoxelsSet)
                     for (const voxel of voxelsToDrawThisFrame) {
                         const globalKey = key(voxel.gx, voxel.gy, voxel.gz);
                         if (!currentDragVoxels.has(globalKey)) {
                             const hasVoxelBeforeDrag = voxelsAtDragStart.has(globalKey);
                             const initialColor = hasVoxelBeforeDrag ? voxelsAtDragStart.get(globalKey).color : null;
 
-                            performVoxelModification(voxel.gx, voxel.gy, voxel.gz, currentMode, currentColor); // Perform for 1x1x1
+                            performVoxelModification(voxel.gx, voxel.gy, voxel.gz, currentMode, currentColor);
                             currentDragVoxels.set(globalKey, { color: currentColor, initialColor: initialColor });
                         } else {
                             if (currentMode === Modes.DRAW && voxels.has(globalKey) && voxels.get(globalKey).color !== currentColor) {
@@ -4054,12 +3596,12 @@ function onPointerMove(e) {
                     distanceDisplay.textContent = `Distanz: ${distance.toFixed(2)} mm`;
                 }
             }
-            updatePreviewVoxel(0, 0, 0, false); // Hide preview during active touch drag operation
+            updatePreviewVoxel(0, 0, 0, false);
             return;
-        } else if (currentMode === Modes.MEASURE && measurementStartPoint) { // Preview measurement line
+        } else if (currentMode === Modes.MEASURE && measurementStartPoint) {
             const currentTargetVoxel = calculateTargetVoxelCoords(e.clientX, e.clientY, currentMode, 'touch');
             if (currentTargetVoxel) {
-                const { dimX, dimY, dimZ } = getCurrentBlockDimensions(); // Still need dimensions for clamping
+                const { dimX, dimY, dimZ } = getCurrentBlockDimensions();
                 currentTargetVoxel.gx = Math.max(0, Math.min(GRID - dimX, currentTargetVoxel.gx));
                 currentTargetVoxel.gy = Math.max(0, Math.min(GRID - dimY, currentTargetVoxel.gy));
                 currentTargetVoxel.gz = Math.max(0, Math.min(GRID - dimZ, currentTargetVoxel.gz));
@@ -4068,43 +3610,37 @@ function onPointerMove(e) {
                              new THREE.Vector3(currentTargetVoxel.gx * VS, currentTargetVoxel.gy * VS, currentTargetVoxel.gz * VS));
                 distanceDisplay.textContent = `Distanz: ${dist.toFixed(2)} mm`;
                 distanceDisplay.style.display = 'block';
-                // Update preview voxels of the line
-                previewLineVoxels = getVoxelsOnLine(measurementStartPoint, currentTargetVoxel, currentMode, currentColor, 1, 1, 1); // Pass 1x1x1 for preview
+                previewLineVoxels = getVoxelsOnLine(measurementStartPoint, currentTargetVoxel, currentMode, currentColor, 1, 1, 1);
                 updatePreviewLineMesh();
             } else {
                 distanceDisplay.style.display = 'none';
-                previewLineInstancedMesh.count = 0; // Clear preview line if no target
+                previewLineInstancedMesh.count = 0;
                 previewLineInstancedMesh.instanceMatrix.needsUpdate = true;
                 previewLineVoxels = [];
             }
-            return; // Exit, handled by measurement preview
+            return;
         }
 
-        // If not double-tap drag or measurement, handle camera gestures. These should NOT draw cubes.
-        handleGesture(); // Handles one-finger rotation, multi-finger pan/zoom
-        updatePreviewVoxel(0, 0, 0, false); // Hide preview during gestures
-        distanceDisplay.style.display = 'none'; // Hide distance display during camera gestures
-        previewLineInstancedMesh.count = 0; // Clear preview line during camera gestures
+        handleGesture();
+        updatePreviewVoxel(0, 0, 0, false);
+        distanceDisplay.style.display = 'none';
+        previewLineInstancedMesh.count = 0;
         previewLineInstancedMesh.instanceMatrix.needsUpdate = true;
         previewLineVoxels = [];
         return;
     }
 
-    // --- 3. Desktop: Mouse Hover and Left-click Drag for Voxel Interaction / Measurement ---
-    // Update lastX, lastY for preview voxel calculation when not dragging.
     lastX = e.clientX;
     lastY = e.clientY;
 
     const movedDistance = initialClickPos ? Math.hypot(e.clientX - initialClickPos.x, e.clientY - initialClickPos.y) : 0;
-    // The condition for isDraggingVoxelAction is crucial.
-    // It is true if the pointer is down AND (it has moved significantly OR Shift/Control are held)
     const isDraggingVoxelAction = pointerIsDown && (movedDistance > MOVE_PX || isShiftDragging || isControlDragging);
 
     if (currentMode === Modes.MEASURE) {
         if (measurementStartPoint) {
             const tempTargetVoxel = calculateTargetVoxelCoords(e.clientX, e.clientY, currentMode, 'mouse');
             if (tempTargetVoxel) {
-                const { dimX, dimY, dimZ } = getCurrentBlockDimensions(); // Still need dimensions for clamping
+                const { dimX, dimY, dimZ } = getCurrentBlockDimensions();
                 tempTargetVoxel.gx = Math.max(0, Math.min(GRID - dimX, tempTargetVoxel.gx));
                 tempTargetVoxel.gy = Math.max(0, Math.min(GRID - dimY, tempTargetVoxel.gy));
                 tempTargetVoxel.gz = Math.max(0, Math.min(GRID - dimZ, tempTargetVoxel.gz));
@@ -4113,7 +3649,7 @@ function onPointerMove(e) {
                              new THREE.Vector3(tempTargetVoxel.gx * VS, tempTargetVoxel.gy * VS, tempTargetVoxel.gz * VS));
                 distanceDisplay.textContent = `Distanz: ${dist.toFixed(2)} mm`;
                 distanceDisplay.style.display = 'block';
-                previewLineVoxels = getVoxelsOnLine(measurementStartPoint, tempTargetVoxel, currentMode, currentColor, 1, 1, 1); // Pass 1x1x1 for preview
+                previewLineVoxels = getVoxelsOnLine(measurementStartPoint, tempTargetVoxel, currentMode, currentColor, 1, 1, 1);
                 updatePreviewLineMesh();
             } else {
                 distanceDisplay.style.display = 'none';
@@ -4124,7 +3660,7 @@ function onPointerMove(e) {
         } else {
             const tempTargetVoxel = calculateTargetVoxelCoords(e.clientX, e.clientY, currentMode, 'mouse');
             if (tempTargetVoxel) {
-                const { dimX, dimY, dimZ } = getCurrentBlockDimensions(); // Still need dimensions for clamping
+                const { dimX, dimY, dimZ } = getCurrentBlockDimensions();
                 tempTargetVoxel.gx = Math.max(0, Math.min(GRID - dimX, tempTargetVoxel.gx));
                 tempTargetVoxel.gy = Math.max(0, Math.min(GRID - dimY, tempTargetVoxel.gy));
                 tempTargetVoxel.gz = Math.max(0, Math.min(GRID - dimZ, tempTargetVoxel.gz));
@@ -4134,34 +3670,31 @@ function onPointerMove(e) {
             }
         }
         return;
-    } else { // Normal drawing/deleting/recoloring
+    } else {
         let rawCurrentTargetVoxel = calculateTargetVoxelCoords(e.clientX, e.clientY, currentMode, 'mouse');
-        let finalTargetVoxelForDrawing = null; // This will be the actual end point for the line
+        let finalTargetVoxelForDrawing = null;
 
         if (isDraggingVoxelAction && rawCurrentTargetVoxel && initialDragVoxelCoords) {
-            // Determine dragAxisLock if not already set
             if (dragAxisLock === null) {
                 const dx = Math.abs(rawCurrentTargetVoxel.gx - initialDragVoxelCoords.gx);
                 const dy = Math.abs(rawCurrentTargetVoxel.gy - initialDragVoxelCoords.gy);
                 const dz = Math.abs(rawCurrentTargetVoxel.gz - initialDragVoxelCoords.gz);
 
                 if (dx > VOXEL_DRAG_THRESHOLD || dy > VOXEL_DRAG_THRESHOLD || dz > VOXEL_DRAG_THRESHOLD) {
-                    // Prioritize control/shift drag if active
                     if (isControlDragging && currentMode === Modes.ADD) {
-                        dragAxisLock = 'y'; // Force Y for stacking
+                        dragAxisLock = 'y';
                     } else if (isShiftDragging) {
-                        // For shift-drag, lock to an axis on the active plane
-                        if (currentDrawingAxis === 'y') { // Y-plane, so lock to X or Z
+                        if (currentDrawingAxis === 'y') {
                             if (dx >= dz) dragAxisLock = 'x';
                             else dragAxisLock = 'z';
-                        } else if (currentDrawingAxis === 'x') { // X-plane, so lock to Y or Z
+                        } else if (currentDrawingAxis === 'x') {
                             if (dy >= dz) dragAxisLock = 'y';
                             else dragAxisLock = 'z';
-                        } else { // Z-plane, so lock to X or Y
+                        } else {
                             if (dx >= dy) dragAxisLock = 'x';
                             else dragAxisLock = 'y';
                         }
-                    } else { // No modifier, free-form drag, lock to dominant axis
+                    } else {
                         if (dx >= dy && dx >= dz) dragAxisLock = 'x';
                         else if (dy >= dx && dy >= dz) dragAxisLock = 'y';
                         else dragAxisLock = 'z';
@@ -4169,41 +3702,34 @@ function onPointerMove(e) {
                 }
             }
 
-            // Apply axis lock if set
             if (dragAxisLock) {
                 const snappedTargetVoxel = { ...rawCurrentTargetVoxel };
                 if (dragAxisLock === 'x') {
                     snappedTargetVoxel.gy = initialDragVoxelCoords.gy;
                     snappedTargetVoxel.gz = initialDragVoxelCoords.gz;
                 } else if (dragAxisLock === 'y') {
-                    // For control-drag, we need to ensure the Y-coordinate is derived from the mouse's vertical position
-                    // relative to the initial click, while X and Z remain fixed to initialDragVoxelCoords.
                     snappedTargetVoxel.gx = initialDragVoxelCoords.gx;
                     snappedTargetVoxel.gz = initialDragVoxelCoords.gz;
-                    snappedTargetVoxel.gy = rawCurrentTargetVoxel.gy; // Use raw Y for stacking
+                    snappedTargetVoxel.gy = rawCurrentTargetVoxel.gy;
                 } else if (dragAxisLock === 'z') {
                     snappedTargetVoxel.gx = initialDragVoxelCoords.gx;
                     snappedTargetVoxel.gy = initialDragVoxelCoords.gy;
                 }
                 finalTargetVoxelForDrawing = snappedTargetVoxel;
             } else {
-                // If no axis lock yet, don't draw, just update preview based on raw target
-                finalTargetVoxelForDrawing = rawCurrentTargetVoxel; // Use raw for preview, drawing happens only if lock is set
+                finalTargetVoxelForDrawing = rawCurrentTargetVoxel;
             }
 
-            // Apply clamping to finalTargetVoxelForDrawing
             if (finalTargetVoxelForDrawing) {
                 finalTargetVoxelForDrawing.gx = Math.max(0, Math.min(GRID - dimX, finalTargetVoxelForDrawing.gx));
                 finalTargetVoxelForDrawing.gy = Math.max(0, Math.min(GRID - dimY, finalTargetVoxelForDrawing.gy));
                 finalTargetVoxelForDrawing.gz = Math.max(0, Math.min(GRID - dimZ, finalTargetVoxelForDrawing.gz));
             }
 
-            // Only perform drawing if an axis lock has been established
             if (dragAxisLock && finalTargetVoxelForDrawing) {
                 const voxelsToDrawThisFrame = getVoxelsOnLine(initialDragVoxelCoords, finalTargetVoxelForDrawing, currentMode, currentColor, dimX, dimY, dimZ);
                 const currentFrameVoxelsSet = new Set(voxelsToDrawThisFrame.map(v => key(v.gx, v.gy, v.gz)));
 
-                    // Identify voxels to remove (were in previousFrameDragVoxels but not in currentFrameVoxelsSet)
                 for (const globalKey of previousFrameDragVoxels) {
                     if (!currentFrameVoxelsSet.has(globalKey)) {
                         const [gx, gy, gz] = parseKey(globalKey);
@@ -4216,7 +3742,6 @@ function onPointerMove(e) {
                     }
                 }
 
-                // Identify voxels to add/recolor (are in currentFrameVoxelsSet)
                 for (const voxel of voxelsToDrawThisFrame) {
                     const globalKey = key(voxel.gx, voxel.gy, voxel.gz);
                     if (!currentDragVoxels.has(globalKey)) {
@@ -4233,32 +3758,30 @@ function onPointerMove(e) {
                 }
                 previousFrameDragVoxels = currentFrameVoxelsSet;
 
-                lastActionVoxelCoords = { ...finalTargetVoxelForDrawing }; // Update the last action for continuous feedback
+                lastActionVoxelCoords = { ...finalTargetVoxelForDrawing };
 
-                // Update distance display
                 const currentVoxelWorldPos = new THREE.Vector3(finalTargetVoxelForDrawing.gx * VS + HALF, finalTargetVoxelForDrawing.gy * VS + HALF, finalTargetVoxelForDrawing.gz * VS + HALF);
                 const distance = initialDragVoxelWorldPos.distanceTo(currentVoxelWorldPos);
                 distanceDisplay.textContent = `Distanz: ${distance.toFixed(2)} mm`;
                 distanceDisplay.style.display = 'block';
             } else {
-                distanceDisplay.style.display = 'none'; // Hide if no axis lock yet
+                distanceDisplay.style.display = 'none';
             }
 
-            // Update preview voxel based on the potentially snapped target, even if not drawing yet
             if (finalTargetVoxelForDrawing) {
                 updatePreviewVoxel(finalTargetVoxelForDrawing.gx, finalTargetVoxelForDrawing.gy, finalTargetVoxelForDrawing.gz, true, dimX, dimY, dimZ);
             } else {
                 updatePreviewVoxel(0, 0, 0, false);
             }
 
-        } else { // Not dragging, just hovering
+        } else {
             distanceDisplay.style.display = 'none';
             let hoverTargetVoxel = calculateTargetVoxelCoords(e.clientX, e.clientY, currentMode, 'mouse');
             if (hoverTargetVoxel) {
                 hoverTargetVoxel.gx = Math.max(0, Math.min(GRID - dimX, hoverTargetVoxel.gx));
                 hoverTargetVoxel.gy = Math.max(0, Math.min(GRID - dimY, hoverTargetVoxel.gy));
                 hoverTargetVoxel.gz = Math.max(0, Math.min(GRID - dimZ, hoverTargetVoxel.gz));
-                updatePreviewVoxel(hoverTargetVoxel.gx, hoverTargetVoxel.gy, hoverTargetVoxel.gz, true, dimX, dimY, dimZ);
+                updatePreviewVoxel(hoverTargetVoxel.gx, hoverTargetVoxel.gy, hoverTargetVoxel.gz, true, 1, 1, 1);
             } else {
                 updatePreviewVoxel(0, 0, 0, false);
             }
@@ -4267,28 +3790,17 @@ function onPointerMove(e) {
 }
 
 
-/**
- * Handles pointer up events (mouse or touch).
- * This completes voxel actions and ends camera controls.
- *
- * @param {PointerEvent} e - The PointerEvent object.
- * @returns {void}
- */
 function onPointerUp(e) {
-    // Declare dimensions here for use in this function
     const { dimX, dimY, dimZ } = getCurrentBlockDimensions();
 
-    // --- Touch Input Release ---
     if (e.pointerType === 'touch') {
         if (suppressNextTap) {
             suppressNextTap = false;
         } else if (activePointers.size === 1 && !doubleTapDragActive && currentMode !== Modes.MEASURE) {
-            // This block handles single-finger taps for drawing, if it wasn't a camera rotation drag
             const movedDistance = initialClickPos ? Math.hypot(e.clientX - initialClickPos.x, e.clientY - initialClickPos.y) : 0;
-            if (movedDistance <= TAP_DIST_TH) { // It was a tap, not a drag
+            if (movedDistance <= TAP_DIST_TH) {
                  const clickedVoxel = calculateTargetVoxelCoords(e.clientX, e.clientY, currentMode, 'touch');
                  if (clickedVoxel) {
-                     // Apply clamping directly to clickedVoxel
                      clickedVoxel.gx = Math.max(0, Math.min(GRID - dimX, clickedVoxel.gx));
                      clickedVoxel.gy = Math.max(0, Math.min(GRID - dimY, clickedVoxel.gy));
                      clickedVoxel.gz = Math.max(0, Math.min(GRID - dimZ, clickedVoxel.gz));
@@ -4297,7 +3809,6 @@ function onPointerUp(e) {
                          const parts = parseKey(id);
                          return { gx: parts[0], gy: parts[1], gz: parts[2], color: data.color };
                      });
-                     // For a single tap, perform the modification for the block directly
                      const voxelsToModify = getVoxelsOnLine(clickedVoxel, clickedVoxel, currentMode, currentColor, dimX, dimY, dimZ);
                      for(const voxel of voxelsToModify) {
                          performVoxelModification(voxel.gx, voxel.gy, voxel.gz, currentMode, currentColor);
@@ -4311,13 +3822,12 @@ function onPointerUp(e) {
             }
         }
         if (doubleTapDragActive && currentMode !== Modes.MEASURE && initialDragVoxelCoords) {
-            // Revert all voxels that were part of currentDragVoxels to their state before the drag started
             for (const [globalKey, data] of currentDragVoxels.entries()) {
                 const [gx, gy, gz] = parseKey(globalKey);
                 if (voxelsAtDragStart.has(globalKey)) {
-                    _addSingleVoxel(gx, gy, gz, voxelsAtDragStart.get(globalKey).color); // Revert to original color
+                    _addSingleVoxel(gx, gy, gz, voxelsAtDragStart.get(globalKey).color);
                 } else {
-                    _removeSingleVoxel(gx, gy, gz); // Remove if it was newly added in this drag
+                    _removeSingleVoxel(gx, gy, gz);
                 }
             }
 
@@ -4330,7 +3840,6 @@ function onPointerUp(e) {
             let finalTargetVoxel = initialDragVoxelCoords;
 
             if (rawFinalTargetVoxel) {
-                // Apply axis lock to the final target voxel for touch drag drawing
                 if (dragAxisLock) {
                     const snappedFinalTargetVoxel = { ...rawFinalTargetVoxel };
                     if (dragAxisLock === 'x') {
@@ -4339,17 +3848,16 @@ function onPointerUp(e) {
                     } else if (dragAxisLock === 'y') {
                         snappedFinalTargetVoxel.gx = initialDragVoxelCoords.gx;
                         snappedFinalTargetVoxel.gz = initialDragVoxelCoords.gz;
-                        snappedFinalTargetVoxel.gy = rawFinalTargetVoxel.gy; // Use raw Y for stacking
+                        snappedFinalTargetVoxel.gy = rawFinalTargetVoxel.gy;
                     } else if (dragAxisLock === 'z') {
                         snappedFinalTargetVoxel.gx = initialDragVoxelCoords.gx;
                         snappedFinalTargetVoxel.gy = initialDragVoxelCoords.gy;
                     }
                     finalTargetVoxel = snappedFinalTargetVoxel;
-                } else { // If no axis lock was established (e.g., too small movement), just the initial click
+                } else {
                     finalTargetVoxel = initialDragVoxelCoords;
                 }
 
-                // Apply clamping directly to finalTargetVoxel
                 if (finalTargetVoxel) {
                     finalTargetVoxel.gx = Math.max(0, Math.min(GRID - dimX, finalTargetVoxel.gx));
                     finalTargetVoxel.gy = Math.max(0, Math.min(GRID - dimY, finalTargetVoxel.gy));
@@ -4369,20 +3877,18 @@ function onPointerUp(e) {
             addCommand('batch', oldStateForHistory, newStateForHistory);
         }
         releasePointer(e.pointerId, e);
-        // Hide distance display only if not in measurement mode or if measurement is completed
         if (currentMode !== Modes.MEASURE || (currentMode === Modes.MEASURE && measurementStartPoint === null && measurementEndPoint === null)) {
             distanceDisplay.style.display = 'none';
         }
         initialDragVoxelWorldPos = null;
-        dragAxisLock = null; // Reset axis lock
-        currentDragVoxels.clear(); // Clear current drag voxels
-        previousFrameDragVoxels.clear(); // Clear previous frame drag voxels
+        dragAxisLock = null;
+        currentDragVoxels.clear();
+        previousFrameDragVoxels.clear();
         return;
     }
 
-    // --- Desktop: Mouse Release ---
     if (e.pointerType === 'mouse') {
-        if (e.button === 2) { // Right-click release
+        if (e.button === 2) {
             document.exitPointerLock();
             return;
         }
@@ -4391,26 +3897,21 @@ function onPointerUp(e) {
         const wasSingleClick = movedDistance <= MOVE_PX;
 
         if (currentMode === Modes.MEASURE) {
-            // Distance display should not hide immediately on mouse up in measure mode,
-            // it should remain visible until a new measurement starts or mode changes.
-            // Logic to reset measurementStartPoint/EndPoint is in onPointerDown.
-            // Only hide preview voxel and clear preview line.
             updatePreviewVoxel(0, 0, 0, false);
             previewLineInstancedMesh.count = 0;
             previewLineInstancedMesh.instanceMatrix.needsUpdate = true;
             previewLineVoxels = [];
-            pointerIsDown = false; // Ensure pointerIsDown is reset
-            return; // Exit, handled by measure mode
+            pointerIsDown = false;
+            return;
         }
 
-        if (pointerIsDown && !isPointerLocked && initialDragVoxelCoords) { // Only if a drag was initiated
-            // Revert all voxels that were part of currentDragVoxels to their state before the drag started
+        if (pointerIsDown && !isPointerLocked && initialDragVoxelCoords) {
             for (const [globalKey, data] of currentDragVoxels.entries()) {
                 const [gx, gy, gz] = parseKey(globalKey);
                 if (voxelsAtDragStart.has(globalKey)) {
-                    _addSingleVoxel(gx, gy, gz, voxelsAtDragStart.get(globalKey).color); // Revert to original color
+                    _addSingleVoxel(gx, gy, gz, voxelsAtDragStart.get(globalKey).color);
                 } else {
-                    _removeSingleVoxel(gx, gy, gz); // Remove if it was newly added in this drag
+                    _removeSingleVoxel(gx, gy, gz);
                 }
             }
 
@@ -4419,14 +3920,12 @@ function onPointerUp(e) {
                 return { gx, gy, gz, color: data.color };
             });
 
-            // Now, redraw the *final* line segment and capture the newState for history
             let finalVoxelsToDraw = [];
             let rawFinalTargetVoxel = calculateTargetVoxelCoords(e.clientX, e.clientY, currentMode, 'mouse');
-            let finalTargetVoxel = initialDragVoxelCoords; // Default to initial if no valid target on leave or if no drag happened
+            let finalTargetVoxel = initialDragVoxelCoords;
 
             if (rawFinalTargetVoxel) {
-                // Apply modifiers/axis lock to finalTargetVoxel
-                if (dragAxisLock) { // Use the established axis lock
+                if (dragAxisLock) {
                     const snappedFinalTargetVoxel = { ...rawFinalTargetVoxel };
                     if (dragAxisLock === 'x') {
                         snappedFinalTargetVoxel.gy = initialDragVoxelCoords.gy;
@@ -4434,19 +3933,18 @@ function onPointerUp(e) {
                     } else if (dragAxisLock === 'y') {
                         snappedFinalTargetVoxel.gx = initialDragVoxelCoords.gx;
                         snappedFinalTargetVoxel.gz = initialDragVoxelCoords.gz;
-                        snappedFinalTargetVoxel.gy = rawFinalTargetVoxel.gy; // Use raw Y for stacking
+                        snappedFinalTargetVoxel.gy = rawFinalTargetVoxel.gy;
                     } else if (dragAxisLock === 'z') {
                         snappedFinalTargetVoxel.gx = initialDragVoxelCoords.gx;
                         snappedFinalTargetVoxel.gy = initialDragVoxelCoords.gy;
                     }
                     finalTargetVoxel = snappedFinalTargetVoxel;
-                } else if (wasSingleClick) { // If it was a single click, the target is just the clicked voxel
+                } else if (wasSingleClick) {
                     finalTargetVoxel = rawFinalTargetVoxel;
-                } else { // If it was a drag but no axis lock was established (e.g., too small movement), treat as single voxel
+                } else {
                     finalTargetVoxel = initialDragVoxelCoords;
                 }
 
-                // Apply clamping directly to finalTargetVoxel
                 if (finalTargetVoxel) {
                     finalTargetVoxel.gx = Math.max(0, Math.min(GRID - dimX, finalTargetVoxel.gx));
                     finalTargetVoxel.gy = Math.max(0, Math.min(GRID - dimY, finalTargetVoxel.gy));
@@ -4456,7 +3954,7 @@ function onPointerUp(e) {
 
             if (finalTargetVoxel) {
                 finalVoxelsToDraw = getVoxelsOnLine(initialDragVoxelCoords, finalTargetVoxel, currentMode, currentColor, dimX, dimY, dimZ);
-            } else { // Should not happen if initialDragVoxelCoords was set, but for safety
+            } else {
                 finalVoxelsToDraw = [];
             }
 
@@ -4472,52 +3970,45 @@ function onPointerUp(e) {
         }
     }
 
-    // --- General Cleanup ---
     pointerIsDown = false;
-    isControlDragging = false; // Reset Control drag on pointer up
+    isControlDragging = false;
     isShiftDragging = false;
     lastActionVoxelCoords = null;
     initialClickPos = null;
-    initialDragVoxelCoords = null; // Reset initial drag point
-    voxelsAtDragStart = null; // Reset snapshot
-    fixedDragPlaneParams = { level: null, axis: null }; // Always reset on pointer up
-    // Hide distance display only if not in measurement mode or if measurement is completed
+    initialDragVoxelCoords = null;
+    voxelsAtDragStart = null;
+    fixedDragPlaneParams = { level: null, axis: null };
     if (currentMode !== Modes.MEASURE || (currentMode === Modes.MEASURE && measurementStartPoint === null && measurementEndPoint === null)) {
         distanceDisplay.style.display = 'none';
     }
     initialDragVoxelWorldPos = null;
-    dragAxisLock = null; // Reset axis lock
-    currentDragVoxels.clear(); // Clear current drag voxels
-    previousFrameDragVoxels.clear(); // Clear previous frame drag voxels
+    dragAxisLock = null;
+    currentDragVoxels.clear();
+    previousFrameDragVoxels.clear();
 }
 
 
 function onPointerLeave(e) {
     if (e.pointerType === 'mouse') {
-        // Only reset drag state if a drag was active
         if (pointerIsDown && initialDragVoxelCoords) {
-            // Revert all voxels that were part of currentDragVoxels to their state before the drag started
             for (const [globalKey, data] of currentDragVoxels.entries()) {
                 const [gx, gy, gz] = parseKey(globalKey);
                 if (voxelsAtDragStart.has(globalKey)) {
-                    _addSingleVoxel(gx, gy, gz, voxelsAtDragStart.get(globalKey).color); // Revert to original color
+                    _addSingleVoxel(gx, gy, gz, voxelsAtDragStart.get(globalKey).color);
                 } else {
-                    _removeSingleVoxel(gx, gy, gz); // Remove if it was newly added in this drag
+                    _removeSingleVoxel(gx, gy, gz);
                 }
             }
-            // Add the final state of the drag to history as a batch
             const oldStateForHistory = [...voxelsAtDragStart.entries()].map(([id, data]) => {
                 const [gx, gy, gz] = parseKey(id);
                 return { gx, gy, gz, color: data.color };
             });
-            // Recalculate the final line to ensure it's correct after potential mouseleave
             const { dimX, dimY, dimZ } = getCurrentBlockDimensions();
             let rawFinalTargetVoxel = calculateTargetVoxelCoords(e.clientX, e.clientY, currentMode, 'mouse');
-            let finalTargetVoxel = initialDragVoxelCoords; // Default to initial if no valid target on leave
+            let finalTargetVoxel = initialDragVoxelCoords;
 
             if (rawFinalTargetVoxel) {
-                // Apply modifiers/axis lock to finalTargetVoxel
-                if (dragAxisLock) { // Use the established axis lock
+                if (dragAxisLock) {
                     const snappedFinalTargetVoxel = { ...rawFinalTargetVoxel };
                     if (dragAxisLock === 'x') {
                         snappedFinalTargetVoxel.gy = initialDragVoxelCoords.gy;
@@ -4525,17 +4016,16 @@ function onPointerLeave(e) {
                     } else if (dragAxisLock === 'y') {
                         snappedFinalTargetVoxel.gx = initialDragVoxelCoords.gx;
                         snappedFinalTargetVoxel.gz = initialDragVoxelCoords.gz;
-                        snappedFinalTargetVoxel.gy = rawFinalTargetVoxel.gy; // Use raw Y for stacking
+                        snappedFinalTargetVoxel.gy = rawFinalTargetVoxel.gy;
                     } else if (dragAxisLock === 'z') {
                         snappedFinalTargetVoxel.gx = initialDragVoxelCoords.gx;
                         snappedFinalTargetVoxel.gy = initialDragVoxelCoords.gy;
                     }
                     finalTargetVoxel = snappedFinalTargetVoxel;
-                } else { // If no axis lock was established, just use the raw target
+                } else {
                     finalTargetVoxel = rawFinalTargetVoxel;
                 }
 
-                // Apply clamping
                 if (finalTargetVoxel) {
                     finalTargetVoxel.gx = Math.max(0, Math.min(GRID - dimX, finalTargetVoxel.gx));
                     finalTargetVoxel.gy = Math.max(0, Math.min(GRID - dimY, finalTargetVoxel.gy));
@@ -4557,17 +4047,16 @@ function onPointerLeave(e) {
 
         pointerIsDown = false;
         lastActionVoxelCoords = null;
-        initialDragVoxelCoords = null; // Reset initial drag point
-        voxelsAtDragStart = null; // Reset snapshot
+        initialDragVoxelCoords = null;
+        voxelsAtDragStart = null;
         updatePreviewVoxel(0, 0, 0, false);
-        // Only hide distance display if not in measurement mode and a measurement is not ongoing
         if (currentMode !== Modes.MEASURE || (currentMode === Modes.MEASURE && measurementStartPoint === null && measurementEndPoint === null)) {
             distanceDisplay.style.display = 'none';
         }
         initialDragVoxelWorldPos = null;
-        dragAxisLock = null; // NEW: Reset drag axis lock
-        currentDragVoxels.clear(); // Clear current drag voxels
-        previousFrameDragVoxels.clear(); // Clear previous frame drag voxels
+        dragAxisLock = null;
+        currentDragVoxels.clear();
+        previousFrameDragVoxels.clear();
     }
 }
 
@@ -4590,7 +4079,6 @@ function onMouseWheel(e) {
     let zoomAmount = e.deltaY * sensitivity;
 
     if (e.altKey) {
-        // Only allow axis lock changes in ADD mode
         if (currentMode === Modes.ADD) {
             if (e.shiftKey) {
                 activeDrawingLevel.z = Math.max(0, Math.min(GRID - 1, activeDrawingLevel.z - Math.sign(e.deltaY)));
@@ -4604,7 +4092,6 @@ function onMouseWheel(e) {
             }
             updateGridHelperPosition();
         } else {
-            // If not in ADD mode, just zoom
             cam.position.addScaledVector(
                 cam.getWorldDirection(new THREE.Vector3()),
                 zoomAmount * moveSpeed * 5
@@ -4624,7 +4111,6 @@ function onMouseWheel(e) {
     }
 }
 
-// Helper to get a point on a specific fixed plane
 function getPointOnFixedPlane(clientX, clientY, axis, level) {
     const rect = cvs.getBoundingClientRect();
     const mouse = new THREE.Vector2(((clientX - rect.left) / rect.width) * 2 - 1,
@@ -4641,7 +4127,7 @@ function getPointOnFixedPlane(clientX, clientY, axis, level) {
     const intersectionPoint = new THREE.Vector3();
     const intersectResult = raycaster.ray.intersectPlane(drawingPlane, intersectionPoint);
 
-    if (intersectResult) { // Check if intersection occurred
+    if (intersectResult) {
         let gx = Math.floor(intersectionPoint.x / VS);
         let gy = Math.floor(intersectionPoint.y / VS);
         let gz = Math.floor(intersectionPoint.z / VS);
@@ -4650,7 +4136,6 @@ function getPointOnFixedPlane(clientX, clientY, axis, level) {
         else if (axis === 'x') gx = level;
         else if (axis === 'z') gz = level;
 
-        // Clamping here for the fixed plane
         const { dimX, dimY, dimZ } = getCurrentBlockDimensions();
         gx = Math.max(0, Math.min(GRID - dimX, gx));
         gy = Math.max(0, Math.min(GRID - dimY, gy));
@@ -4661,15 +4146,13 @@ function getPointOnFixedPlane(clientX, clientY, axis, level) {
     return null;
 }
 
-// Function to set the current fixed block size
 function setFixedBlockSize(size) {
     currentBlockSize = size;
-    useDynamicBlockDim = false; // Deactivate dynamic mode
+    useDynamicBlockDim = false;
     localStorage.setItem('voxelEditorCurrentBlockSize', currentBlockSize);
     localStorage.setItem('voxelEditorUseDynamicBlockDim', useDynamicBlockDim);
-    updateBlockSizeButtonsActiveState(); // Update active state for buttons
+    updateBlockSizeButtonsActiveState();
     
-    // Trigger a mouse move to update preview voxel
     const rect = cvs.getBoundingClientRect();
     const mouseX = lastX - rect.left;
     const mouseY = lastY - rect.top;
@@ -4685,7 +4168,6 @@ function setFixedBlockSize(size) {
     }
 }
 
-// NEW: Function to set dynamic block dimensions
 function setDynamicBlockDimensions() {
     const x = parseInt(document.getElementById('dynamic-block-x').value);
     const y = parseInt(document.getElementById('dynamic-block-y').value);
@@ -4695,20 +4177,18 @@ function setDynamicBlockDimensions() {
     dynamicBlockDim.y = Math.max(1, Math.min(GRID, y));
     dynamicBlockDim.z = Math.max(1, Math.min(GRID, z));
 
-    // Update input fields to reflect clamped values
     document.getElementById('dynamic-block-x').value = dynamicBlockDim.x;
     document.getElementById('dynamic-block-y').value = dynamicBlockDim.y;
     document.getElementById('dynamic-block-z').value = dynamicBlockDim.z;
 
-    useDynamicBlockDim = true; // Activate dynamic mode
+    useDynamicBlockDim = true;
     localStorage.setItem('voxelEditorDynamicBlockDimX', dynamicBlockDim.x);
     localStorage.setItem('voxelEditorDynamicBlockDimY', dynamicBlockDim.y);
     localStorage.setItem('voxelEditorDynamicBlockDimZ', dynamicBlockDim.z);
     localStorage.setItem('voxelEditorUseDynamicBlockDim', useDynamicBlockDim);
 
-    updateBlockSizeButtonsActiveState(); // Update active state for buttons
+    updateBlockSizeButtonsActiveState();
 
-    // Trigger a mouse move to update preview voxel
     const rect = cvs.getBoundingClientRect();
     const mouseX = lastX - rect.left;
     const mouseY = lastY - rect.top;
@@ -4731,7 +4211,7 @@ function getVoxelsOnLine(start, end, mode, color, dimX, dimY, dimZ) {
         return [];
     }
 
-    const voxelsOnLineSet = new Set(); // Use a Set to ensure uniqueness of voxel keys
+    const voxelsOnLineSet = new Set();
 
     let x1 = start.gx;
     let y1 = start.gy;
@@ -4741,7 +4221,7 @@ function getVoxelsOnLine(start, end, mode, color, dimX, dimY, dimZ) {
     let z2 = end.gz;
 
     let dx = Math.abs(x2 - x1);
-    let dy = Math.abs(y2 - y1);
+    let dy = Math.abs(y1 - y2);
     let dz = Math.abs(z2 - z1);
 
     let sx = (x1 < x2) ? 1 : -1;
@@ -4755,7 +4235,6 @@ function getVoxelsOnLine(start, end, mode, color, dimX, dimY, dimZ) {
     let p2 = 2 * dz - dm;
 
     for (let i = 0; i <= dm; i++) {
-        // Add current 1x1x1 voxel and expand it to block dimensions
         for (let xOffset = 0; xOffset < dimX; xOffset++) {
             for (let yOffset = 0; yOffset < dimY; yOffset++) {
                 for (let zOffset = 0; zOffset < dimZ; zOffset++) {
@@ -4763,7 +4242,6 @@ function getVoxelsOnLine(start, end, mode, color, dimX, dimY, dimZ) {
                     const currentVoxelY = y + yOffset;
                     const currentVoxelZ = z + zOffset;
 
-                    // Clamp to grid boundaries
                     const clampedX = Math.max(0, Math.min(GRID - 1, currentVoxelX));
                     const clampedY = Math.max(0, Math.min(GRID - 1, currentVoxelY));
                     const clampedZ = Math.max(0, Math.min(GRID - 1, currentVoxelZ));
@@ -4783,7 +4261,7 @@ function getVoxelsOnLine(start, end, mode, color, dimX, dimY, dimZ) {
             p1 += 2 * dx;
             z += sz * (p2 > 0 ? 1 : 0);
             p2 += 2 * dz;
-        } else { // dm === dz
+        } else {
             x += sx * (p1 > 0 ? 1 : 0);
             p1 += 2 * dy;
             y += sy * (p2 > 0 ? 1 : 0);
@@ -4794,22 +4272,19 @@ function getVoxelsOnLine(start, end, mode, color, dimX, dimY, dimZ) {
             x += sx;
         } else if (dm === dy) {
             y += sy;
-        } else { // dm === dz
+        } else {
             z += sz;
         }
     }
 
-    // Convert Set of keys back to array of objects
     return Array.from(voxelsOnLineSet).map(k => {
         const [gx, gy, gz] = parseKey(k);
         return { gx, gy, gz, color: color };
     });
 }
 
-
-// NEW: Update the InstancedMesh for the preview line in measurement mode
 function updatePreviewLineMesh() {
-    previewLineInstancedMesh.count = 0; // Reset count
+    previewLineInstancedMesh.count = 0;
     const tempMatrix = new THREE.Matrix4();
 
     for (let i = 0; i < previewLineVoxels.length && i < maxPreviewInstances; i++) {
@@ -4817,16 +4292,13 @@ function updatePreviewLineMesh() {
         dummy.position.set(voxel.gx * VS + HALF, voxel.gy * VS + HALF, voxel.gz * VS + HALF);
         dummy.updateMatrix();
         previewLineInstancedMesh.setMatrixAt(i, dummy.matrix);
-        // Set a distinct color for the preview line
-        previewLineInstancedMesh.instanceColor.setXYZ(i, 0, 1, 0); // Green
+        previewLineInstancedMesh.instanceColor.setXYZ(i, 0, 1, 0);
         previewLineInstancedMesh.count++;
     }
     previewLineInstancedMesh.instanceMatrix.needsUpdate = true;
     previewLineInstancedMesh.instanceColor.needsUpdate = true;
 }
 
-
-/* ---------- Keyboard Input ---------- */
 const keyboard = {};
 function onKeyDown(e) {
     keyboard[e.key] = true;
@@ -4848,12 +4320,9 @@ function onKeyDown(e) {
     }
     if ((e.ctrlKey || e.metaKey) && e.key === 'd') {
         e.preventDefault();
-        // Prevent default behavior to avoid bookmarking on Ctrl+D
     }
 
-    // Tab handling moved to cycleMode and input event listeners
     if (e.key === 'Tab') {
-        // Prevent default behavior only if not inside a dynamic block input
         const activeElement = document.activeElement;
         if (!(activeElement && activeElement.classList.contains('dynamic-block-input'))) {
             e.preventDefault();
@@ -4878,6 +4347,28 @@ function onKeyUp(e) {
         isControlDragging = false;
     }
 }
+
+function updateBlockSizeButtonsActiveState() {
+    document.querySelectorAll('.block-size-btn').forEach(btn => {
+        btn.classList.remove('active');
+    });
+
+    document.getElementById('setDynamicBlockSizeBtn').classList.remove('active');
+
+    if (useDynamicBlockDim) {
+        document.getElementById('setDynamicBlockSizeBtn').classList.add('active');
+    } else {
+        const activeBtn = document.getElementById(`block-size-${currentBlockSize}x${currentBlockSize}`);
+        if (activeBtn) {
+            activeBtn.classList.add('active');
+        } else {
+            document.getElementById('block-size-1x1').classList.add('active');
+            currentBlockSize = 1;
+            localStorage.setItem('voxelEditorCurrentBlockSize', currentBlockSize);
+        }
+    }
+}
+
 
 function updateBlockSizeButtonsActiveState() {
     // Remove active class from all fixed size buttons
