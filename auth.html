@@ -1,0 +1,74 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8" />
+  <title>Login Redirect</title>
+  <script type="module">
+    // Firebase SDKs importieren
+    import { initializeApp } from "https://www.gstatic.com/firebasejs/11.10.0/firebase-app.js";
+    import { getAuth, getRedirectResult, browserLocalPersistence, setPersistence } from "https://www.gstatic.com/firebasejs/11.10.0/firebase-auth.js";
+
+    // Ihre Firebase-Konfiguration (muss mit der in index.html übereinstimmen)
+    const firebaseConfig = {
+      apiKey: "AIzaSyB9-mpyAu9W6oiVtB0fYG8E6YFvTAsjtAA",
+      authDomain: "voxelshaper.firebaseapp.com",
+      projectId: "voxelshaper",
+      storageBucket: "voxelshaper.firebasestorage.app", 
+      messagingSenderId: "1053689247573",
+      appId: "1:1053689247573:web:f7960c7f8c2e8849e8e1dc",
+      measurementId: "G-QJ5CNKZ5DR"
+    };
+
+    // Firebase initialisieren
+    const app = initializeApp(firebaseConfig);
+    const auth = getAuth(app);
+
+    // Persistenz setzen (wichtig für die Sitzungsverwaltung)
+    // browserLocalPersistence speichert die Sitzung im localStorage des aktuellen Origins.
+    setPersistence(auth, browserLocalPersistence)
+      .then(() => {
+        // Ergebnis des Redirect-Logins abrufen
+        getRedirectResult(auth)
+          .then((result) => {
+            if (result && result.user) {
+              // Optional: Hier könnten Sie Benutzerinformationen speichern,
+              // z.B. in localStorage, obwohl Firebase Auth dies bereits
+              // für diesen Origin tut.
+              // localStorage.setItem("userEmail", result.user.email);
+              console.log("Redirect-Login erfolgreich:", result.user);
+
+              // Zurück zur ursprünglichen Seite leiten
+              const target = localStorage.getItem("redirectAfterLogin") || "https://voxelshaper.com/"; // Fallback zur Hauptseite
+              localStorage.removeItem("redirectAfterLogin"); // Aufräumen
+              window.location.href = target;
+            } else {
+              // Kein Redirect-Ergebnis oder Benutzer nicht angemeldet (z.B. Seite direkt aufgerufen)
+              console.log("Kein Redirect-Ergebnis oder Benutzer nicht angemeldet.");
+              const target = localStorage.getItem("redirectAfterLogin") || "https://voxelshaper.com/"; // Fallback zur Hauptseite
+              localStorage.removeItem("redirectAfterLogin"); // Aufräumen
+              window.location.href = target;
+            }
+          })
+          .catch((error) => {
+            // Fehler beim Redirect-Login
+            console.error("Fehler beim Redirect-Login:", error);
+            // Optional: Fehlermeldung anzeigen oder zurück zur Hauptseite leiten
+            const target = localStorage.getItem("redirectAfterLogin") || "https://voxelshaper.com/"; // Fallback zur Hauptseite
+            localStorage.removeItem("redirectAfterLogin"); // Aufräumen
+            window.location.href = target;
+          });
+      })
+      .catch((error) => {
+        console.error("Fehler bei setPersistence in auth.html:", error);
+        // Auch hier versuchen, zurückzuleiten, auch wenn Persistenz fehlschlägt
+        const target = localStorage.getItem("redirectAfterLogin") || "https://voxelshaper.com/";
+        localStorage.removeItem("redirectAfterLogin");
+        window.location.href = target;
+      });
+  </script>
+</head>
+<body>
+  <p>Melde dich an...</p>
+  <p>Bitte warten, du wirst weitergeleitet.</p>
+</body>
+</html>
