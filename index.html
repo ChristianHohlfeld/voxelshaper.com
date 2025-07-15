@@ -520,7 +520,7 @@ input[type="color"].color-preset-box::-moz-color-swatch {
         <div class="modal-buttons">
             <button id="messageModalCloseBtn" class="cancel">Schließen</button>
         </div>
-</div>
+    </div>
 </div>
 
 <!-- NEW: Mobile controls -->
@@ -715,67 +715,6 @@ var VoxelShaperIO = (function() {
 })();
 </script>
 
-<!-- Firebase SDKs -->
-<script type="module">
-    import { initializeApp } from "https://www.gstatic.com/firebasejs/11.10.0/firebase-app.js";
-    import { getAuth, signInAnonymously, signInWithCustomToken, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/11.10.0/firebase-auth.js";
-    import { getFirestore, doc, getDoc, collection } from "https://www.gstatic.com/firebasejs/11.10.0/firebase-firestore.js";
-
-    // Global Firebase variables accessible to other scripts
-    window.firebaseApp = null;
-    window.auth = null;
-    window.db = null;
-
-    // Initialize Firebase and authenticate
-    const initFirebase = async () => {
-        try {
-            const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
-            const firebaseConfig = JSON.parse(typeof __firebase_config !== 'undefined' ? __firebase_config : '{}');
-
-            if (!firebaseConfig.apiKey) {
-                console.warn("Firebase API Key is missing. Firebase services will not be fully functional.");
-                // Provide a dummy config if no API key, to prevent app crash
-                firebaseConfig.apiKey = "dummy-api-key";
-                firebaseConfig.authDomain = "dummy-project.firebaseapp.com";
-                firebaseConfig.projectId = "dummy-project";
-                firebaseConfig.storageBucket = "dummy-project.appspot.com";
-                firebaseConfig.messagingSenderId = "1234567890";
-                firebaseConfig.appId = "1:1234567890:web:abcdef1234567890";
-            }
-
-            window.firebaseApp = initializeApp(firebaseConfig);
-            window.auth = getAuth(window.firebaseApp);
-            window.db = getFirestore(window.firebaseApp);
-
-            // Authenticate with custom token or anonymously
-            if (typeof __initial_auth_token !== 'undefined' && __initial_auth_token) {
-                await signInWithCustomToken(window.auth, __initial_auth_token);
-                console.log("Firebase: Signed in with custom token.");
-            } else {
-                await signInAnonymously(window.auth);
-                console.log("Firebase: Signed in anonymously.");
-            }
-
-            // Listen for auth state changes (optional, but good practice)
-            onAuthStateChanged(window.auth, (user) => {
-                if (user) {
-                    console.log("Firebase Auth State Changed: User is signed in.", user.uid);
-                } else {
-                    console.log("Firebase Auth State Changed: User is signed out.");
-                }
-            });
-
-            console.log("Firebase initialized and authenticated.");
-        } catch (error) {
-            console.error("Firebase initialization or authentication failed:", error);
-            showMessageModal('Fehler', 'Firebase konnte nicht initialisiert werden. Einige Funktionen sind möglicherweise nicht verfügbar. Fehler: ' + error.message);
-        }
-    };
-
-    // Expose initFirebase to the global scope
-    window.initFirebase = initFirebase;
-</script>
-
 
 <script>
 /* ---------- Konstanten ---------- */
@@ -950,7 +889,7 @@ let previousFrameDragVoxels = new Set(); // Stores keys of voxels drawn in the *
 // NEW: Global variables for image template
 let templateImageMesh = null;
 // Updated templateImageData structure to store scaled dimensions
-let templateImageData = null; // { src: base64, position: [], rotation: [], scaledWidth: number, scaledHeight: number }
+let templateImageData = null; // { src: base64, position: [], rotation: [], [], scaledWidth: number, scaledHeight: number }
 
 // NEW: Mobile specific flags and variables
 let isMobile = window.matchMedia('(max-width: 768px)').matches;
@@ -2237,6 +2176,13 @@ function exportSTL() {
 
     // Create a temporary mesh for the exporter
     const tempMesh = new THREE.Mesh(mergedGeometry); // No material needed for STL export
+    
+    // Ensure the exporter is available
+    if (typeof THREE.STLExporter === 'undefined') {
+        console.error("STLExporter is not loaded. Make sure the script is included.");
+        showMessageModal('Export fehlgeschlagen', 'STLExporter-Bibliothek nicht geladen.');
+        return;
+    }
 
     const exporter = new THREE.STLExporter();
     const result = exporter.parse(tempMesh);
@@ -2423,54 +2369,13 @@ function getCurrentBlockDimensions() {
     return { dimX, dimY, dimZ };
 }
 
-/**
- * NEW: Function to load a project from Firestore using a model ID.
- * @param {string} modelId - The ID of the model document in Firestore.
- */
-async function loadProjectFromModelId(modelId) {
-    if (!window.db) {
-        console.error("Firestore DB not initialized. Cannot load model.");
-        showMessageModal('Fehler', 'Datenbank nicht bereit. Bitte versuchen Sie es später erneut.');
-        return;
-    }
-
-    try {
-        const modelRef = window.doc(window.db, "models", modelId);
-        const modelSnap = await window.getDoc(modelRef);
-
-        if (modelSnap.exists()) {
-            const modelData = modelSnap.data();
-            if (modelData.projectData) {
-                console.log(`Loading model ${modelId} from Firestore...`);
-                loadProjectData(modelData.projectData);
-                showMessageModal('Erfolg', `Modell "${modelData.title || 'Unbenannt'}" erfolgreich geladen.`);
-            } else {
-                console.error("Model document found, but no 'projectData' field:", modelId);
-                showMessageModal('Fehler', 'Modell gefunden, aber keine Projektdaten zum Laden.');
-                resetToDefaultProject();
-            }
-        } else {
-            console.warn("No model found with ID:", modelId);
-            showMessageModal('Fehler', 'Modell mit dieser ID nicht gefunden.');
-            resetToDefaultProject();
-        }
-    } catch (error) {
-        console.error("Error loading model from Firestore:", error);
-        showMessageModal('Fehler', 'Fehler beim Laden des Modells aus der Datenbank: ' + error.message);
-        resetToDefaultProject();
-    }
-}
-
 
 /* ---------- Initialisierung bei Fensterladung ---------- */
-window.onload = async function() { // Made window.onload async
+window.onload = function() {
     cvs = document.getElementById('voxelCanvas');
     containerDiv = document.getElementById('container');
     touchIndicator = document.getElementById('touch-indicator');
     distanceDisplay = document.getElementById('distanceDisplay'); // Get distance display element
-
-    // Initialize Firebase first
-    await window.initFirebase(); // Wait for Firebase to be ready
 
     // Scene
     scene = new THREE.Scene();
@@ -2831,36 +2736,26 @@ window.onload = async function() { // Made window.onload async
     // Set initial active state for block size buttons
     updateBlockSizeButtonsActiveState();
 
-    // --- NEW: Check for modelId URL parameter on load ---
+    // --- NEW: Check for projectJson URL parameter on load ---
     const urlParams = new URLSearchParams(window.location.search);
-    const modelId = urlParams.get('modelId');
+    const encodedJson = urlParams.get('projectJson');
 
-    if (modelId) {
-        console.log(`Model ID found in URL: ${modelId}. Attempting to load project.`);
-        // Ensure Firebase is initialized before attempting to load the model
-        if (window.db) {
-            loadProjectFromModelId(modelId);
-        } else {
-            // If Firebase is not yet initialized (due to async nature of initFirebase),
-            // wait for it to be ready. This is a fallback and generally initFirebase
-            // should complete quickly.
-            const checkFirebaseInterval = setInterval(() => {
-                if (window.db) {
-                    clearInterval(checkFirebaseInterval);
-                    loadProjectFromModelId(modelId);
-                }
-            }, 100); // Check every 100ms
-            setTimeout(() => {
-                if (!window.db) {
-                    console.error("Firebase DB did not initialize in time to load model from URL.");
-                    showMessageModal('Fehler', 'Firebase konnte nicht rechtzeitig geladen werden, um das Modell zu öffnen.');
-                    resetToDefaultProject();
-                }
-            }, 5000); // Timeout after 5 seconds
+    if (encodedJson) {
+        try {
+            const decodedJsonString = decodeURIComponent(encodedJson);
+            const projectData = JSON.parse(decodedJsonString);
+            loadProjectData(projectData); // Load project from URL
+            console.log("Project loaded from URL parameter.");
+        } catch (error) {
+            console.error("Error loading project from URL parameter:", error);
+            showMessageModal('Fehler', 'Fehler beim Laden des Projekts aus der URL. Ungültige oder beschädigte Projektdaten. Fehler: ' + error.message);
+            resetToDefaultProject(); // Reset to default if URL load fails
         }
     } else {
         // If no URL parameter, load default project or from local storage
-        console.log("No modelId URL parameter found. Loading default or local storage project.");
+        // This part remains as it was, ensuring the editor starts with a usable state
+        // if no URL parameter is provided.
+        console.log("No projectJson URL parameter found. Loading default or local storage project.");
         // Existing logic for loading from local storage or starting fresh
         // (already handled by the initial variable assignments and UI updates)
     }
@@ -3133,11 +3028,11 @@ function onPointerDown(e) {
             if (!initialDragVoxelCoords && rawTargetVoxel) { // Fallback: If plane intersection fails, but a voxel was hit
                 initialDragVoxelCoords = rawTargetVoxel;
             }
-            dragAxisLock = null; // No axis lock for Shift-drag, it's plane-locked
+            dragAxisLock = null; // No axis lock for Shift-drag, it's plane-locked initially, but can become axis-locked
         } else {
             // Normal click/drag: Use the raw target voxel directly as the initial drag point
             initialDragVoxelCoords = rawTargetVoxel;
-            dragAxisLock = null; // No axis lock for free-form drag
+            dragAxisLock = null; // No axis lock for free-form drag initially
         }
 
         console.log("onPointerDown: initialDragVoxelCoords (before clamping) =", initialDragVoxelCoords);
@@ -3223,7 +3118,7 @@ function onPointerMove(e) {
 
         if (doubleTapDragActive && currentMode !== Modes.MEASURE) { // Only draw lines if not in MEASURE mode
             let rawCurrentTargetVoxel = calculateTargetVoxelCoords(e.clientX, e.clientY, currentMode, 'touch');
-            let currentTargetVoxel = null; // Initialize
+            let finalTargetVoxelForDrawing = null;
             
             if (rawCurrentTargetVoxel && initialDragVoxelCoords) { // Ensure initial point for line drawing is set
                 // Determine dragAxisLock only if not already set (for mobile, we might want some initial locking)
@@ -3233,6 +3128,7 @@ function onPointerMove(e) {
                     const dz = Math.abs(rawCurrentTargetVoxel.gz - initialDragVoxelCoords.gz);
 
                     if (dx > VOXEL_DRAG_THRESHOLD || dy > VOXEL_DRAG_THRESHOLD || dz > VOXEL_DRAG_THRESHOLD) {
+                        // For touch, just lock to the dominant axis
                         if (dx >= dy && dx >= dz) dragAxisLock = 'x';
                         else if (dy >= dx && dy >= dz) dragAxisLock = 'y';
                         else dragAxisLock = 'z';
@@ -3251,59 +3147,59 @@ function onPointerMove(e) {
                         snappedTargetVoxel.gx = initialDragVoxelCoords.gx;
                         snappedTargetVoxel.gy = initialDragVoxelCoords.gy;
                     }
-                    currentTargetVoxel = snappedTargetVoxel;
+                    finalTargetVoxelForDrawing = snappedTargetVoxel;
                 } else {
-                    currentTargetVoxel = rawCurrentTargetVoxel;
+                    finalTargetVoxelForDrawing = rawCurrentTargetVoxel; // For preview, if no lock yet
                 }
 
-                // Apply clamping to currentTargetVoxel
-                currentTargetVoxel.gx = Math.max(0, Math.min(GRID - dimX, currentTargetVoxel.gx));
-                currentTargetVoxel.gy = Math.max(0, Math.min(GRID - dimY, currentTargetVoxel.gy));
-                currentTargetVoxel.gz = Math.max(0, Math.min(GRID - dimZ, currentTargetVoxel.gz));
+                // Apply clamping to finalTargetVoxelForDrawing
+                if (finalTargetVoxelForDrawing) {
+                    finalTargetVoxelForDrawing.gx = Math.max(0, Math.min(GRID - dimX, finalTargetVoxelForDrawing.gx));
+                    finalTargetVoxelForDrawing.gy = Math.max(0, Math.min(GRID - dimY, finalTargetVoxelForDrawing.gy));
+                    finalTargetVoxelForDrawing.gz = Math.max(0, Math.min(GRID - dimZ, finalTargetVoxelForDrawing.gz));
+                }
 
-                // NEW: Incremental update for drag drawing
-                const voxelsToDrawThisFrame = getVoxelsOnLine(initialDragVoxelCoords, currentTargetVoxel, currentMode, currentColor, dimX, dimY, dimZ);
-                const currentFrameVoxelsSet = new Set(voxelsToDrawThisFrame.map(v => key(v.gx, v.gy, v.gz)));
+                // Only perform drawing if an axis lock has been established
+                if (dragAxisLock && finalTargetVoxelForDrawing) {
+                    const voxelsToDrawThisFrame = getVoxelsOnLine(initialDragVoxelCoords, finalTargetVoxelForDrawing, currentMode, currentColor, dimX, dimY, dimZ);
+                    const currentFrameVoxelsSet = new Set(voxelsToDrawThisFrame.map(v => key(v.gx, v.gy, v.gz)));
 
-                // Identify voxels to remove (were in previousFrameDragVoxels but not in currentFrameVoxelsSet)
-                for (const globalKey of previousFrameDragVoxels) {
-                    if (!currentFrameVoxelsSet.has(globalKey)) {
-                        const [gx, gy, gz] = parseKey(globalKey);
-                        // Revert to original state or remove if it was added during this drag
-                        if (voxelsAtDragStart.has(globalKey)) {
-                            _addSingleVoxel(gx, gy, gz, voxelsAtDragStart.get(globalKey).color); // Revert to original color
+                    // Identify voxels to remove (were in previousFrameDragVoxels but not in currentFrameVoxelsSet)
+                    for (const globalKey of previousFrameDragVoxels) {
+                        if (!currentFrameVoxelsSet.has(globalKey)) {
+                            const [gx, gy, gz] = parseKey(globalKey);
+                            if (voxelsAtDragStart.has(globalKey)) {
+                                _addSingleVoxel(gx, gy, gz, voxelsAtDragStart.get(globalKey).color);
+                            } else {
+                                _removeSingleVoxel(gx, gy, gz);
+                            }
+                            currentDragVoxels.delete(globalKey);
+                        }
+                    }
+
+                    // Identify voxels to add/recolor (are in currentFrameVoxelsSet)
+                    for (const voxel of voxelsToDrawThisFrame) {
+                        const globalKey = key(voxel.gx, voxel.gy, voxel.gz);
+                        if (!currentDragVoxels.has(globalKey)) {
+                            const hasVoxelBeforeDrag = voxelsAtDragStart.has(globalKey);
+                            const initialColor = hasVoxelBeforeDrag ? voxelsAtDragStart.get(globalKey).color : null;
+                            performVoxelModification(voxel.gx, voxel.gy, voxel.gz, currentMode, currentColor);
+                            currentDragVoxels.set(globalKey, { color: currentColor, initialColor: initialColor });
                         } else {
-                            _removeSingleVoxel(gx, gy, gz); // Remove if it was newly added in this drag
-                        }
-                        currentDragVoxels.delete(globalKey); // Remove from current drag tracking
-                    }
-                }
-
-                // Identify voxels to add/recolor (are in currentFrameVoxelsSet)
-                for (const voxel of voxelsToDrawThisFrame) {
-                    const globalKey = key(voxel.gx, voxel.gy, voxel.gz);
-                    if (!currentDragVoxels.has(globalKey)) {
-                        // New voxel in this frame's line, add it
-                        const hasVoxelBeforeDrag = voxelsAtDragStart.has(globalKey);
-                        const initialColor = hasVoxelBeforeDrag ? voxelsAtDragStart.get(globalKey).color : null;
-                        performVoxelModification(voxel.gx, voxel.gy, voxel.gz, currentMode, currentColor); // Perform for 1x1x1
-                        currentDragVoxels.set(globalKey, { color: currentColor, initialColor: initialColor });
-                    } else {
-                        // Voxel already in currentDragVoxels, check if color needs updating (DRAW mode)
-                        if (currentMode === Modes.DRAW && voxels.has(globalKey) && voxels.get(globalKey).color !== currentColor) {
-                            _recolorSingleVoxel(voxel.gx, voxel.gy, voxel.gz, currentColor);
-                            currentDragVoxels.get(globalKey).color = currentColor; // Update tracked color
+                            if (currentMode === Modes.DRAW && voxels.has(globalKey) && voxels.get(globalKey).color !== currentColor) {
+                                _recolorSingleVoxel(voxel.gx, voxel.gy, voxel.gz, currentColor);
+                                currentDragVoxels.get(globalKey).color = currentColor;
+                            }
                         }
                     }
+                    previousFrameDragVoxels = currentFrameVoxelsSet;
+
+                    lastActionVoxelCoords = { ...finalTargetVoxelForDrawing };
+
+                    const currentVoxelWorldPos = new THREE.Vector3(finalTargetVoxelForDrawing.gx * VS + HALF, finalTargetVoxelForDrawing.gy * VS + HALF, finalTargetVoxelForDrawing.gz * VS + HALF);
+                    const distance = initialDragVoxelWorldPos.distanceTo(currentVoxelWorldPos);
+                    distanceDisplay.textContent = `Distanz: ${distance.toFixed(2)} mm`;
                 }
-                previousFrameDragVoxels = currentFrameVoxelsSet; // Update for next frame
-
-                lastActionVoxelCoords = { ...currentTargetVoxel }; // Update the last action for continuous feedback
-
-                // Update distance display
-                const currentVoxelWorldPos = new THREE.Vector3(currentTargetVoxel.gx * VS + HALF, currentTargetVoxel.gy * VS + HALF, currentTargetVoxel.gz * VS + HALF);
-                const distance = initialDragVoxelWorldPos.distanceTo(currentVoxelWorldPos);
-                distanceDisplay.textContent = `Distanz: ${distance.toFixed(2)} mm`;
             }
             updatePreviewVoxel(0, 0, 0, false); // Hide preview during active touch drag operation
             return;
@@ -3351,8 +3247,6 @@ function onPointerMove(e) {
     // It is true if the pointer is down AND (it has moved significantly OR Shift/Control are held)
     const isDraggingVoxelAction = pointerIsDown && (movedDistance > MOVE_PX || isShiftDragging || isControlDragging);
 
-    let currentTargetVoxel = null;
-
     if (currentMode === Modes.MEASURE) {
         if (measurementStartPoint) {
             const tempTargetVoxel = calculateTargetVoxelCoords(e.clientX, e.clientY, currentMode, 'mouse');
@@ -3389,100 +3283,120 @@ function onPointerMove(e) {
         return;
     } else { // Normal drawing/deleting/recoloring
         let rawCurrentTargetVoxel = calculateTargetVoxelCoords(e.clientX, e.clientY, currentMode, 'mouse');
-        
+        let finalTargetVoxelForDrawing = null; // This will be the actual end point for the line
+
         if (isDraggingVoxelAction && rawCurrentTargetVoxel && initialDragVoxelCoords) {
-            if (isControlDragging && currentMode === Modes.ADD) {
-                // Stacking: Fix X and Z to initial drag voxel's X and Z
-                const initialWorldX = initialDragVoxelCoords.gx * VS + HALF;
-                const initialWorldZ = initialDragVoxelCoords.gz * VS + HALF;
+            // Determine dragAxisLock if not already set
+            if (dragAxisLock === null) {
+                const dx = Math.abs(rawCurrentTargetVoxel.gx - initialDragVoxelCoords.gx);
+                const dy = Math.abs(rawCurrentTargetVoxel.gy - initialDragVoxelCoords.gy);
+                const dz = Math.abs(rawCurrentTargetVoxel.gz - initialDragVoxelCoords.gz);
 
-                const linePoint = new THREE.Vector3(initialWorldX, 0, initialWorldZ);
-                const lineDirection = new THREE.Vector3(0, 1, 0);
-
-                const raycaster = new THREE.Raycaster();
-                const rect = cvs.getBoundingClientRect();
-                const mouse = new THREE.Vector2(((e.clientX - rect.left) / rect.width) * 2 - 1,
-                                                -((e.clientY - rect.top) / rect.height) * 2 + 1);
-                raycaster.setFromCamera(mouse, cam);
-                
-                const closestWorldPoint = closestPointOnLineToRay(raycaster.ray.origin, raycaster.ray.direction, linePoint, lineDirection);
-                
-                currentTargetVoxel = {
-                    gx: initialDragVoxelCoords.gx, // Fixed X
-                    gy: Math.floor(closestWorldPoint.y / VS), // Responsive Y
-                    gz: initialDragVoxelCoords.gz  // Fixed Z
-                };
-                // Clamp Y to grid boundaries, considering block height
-                currentTargetVoxel.gy = Math.max(0, Math.min(GRID - dimY, currentTargetVoxel.gy));
-                dragAxisLock = 'y'; // Explicit Y-axis lock for Control-drag, overrides other locking
-            } else if (isShiftDragging) { // NEW: Explicit Shift-Drag Logic
-                // Constrain to the active drawing plane
-                currentTargetVoxel = getPointOnFixedPlane(e.clientX, e.clientY, currentDrawingAxis, activeDrawingLevel[currentDrawingAxis]);
-                if (!currentTargetVoxel) {
-                    updatePreviewVoxel(0, 0, 0, false);
-                    distanceDisplay.style.display = 'none';
-                    return; // Skip drawing this frame
+                if (dx > VOXEL_DRAG_THRESHOLD || dy > VOXEL_DRAG_THRESHOLD || dz > VOXEL_DRAG_THRESHOLD) {
+                    // Prioritize control/shift drag if active
+                    if (isControlDragging && currentMode === Modes.ADD) {
+                        dragAxisLock = 'y'; // Force Y for stacking
+                    } else if (isShiftDragging) {
+                        // For shift-drag, lock to an axis on the active plane
+                        if (currentDrawingAxis === 'y') { // Y-plane, so lock to X or Z
+                            if (dx >= dz) dragAxisLock = 'x';
+                            else dragAxisLock = 'z';
+                        } else if (currentDrawingAxis === 'x') { // X-plane, so lock to Y or Z
+                            if (dy >= dz) dragAxisLock = 'y';
+                            else dragAxisLock = 'z';
+                        } else { // Z-plane, so lock to X or Y
+                            if (dx >= dy) dragAxisLock = 'x';
+                            else dragAxisLock = 'y';
+                        }
+                    } else { // No modifier, free-form drag, lock to dominant axis
+                        if (dx >= dy && dx >= dz) dragAxisLock = 'x';
+                        else if (dy >= dx && dy >= dz) dragAxisLock = 'y';
+                        else dragAxisLock = 'z';
+                    }
                 }
-                dragAxisLock = null; // No axis lock for Shift-drag, it's plane-locked
-            } else { // No modifier: free-form line drawing
-                currentTargetVoxel = rawCurrentTargetVoxel;
-                dragAxisLock = null; // Ensure no axis lock for free drawing
             }
-            
-            // Apply clamping to currentTargetVoxel
-            currentTargetVoxel.gx = Math.max(0, Math.min(GRID - dimX, currentTargetVoxel.gx));
-            currentTargetVoxel.gy = Math.max(0, Math.min(GRID - dimY, currentTargetVoxel.gy));
-            currentTargetVoxel.gz = Math.max(0, Math.min(GRID - dimZ, currentTargetVoxel.gz));
 
-            console.log("onPointerMove: currentTargetVoxel (after clamping) =", currentTargetVoxel);
+            // Apply axis lock if set
+            if (dragAxisLock) {
+                const snappedTargetVoxel = { ...rawCurrentTargetVoxel };
+                if (dragAxisLock === 'x') {
+                    snappedTargetVoxel.gy = initialDragVoxelCoords.gy;
+                    snappedTargetVoxel.gz = initialDragVoxelCoords.gz;
+                } else if (dragAxisLock === 'y') {
+                    snappedTargetVoxel.gx = initialDragVoxelCoords.gx;
+                    snappedTargetVoxel.gz = initialDragVoxelCoords.gz;
+                } else if (dragAxisLock === 'z') {
+                    snappedTargetVoxel.gx = initialDragVoxelCoords.gx;
+                    snappedTargetVoxel.gy = initialDragVoxelCoords.gy;
+                }
+                finalTargetVoxelForDrawing = snappedTargetVoxel;
+            } else {
+                // If no axis lock yet, don't draw, just update preview based on raw target
+                finalTargetVoxelForDrawing = rawCurrentTargetVoxel; // Use raw for preview, drawing happens only if lock is set
+            }
 
-            // NEW: Incremental update for drag drawing
-            const voxelsToDrawThisFrame = getVoxelsOnLine(initialDragVoxelCoords, currentTargetVoxel, currentMode, currentColor, dimX, dimY, dimZ);
-            const currentFrameVoxelsSet = new Set(voxelsToDrawThisFrame.map(v => key(v.gx, v.gy, v.gz)));
+            // Apply clamping to finalTargetVoxelForDrawing
+            if (finalTargetVoxelForDrawing) {
+                finalTargetVoxelForDrawing.gx = Math.max(0, Math.min(GRID - dimX, finalTargetVoxelForDrawing.gx));
+                finalTargetVoxelForDrawing.gy = Math.max(0, Math.min(GRID - dimY, finalTargetVoxelForDrawing.gy));
+                finalTargetVoxelForDrawing.gz = Math.max(0, Math.min(GRID - dimZ, finalTargetVoxelForDrawing.gz));
+            }
 
-            // Identify voxels to remove (were in previousFrameDragVoxels but not in currentFrameVoxelsSet)
-            for (const globalKey of previousFrameDragVoxels) {
-                if (!currentFrameVoxelsSet.has(globalKey)) {
-                    const [gx, gy, gz] = parseKey(globalKey);
-                    // Revert to original state or remove if it was added during this drag
-                    if (voxelsAtDragStart.has(globalKey)) {
-                        _addSingleVoxel(gx, gy, gz, voxelsAtDragStart.get(globalKey).color); // Revert to original color
+            // Only perform drawing if an axis lock has been established
+            if (dragAxisLock && finalTargetVoxelForDrawing) {
+                const voxelsToDrawThisFrame = getVoxelsOnLine(initialDragVoxelCoords, finalTargetVoxelForDrawing, currentMode, currentColor, dimX, dimY, dimZ);
+                const currentFrameVoxelsSet = new Set(voxelsToDrawThisFrame.map(v => key(v.gx, v.gy, v.gz)));
+
+                // Identify voxels to remove (were in previousFrameDragVoxels but not in currentFrameVoxelsSet)
+                for (const globalKey of previousFrameDragVoxels) {
+                    if (!currentFrameVoxelsSet.has(globalKey)) {
+                        const [gx, gy, gz] = parseKey(globalKey);
+                        if (voxelsAtDragStart.has(globalKey)) {
+                            _addSingleVoxel(gx, gy, gz, voxelsAtDragStart.get(globalKey).color);
+                        } else {
+                            _removeSingleVoxel(gx, gy, gz);
+                        }
+                        currentDragVoxels.delete(globalKey);
+                    }
+                }
+
+                // Identify voxels to add/recolor (are in currentFrameVoxelsSet)
+                for (const voxel of voxelsToDrawThisFrame) {
+                    const globalKey = key(voxel.gx, voxel.gy, voxel.gz);
+                    if (!currentDragVoxels.has(globalKey)) {
+                        const hasVoxelBeforeDrag = voxelsAtDragStart.has(globalKey);
+                        const initialColor = hasVoxelBeforeDrag ? voxelsAtDragStart.get(globalKey).color : null;
+                        performVoxelModification(voxel.gx, voxel.gy, voxel.gz, currentMode, currentColor);
+                        currentDragVoxels.set(globalKey, { color: currentColor, initialColor: initialColor });
                     } else {
-                        _removeSingleVoxel(gx, gy, gz); // Remove if it was newly added in this drag
-                    }
-                    currentDragVoxels.delete(globalKey); // Remove from current drag tracking
-                }
-            }
-
-            // Identify voxels to add/recolor (are in currentFrameVoxelsSet)
-            for (const voxel of voxelsToDrawThisFrame) {
-                const globalKey = key(voxel.gx, voxel.gy, voxel.gz);
-                if (!currentDragVoxels.has(globalKey)) {
-                    // New voxel in this frame's line, add it
-                    const hasVoxelBeforeDrag = voxelsAtDragStart.has(globalKey);
-                    const initialColor = hasVoxelBeforeDrag ? voxelsAtDragStart.get(globalKey).color : null;
-                    performVoxelModification(voxel.gx, voxel.gy, voxel.gz, currentMode, currentColor); // Perform for 1x1x1
-                    currentDragVoxels.set(globalKey, { color: currentColor, initialColor: initialColor });
-                } else {
-                    // Voxel already in currentDragVoxels, check if color needs updating (DRAW mode)
-                    if (currentMode === Modes.DRAW && voxels.has(globalKey) && voxels.get(globalKey).color !== currentColor) {
-                        _recolorSingleVoxel(voxel.gx, voxel.gy, voxel.gz, currentColor);
-                        currentDragVoxels.get(globalKey).color = currentColor; // Update tracked color
+                        if (currentMode === Modes.DRAW && voxels.has(globalKey) && voxels.get(globalKey).color !== currentColor) {
+                            _recolorSingleVoxel(voxel.gx, voxel.gy, voxel.gz, currentColor);
+                            currentDragVoxels.get(globalKey).color = currentColor;
+                        }
                     }
                 }
+                previousFrameDragVoxels = currentFrameVoxelsSet;
+
+                lastActionVoxelCoords = { ...finalTargetVoxelForDrawing }; // Update the last action for continuous feedback
+
+                // Update distance display
+                const currentVoxelWorldPos = new THREE.Vector3(finalTargetVoxelForDrawing.gx * VS + HALF, finalTargetVoxelForDrawing.gy * VS + HALF, finalTargetVoxelForDrawing.gz * VS + HALF);
+                const distance = initialDragVoxelWorldPos.distanceTo(currentVoxelWorldPos);
+                distanceDisplay.textContent = `Distanz: ${distance.toFixed(2)} mm`;
+                distanceDisplay.style.display = 'block';
+            } else {
+                distanceDisplay.style.display = 'none'; // Hide if no axis lock yet
             }
-            previousFrameDragVoxels = currentFrameVoxelsSet; // Update for next frame
 
-            lastActionVoxelCoords = { ...currentTargetVoxel }; // Update the last action for continuous feedback
+            // Update preview voxel based on the potentially snapped target, even if not drawing yet
+            if (finalTargetVoxelForDrawing) {
+                updatePreviewVoxel(finalTargetVoxelForDrawing.gx, finalTargetVoxelForDrawing.gy, finalTargetVoxelForDrawing.gz, true, dimX, dimY, dimZ);
+            } else {
+                updatePreviewVoxel(0, 0, 0, false);
+            }
 
-            // Update distance display
-            const currentVoxelWorldPos = new THREE.Vector3(currentTargetVoxel.gx * VS + HALF, currentTargetVoxel.gy * VS + HALF, currentTargetVoxel.gz * VS + HALF);
-            const distance = initialDragVoxelWorldPos.distanceTo(currentVoxelWorldPos);
-            distanceDisplay.textContent = `Distanz: ${distance.toFixed(2)} mm`;
-            distanceDisplay.style.display = 'block';
-        } else {
-            distanceDisplay.style.display = 'none'; // Hide distance display when not dragging
-            // For hover, calculate target voxel and apply clamping for preview
+        } else { // Not dragging, just hovering
+            distanceDisplay.style.display = 'none';
             let hoverTargetVoxel = calculateTargetVoxelCoords(e.clientX, e.clientY, currentMode, 'mouse');
             if (hoverTargetVoxel) {
                 hoverTargetVoxel.gx = Math.max(0, Math.min(GRID - dimX, hoverTargetVoxel.gx));
@@ -3557,7 +3471,7 @@ function onPointerUp(e) {
             });
 
             let rawFinalTargetVoxel = calculateTargetVoxelCoords(e.clientX, e.clientY, currentMode, 'touch');
-            let finalTargetVoxel = null;
+            let finalTargetVoxel = initialDragVoxelCoords;
 
             if (rawFinalTargetVoxel) {
                 // Apply axis lock to the final target voxel for touch drag drawing
@@ -3574,25 +3488,21 @@ function onPointerUp(e) {
                         snappedFinalTargetVoxel.gy = initialDragVoxelCoords.gy;
                     }
                     finalTargetVoxel = snappedFinalTargetVoxel;
-                } else {
-                    finalTargetVoxel = rawFinalTargetVoxel;
+                } else { // If no axis lock was established (e.g., too small movement), just the initial click
+                    finalTargetVoxel = initialDragVoxelCoords;
                 }
 
                 // Apply clamping directly to finalTargetVoxel
-                finalTargetVoxel.gx = Math.max(0, Math.min(GRID - dimX, finalTargetVoxel.gx));
-                finalTargetVoxel.gy = Math.max(0, Math.min(GRID - dimY, finalTargetVoxel.gy));
-                finalTargetVoxel.gz = Math.max(0, Math.min(GRID - dimZ, finalTargetVoxel.gz));
+                if (finalTargetVoxel) {
+                    finalTargetVoxel.gx = Math.max(0, Math.min(GRID - dimX, finalTargetVoxel.gx));
+                    finalTargetVoxel.gy = Math.max(0, Math.min(GRID - dimY, finalTargetVoxel.gy));
+                    finalTargetVoxel.gz = Math.max(0, Math.min(GRID - dimZ, finalTargetVoxel.gz));
+                }
+            }
 
-                // Now, redraw the *final* line segment and capture the newState for history
-                const finalVoxelsToDraw = getVoxelsOnLine(initialDragVoxelCoords, finalTargetVoxel, currentMode, currentColor, dimX, dimY, dimZ);
-                for (const voxel of finalVoxelsToDraw) {
-                    performVoxelModification(voxel.gx, voxel.gy, voxel.gz, currentMode, currentColor); // Perform for 1x1x1
-                }
-            } else { // If no valid target, just the initial click
-                const finalVoxelsToDraw = getVoxelsOnLine(initialDragVoxelCoords, initialDragVoxelCoords, currentMode, currentColor, dimX, dimY, dimZ);
-                for (const voxel of finalVoxelsToDraw) {
-                    performVoxelModification(voxel.gx, voxel.gy, voxel.gz, currentMode, currentColor); // Perform for 1x1x1
-                }
+            const finalVoxelsToDraw = getVoxelsOnLine(initialDragVoxelCoords, finalTargetVoxel, currentMode, currentColor, dimX, dimY, dimZ);
+            for (const voxel of finalVoxelsToDraw) {
+                performVoxelModification(voxel.gx, voxel.gy, voxel.gz, currentMode, currentColor);
             }
 
             const newStateForHistory = [...voxels.entries()].map(([id, data]) => {
@@ -3636,7 +3546,7 @@ function onPointerUp(e) {
             return; // Exit, handled by measure mode
         }
 
-        if (pointerIsDown && !isPointerLocked && initialDragVoxelCoords) {
+        if (pointerIsDown && !isPointerLocked && initialDragVoxelCoords) { // Only if a drag was initiated
             // Revert all voxels that were part of currentDragVoxels to their state before the drag started
             for (const [globalKey, data] of currentDragVoxels.entries()) {
                 const [gx, gy, gz] = parseKey(globalKey);
@@ -3655,37 +3565,27 @@ function onPointerUp(e) {
             // Now, redraw the *final* line segment and capture the newState for history
             let finalVoxelsToDraw = [];
             let rawFinalTargetVoxel = calculateTargetVoxelCoords(e.clientX, e.clientY, currentMode, 'mouse');
-            let finalTargetVoxel = null;
+            let finalTargetVoxel = initialDragVoxelCoords; // Default to initial if no valid target on leave or if no drag happened
 
             if (rawFinalTargetVoxel) {
-                if (isControlDragging && currentMode === Modes.ADD) {
-                    const initialWorldX = initialDragVoxelCoords.gx * VS + HALF;
-                    const initialWorldZ = initialDragVoxelCoords.gz * VS + HALF;
-
-                    const linePoint = new THREE.Vector3(initialWorldX, 0, initialWorldZ);
-                    const lineDirection = new THREE.Vector3(0, 1, 0);
-
-                    const raycaster = new THREE.Raycaster();
-                    const rect = cvs.getBoundingClientRect();
-                    const mouse = new THREE.Vector2(((e.clientX - rect.left) / rect.width) * 2 - 1,
-                                                    -((e.clientY - rect.top) / rect.height) * 2 + 1);
-                    raycaster.setFromCamera(mouse, cam);
-                    
-                    const closestWorldPoint = closestPointOnLineToRay(raycaster.ray.origin, raycaster.ray.direction, linePoint, lineDirection);
-                    
-                    finalTargetVoxel = {
-                        gx: initialDragVoxelCoords.gx,
-                        gy: Math.floor(closestWorldPoint.y / VS),
-                        gz: initialDragVoxelCoords.gz
-                    };
-                    finalTargetVoxel.gy = Math.max(0, Math.min(GRID - dimY, finalTargetVoxel.gy)); // Clamp with dimY
-                } else if (isShiftDragging) {
-                    finalTargetVoxel = getPointOnFixedPlane(e.clientX, e.clientY, currentDrawingAxis, activeDrawingLevel[currentDrawingAxis]);
-                    if (!finalTargetVoxel) { // Fallback if fixed plane intersection fails
-                        finalTargetVoxel = rawFinalTargetVoxel;
+                // Apply axis lock to the final target voxel if a lock was established during the drag
+                if (dragAxisLock) {
+                    const snappedFinalTargetVoxel = { ...rawFinalTargetVoxel };
+                    if (dragAxisLock === 'x') {
+                        snappedFinalTargetVoxel.gy = initialDragVoxelCoords.gy;
+                        snappedFinalTargetVoxel.gz = initialDragVoxelCoords.gz;
+                    } else if (dragAxisLock === 'y') {
+                        snappedFinalTargetVoxel.gx = initialDragVoxelCoords.gx;
+                        snappedFinalTargetVoxel.gz = initialDragVoxelCoords.gz;
+                    } else if (dragAxisLock === 'z') {
+                        snappedFinalTargetVoxel.gx = initialDragVoxelCoords.gx;
+                        snappedFinalTargetVoxel.gy = initialDragVoxelCoords.gy;
                     }
-                } else { // No modifier, no axis lock, just raw movement
+                    finalTargetVoxel = snappedFinalTargetVoxel;
+                } else if (wasSingleClick) { // If it was a single click, the target is just the clicked voxel
                     finalTargetVoxel = rawFinalTargetVoxel;
+                } else { // If it was a drag but no axis lock was established (e.g., too small movement), treat as single voxel
+                    finalTargetVoxel = initialDragVoxelCoords;
                 }
 
                 // Apply clamping directly to finalTargetVoxel
@@ -3698,12 +3598,12 @@ function onPointerUp(e) {
 
             if (finalTargetVoxel) {
                 finalVoxelsToDraw = getVoxelsOnLine(initialDragVoxelCoords, finalTargetVoxel, currentMode, currentColor, dimX, dimY, dimZ);
-            } else { // If no valid target, just the initial click
-                finalVoxelsToDraw = getVoxelsOnLine(initialDragVoxelCoords, initialDragVoxelCoords, currentMode, currentColor, dimX, dimY, dimZ);
+            } else { // Should not happen if initialDragVoxelCoords was set, but for safety
+                finalVoxelsToDraw = [];
             }
 
             for (const voxel of finalVoxelsToDraw) {
-                performVoxelModification(voxel.gx, voxel.gy, voxel.gz, currentMode, currentColor); // Perform for 1x1x1
+                performVoxelModification(voxel.gx, voxel.gy, voxel.gz, currentMode, currentColor);
             }
 
             const newStateForHistory = [...voxels.entries()].map(([id, data]) => {
@@ -3759,33 +3659,20 @@ function onPointerLeave(e) {
 
             if (rawFinalTargetVoxel) {
                 // Apply modifiers/axis lock to finalTargetVoxel
-                if (isControlDragging && currentMode === Modes.ADD) {
-                    const initialWorldX = initialDragVoxelCoords.gx * VS + HALF;
-                    const initialWorldZ = initialDragVoxelCoords.gz * VS + HALF;
-
-                    const linePoint = new THREE.Vector3(initialWorldX, 0, initialWorldZ);
-                    const lineDirection = new THREE.Vector3(0, 1, 0);
-
-                    const raycaster = new THREE.Raycaster();
-                    const rect = cvs.getBoundingClientRect();
-                    const mouse = new THREE.Vector2(((e.clientX - rect.left) / rect.width) * 2 - 1,
-                                                    -((e.clientY - rect.top) / rect.height) * 2 + 1);
-                    raycaster.setFromCamera(mouse, cam);
-                    
-                    const closestWorldPoint = closestPointOnLineToRay(raycaster.ray.origin, raycaster.ray.direction, linePoint, lineDirection);
-                    
-                    finalTargetVoxel = {
-                        gx: initialDragVoxelCoords.gx,
-                        gy: Math.floor(closestWorldPoint.y / VS),
-                        gz: initialDragVoxelCoords.gz
-                    };
-                    finalTargetVoxel.gy = Math.max(0, Math.min(GRID - dimY, finalTargetVoxel.gy)); // Clamp with dimY
-                } else if (isShiftDragging) {
-                    finalTargetVoxel = getPointOnFixedPlane(e.clientX, e.clientY, currentDrawingAxis, activeDrawingLevel[currentDrawingAxis]);
-                    if (!finalTargetVoxel) { // Fallback if fixed plane intersection fails
-                        finalTargetVoxel = rawFinalTargetVoxel;
+                if (dragAxisLock) { // Use the established axis lock
+                    const snappedFinalTargetVoxel = { ...rawFinalTargetVoxel };
+                    if (dragAxisLock === 'x') {
+                        snappedFinalTargetVoxel.gy = initialDragVoxelCoords.gy;
+                        snappedFinalTargetVoxel.gz = initialDragVoxelCoords.gz;
+                    } else if (dragAxisLock === 'y') {
+                        snappedFinalTargetVoxel.gx = initialDragVoxelCoords.gx;
+                        snappedFinalTargetVoxel.gz = initialDragVoxelCoords.gz;
+                    } else if (dragAxisLock === 'z') {
+                        snappedFinalTargetVoxel.gx = initialDragVoxelCoords.gx;
+                        snappedFinalTargetVoxel.gy = initialDragVoxelCoords.gy;
                     }
-                } else {
+                    finalTargetVoxel = snappedFinalTargetVoxel;
+                } else { // If no axis lock was established, just use the raw target
                     finalTargetVoxel = rawFinalTargetVoxel;
                 }
 
@@ -3980,7 +3867,7 @@ function setDynamicBlockDimensions() {
 
 /**
  * NEW: Bresenham's 3D Line Algorithm to get all voxels on a line segment.
- * This function will now return a Set of unique voxel keys.
+ * This function will now return an Array of unique voxel objects.
  * It also handles the block dimensions by expanding each 1x1x1 voxel into the specified block size.
  *
  * @param {object} start - {gx, gy, gz} starting voxel coordinates (base corner).
@@ -4170,6 +4057,8 @@ function updateBlockSizeButtonsActiveState() {
             localStorage.setItem('voxelEditorCurrentBlockSize', currentBlockSize);
         }
     }
-}</script>
+}
+
+</script>
 </body>
 </html>
