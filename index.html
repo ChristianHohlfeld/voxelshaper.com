@@ -3098,28 +3098,29 @@ window.onload = async function() {
     const userIdDisplay = document.getElementById('userIdDisplay');
     const goToHubBtn = document.getElementById('goToHubBtn');
   
-    window.firebase.setPersistence(auth, window.firebase.browserLocalPersistence)
-        .then(() => {
-            window.firebase.onAuthStateChanged(auth, (user) => {
-                if (user) {
-                    currentUserId = user.uid;
-                    currentUser = user;
-                    loginLogoutBtn.textContent = 'Abmelden';
-                    userIdDisplay.textContent = `Angemeldet als: ${user.uid}`;
-                    uploadToHubBtn.style.display = 'inline-block';
-                } else {
-                    currentUserId = null;
-                    currentUser = null;
-                    loginLogoutBtn.textContent = 'Anmelden';
-                    userIdDisplay.textContent = '';
-                    uploadToHubBtn.style.display = 'none';
-                }
-            });
-        })
-        .catch((error) => {
-            console.error("Fehler bei setPersistence:", error);
-            showToast('Anmeldefehler', `Fehler bei der Anmeldungspersistenz: ${error.message}. Die Funktionalität könnte eingeschränkt sein.`, 'error', 5000);
+window.firebase.setPersistence(auth, window.firebase.browserLocalPersistence)
+    .then(() => {
+        window.firebase.onAuthStateChanged(auth, (user) => {
+            if (user) {
+                currentUserId = user.uid;
+                currentUser = user;
+                loginLogoutBtn.textContent = 'Abmelden';
+                userIdDisplay.textContent = `Angemeldet als: ${user.email || user.uid.substring(0, 8)}...`;
+                uploadToHubBtn.style.display = 'inline-block';
+            } else {
+                currentUserId = null;
+                currentUser = null;
+                loginLogoutBtn.textContent = 'Anmelden';
+                userIdDisplay.textContent = '';
+                uploadToHubBtn.style.display = 'none';
+                // KEIN openAuthModal() HIER - das war das Problem
+            }
         });
+    })
+    .catch((error) => {
+        console.error("Fehler bei setPersistence:", error);
+        showToast('Anmeldefehler', `Fehler bei der Anmeldungspersistenz: ${error.message}. Die Funktionalität könnte eingeschränkt sein.`, 'error', 5000);
+    });
 
     loginLogoutBtn.addEventListener('click', loginLogout);
     uploadToHubBtn.addEventListener('click', openUploadModal);
