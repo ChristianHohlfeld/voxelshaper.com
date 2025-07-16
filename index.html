@@ -3529,121 +3529,85 @@ window.onload = async function() {
         // Flag to ensure project loading from URL only happens once after auth is settled
         let projectLoadedFromUrl = false; // <<< NEU: Flag für URL-Laden
 
-        // Firebase Auth Initialisierung und Listener für Authentifizierungsstatusänderungen
-        window.firebase.setPersistence(auth, window.firebase.browserLocalPersistence)
-            .then(async () => {
-                // Initial sign-in logic
-                if (typeof __initial_auth_token !== 'undefined' && __initial_auth_token) {
-                    try {
-                        await window.firebase.signInWithCustomToken(auth, __initial_auth_token);
-                        console.log("VoxelShaper: Mit benutzerdefiniertem Token angemeldet.");
-                    } catch (error) {
-                        console.error("VoxelShaper: Fehler bei der Anmeldung mit benutzerdefiniertem Token:", error);
-                        showToast('Anmeldefehler', `Fehler bei der Anmeldung mit Token: ${error.message}`, 'error', 5000);
-                        // Fallback to anonymous sign-in if custom token fails
-                        try {
-                            await window.firebase.signInAnonymously(auth);
-                            console.log("VoxelShaper: Anonym angemeldet nach fehlgeschlagenem benutzerdefiniertem Token.");
-                        } catch (anonError) {
-                            console.error("VoxelShaper: Fehler bei anonymer Anmeldung:", anonError);
-                            showToast('Anmeldefehler', `Fehler bei anonymer Anmeldung: ${anonError.message}.`, 'error', 5000);
-                        }
-                    }
-                } else {
-                    try {
-                        await window.firebase.signInAnonymously(auth);
-                        console.log("VoxelShaper: Anonym angemeldet (kein initiales Token vorhanden).");
-                    } catch (error) {
-                        console.error("VoxelShaper: Fehler bei anonymer Anmeldung:", error);
-                        showToast('Anmeldefehler', `Fehler bei anonymer Anmeldung: ${error.message}.`, 'error', 5000);
-                    }
-                }
 
-                // Listener für Authentifizierungsstatusänderungen
-                // This listener will now handle loading project from URL AFTER authentication is established
-   window.firebase.onAuthStateChanged(auth, async (user) => {
-    console.log("VoxelShaper: Auth-Status geändert. Benutzer:", user ? user.uid : "null");
-
-    currentUserId = user ? user.uid : null;
-    currentUser = user;
-
-    loginLogoutBtn.textContent = user ? 'Abmelden' : 'Anmelden';
-    userIdDisplay.innerHTML = user
-        ? `<img src="${user.photoURL || 'https://placehold.co/24x24/cccccc/000000?text=U'}" alt="User Avatar"> ${user.uid}`
-        : '';
-    document.getElementById('mobile-login-logout').textContent = user ? '🚪' : '🔑';
-    uploadToHubBtn.style.display = user ? 'inline-block' : 'none';
-
-    if (user) {
-        document.getElementById('authModal').close();
-    }
-
-    // Nur einmal aus URL laden
-    if (!projectLoadedFromUrl) {
-        try {
-            const urlParams = new URLSearchParams(window.location.search);
-            const modelId = urlParams.get('modelId');
-            const encodedJson = urlParams.get('projectJson');
-
-            if (modelId) {
-                const docRef = doc(db, "models", modelId);
-                const docSnap = await getDoc(docRef);
-
-                if (docSnap.exists()) {
-                    const modelData = docSnap.data();
-                    const projectData = modelData.projectData;
-                    projectRemixOf = modelData.remixOf || '';
-                    projectSourceJsonUrl = `https://hub.voxelshaper.com?modelId=${modelId}`;
-
-                    loadProjectData(projectData);
-                    showToast('Modell geladen', 'Das Modell wurde erfolgreich aus der Datenbank geladen.', 'success');
-                } else {
-                    console.warn("VoxelShaper: Modell nicht gefunden:", modelId);
-                    showToast('Nicht gefunden', 'Das angeforderte Modell existiert nicht.', 'error');
-                    resetToDefaultProject();
-                }
-
-                projectLoadedFromUrl = true;
-            } else if (encodedJson) {
+// Firebase Auth Initialisierung + Projektlade-Logik nach Auth
+window.firebase.setPersistence(auth, window.firebase.browserLocalPersistence)
+    .then(async () => {
+        // Custom-Token-Login oder Fallback auf anonym
+        if (typeof __initial_auth_token !== 'undefined' && __initial_auth_token) {
+            try {
+                await window.firebase.signInWithCustomToken(auth, __initial_auth_token);
+                console.log("VoxelShaper: Mit benutzerdefiniertem Token angemeldet.");
+            } catch (error) {
+                console.error("VoxelShaper: Fehler bei der Anmeldung mit benutzerdefiniertem Token:", error);
+                showToast('Anmeldefehler', `Fehler bei der Anmeldung mit Token: ${error.message}`, 'error', 5000);
                 try {
-                    const decodedJsonString = decodeURIComponent(encodedJson);
-                    const projectData = JSON.parse(decodedJsonString);
+                    await window.firebase.signInAnonymously(auth);
+                    console.log("VoxelShaper: Anonym angemeldet nach Token-Fehlschlag.");
+                } catch (anonError) {
+                    console.error("VoxelShaper: Fehler bei anonymer Anmeldung:", anonError);
+                    showToast('Anmeldefehler', `Fehler bei anonymer Anmeldung: ${anonError.message}.`, 'error', 5000);
+                }
+            }
+        } else {
+            try {
+                await window.firebase.signInAnonymously(auth);
+                console.log("VoxelShaper: Anonym angemeldet (kein Token).");
+            } catch (error) {
+                console.error("VoxelShaper: Fehler bei anonymer Anmeldung:", error);
+                showToast('Anmeldefehler', `Fehler bei anonymer Anmeldung: ${error.message}.`, 'error', 5000);
+            }
+        }
 
-                    projectRemixOf = 'Direct JSON Load';
-                    projectSourceJsonUrl = window.location.href;
-                    loadProjectData(projectData);
-                    showToast('Projekt geladen', 'Projekt erfolgreich aus URL-Parameter geladen.', 'success');
-                } catch (err) {
-                    console.error("Fehler beim Parsen des Projekts aus URL:", err);
-                    showToast('Fehler', 'Ungültige Projektdaten in URL. Fehler: ' + err.message, 'error');
+        // Listener für Login-Statusänderung → lädt 1x Projekt aus URL
+        window.firebase.onAuthStateChanged(auth, async (user) => {
+            console.log("VoxelShaper: Auth-Status geändert. Benutzer:", user ? user.uid : "null");
+
+            currentUserId = user ? user.uid : null;
+            currentUser = user;
+
+            loginLogoutBtn.textContent = user ? 'Abmelden' : 'Anmelden';
+            userIdDisplay.innerHTML = user
+                ? `<img src="${user.photoURL || 'https://placehold.co/24x24/cccccc/000000?text=U'}" alt="User Avatar"> ${user.uid}`
+                : '';
+            document.getElementById('mobile-login-logout').textContent = user ? '🚪' : '🔑';
+            uploadToHubBtn.style.display = user ? 'inline-block' : 'none';
+
+            if (user) {
+                document.getElementById('authModal').close();
+            }
+
+            if (!projectLoadedFromUrl) {
+                const urlParams = new URLSearchParams(window.location.search);
+                const modelId = urlParams.get('modelId');
+                const encodedJson = urlParams.get('projectJson');
+
+                if (modelId) {
+                    await loadProjectFromModelId(modelId);
+                } else if (encodedJson) {
+                    try {
+                        const decodedJsonString = decodeURIComponent(encodedJson);
+                        const projectData = JSON.parse(decodedJsonString);
+
+                        projectRemixOf = 'Direct JSON Load';
+                        projectSourceJsonUrl = window.location.href;
+                        loadProjectData(projectData);
+                        showToast('Projekt geladen', 'Projekt erfolgreich aus URL-Parameter geladen.', 'success');
+                    } catch (err) {
+                        console.error("Fehler beim Parsen des Projekts aus URL:", err);
+                        showToast('Fehler', 'Ungültige Projektdaten in URL. Fehler: ' + err.message, 'error');
+                        resetToDefaultProject();
+                    }
+                } else {
+                    projectRemixOf = '';
+                    projectSourceJsonUrl = '';
                     resetToDefaultProject();
                 }
 
                 projectLoadedFromUrl = true;
-            } else {
-                projectRemixOf = '';
-                projectSourceJsonUrl = '';
-                resetToDefaultProject();
             }
-        } catch (error) {
-            console.error("VoxelShaper: Fehler beim Laden des Modells:", error);
-            showToast('Fehler', `Fehler beim Laden des Modells: ${error.message}`, 'error');
-            resetToDefaultProject();
-        }
-    }
-});
-
-
-
-                animate(); // Start the animation loop
-
-            })
-            .catch((error) => {
-                console.error("VoxelShaper: Fehler bei setPersistence:", error);
-                showToast('Anmeldefehler', `Fehler bei der Anmeldungspersistenz: ${error.message}. Die Funktionalität könnte eingeschränkt sein.`, 'error', 5000);
-                
-                animate(); // Animation trotzdem starten, auch wenn Persistenz fehlschlägt
-            });
+        });
+    });
 
         // Event Listener für "Zum Hub wechseln" Button
         document.getElementById('goToHubBtn').addEventListener('click', () => {
