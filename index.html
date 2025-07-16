@@ -1559,7 +1559,7 @@ function onPointerDown(e) {
                 if (proposedVoxel.gx >= 0 && proposedVoxel.gx < GRID &&
                     proposedVoxel.gy >= 0 && proposedVoxel.gy < GRID &&
                     proposedVoxel.gz >= 0 && proposedVoxel.gz < GRID &&
-                    !voxels.has(key(proposedVoxel.gx, proposedVoxel.gy, proposedVoxel.gz))) {
+                    !voxels.has(key(proposedVoxel.gx, proposedVoxel.gy, proposedPoxel.gz))) {
                     initialActionVoxel = proposedVoxel;
                 } else {
                     // Cannot place here (either out of bounds or occupied)
@@ -1650,21 +1650,16 @@ function onPointerMove(e) {
         }
 
         if (isDraggingVoxelAction) {
-            if (currentTargetVoxelCoords) {
-                // Use lastActionVoxelCoords for subsequent segments, initialDragVoxelCoords for the very first segment if lastActionVoxelCoords is null
-                const startPoint = lastActionVoxelCoords || initialDragVoxelCoords;
+            if (currentTargetVoxelCoords) { // Ray is hitting a valid voxel or plane
+                // Ensure startPoint is always valid. If lastActionVoxelCoords became invalid, fall back to initialDragVoxelCoords.
+                const startPoint = (lastActionVoxelCoords && Number.isFinite(lastActionVoxelCoords.gx) && Number.isFinite(lastActionVoxelCoords.gy) && Number.isFinite(lastActionVoxelCoords.gz)) ? lastActionVoxelCoords : initialDragVoxelCoords;
 
-                // Crucial check: Ensure both startPoint and currentTargetVoxelCoords are valid and finite
-                // This check is already in getVoxelsOnLine, but good to have it here too to prevent calling getVoxelsOnLine with bad data.
-                if (!startPoint || !Number.isFinite(startPoint.gx) || !Number.isFinite(startPoint.gy) || !Number.isFinite(startPoint.gz) ||
-                    !Number.isFinite(currentTargetVoxelCoords.gx) || !Number.isFinite(currentTargetVoxelCoords.gy) || !Number.isFinite(currentTargetVoxelCoords.gz)) {
-                    console.error("Invalid start or end coordinates for line drawing. Resetting drag state.");
-                    // Reset lastActionVoxelCoords to initialDragVoxelCoords to allow resuming from a valid point
-                    // if the ray briefly goes off-grid.
-                    lastActionVoxelCoords = { ...initialDragVoxelCoords };
+                // If for some reason startPoint is still invalid here, something is fundamentally wrong, should not happen.
+                if (!startPoint || !Number.isFinite(startPoint.gx) || !Number.isFinite(startPoint.gy) || !Number.isFinite(startPoint.gz)) {
+                    console.error("Critical error: startPoint for line drawing is invalid. Aborting drag segment.");
                     updatePreviewVoxel(0, 0, 0, false);
                     previewLineInstancedMesh.count = 0;
-                    return; // Abort this move event for drawing
+                    return;
                 }
 
                 // Only process if the target voxel has changed from the last processed one
@@ -1684,7 +1679,6 @@ function onPointerMove(e) {
                         
                         const newColor = voxels.has(gKey) ? voxels.get(gKey).color : null;
 
-                        // Only add to currentStrokeVoxels if an actual change occurred or if it's a new voxel in ADD mode
                         if (initialColor !== newColor || (initialColor === null && newColor !== null && currentMode === Modes.ADD)) {
                             currentStrokeVoxels.set(gKey, { newColor: newColor, initialColor: initialColor });
                         }
@@ -1704,7 +1698,7 @@ function onPointerMove(e) {
                 }
                 updatePreviewVoxel(currentTargetVoxelCoords.gx, currentTargetVoxelCoords.gy, currentTargetVoxelCoords.gz, showPreview);
             } else {
-                // If ray leaves grid during drag, hide preview but DO NOT reset lastActionVoxelCoords
+                // If ray leaves grid during drag, hide preview but lastActionVoxelCoords should retain its last valid value.
                 // This allows the line to resume from the last valid point when the pointer re-enters the grid.
                 updatePreviewVoxel(0, 0, 0, false);
             }
