@@ -2540,12 +2540,13 @@ function loadProjectData(projectData) {
  */
 async function loadProjectFromModelId(modelId) {
     try {
+        // This check is still good to have, even if called after user is known
         if (!auth.currentUser) {
-            // This should ideally not happen if called after onAuthStateChanged,
-            // but as a safeguard.
             showToast('Fehler', 'Nicht angemeldet. Projekt kann nicht geladen werden.', 'error');
+            console.error("loadProjectFromModelId: User not authenticated when trying to load modelId:", modelId);
             return;
         }
+        console.log(`loadProjectFromModelId: Attempting to load model ID: ${modelId} for user: ${auth.currentUser.uid}`);
         showToast('Lade Projekt', `Lade Projekt mit ID: ${modelId}...`, 'info');
         const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
         const docRef = window.firebase.doc(db, `artifacts/${appId}/public/data/models`, modelId);
@@ -2553,14 +2554,22 @@ async function loadProjectFromModelId(modelId) {
 
         if (docSnap.exists()) {
             const projectData = docSnap.data();
-            if (projectData && projectData.projectData) {
-                // Set remix info if loading from hub
-                projectRemixOf = modelId;
-                projectSourceJsonUrl = window.location.href;
-                loadProjectData(projectData);
-                showToast('Projekt geladen', `Projekt "${docSnap.data().title}" erfolgreich geladen.`, 'success');
+            console.log("loadProjectFromModelId: Fetched project data:", projectData);
+
+            // Additional client-side check for visibility and ownership
+            if (projectData.visibility === 'public' || (auth.currentUser && auth.currentUser.uid === projectData.uploaderUid)) {
+                if (projectData && projectData.projectData) {
+                    projectRemixOf = modelId;
+                    projectSourceJsonUrl = window.location.href;
+                    loadProjectData(projectData);
+                    showToast('Projekt geladen', `Projekt "${docSnap.data().title}" erfolgreich geladen.`, 'success');
+                } else {
+                    showToast('Fehler', 'Projektdaten im Dokument nicht gefunden.', 'error');
+                    resetToDefaultProject();
+                }
             } else {
-                showToast('Fehler', 'Projektdaten im Dokument nicht gefunden.', 'error');
+                showToast('Fehler', 'Sie haben keine Berechtigung, dieses private Projekt zu laden.', 'error');
+                console.error("loadProjectFromModelId: Permission denied client-side. Model is not public and user is not owner.");
                 resetToDefaultProject();
             }
         } else {
@@ -3500,6 +3509,9 @@ window.onload = async function() {
         const userIdDisplay = document.getElementById('userIdDisplay');
         const goToHubBtn = document.getElementById('goToHubBtn');
       
+        // Flag to ensure project loading from URL only happens once after auth is settled
+        let projectLoadedFromUrl = false; // <<< NEU: Flag für URL-Laden
+
         // Firebase Auth Initialisierung und Listener für Authentifizierungsstatusänderungen
         window.firebase.setPersistence(auth, window.firebase.browserLocalPersistence)
             .then(async () => {
@@ -3534,7 +3546,10 @@ window.onload = async function() {
                 // This listener will now handle loading project from URL AFTER authentication is established
                 window.firebase.onAuthStateChanged(auth, async (user) => {
                     console.log("VoxelShaper: Auth-Status geändert. Benutzer:", user ? user.uid : "null");
-                    if (user) {
+                    
+                    // <<< WICHTIGE ÄNDERUNG HIER >>>
+                    // Nur fortfahren, wenn die Authentifizierung etabliert ist UND das Projekt noch nicht von der URL geladen wurde
+                    if (user && !projectLoadedFromUrl) {
                         currentUserId = user.uid;
                         currentUser = user;
                         loginLogoutBtn.textContent = 'Abmelden';
@@ -3550,6 +3565,7 @@ window.onload = async function() {
 
                         if (modelId) {
                             await loadProjectFromModelId(modelId);
+                            projectLoadedFromUrl = true; // Projekt als geladen markieren
                         } else if (encodedJson) {
                             try {
                                 const decodedJsonString = decodeURIComponent(encodedJson);
@@ -3558,6 +3574,7 @@ window.onload = async function() {
                                 projectSourceJsonUrl = window.location.href;
                                 loadProjectData(projectData);
                                 showToast('Projekt geladen', 'Projekt erfolgreich aus URL-Parameter geladen.', 'success');
+                                projectLoadedFromUrl = true; // Projekt als geladen markieren
                             } catch (error) {
                                 console.error("Error loading project from URL parameter (projectJson):", error);
                                 showToast('Fehler', 'Fehler beim Laden des Projekts aus der URL. Ungültige oder beschädigte Projektdaten. Fehler: ' + error.message, 'error');
@@ -3567,19 +3584,17 @@ window.onload = async function() {
                             projectRemixOf = '';
                             projectSourceJsonUrl = '';
                         }
-                    } else {
+                    } else if (!user) { // Wenn Benutzer abgemeldet ist oder initial null
                         currentUserId = null;
                         currentUser = null;
                         loginLogoutBtn.textContent = 'Anmelden';
                         userIdDisplay.innerHTML = ''; // Benutzerinformationen löschen
                         uploadToHubBtn.style.display = 'none';
                         document.getElementById('mobile-login-logout').textContent = '🔑'; // Schlüssel-Symbol für Anmelden
-                        // If no user is logged in, ensure no model is loaded from URL if it requires auth
-                        // This might be a good place to reset the project if a model was previously loaded and then the user logged out.
-                        // For now, we'll just ensure project metadata is cleared.
+                        // Wenn kein Benutzer angemeldet ist, stellen Sie sicher, dass keine URL-Modelle geladen werden, die Auth erfordern
                         projectRemixOf = '';
                         projectSourceJsonUrl = '';
-                        // Optionally: resetToDefaultProject(); if you want to clear the canvas on logout
+                        projectLoadedFromUrl = false; // Flag zurücksetzen, falls Benutzer sich abmeldet
                     }
                 });
 
