@@ -2043,7 +2043,8 @@ function calculateTargetVoxelCoords(clientX, clientY, mode, pointerType) {
                 normalX = Math.sign(hit.face.normal.x);
             } else if (absY > absX && absY > absZ) {
                 normalY = Math.sign(hit.face.normal.y);
-            } else if (absZ > absX && absZ > absY) {
+            }
+            else if (absZ > absX && absZ > absY) {
                 normalZ = Math.sign(hit.face.normal.z);
             }
             // Fallback for near-zero normals (e.g., perfectly flat surfaces)
@@ -2536,28 +2537,37 @@ function loadProjectData(projectData) {
 
 /**
  * Loads a project from the VoxelShaper Hub using its model ID.
+ * This function should allow loading public models regardless of user login status.
  * @param {string} modelId The ID of the model to load.
  */
 async function loadProjectFromModelId(modelId) {
     try {
-        // This check is still good to have, even if called after user is known
-        if (!auth.currentUser) {
-            showToast('Fehler', 'Nicht angemeldet. Projekt kann nicht geladen werden.', 'error');
-            console.error("loadProjectFromModelId: User not authenticated when trying to load modelId:", modelId);
-            return;
-        }
-        console.log(`loadProjectFromModelId: Attempting to load model ID: ${modelId} for user: ${auth.currentUser.uid}`);
+        // No explicit check for auth.currentUser here, as anonymous users should be able to load public models.
+        // The Firestore security rules will handle the actual permission check.
+
+        console.log(`loadProjectFromModelId: Attempting to load model ID: ${modelId}`);
         showToast('Lade Projekt', `Lade Projekt mit ID: ${modelId}...`, 'info');
+        
+        // Ensure __app_id is defined; otherwise, use a default for local testing
         const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
+        // Construct the document reference for the public data path
         const docRef = window.firebase.doc(db, `artifacts/${appId}/public/data/models`, modelId);
-        const docSnap = await window.firebase.getDoc(docRef);
+        
+        const docSnap = await window.firebase.getDoc(docRef); // This is where the permission error occurs
 
         if (docSnap.exists()) {
             const projectData = docSnap.data();
             console.log("loadProjectFromModelId: Fetched project data:", projectData);
+            console.log("loadProjectFromModelId: Model visibility:", projectData.visibility);
+            console.log("loadProjectFromModelId: Uploader UID:", projectData.uploaderUid);
+            console.log("loadProjectFromModelId: Current User UID:", auth.currentUser ? auth.currentUser.uid : "N/A (anonymous or not yet set)");
 
-            // Additional client-side check for visibility and ownership
-            if (projectData.visibility === 'public' || (auth.currentUser && auth.currentUser.uid === projectData.uploaderUid)) {
+            // Client-side check to confirm visibility. The Firestore rule should ideally prevent this,
+            // but this helps in debugging if the rule is misconfigured or data is unexpected.
+            const isPublic = projectData.visibility === 'public';
+            const isOwner = auth.currentUser && auth.currentUser.uid === projectData.uploaderUid;
+
+            if (isPublic || isOwner) {
                 if (projectData && projectData.projectData) {
                     projectRemixOf = modelId;
                     projectSourceJsonUrl = window.location.href;
@@ -2568,8 +2578,10 @@ async function loadProjectFromModelId(modelId) {
                     resetToDefaultProject();
                 }
             } else {
+                // This block should ideally not be reached if Firestore rules are correctly applied
+                // and the model is private and user is not owner.
                 showToast('Fehler', 'Sie haben keine Berechtigung, dieses private Projekt zu laden.', 'error');
-                console.error("loadProjectFromModelId: Permission denied client-side. Model is not public and user is not owner.");
+                console.error("loadProjectFromModelId: Client-side permission check failed. Model is not public and user is not owner.");
                 resetToDefaultProject();
             }
         } else {
@@ -2578,7 +2590,12 @@ async function loadProjectFromModelId(modelId) {
         }
     } catch (error) {
         console.error("Error loading project from model ID:", error);
-        showToast('Fehler', `Fehler beim Laden des Projekts: ${error.message}`, 'error');
+        // This is the error from Firestore rules
+        if (error.code === 'permission-denied') {
+            showToast('Fehler', `Berechtigungsfehler beim Laden des Projekts. Stellen Sie sicher, dass das Modell öffentlich ist oder Sie der Eigentümer sind.`, 'error');
+        } else {
+            showToast('Fehler', `Fehler beim Laden des Projekts: ${error.message}`, 'error');
+        }
         resetToDefaultProject();
     }
 }
@@ -2753,7 +2770,7 @@ function resetCameraPosition() {
     cam.position.set(GRID * 1.0, GRID * 1.2, GRID * 1.5); // Position relative to grid size
     cam.lookAt(GRID / 2, GRID / 2, GRID / 2); // Look at the center of the grid
     if (euler) {
-        euler.setFromQuaternion(cam.quaternion, 'YXZ'); // Update Euler angles for pointer lock
+        euler.setFromQuaternion(cam.quaternion, 'YXZ'); // Sync Euler angles with camera quaternion
     }
 }
 
