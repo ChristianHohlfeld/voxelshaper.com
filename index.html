@@ -3948,3 +3948,31 @@ function updateBlockSizeButtonsActiveState() {
         }
     }
 }
+
+function updateBlockSizeButtonsActiveState() {
+    // Remove active class from all fixed size buttons
+    document.querySelectorAll('.block-size-btn').forEach(btn => {
+        btn.classList.remove('active');
+    });
+
+    // Remove active class from dynamic block size button
+    document.getElementById('setDynamicBlockSizeBtn').classList.remove('active');
+
+    if (useDynamicBlockDim) {
+        document.getElementById('setDynamicBlockSizeBtn').classList.add('active');
+    } else {
+        // Add active class to the currently selected fixed size button
+        const activeBtn = document.getElementById(`block-size-${currentBlockSize}x${currentBlockSize}`);
+        if (activeBtn) {
+            activeBtn.classList.add('active');
+        } else {
+            // If currentBlockSize doesn't match a fixed button, default to 1x1x1
+            document.getElementById('block-size-1x1').classList.add('active');
+            currentBlockSize = 1;
+            localStorage.setItem('voxelEditorCurrentBlockSize', currentBlockSize);
+        }
+    }
+}
+</script>
+</body>
+</html>
