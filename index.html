@@ -1550,6 +1550,14 @@ function onPointerMove(e) {
         let currentTargetVoxelCoords = null; // The voxel coordinate the ray is currently pointing at, clamped and adjusted for ADD mode
 
         if (currentRayHit) {
+            // Validate coordinates from ray hit before processing
+            if (!Number.isFinite(currentRayHit.gx) || !Number.isFinite(currentRayHit.gy) || !Number.isFinite(currentRayHit.gz)) {
+                console.warn("calculateRayTargetVoxelCoords returned non-finite coordinates. Skipping this hit.");
+                currentRayHit = null; // Treat as no hit if coordinates are invalid
+            }
+        }
+
+        if (currentRayHit) {
             currentTargetVoxelCoords = { gx: currentRayHit.gx, gy: currentRayHit.gy, gz: currentRayHit.gz };
 
             if (currentMode === Modes.ADD) {
@@ -1570,13 +1578,28 @@ function onPointerMove(e) {
 
         if (isDraggingVoxelAction) {
             if (currentTargetVoxelCoords) {
+                const startPoint = lastActionVoxelCoords || initialDragVoxelCoords;
+
+                // Crucial check: Ensure both startPoint and currentTargetVoxelCoords are valid and finite
+                if (!startPoint || !Number.isFinite(startPoint.gx) || !Number.isFinite(startPoint.gy) || !Number.isFinite(startPoint.gz) ||
+                    !Number.isFinite(currentTargetVoxelCoords.gx) || !Number.isFinite(currentTargetVoxelCoords.gy) || !Number.isFinite(currentTargetVoxelCoords.gz)) {
+                    console.error("Invalid start or end coordinates for line drawing. Resetting drag state.");
+                    lastActionVoxelCoords = null; // Force re-establishment of start point
+                    initialDragVoxelCoords = null; // Also reset initial to prevent issues
+                    pointerIsDown = false;
+                    doubleTapDragActive = false;
+                    currentStrokeVoxels.clear();
+                    updatePreviewVoxel(0, 0, 0, false);
+                    previewLineInstancedMesh.count = 0;
+                    return; // Abort this move event for drawing
+                }
+
                 // Only process if the target voxel has changed from the last processed one
                 if (!lastActionVoxelCoords ||
                     currentTargetVoxelCoords.gx !== lastActionVoxelCoords.gx ||
                     currentTargetVoxelCoords.gy !== lastActionVoxelCoords.gy ||
                     currentTargetVoxelCoords.gz !== lastActionVoxelCoords.gz) {
 
-                    const startPoint = lastActionVoxelCoords || initialDragVoxelCoords;
                     const pathVoxels = getVoxelsOnLine(startPoint, currentTargetVoxelCoords);
 
                     for (const voxelCoord of pathVoxels) {
