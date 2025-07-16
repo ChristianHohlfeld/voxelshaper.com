@@ -748,17 +748,21 @@ function calculateRayTargetVoxelCoords(clientX, clientY) {
     const intersects = raycaster.intersectObjects(objectsToIntersect);
 
     if (intersects.length > 0) {
-        // Intersection with an existing voxel
         const hit = intersects[0];
         const hitNormal = hit.face.normal.clone();
-        // Move slightly inside the hit face to ensure correct voxel coordinates
-        const hitPointInside = hit.point.clone().sub(hitNormal.multiplyScalar(0.001));
+        // The point of intersection on the surface of the object
+        const intersectionPoint = hit.point;
+
+        // Determine the voxel coordinates of the hit voxel
+        const hitVoxelX = Math.floor(intersectionPoint.x / VS);
+        const hitVoxelY = Math.floor(intersectionPoint.y / VS);
+        const hitVoxelZ = Math.floor(intersectionPoint.z / VS);
 
         return {
-            gx: Math.floor(hitPointInside.x / VS),
-            gy: Math.floor(hitPointInside.y / VS),
-            gz: Math.floor(hitPointInside.z / VS),
-            faceNormal: hitNormal // Return the face normal
+            gx: hitVoxelX,
+            gy: hitVoxelY,
+            gz: hitVoxelZ,
+            faceNormal: hitNormal
         };
     } else {
         // No intersection with existing voxels, try to intersect with the active drawing plane
@@ -1133,10 +1137,10 @@ async function uploadProjectToHub() {
             uploaderPhotoURL: currentUser?.photoURL || "", timestamp: window.firebase.serverTimestamp(),
             projectData: {
                 description: description, remixOf: projectRemixOf || "", sourceJsonUrl: projectSourceJsonUrl || "",
-                settings: firestoreSafeSettings, activeDrawingLevel: activeDrawingLevel, activePresetIndex: activePresetIndex,
+                settings: firestoreSafeSettings, activeDrawingLevel: firestoreSafeSettings.activeDrawingLevel, activePresetIndex: firestoreSafeSettings.activePresetIndex,
                 cameraPosition: firestoreSafeSettings.cameraPosition, cameraQuaternion: firestoreSafeSettings.cameraQuaternion,
-                currentColor: currentColor, currentDrawingAxis: currentDrawingAxis,
-                gridSize: GRID, moveSpeed: moveSpeed, presetColors: presetColors, templateImageData: null, voxels: voxelMap
+                currentColor: firestoreSafeSettings.currentColor, currentDrawingAxis: firestoreSafeSettings.currentDrawingAxis,
+                gridSize: firestoreSafeSettings.gridSize, moveSpeed: firestoreSafeSettings.moveSpeed, presetColors: firestoreSafeSettings.presetColors, templateImageData: null, voxels: voxelMap
             }
         };
         const docRef = await window.firebase.addDoc(window.firebase.collection(db, "models"), firestoreDocument);
@@ -1270,33 +1274,38 @@ function onPointerUp(e) {
         if (clickedVoxel) {
             let finalVoxelCoords = null;
             if (currentMode === Modes.ADD) {
-                // If we hit an existing voxel AND we have a face normal,
-                // the intended action is to add on that face.
-                if (voxels.has(key(clickedVoxel.gx, clickedVoxel.gy, clickedVoxel.gz)) && clickedVoxel.faceNormal) {
+                if (clickedVoxel.faceNormal) { // Hit an existing voxel's face
                     const proposedVoxel = {
                         gx: clickedVoxel.gx + Math.round(clickedVoxel.faceNormal.x),
                         gy: clickedVoxel.gy + Math.round(clickedVoxel.faceNormal.y),
                         gz: clickedVoxel.gz + Math.round(clickedVoxel.faceNormal.z)
                     };
-                    // Only set as final if the proposed spot is not already occupied
-                    if (!voxels.has(key(proposedVoxel.gx, proposedVoxel.gy, proposedVoxel.gz))) {
+                    // Only set as final if the proposed spot is within grid and empty
+                    if (proposedVoxel.gx >= 0 && proposedVoxel.gx < GRID &&
+                        proposedVoxel.gy >= 0 && proposedVoxel.gy < GRID &&
+                        proposedVoxel.gz >= 0 && proposedVoxel.gz < GRID &&
+                        !voxels.has(key(proposedVoxel.gx, proposedVoxel.gy, proposedVoxel.gz))) {
                         finalVoxelCoords = proposedVoxel;
                     }
-                } else if (!voxels.has(key(clickedVoxel.gx, clickedVoxel.gy, clickedVoxel.gz))) {
-                    // If we hit empty space (or existing without face normal, which means hitting the plane),
-                    // and the spot is empty, then add at clicked position.
-                    finalVoxelCoords = { gx: clickedVoxel.gx, gy: clickedVoxel.gy, gz: clickedVoxel.gz };
+                } else { // Hit empty space or drawing plane
+                    // Only act if the spot is within grid and empty
+                    if (clickedVoxel.gx >= 0 && clickedVoxel.gx < GRID &&
+                        clickedVoxel.gy >= 0 && clickedVoxel.gy < GRID &&
+                        clickedVoxel.gz >= 0 && clickedVoxel.gz < GRID &&
+                        !voxels.has(key(clickedVoxel.gx, clickedVoxel.gy, clickedVoxel.gz))) {
+                        finalVoxelCoords = { gx: clickedVoxel.gx, gy: clickedVoxel.gy, gz: clickedVoxel.gz };
+                    }
                 }
             } else { // DELETE or DRAW mode
                 // For delete and draw, the action always applies to the clicked voxel itself
                 finalVoxelCoords = { gx: clickedVoxel.gx, gy: clickedVoxel.gy, gz: clickedVoxel.gz };
+                // If no voxel exists at the target for DELETE/DRAW, prevent action
+                if (!voxels.has(key(finalVoxelCoords.gx, finalVoxelCoords.gy, finalVoxelCoords.gz))) {
+                    finalVoxelCoords = null; // Prevent action if no voxel to delete/draw on
+                }
             }
 
             if (finalVoxelCoords) {
-                finalVoxelCoords.gx = Math.max(0, Math.min(GRID - 1, finalVoxelCoords.gx));
-                finalVoxelCoords.gy = Math.max(0, Math.min(GRID - 1, finalVoxelCoords.gy));
-                finalVoxelCoords.gz = Math.max(0, Math.min(GRID - 1, finalVoxelCoords.gz));
-
                 // Perform the single voxel modification and record it as a batch
                 const oldState = [...voxels.entries()].map(([id, data]) => { const p = parseKey(id); return { gx: p[0], gy: p[1], gz: p[2], color: data.color }; });
                 performVoxelModification(finalVoxelCoords.gx, finalVoxelCoords.gy, finalVoxelCoords.gz, currentMode, currentColor);
@@ -1352,78 +1361,72 @@ function onPointerDown(e) {
             // Double tap for continuous drag (freehand drawing)
             doubleTapDragActive = true; tapCandidate = null;
             let rawTarget = calculateRayTargetVoxelCoords(e.clientX, e.clientY);
-            if (rawTarget) {
-                let initialActionVoxel = null;
-                if (currentMode === Modes.ADD) {
-                    if (voxels.has(key(rawTarget.gx, rawTarget.gy, rawTarget.gz)) && rawTarget.faceNormal) {
-                        const proposedVoxel = {
-                            gx: rawTarget.gx + Math.round(rawTarget.faceNormal.x),
-                            gy: rawTarget.gy + Math.round(rawTarget.faceNormal.y),
-                            gz: rawTarget.gz + Math.round(rawTarget.faceNormal.z)
-                        };
-                        // Only set as initial if the proposed spot is not already occupied
-                        if (!voxels.has(key(proposedVoxel.gx, proposedVoxel.gy, proposedVoxel.gz))) {
-                            initialActionVoxel = proposedVoxel;
-                        } else {
-                            // If proposed spot is occupied, we can't start adding there.
-                            // This prevents starting a drag to add on an already filled spot.
-                            doubleTapDragActive = false;
-                            return;
-                        }
-                    } else if (!voxels.has(key(rawTarget.gx, rawTarget.gy, rawTarget.gz))) {
-                        // If we hit empty space (or existing without face normal, which means hitting the plane),
-                        // and the spot is empty, then add at clicked position.
+            if (!rawTarget) { // If no target voxel, don't start an action
+                doubleTapDragActive = false; return;
+            }
+
+            let initialActionVoxel = null;
+            if (currentMode === Modes.ADD) {
+                if (rawTarget.faceNormal) { // Hit an existing voxel's face
+                    const proposedVoxel = {
+                        gx: rawTarget.gx + Math.round(rawTarget.faceNormal.x),
+                        gy: rawTarget.gy + Math.round(rawTarget.faceNormal.y),
+                        gz: rawTarget.gz + Math.round(rawTarget.faceNormal.z)
+                    };
+                    // Only set as initial if the proposed spot is within grid and empty
+                    if (proposedVoxel.gx >= 0 && proposedVoxel.gx < GRID &&
+                        proposedVoxel.gy >= 0 && proposedVoxel.gy < GRID &&
+                        proposedVoxel.gz >= 0 && proposedVoxel.gz < GRID &&
+                        !voxels.has(key(proposedVoxel.gx, proposedVoxel.gy, proposedVoxel.gz))) {
+                        initialActionVoxel = proposedVoxel;
+                    } else {
+                        // Cannot place here (either out of bounds or occupied)
+                        doubleTapDragActive = false; return;
+                    }
+                } else { // Hit empty space or drawing plane
+                    // Only act if the spot is within grid and empty
+                    if (rawTarget.gx >= 0 && rawTarget.gx < GRID &&
+                        rawTarget.gy >= 0 && rawTarget.gy < GRID &&
+                        rawTarget.gz >= 0 && rawTarget.gz < GRID &&
+                        !voxels.has(key(rawTarget.gx, rawTarget.gy, rawTarget.gz))) {
                         initialActionVoxel = { gx: rawTarget.gx, gy: rawTarget.gy, gz: rawTarget.gz };
                     } else {
-                        // If we hit an existing voxel directly (not on a face), and the spot is occupied,
-                        // we can't start adding there.
-                        doubleTapDragActive = false;
-                        return;
-                    }
-                } else { // DELETE or DRAW mode
-                    // For delete and draw, the action always applies to the clicked voxel itself
-                    initialActionVoxel = { gx: rawTarget.gx, gy: rawTarget.gy, gz: rawTarget.gz };
-                    // If no voxel exists at the target for DELETE/DRAW, prevent drag
-                    if (!voxels.has(key(initialActionVoxel.gx, initialActionVoxel.gy, initialActionVoxel.gz))) {
-                        doubleTapDragActive = false;
-                        return;
+                        // Cannot place here (either out of bounds or occupied)
+                        doubleTapDragActive = false; return;
                     }
                 }
-
-                if (initialActionVoxel) {
-                    initialActionVoxel.gx = Math.max(0, Math.min(GRID - 1, initialActionVoxel.gx));
-                    initialActionVoxel.gy = Math.max(0, Math.min(GRID - 1, initialActionVoxel.gy));
-                    initialActionVoxel.gz = Math.max(0, Math.min(GRID - 1, initialActionVoxel.gz));
-
-                    initialDragVoxelCoords = initialActionVoxel;
-                    lastActionVoxelCoords = { ...initialDragVoxelCoords }; // Set for first action in drag
-                    
-                    const gKey = key(initialDragVoxelCoords.gx, initialDragVoxelCoords.gy, initialDragVoxelCoords.gz);
-                    const initialColor = voxelsAtDragStart.has(gKey) ? voxelsAtDragStart.get(gKey).color : null;
-
-                    // Apply change immediately for all modes, and record for undo/redo
-                    if (currentMode === Modes.ADD) {
-                        if (!voxels.has(gKey)) { // Double check if it's still empty
-                            _addSingleVoxel(initialDragVoxelCoords.gx, initialDragVoxelCoords.gy, initialDragVoxelCoords.gz, currentColor);
-                            currentStrokeVoxels.set(gKey, { newColor: currentColor, initialColor: initialColor });
-                        }
-                    } else if (currentMode === Modes.DELETE) {
-                        if (voxels.has(gKey)) { // Double check if it exists
-                            _removeSingleVoxel(initialDragVoxelCoords.gx, initialDragVoxelCoords.gy, initialDragVoxelCoords.gz);
-                            currentStrokeVoxels.set(gKey, { newColor: null, initialColor: initialColor });
-                        }
-                    } else if (currentMode === Modes.DRAW) {
-                        if (voxels.has(gKey)) { // Double check if it exists
-                            _recolorSingleVoxel(initialDragVoxelCoords.gx, initialDragVoxelCoords.gy, initialDragVoxelCoords.gz, currentColor);
-                            currentStrokeVoxels.set(gKey, { newColor: currentColor, initialColor: initialColor });
-                        }
-                    }
-
-                    updatePreviewVoxel(initialDragVoxelCoords.gx, initialDragVoxelCoords.gy, initialDragVoxelCoords.gz, true); // Show 1x1x1 preview
-                    previewLineInstancedMesh.count = 0; // Hide line preview
-                } else {
-                    doubleTapDragActive = false; // If no valid initial voxel, prevent drag
+            } else { // DELETE or DRAW mode
+                // For delete and draw, the action always applies to the clicked voxel itself
+                initialActionVoxel = { gx: rawTarget.gx, gy: rawTarget.gy, gz: rawTarget.gz };
+                // If no voxel exists at the target for DELETE/DRAW, prevent drag
+                if (!voxels.has(key(initialActionVoxel.gx, initialActionVoxel.gy, initialActionVoxel.gz))) {
+                    doubleTapDragActive = false;
+                    return;
                 }
+            }
+
+            if (initialActionVoxel) {
+                // Initial action voxel is already clamped and checked for validity in the above logic
+                initialDragVoxelCoords = initialActionVoxel;
+                lastActionVoxelCoords = { ...initialDragVoxelCoords }; // Set for first action in drag
+                
+                const gKey = key(initialDragVoxelCoords.gx, initialDragVoxelCoords.gy, initialDragVoxelCoords.gz);
+                const initialColor = voxelsAtDragStart.has(gKey) ? voxelsAtDragStart.get(gKey).color : null;
+
+                // Apply change immediately for all modes, and record for undo/redo
+                if (currentMode === Modes.ADD) {
+                    _addSingleVoxel(initialDragVoxelCoords.gx, initialDragVoxelCoords.gy, initialDragVoxelCoords.gz, currentColor);
+                    currentStrokeVoxels.set(gKey, { newColor: currentColor, initialColor: initialColor });
+                } else if (currentMode === Modes.DELETE) {
+                    _removeSingleVoxel(initialDragVoxelCoords.gx, initialDragVoxelCoords.gy, initialDragVoxelCoords.gz);
+                    currentStrokeVoxels.set(gKey, { newColor: null, initialColor: initialColor });
+                } else if (currentMode === Modes.DRAW) {
+                    _recolorSingleVoxel(initialDragVoxelCoords.gx, initialDragVoxelCoords.gy, initialDragVoxelCoords.gz, currentColor);
+                    currentStrokeVoxels.set(gKey, { newColor: currentColor, initialColor: initialColor });
+                }
+
+                updatePreviewVoxel(initialDragVoxelCoords.gx, initialDragVoxelCoords.gy, initialDragVoxelCoords.gz, true); // Show 1x1x1 preview
+                previewLineInstancedMesh.count = 0; // Hide line preview
             }
         } else {
             // Single tap or start of multi-touch gesture
@@ -1457,29 +1460,35 @@ function onPointerDown(e) {
 
         let initialActionVoxel = null;
         if (currentMode === Modes.ADD) {
-            if (voxels.has(key(rawTarget.gx, rawTarget.gy, rawTarget.gz)) && rawTarget.faceNormal) {
+            if (rawTarget.faceNormal) { // Hit an existing voxel's face
                 const proposedVoxel = {
                     gx: rawTarget.gx + Math.round(rawTarget.faceNormal.x),
                     gy: rawTarget.gy + Math.round(rawTarget.faceNormal.y),
                     gz: rawTarget.gz + Math.round(rawTarget.faceNormal.z)
                 };
-                // Only set as initial if the proposed spot is not already occupied
-                if (!voxels.has(key(proposedVoxel.gx, proposedVoxel.gy, proposedVoxel.gz))) {
+                // Only set as initial if the proposed spot is within grid and empty
+                if (proposedVoxel.gx >= 0 && proposedVoxel.gx < GRID &&
+                    proposedVoxel.gy >= 0 && proposedVoxel.gy < GRID &&
+                    proposedVoxel.gz >= 0 && proposedVoxel.gz < GRID &&
+                    !voxels.has(key(proposedVoxel.gx, proposedVoxel.gy, proposedVoxel.gz))) {
                     initialActionVoxel = proposedVoxel;
                 } else {
-                    // If proposed spot is occupied, we can't start adding there.
+                    // Cannot place here (either out of bounds or occupied)
                     pointerIsDown = false; initialClickPos = null;
                     return;
                 }
-            } else if (!voxels.has(key(rawTarget.gx, rawTarget.gy, rawTarget.gz))) {
-                // If we hit empty space (or existing without face normal, which means hitting the plane),
-                // and the spot is empty, then add at clicked position.
-                initialActionVoxel = { gx: rawTarget.gx, gy: rawTarget.gy, gz: rawTarget.gz };
-            } else {
-                // If we hit an existing voxel directly (not on a face), and the spot is occupied,
-                // we can't start adding there.
-                pointerIsDown = false; initialClickPos = null;
-                return;
+            } else { // Hit empty space or drawing plane
+                // Only act if the spot is within grid and empty
+                if (rawTarget.gx >= 0 && rawTarget.gx < GRID &&
+                    rawTarget.gy >= 0 && rawTarget.gy < GRID &&
+                    rawTarget.gz >= 0 && rawTarget.gz < GRID &&
+                    !voxels.has(key(rawTarget.gx, rawTarget.gy, rawTarget.gz))) {
+                    initialActionVoxel = { gx: rawTarget.gx, gy: rawTarget.gy, gz: rawTarget.gz };
+                } else {
+                    // Cannot place here (either out of bounds or occupied)
+                    pointerIsDown = false; initialClickPos = null;
+                    return;
+                }
             }
         } else { // DELETE or DRAW mode
             // For delete and draw, the action always applies to the clicked voxel itself
@@ -1492,10 +1501,7 @@ function onPointerDown(e) {
         }
 
         if (initialActionVoxel) {
-            initialActionVoxel.gx = Math.max(0, Math.min(GRID - 1, initialActionVoxel.gx));
-            initialActionVoxel.gy = Math.max(0, Math.min(GRID - 1, initialActionVoxel.gy));
-            initialActionVoxel.gz = Math.max(0, Math.min(GRID - 1, initialActionVoxel.gz));
-
+            // Initial action voxel is already clamped and checked for validity in the above logic
             initialDragVoxelCoords = initialActionVoxel;
             lastActionVoxelCoords = { ...initialDragVoxelCoords }; // Set for first action in drag
             
@@ -1504,26 +1510,18 @@ function onPointerDown(e) {
 
             // Apply change immediately for all modes, and record for undo/redo
             if (currentMode === Modes.ADD) {
-                if (!voxels.has(gKey)) { // Double check if it's still empty
-                    _addSingleVoxel(initialDragVoxelCoords.gx, initialDragVoxelCoords.gy, initialDragVoxelCoords.gz, currentColor);
-                    currentStrokeVoxels.set(gKey, { newColor: currentColor, initialColor: initialColor });
-                }
+                _addSingleVoxel(initialDragVoxelCoords.gx, initialDragVoxelCoords.gy, initialDragVoxelCoords.gz, currentColor);
+                currentStrokeVoxels.set(gKey, { newColor: currentColor, initialColor: initialColor });
             } else if (currentMode === Modes.DELETE) {
-                if (voxels.has(gKey)) { // Double check if it exists
-                    _removeSingleVoxel(initialDragVoxelCoords.gx, initialDragVoxelCoords.gy, initialDragVoxelCoords.gz);
-                    currentStrokeVoxels.set(gKey, { newColor: null, initialColor: initialColor });
-                }
+                _removeSingleVoxel(initialDragVoxelCoords.gx, initialDragVoxelCoords.gy, initialDragVoxelCoords.gz);
+                currentStrokeVoxels.set(gKey, { newColor: null, initialColor: initialColor });
             } else if (currentMode === Modes.DRAW) {
-                if (voxels.has(gKey)) { // Double check if it exists
-                    _recolorSingleVoxel(initialDragVoxelCoords.gx, initialDragVoxelCoords.gy, initialDragVoxelCoords.gz, currentColor);
-                    currentStrokeVoxels.set(gKey, { newColor: currentColor, initialColor: initialColor });
-                }
+                _recolorSingleVoxel(initialDragVoxelCoords.gx, initialDragVoxelCoords.gy, initialDragVoxelCoords.gz, currentColor);
+                currentStrokeVoxels.set(gKey, { newColor: currentColor, initialColor: initialColor });
             }
 
             updatePreviewVoxel(initialDragVoxelCoords.gx, initialDragVoxelCoords.gy, initialDragVoxelCoords.gz, true); // Show preview for first voxel
             previewLineInstancedMesh.count = 0; // Hide line preview
-        } else {
-            pointerIsDown = false; initialClickPos = null;
         }
         return;
     }
@@ -1550,22 +1548,28 @@ function onPointerMove(e) {
             let targetVoxelForAction = { gx: currentRayHit.gx, gy: currentRayHit.gy, gz: currentRayHit.gz };
 
             if (currentMode === Modes.ADD) {
-                // If we hit an existing voxel AND we have a face normal,
-                // the intended action is to add on that face.
-                if (voxels.has(key(currentRayHit.gx, currentRayHit.gy, currentRayHit.gz)) && currentRayHit.faceNormal) {
-                    targetVoxelForAction.gx += Math.round(currentRayHit.faceNormal.x);
-                    targetVoxelForAction.gy += Math.round(currentRayHit.faceNormal.y);
-                    targetVoxelForAction.gz += Math.round(currentRayHit.faceNormal.z);
+                if (currentRayHit.faceNormal) { // Hit an existing voxel's face
+                    targetVoxelForAction.gx = currentRayHit.gx + Math.round(currentRayHit.faceNormal.x);
+                    targetVoxelForAction.gy = currentRayHit.gy + Math.round(currentRayHit.faceNormal.y);
+                    targetVoxelForAction.gz = currentRayHit.gz + Math.round(currentRayHit.faceNormal.z);
                 }
-                // If we hit empty space, targetVoxelForAction is already currentRayHit (the empty spot).
-                // If we hit an existing voxel but no clear face normal (e.g., edge/corner),
-                // the targetVoxelForAction remains currentRayHit. performVoxelModification will prevent adding if occupied.
+                // If currentRayHit.faceNormal is null, targetVoxelForAction remains currentRayHit's coordinates (empty space/plane)
             }
-
             // Clamp targetVoxelForAction to grid boundaries
             targetVoxelForAction.gx = Math.max(0, Math.min(GRID - 1, targetVoxelForAction.gx));
             targetVoxelForAction.gy = Math.max(0, Math.min(GRID - 1, targetVoxelForAction.gy));
             targetVoxelForAction.gz = Math.max(0, Math.min(GRID - 1, targetVoxelForAction.gz));
+
+            // Now, before processing, ensure the targetVoxelForAction is valid for the current mode
+            if (currentMode === Modes.ADD && voxels.has(key(targetVoxelForAction.gx, targetVoxelForAction.gy, targetVoxelForAction.gz))) {
+                // If the target spot is occupied in ADD mode, we cannot add a voxel here.
+                updatePreviewVoxel(targetVoxelForAction.gx, targetVoxelForAction.gy, targetVoxelForAction.gz, true);
+                return; // Skip adding to currentStrokeVoxels and performing modification
+            } else if ((currentMode === Modes.DELETE || currentMode === Modes.DRAW) && !voxels.has(key(targetVoxelForAction.gx, targetVoxelForAction.gy, targetVoxelForAction.gz))) {
+                // If no voxel exists at the target for DELETE/DRAW mode, skip action
+                updatePreviewVoxel(targetVoxelForAction.gx, targetVoxelForAction.gy, targetVoxelForAction.gz, true);
+                return; // Skip adding to currentStrokeVoxels and performing modification
+            }
 
             // Determine the path of voxels to affect
             const pathVoxels = getVoxelsOnLine(lastActionVoxelCoords, targetVoxelForAction);
@@ -1604,34 +1608,36 @@ function onPointerMove(e) {
                 let previewZ = hoverTarget.gz;
 
                 if (currentMode === Modes.ADD) {
-                    // If hovering over an existing voxel with a face normal, preview on that face
-                    if (voxels.has(key(hoverTarget.gx, hoverTarget.gy, hoverTarget.gz)) && hoverTarget.faceNormal) {
+                    if (hoverTarget.faceNormal) { // Hovering over an existing voxel's face
                         previewX = hoverTarget.gx + Math.round(hoverTarget.faceNormal.x);
                         previewY = hoverTarget.gy + Math.round(hoverTarget.faceNormal.y);
                         previewZ = hoverTarget.gz + Math.round(hoverTarget.faceNormal.z);
-                        // If the proposed spot is already occupied, don't show preview
-                        if (voxels.has(key(previewX, previewY, previewZ))) {
-                            updatePreviewVoxel(0, 0, 0, false);
-                            return;
-                        }
-                    } else if (voxels.has(key(hoverTarget.gx, hoverTarget.gy, hoverTarget.gz)) && !hoverTarget.faceNormal) {
-                        // If hitting an existing voxel directly (not on a face), and no face normal, don't show preview for ADD
-                        updatePreviewVoxel(0, 0, 0, false);
+                    }
+                    // Check if the proposed preview spot is within bounds and empty
+                    if (previewX < 0 || previewX >= GRID ||
+                        previewY < 0 || previewY >= GRID ||
+                        previewZ < 0 || previewZ >= GRID ||
+                        voxels.has(key(previewX, previewY, previewZ))) {
+                        updatePreviewVoxel(0, 0, 0, false); // Hide preview if invalid or occupied
                         return;
                     }
-                    // If hovering over empty space, preview at that empty space.
-                } else if (currentMode === Modes.DELETE && !voxels.has(key(hoverTarget.gx, hoverTarget.gy, hoverTarget.gz))) {
-                    // In DELETE mode, if there's no voxel, hide preview
-                    updatePreviewVoxel(0, 0, 0, false);
-                    return;
-                } else if (currentMode === Modes.DRAW && !voxels.has(key(hoverTarget.gx, hoverTarget.gy, hoverTarget.gz))) {
-                    // In DRAW mode, if there's no voxel, hide preview
-                    updatePreviewVoxel(0, 0, 0, false);
-                    return;
+                } else if (currentMode === Modes.DELETE || currentMode === Modes.DRAW) {
+                    // For DELETE/DRAW, only show preview if a voxel exists at the target
+                    if (!voxels.has(key(hoverTarget.gx, hoverTarget.gy, hoverTarget.gz))) {
+                        updatePreviewVoxel(0, 0, 0, false); // Hide preview if no voxel to delete/draw on
+                        return;
+                    }
+                    // If a voxel exists, preview at its location
+                    previewX = hoverTarget.gx;
+                    previewY = hoverTarget.gy;
+                    previewZ = hoverTarget.gz;
                 }
+                
+                // Clamp final preview coordinates (already done for previewX/Y/Z, but good for safety)
                 previewX = Math.max(0, Math.min(GRID - 1, previewX));
                 previewY = Math.max(0, Math.min(GRID - 1, previewY));
                 previewZ = Math.max(0, Math.min(GRID - 1, previewZ));
+
                 updatePreviewVoxel(previewX, previewY, previewZ, true);
             } else {
                 updatePreviewVoxel(0, 0, 0, false);
