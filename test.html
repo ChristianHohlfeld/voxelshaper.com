@@ -1,0 +1,305 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+    <meta charset="UTF-8">
+    <title>VoxelShaper Editor Tests</title>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/mocha/8.3.0/mocha.css">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/mocha/8.3.0/mocha.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/chai/4.3.4/chai.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/sinon.js/11.1.2/sinon.min.js"></script>
+    <style>
+        #container {
+            width: 800px;
+            height: 600px;
+            position: relative;
+            border: 1px solid #ccc;
+            margin: 20px auto;
+        }
+        #mocha {
+            margin: 20px;
+        }
+        .test-section {
+            margin: 30px 0;
+            padding: 15px;
+            border: 1px solid #eee;
+            border-radius: 5px;
+        }
+    </style>
+</head>
+<body>
+    <div id="mocha"></div>
+    
+    <div class="test-section">
+        <h3>Rendering Canvas</h3>
+        <div id="container">
+            <canvas id="voxelCanvas"></canvas>
+        </div>
+    </div>
+    
+    <div class="test-section">
+        <h3>Test Controls</h3>
+        <button id="runAllTests">Run All Tests</button>
+        <button id="testCoreFunctions">Test Core Functions</button>
+        <button id="testUIInteractions">Test UI Interactions</button>
+        <button id="testFirebase">Test Firebase Integration</button>
+    </div>
+
+    <script>
+        // Konfiguration
+        mocha.setup('bdd');
+        mocha.checkLeaks();
+        const expect = chai.expect;
+
+        // Mock für Firebase-Funktionen
+        const firebaseMocks = {
+            initializeApp: sinon.stub(),
+            getAuth: sinon.stub(),
+            signInAnonymously: sinon.stub(),
+            onAuthStateChanged: sinon.stub(),
+            signOut: sinon.stub(),
+            getFirestore: sinon.stub(),
+            doc: sinon.stub(),
+            getDoc: sinon.stub(),
+            collection: sinon.stub(),
+            addDoc: sinon.stub(),
+            serverTimestamp: sinon.stub()
+        };
+
+        // Globale Variablen für Testzugriff
+        let testApp;
+        let testScene;
+        let testCam;
+        let testRenderer;
+        
+        // Test-Suite für Kernfunktionalitäten
+        describe('VoxelShaper Core Functions', function() {
+            this.timeout(5000);  // Erhöhtes Timeout für 3D-Operationen
+            
+            before(function() {
+                // Environment Setup
+                window.THREE = {
+                    WebGLRenderer: class MockRenderer {
+                        constructor() { 
+                            this.domElement = document.createElement('canvas');
+                            this.setSize = sinon.stub();
+                            this.setPixelRatio = sinon.stub();
+                            this.render = sinon.stub();
+                        }
+                    },
+                    Scene: class MockScene {
+                        constructor() { 
+                            this.background = null;
+                            this.add = sinon.stub();
+                            this.remove = sinon.stub();
+                        }
+                    },
+                    PerspectiveCamera: class MockCamera {
+                        constructor() {
+                            this.position = { set: sinon.stub() };
+                            this.lookAt = sinon.stub();
+                            this.updateMatrixWorld = sinon.stub();
+                            this.updateProjectionMatrix = sinon.stub();
+                        }
+                    },
+                    // Weitere THREE Mocks hier ergänzen...
+                };
+
+                // Firebase Mocks einrichten
+                window.firebase = firebaseMocks;
+            });
+            
+            it('should initialize THREE.js components correctly', function() {
+                // Initialisierung der Hauptkomponenten
+                testScene = new THREE.Scene();
+                testCam = new THREE.PerspectiveCamera();
+                testRenderer = new THREE.WebGLRenderer({ canvas: document.getElementById('voxelCanvas') });
+                
+                expect(testScene).to.be.instanceOf(THREE.Scene);
+                expect(testCam).to.be.instanceOf(THREE.PerspectiveCamera);
+                expect(testRenderer).to.be.instanceOf(THREE.WebGLRenderer);
+            });
+            
+            it('should handle voxel coordinate conversion', function() {
+                // Test der Koordinaten-Schlüsselfunktionen
+                const key = (x, y, z) => ((x << 20) | (y << 10) | z) >>> 0;
+                const parsed = [100, 50, 25];
+                const k = key(...parsed);
+                
+                expect(k).to.equal(10486525);
+                expect(parseKey(k)).to.eql(parsed);
+            });
+            
+            it('should manage undo/redo history correctly', function() {
+                // History Management Tests
+                const history = [];
+                let historyPointer = -1;
+                
+                const addCommand = (type) => {
+                    if (historyPointer < history.length - 1) {
+                        history.splice(historyPointer + 1);
+                    }
+                    history.push({ type });
+                    historyPointer++;
+                };
+                
+                addCommand('add-voxel');
+                addCommand('remove-voxel');
+                
+                expect(history.length).to.equal(2);
+                expect(historyPointer).to.equal(1);
+                
+                // Undo
+                historyPointer--;
+                expect(historyPointer).to.equal(0);
+                
+                // Redo
+                historyPointer++;
+                expect(historyPointer).to.equal(1);
+            });
+            
+            it('should handle color conversions', function() {
+                // Farbkonvertierungstests
+                const hexColor = "#FF8800";
+                const rgba = VoxelShaperIO.hexToRgba(hexColor);
+                
+                expect(rgba).to.equal(0xFF8800FF);
+                expect(VoxelShaperIO.rgbaToHex(rgba)).to.equal(hexColor);
+            });
+        });
+        
+        // Test-Suite für UI-Interaktionen
+        describe('UI Interactions', function() {
+            beforeEach(function() {
+                // DOM für Tests vorbereiten
+                document.body.innerHTML += `
+                    <div id="controls">
+                        <input type="range" id="grid-size-slider" value="10">
+                        <span id="grid-size-display"></span>
+                        <button id="modeToggle"></button>
+                        <span id="current-mode"></span>
+                        <input type="color" id="color-picker">
+                    </div>
+                `;
+            });
+            
+            it('should update grid size correctly', function() {
+                const slider = document.getElementById('grid-size-slider');
+                const display = document.getElementById('grid-size-display');
+                
+                slider.value = 20;
+                slider.dispatchEvent(new Event('input'));
+                
+                expect(display.textContent).to.equal('20×20×20');
+            });
+            
+            it('should cycle through modes correctly', function() {
+                const modeToggle = document.getElementById('modeToggle');
+                const modeDisplay = document.getElementById('current-mode');
+                
+                // Simuliere 4 Klicks (durchläuft alle Modi)
+                for (let i = 0; i < 4; i++) {
+                    modeToggle.click();
+                }
+                
+                expect(modeDisplay.textContent).to.include('Hinzufügen');
+            });
+            
+            it('should handle color selection', function() {
+                const colorPicker = document.getElementById('color-picker');
+                colorPicker.value = "#FF0000";
+                colorPicker.dispatchEvent(new Event('input'));
+                
+                expect(colorPicker.value).to.equal("#FF0000");
+            });
+        });
+        
+        // Test-Suite für Firebase-Integration
+        describe('Firebase Integration', function() {
+            beforeEach(function() {
+                // Firebase Mocks zurücksetzen
+                sinon.resetHistory();
+                
+                // Auth Mock konfigurieren
+                firebaseMocks.getAuth.returns({
+                    currentUser: { uid: 'test-user' }
+                });
+            });
+            
+            it('should initialize Firebase on load', async function() {
+                window.onload();
+                await new Promise(resolve => setTimeout(resolve, 100));
+                
+                expect(firebaseMocks.initializeApp.called).to.be.true;
+                expect(firebaseMocks.onAuthStateChanged.called).to.be.true;
+            });
+            
+            it('should handle login/logout', function() {
+                const loginBtn = document.createElement('button');
+                loginBtn.id = 'loginLogoutBtn';
+                document.body.appendChild(loginBtn);
+                
+                // Login testen
+                loginBtn.click();
+                expect(firebaseMocks.signInAnonymously.called).to.be.true;
+                
+                // Logout testen
+                firebaseMocks.getAuth.returns({
+                    currentUser: { uid: 'test-user' },
+                    signOut: sinon.stub().resolves()
+                });
+                loginBtn.click();
+                expect(firebaseMocks.signOut.called).to.be.true;
+            });
+        });
+        
+        // Test-Suite für Exportfunktionen
+        describe('Export Functions', function() {
+            it('should export STL format', function() {
+                const exporterSpy = sinon.spy();
+                window.THREE.STLExporter = class {
+                    parse = exporterSpy;
+                };
+                
+                exportSTL();
+                expect(exporterSpy.called).to.be.true;
+            });
+            
+            it('should export OBJ format', function() {
+                const saveSpy = sinon.spy(VoxelShaperIO, 'saveBlob');
+                exportOBJ();
+                expect(saveSpy.calledWith(sinon.match.string, 'voxel_model.obj')).to.be.true;
+            });
+        });
+        
+        // Test-Steuerung
+        document.getElementById('runAllTests').addEventListener('click', function() {
+            mocha.run();
+        });
+        
+        document.getElementById('testCoreFunctions').addEventListener('click', function() {
+            const runner = mocha.run();
+            runner.suite.suites = runner.suite.suites.filter(s => s.title === 'VoxelShaper Core Functions');
+        });
+        
+        // Initialisierung
+        window.addEventListener('DOMContentLoaded', function() {
+            // Lade benötigte Bibliotheken dynamisch
+            const loadScript = (src) => new Promise((resolve, reject) => {
+                const script = document.createElement('script');
+                script.src = src;
+                script.onload = resolve;
+                script.onerror = reject;
+                document.head.appendChild(script);
+            });
+            
+            Promise.all([
+                loadScript('https://cdn.jsdelivr.net/npm/three@0.128.0/build/three.min.js'),
+                loadScript('https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/utils/BufferGeometryUtils.js'),
+                loadScript('https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/exporters/STLExporter.js')
+            ]).then(() => {
+                console.log('Test dependencies loaded');
+            });
+        });
+    </script>
+</body>
+</html>
