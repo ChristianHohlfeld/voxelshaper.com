@@ -1277,10 +1277,14 @@ function onPointerUp(e) {
             if (currentMode === Modes.ADD) {
                 if (clickedVoxel.faceNormal) { // Hit an existing voxel's face
                     const proposedVoxel = {
-                        gx: clickedVoxel.gx + Math.round(clickedVoxel.faceNormal.x),
-                        gy: clickedVoxel.gy + Math.round(clickedVoxel.faceNormal.y),
-                        gz: clickedVoxel.gz + Math.round(clickedVoxel.faceNormal.z)
+                        gx: clickedVoxel.gx,
+                        gy: clickedVoxel.gy,
+                        gz: clickedVoxel.gz
                     };
+                    if (clickedVoxel.faceNormal.x < 0) proposedVoxel.gx--;
+                    if (clickedVoxel.faceNormal.y < 0) proposedVoxel.gy--;
+                    if (clickedVoxel.faceNormal.z < 0) proposedVoxel.gz--;
+
                     // Only set as final if the proposed spot is within grid and empty
                     if (proposedVoxel.gx >= 0 && proposedVoxel.gx < GRID &&
                         proposedVoxel.gy >= 0 && proposedVoxel.gy < GRID &&
@@ -1370,15 +1374,18 @@ function onPointerDown(e) {
             if (currentMode === Modes.ADD) {
                 if (rawTarget.faceNormal) { // Hit an existing voxel's face
                     const proposedVoxel = {
-                        gx: rawTarget.gx + Math.round(rawTarget.faceNormal.x),
-                        gy: rawTarget.gy + Math.round(rawTarget.faceNormal.y),
-                        gz: rawTarget.gz + Math.round(rawTarget.faceNormal.z)
+                        gx: rawTarget.gx,
+                        gy: rawTarget.gy,
+                        gz: rawTarget.gz
                     };
+                    if (rawTarget.faceNormal.x < 0) proposedVoxel.gx--;
+                    if (rawTarget.faceNormal.y < 0) proposedVoxel.gy--;
+                    if (rawTarget.faceNormal.z < 0) proposedVoxel.gz--;
                     // Only set as initial if the proposed spot is within grid and empty
                     if (proposedVoxel.gx >= 0 && proposedVoxel.gx < GRID &&
                         proposedVoxel.gy >= 0 && proposedVoxel.gy < GRID &&
                         proposedVoxel.gz >= 0 && proposedVoxel.gz < GRID &&
-                        !voxels.has(key(proposedVoxel.gx, proposedPoxel.gy, proposedVoxel.gz))) {
+                        !voxels.has(key(proposedVoxel.gx, proposedVoxel.gy, proposedVoxel.gz))) {
                         initialActionVoxel = proposedVoxel;
                     } else {
                         // Cannot place here (either out of bounds or occupied)
@@ -1463,10 +1470,13 @@ function onPointerDown(e) {
         if (currentMode === Modes.ADD) {
             if (rawTarget.faceNormal) { // Hit an existing voxel's face
                 const proposedVoxel = {
-                    gx: rawTarget.gx + Math.round(rawTarget.faceNormal.x),
-                    gy: rawTarget.gy + Math.round(rawTarget.faceNormal.y),
-                    gz: rawTarget.gz + Math.round(rawTarget.faceNormal.z)
+                    gx: rawTarget.gx,
+                    gy: rawTarget.gy,
+                    gz: rawTarget.gz
                 };
+                if (rawTarget.faceNormal.x < 0) proposedVoxel.gx--;
+                if (rawTarget.faceNormal.y < 0) proposedVoxel.gy--;
+                if (rawTarget.faceNormal.z < 0) proposedVoxel.gz--;
                 // Only set as initial if the proposed spot is within grid and empty
                 if (proposedVoxel.gx >= 0 && proposedVoxel.gx < GRID &&
                     proposedVoxel.gy >= 0 && proposedVoxel.gy < GRID &&
@@ -1544,9 +1554,12 @@ function onPointerMove(e) {
 
             if (currentMode === Modes.ADD) {
                 if (currentRayHit.faceNormal) {
-                    currentTargetVoxelCoords.gx = currentRayHit.gx + Math.round(currentRayHit.faceNormal.x);
-                    currentTargetVoxelCoords.gy = currentRayHit.gy + Math.round(currentRayHit.faceNormal.y);
-                    currentTargetVoxelCoords.gz = currentRayHit.gz + Math.round(currentRayHit.faceNormal.z);
+                    // When hitting a face, currentRayHit.gx/gy/gz is the voxel *after* a positive normal face
+                    // or the voxel *containing* a negative normal face.
+                    // We need to adjust for negative normals to get the target voxel for ADD mode.
+                    if (currentRayHit.faceNormal.x < 0) currentTargetVoxelCoords.gx--;
+                    if (currentRayHit.faceNormal.y < 0) currentTargetVoxelCoords.gy--;
+                    if (currentRayHit.faceNormal.z < 0) currentTargetVoxelCoords.gz--;
                 }
             }
             // Clamp currentTargetVoxelCoords to grid boundaries
