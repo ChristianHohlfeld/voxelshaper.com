@@ -1349,10 +1349,8 @@ function onPointerDown(e) {
                             gy: rawTarget.gy + Math.round(rawTarget.faceNormal.y),
                             gz: rawTarget.gz + Math.round(rawTarget.faceNormal.z)
                         };
-                        if (!voxels.has(key(proposedVoxel.gx, proposedVoxel.gy, proposedVoxel.gz))) {
-                            initialActionVoxel = proposedVoxel;
-                        }
-                    } else if (!voxels.has(key(rawTarget.gx, rawTarget.gy, rawTarget.gz))) {
+                        initialActionVoxel = proposedVoxel; // Always attempt to place on face for initial drag point
+                    } else {
                         initialActionVoxel = { gx: rawTarget.gx, gy: rawTarget.gy, gz: rawTarget.gz };
                     }
                 } else { // DELETE or DRAW mode
@@ -1432,10 +1430,8 @@ function onPointerDown(e) {
                     gy: rawTarget.gy + Math.round(rawTarget.faceNormal.y),
                     gz: rawTarget.gz + Math.round(rawTarget.faceNormal.z)
                 };
-                if (!voxels.has(key(proposedVoxel.gx, proposedVoxel.gy, proposedVoxel.gz))) {
-                    initialActionVoxel = proposedVoxel;
-                }
-            } else if (!voxels.has(key(rawTarget.gx, rawTarget.gy, rawTarget.gz))) {
+                initialActionVoxel = proposedVoxel; // Always attempt to place on face for initial drag point
+            } else {
                 initialActionVoxel = { gx: rawTarget.gx, gy: rawTarget.gy, gz: rawTarget.gz };
             }
         } else { // DELETE or DRAW mode
@@ -1514,16 +1510,31 @@ function onPointerMove(e) {
                 const initialColor = voxelsAtDragStart.has(gKey) ? voxelsAtDragStart.get(gKey).color : null;
 
                 if (currentMode === Modes.ADD) {
-                    // In ADD mode, we want to add to empty spots.
-                    // If the current voxel in the path is already occupied, we skip it.
-                    // We don't break the loop, as there might be empty spots further along the drag path.
-                    if (!hasVoxelAtCurrentSpot) {
-                        _addSingleVoxel(voxel.gx, voxel.gy, voxel.gz, currentColor);
-                        if (!currentStrokeVoxels.has(gKey)) {
-                            currentStrokeVoxels.set(gKey, { newColor: currentColor, initialColor: initialColor });
+                    let targetVoxelForAction = { gx: voxel.gx, gy: voxel.gy, gz: voxel.gz };
+
+                    // If the current voxel in the path is an existing voxel and we have a face normal,
+                    // propose adding on that face instead.
+                    if (hasVoxelAtCurrentSpot && currentRayTarget.faceNormal) {
+                        targetVoxelForAction.gx = voxel.gx + Math.round(currentRayTarget.faceNormal.x);
+                        targetVoxelForAction.gy = voxel.gy + Math.round(currentRayTarget.faceNormal.y);
+                        targetVoxelForAction.gz = voxel.gz + Math.round(currentRayTarget.faceNormal.z);
+                    }
+
+                    // Clamp to grid boundaries
+                    targetVoxelForAction.gx = Math.max(0, Math.min(GRID - 1, targetVoxelForAction.gx));
+                    targetVoxelForAction.gy = Math.max(0, Math.min(GRID - 1, targetVoxelForAction.gy));
+                    targetVoxelForAction.gz = Math.max(0, Math.min(GRID - 1, targetVoxelForAction.gz));
+
+                    const gKeyForAction = key(targetVoxelForAction.gx, targetVoxelForAction.gy, targetVoxelForAction.gz);
+
+                    // Only add if the target spot is empty
+                    if (!voxels.has(gKeyForAction)) {
+                        _addSingleVoxel(targetVoxelForAction.gx, targetVoxelForAction.gy, targetVoxelForAction.gz, currentColor);
+                        if (!currentStrokeVoxels.has(gKeyForAction)) {
+                            currentStrokeVoxels.set(gKeyForAction, { newColor: currentColor, initialColor: initialColor });
                         }
                     }
-                    // If hasVoxelAtCurrentSpot is true, we just do nothing for this voxel in ADD mode and continue the loop.
+                    lastProcessedVoxel = targetVoxelForAction; // Update lastProcessedVoxel to the *actual* voxel added/attempted
                 } else if (currentMode === Modes.DELETE) {
                     if (hasVoxelAtCurrentSpot) {
                         _removeSingleVoxel(voxel.gx, voxel.gy, voxel.gz);
@@ -1531,6 +1542,7 @@ function onPointerMove(e) {
                             currentStrokeVoxels.set(gKey, { newColor: null, initialColor: initialColor });
                         }
                     }
+                    lastProcessedVoxel = voxel;
                 } else if (currentMode === Modes.DRAW) {
                     if (hasVoxelAtCurrentSpot) {
                         if (voxels.get(gKey).color !== currentColor) { // Only recolor if different
@@ -1542,10 +1554,8 @@ function onPointerMove(e) {
                             }
                         }
                     }
+                    lastProcessedVoxel = voxel;
                 }
-                // Always update lastProcessedVoxel to the current voxel in the path, regardless of action taken
-                // This ensures the next segment calculation starts from the correct point on the line.
-                lastProcessedVoxel = voxel;
             }
 
             // Update lastActionVoxelCoords to the last voxel that was successfully processed (or the ray target if no specific voxel was processed)
