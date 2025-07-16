@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="de">
+<html lang="de" data-theme="dark">
 <head>
 <meta charset="UTF-8">
 <meta property="og:title" content="VoxelShaper – Create in 3D, Effortlessly" />
@@ -16,22 +16,21 @@
 <meta name="twitter:description" content="A powerful, intuitive voxel-based 3D editor – made for makers, artists, and coders.">
 <meta name="twitter:image" content="https://voxelshaper.com/preview.png">
 <title>VoxelShaper – Voxel Editor & 3D Print Exporter</title>
+
+<!-- DaisyUI and Tailwind CSS CDN -->
+<link href="https://cdn.jsdelivr.net/npm/daisyui@4.7.2/dist/full.min.css" rel="stylesheet" type="text/css" />
+<script src="https://cdn.tailwindcss.com"></script>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+
 <style>
+/* Custom styles for specific animations or low-level interactions not covered by Tailwind/DaisyUI */
 body {
-    margin: 0;
-    overflow: hidden;
-    font-family: sans-serif;
-    display: flex;
-    flex-direction: column;
-    height: 100vh;
-    background: #282c34;
-    color: #e0e0e0;
     padding-top: env(safe-area-inset-top);
     padding-bottom: env(safe-area-inset-bottom);
     padding-left: env(safe-area-inset-left);
     padding-right: env(safe-area-inset-right);
     box-sizing: border-box;
-    touch-action: pan-x pan-y;
+    touch-action: pan-x pan-y; /* Allows horizontal and vertical panning */
     -webkit-user-select: none;
     -moz-user-select: none;
     user-select: none;
@@ -43,275 +42,10 @@ canvas, body, #container{
     user-select: none;
     -webkit-touch-callout: none;
 }
-#controls{padding:14px;background:#3a3f47;border-bottom:1px solid #4a4f57;display:flex;flex-wrap:wrap;gap:12px;justify-content:center;align-items:center}
-#controls button,#controls label{padding:8px 18px;border:none;border-radius:5px;font-size:1em;background:#555c66;color:#e0e0e0;cursor:pointer}
-#controls button:hover{background:#6a727f}
-#grid-size-display{font-weight:700;color:#90caf9}
-#current-mode{
-    font-weight:700;
-    color:#81c784;
-    min-width: 160px;
-    max-width: 160px;
-    text-align: center;
-}
-#container{
-    flex:1;
-    position:relative;
-    border: 2px solid transparent;
-    box-sizing: border-box;
-    overflow: hidden;
-    touch-action: none;
-}
-canvas{
-    width:100%;
-    height:100%;
-    display: block;
-    box-sizing: border-box;
-}
-.info-box{
-    position:absolute;
-    bottom:18px;
-    left:18px;
-    padding:12px;
-    border-radius:8px;
-    font-size:.85em;
-    background:rgba(0,0,0,.6);
-    pointer-events:none;
-}
-.info-box strong{color:#90caf9}
-#fileInput{display:none}
-
-input[type="range"] {
-    -webkit-appearance: none;
-    width: 150px;
-    height: 8px;
-    background: #4a4f57;
-    border-radius: 5px;
-    outline: none;
-    opacity: 0.8;
-    transition: opacity .2s;
-    margin-left: 10px;
-    margin-right: 10px;
-}
-input[type="range"]:hover {
-    opacity: 1;
-}
-input[type="range"]::-webkit-slider-thumb {
-    -webkit-appearance: none;
-    appearance: none;
-    width: 20px;
-    height: 20px;
-    border-radius: 50%;
-    background: #90caf9;
-    cursor: pointer;
-}
-input[type="range"]::-moz-range-thumb {
-    width: 20px;
-    height: 20px;
-    border-radius: 50%;
-    background: #90caf9;
-    cursor: pointer;
-}
-input[type="color"] {
-    -webkit-appearance: none;
-    -moz-appearance: none;
-    appearance: none;
-    width: 38px;
-    height: 38px;
-    border: none;
-    border-radius: 50%;
-    background-color: transparent;
-    cursor: pointer;
-    padding: 0;
-    vertical-align: middle;
-}
-input[type="color"]::-webkit-color-swatch-wrapper {
-    padding: 0;
-}
-input[type="color"]::-webkit-color-swatch {
-    border: 1px solid #555c66;
-    border-radius: 50%;
-}
-input[type="color"]::-moz-color-swatch-wrapper {
-    padding: 0;
-}
-input[type="color"]::-moz-color-swatch {
-    border: 1px solid #555c66;
-    border-radius: 50%;
-}
-
-
-.color-preset-box, input[type="color"].color-preset-box {
-    width: 38px;
-    height: 38px;
-    border-radius: 5px;
-    border: 2px solid #555c66;
-    cursor: pointer;
-    display: inline-block;
-    vertical-align: middle;
-    box-sizing: border-box;
-    transition: transform 0.1s ease-in-out, border-color 0.2s ease-in-out, box-shadow 0.2s ease-in-out;
-    -webkit-appearance: none;
-    -moz-appearance: none;
-    appearance: none;
-    padding: 0;
-}
-
-input[type="color"].color-preset-box::-webkit-color-swatch-wrapper {
-    padding: 0;
-}
-input[type="color"].color-preset-box::-webkit-color-swatch {
-    border: none;
-    border-radius: 3px;
-}
-input[type="color"].color-preset-box::-moz-color-swatch-wrapper {
-    padding: 0;
-}
-input[type="color"].color-preset-box::-moz-color-swatch {
-    border: none;
-    border-radius: 3px;
-}
-
-
-.color-preset-box:hover, input[type="color"].color-preset-box:hover {
-    transform: scale(1.1);
-}
-.color-preset-box.active, input[type="color"].color-preset-box.active {
-    border-color: #90caf9;
-    box-shadow: 0 0 8px rgba(144, 202, 249, 0.7);
-}
-
-.app-modal-dialog {
-    border: none;
-    padding: 0;
-    margin: 0;
-    width: 100%;
-    height: 100%;
-    max-width: none;
-    max-height: none;
-    position: fixed;
-    top: 0;
-    left: 0;
-    z-index: 1000;
-    background-color: transparent;
-    align-items: center;
-    justify-content: center;
-}
-
-.app-modal-dialog[open] {
-    display: flex;
-}
-
-.app-modal-dialog::backdrop {
-    background-color: rgba(0, 0, 0, 0.7);
-}
-
-.modal-content {
-    background-color: #3a3f47;
-    padding: 30px;
-    border-radius: 8px;
-    text-align: center;
-    box-shadow: 0 4px 8px rgba(0,0,0,.2);
-    max-width: 400px;
-    color: #e0e0e0;
-    pointer-events: auto;
-}
-
-.modal-content h3 {
-    margin-top: 0;
-    color: #90caf9;
-}
-
-.modal-buttons {
-    margin-top: 25px;
-    display: flex;
-    justify-content: space-around;
-    gap: 10px;
-}
-
-.modal-buttons button {
-    padding: 10px 20px;
-    border: none;
-    border-radius: 5px;
-    font-size: 1em;
-    flex-grow: 1;
-}
-
-.modal-buttons button.confirm-save {
-    background-color: #4CAF50;
-    color: white;
-}
-
-.modal-buttons button.confirm-no-save {
-    background-color: #f44336;
-    color: white;
-}
-
-.modal-buttons button.cancel {
-    background-color: #555c66;
-    color: #e0e0e0;
-}
-
-.modal-buttons button:hover {
-    opacity: 0.9;
-}
-
-#menuToggle{
-    position: fixed;
-    top: calc(10px + env(safe-area-inset-top));
-    right: 10px;
-    z-index: 1500;
-    width: 42px; height: 42px;
-    font-size: 1.4em;
-    line-height: 42px;
-    text-align: center;
-    background:#555c66;
-    color:#e0e0e0;
-    border:none;
-    border-radius:8px;
-    cursor:pointer;
-    box-shadow:0 2px 6px rgba(0,0,0,.4);
-}
-#menuToggle:hover{background:#6a727f}
-
-@media (max-width:768px){
-    #controls{display:none;}
-    button {
-        min-width: 44px;
-        min-height: 44px;
-    }
-}
-#container,
-#voxelCanvas{
-    touch-action: none;
-    -ms-touch-action: none;
-    box-sizing: border-box;
-}
-
-.sr-only {
-  position: absolute;
-  width: 1px;
-  height: 1px;
-  padding: 0;
-  margin: -1px;
-  overflow: hidden;
-  clip: rect(0,0,0,0);
-  border: 0;
-}
 
 .touch-indicator {
-    position: absolute;
-    width: 40px;
-    height: 40px;
-    border-radius: 50%;
-    background: rgba(0, 150, 255, 0.3);
-    transform: translate(-50%, -50%);
-    pointer-events: none;
     animation: pulse 0.5s;
-    display: none;
-    z-index: 2000;
 }
-
 
 @keyframes pulse {
     0% { transform: translate(-50%, -50%) scale(1); opacity: 0.5; }
@@ -319,426 +53,111 @@ input[type="color"].color-preset-box::-moz-color-swatch {
     100% { transform: translate(-50%, -50%) scale(1); opacity: 0.5; }
 }
 
-.mobile-only {
-    display: none;
-    position: absolute;
-    bottom: calc(20px + env(safe-area-inset-bottom));
-    right: calc(20px + env(safe-area-inset-right));
-    flex-direction: column;
-    gap: 12px;
-    z-index: 1000;
-}
-
-@media (max-width: 768px) {
-    .mobile-only {
-        display: flex;
-    }
-    
-    .mobile-btn {
-        width: 60px;
-        height: 60px;
-        font-size: 24px;
-        border-radius: 50%;
-        background: rgba(90, 90, 120, 0.8);
-        color: white;
-        border: 2px solid white;
-        cursor: pointer;
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        box-shadow: 0 2px 6px rgba(0,0,0,.4);
-    }
-    .mobile-btn:hover {
-        background: rgba(110, 110, 140, 0.9);
-    }
-}
-
-#distanceDisplay {
-    position: absolute;
-    bottom: 18px;
-    right: 18px;
-    padding: 8px 12px;
-    background: rgba(0,0,0,0.6);
-    color: #e0e0e0;
-    border-radius: 5px;
-    font-size: 0.9em;
-    display: none;
-    z-index: 900;
-}
-
-.dynamic-block-input {
-    width: 60px;
-    padding: 8px;
-    border: none;
-    border-radius: 5px;
-    font-size: 1em;
-    background: #555c66;
-    color: #e0e0e0;
-    text-align: center;
-    -moz-appearance: textfield;
-}
-
+/* Hide spin buttons for number inputs */
 .dynamic-block-input::-webkit-outer-spin-button,
 .dynamic-block-input::-webkit-inner-spin-button {
     -webkit-appearance: none;
     margin: 0;
 }
-
-.dynamic-block-input-group {
-    display: flex;
-    align-items: center;
-    gap: 5px;
+.dynamic-block-input {
+    -moz-appearance: textfield; /* Firefox */
 }
 
-.block-size-btn.active, #setDynamicBlockSizeBtn.active {
-    border-color: #90caf9;
-    box-shadow: 0 0 8px rgba(144, 202, 249, 0.7);
+/* Ensure color input swatch is correctly styled without default browser UI */
+input[type="color"]::-webkit-color-swatch-wrapper {
+    padding: 0;
 }
-
-.upload-modal-content {
-    background-color: #3a3f47;
-    padding: 30px;
-    border-radius: 8px;
-    box-shadow: 0 4px 8px rgba(0,0,0,.2);
-    max-width: 500px;
-    width: 90%;
-    color: #e0e0e0;
-    text-align: left;
-    pointer-events: auto;
-}
-
-.upload-modal-content h3 {
-    text-align: center;
-    margin-top: 0;
-    color: #90caf9;
-    margin-bottom: 20px;
-}
-
-.upload-modal-content label {
-    display: block;
-    margin-bottom: 8px;
-    font-weight: bold;
-}
-
-.upload-modal-content input[type="text"],
-.upload-modal-content textarea {
-    width: calc(100% - 20px);
-    padding: 10px;
-    margin-bottom: 15px;
-    border: 1px solid #555c66;
-    border-radius: 5px;
-    background-color: #2d3748;
-    color: #e0e0e0;
-    box-sizing: border-box;
-}
-
-.upload-modal-content textarea {
-    resize: vertical;
-    min-height: 80px;
-}
-
-.upload-modal-content .radio-group {
-    display: flex;
-    gap: 20px;
-    margin-bottom: 15px;
-}
-
-.upload-modal-content .radio-group label {
-    display: flex;
-    align-items: center;
-    font-weight: normal;
-}
-
-.upload-modal-content .radio-group input[type="radio"] {
-    margin-right: 8px;
-}
-
-.upload-modal-buttons {
-    margin-top: 25px;
-    display: flex;
-    justify-content: space-around;
-    gap: 10px;
-}
-
-.upload-modal-buttons button {
-    padding: 10px 20px;
+input[type="color"]::-webkit-color-swatch {
     border: none;
-    border-radius: 5px;
-    cursor: pointer;
-    font-size: 1em;
-    flex-grow: 1;
+    border-radius: 50%; /* For main color picker */
 }
-
-.upload-modal-buttons button.upload-confirm {
-    background-color: #4CAF50;
-    color: white;
+input[type="color"]::-moz-color-swatch-wrapper {
+    padding: 0;
 }
-
-.upload-modal-buttons button.upload-cancel {
-    background-color: #555c66;
-    color: #e0e0e0;
-}
-
-.upload-modal-buttons button:hover {
-    opacity: 0.9;
-}
-
-#loginLogoutBtn {
-    background-color: #007bff;
-    color: white;
-}
-#loginLogoutBtn:hover {
-    background-color: #0056b3;
-}
-
-#uploadToHubBtn {
-    background-color: #ff9800;
-    color: white;
-}
-#uploadToHubBtn:hover {
-    background-color: #fb8c00;
-}
-
-#goToHubBtn {
-    background-color: #6200EE;
-    color: white;
-}
-#goToHubBtn:hover {
-    background-color: #3700B3;
-}
-
-#userIdDisplay {
-    font-weight: bold;
-    color: #ADD8E6;
-    margin-left: 10px;
-    margin-right: 10px;
-    white-space: nowrap;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    max-width: 150px;
-    display: flex;
-    align-items: center;
-    gap: 5px;
-}
-
-#userIdDisplay img {
-    width: 24px;
-    height: 24px;
-    border-radius: 50%;
-    vertical-align: middle;
-}
-
-#toast-container {
-    position: fixed;
-    top: calc(20px + env(safe-area-inset-top));
-    left: 50%;
-    transform: translateX(-50%);
-    z-index: 2000;
-    display: flex;
-    flex-direction: column;
-    gap: 10px;
-    pointer-events: none;
-    width: 90%;
-    max-width: 400px;
-}
-
-.toast-message {
-    background-color: #3a3f47;
-    color: #e0e0e0;
-    padding: 15px 20px;
-    border-radius: 8px;
-    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
-    opacity: 0;
-    transition: opacity 0.3s ease-in-out, transform 0.3s ease-in-out;
-    transform: translateY(-20px);
-    pointer-events: auto;
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-}
-
-.toast-message.show {
-    opacity: 1;
-    transform: translateY(0);
-}
-
-.toast-message .close-btn {
-    background: none;
+input[type="color"]::-moz-color-swatch {
     border: none;
-    color: #e0e0e0;
-    font-size: 1.2em;
-    cursor: pointer;
-    margin-left: 10px;
+    border-radius: 50%; /* For main color picker */
 }
 
-.toast-message.info { background-color: #3f51b5; }
-.toast-message.success { background-color: #4CAF50; }
-.toast-message.error { background-color: #f44336; }
-.toast-message.warning { background-color: #ff9800; }
-
-.auth-modal-content {
-    background-color: #3a3f47;
-    padding: 30px;
-    border-radius: 8px;
-    box-shadow: 0 4px 8px rgba(0,0,0,.2);
-    max-width: 450px;
-    width: 90%;
-    color: #e0e0e0;
-    text-align: center;
-    pointer-events: auto;
+/* Specific styling for color preset boxes */
+.color-preset-box::-webkit-color-swatch-wrapper {
+    padding: 0;
 }
-
-.auth-modal-content h3 {
-    margin-top: 0;
-    color: #90caf9;
-    margin-bottom: 20px;
-}
-
-.auth-modal-content .provider-buttons button {
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    width: 100%;
-    padding: 12px;
-    margin-bottom: 10px;
+.color-preset-box::-webkit-color-swatch {
     border: none;
-    border-radius: 5px;
-    font-size: 1.1em;
-    cursor: pointer;
-    gap: 10px;
+    border-radius: 0.375rem; /* rounded-md */
 }
-
-.auth-modal-content .provider-buttons button.google {
-    background-color: #DB4437;
-    color: white;
+.color-preset-box::-moz-color-swatch-wrapper {
+    padding: 0;
 }
-.auth-modal-content .provider-buttons button.github {
-    background-color: #333;
-    color: white;
-}
-.auth-modal-content .provider-buttons button.email {
-    background-color: #4285F4;
-    color: white;
-}
-
-.auth-modal-content .provider-buttons button:hover {
-    opacity: 0.9;
-}
-
-.auth-modal-content .email-login-form {
-    margin-top: 20px;
-    border-top: 1px solid #555c66;
-    padding-top: 20px;
-}
-
-.auth-modal-content .email-login-form input[type="email"],
-.auth-modal-content .email-login-form input[type="password"] {
-    width: calc(100% - 20px);
-    padding: 10px;
-    margin-bottom: 10px;
-    border: 1px solid #555c66;
-    border-radius: 5px;
-    background-color: #2d3748;
-    color: #e0e0e0;
-    box-sizing: border-box;
-}
-
-.auth-modal-content .email-login-form button {
-    width: 100%;
-    padding: 10px;
+.color-preset-box::-moz-color-swatch {
     border: none;
-    border-radius: 5px;
-    background-color: #007bff;
-    color: white;
-    font-size: 1em;
-    cursor: pointer;
-}
-.auth-modal-content .email-login-form button:hover {
-    background-color: #0056b3;
-}
-
-.auth-modal-content .close-button-container {
-    margin-top: 20px;
-}
-
-.auth-modal-content .close-button-container button {
-    background-color: #555c66;
-    color: #e0e0e0;
-    padding: 10px 20px;
-    border: none;
-    border-radius: 5px;
-    cursor: pointer;
-}
-.auth-modal-content .close-button-container button:hover {
-    opacity: 0.9;
-}
-
-.app-modal-dialog:focus {
-    outline: none;
+    border-radius: 0.375rem; /* rounded-md */
 }
 
 </style>
 </head>
-<body>
-<button id="menuToggle" aria-label="Menü umschalten">☰</button>
+<body class="bg-base-100 min-h-screen text-base-content flex flex-col">
+<button id="menuToggle" aria-label="Menü umschalten" class="fixed top-4 right-4 z-[1500] w-10 h-10 text-xl leading-10 text-center bg-base-300 text-base-content border-none rounded-lg cursor-pointer shadow-md hover:bg-base-content/20 lg:hidden">☰</button>
 
-<div id="controls">
-    <label for="grid-size-slider">Gittergröße:</label>
-    <input type="range" id="grid-size-slider" min="5" max="180" value="10" aria-label="Gittergröße anpassen">
-    <span id="grid-size-display">10×10×10</span>
-    <label for="color-picker">Farbe:</label>
-    <input type="color" id="color-picker" value="#ffffff" aria-label="Aktuelle Farbe wählen">
-    <input type="color" id="color-preset-1" class="color-preset-box" value="#8B4513" aria-label="Voreingestellte Farbe 1">
-    <input type="color" id="color-preset-2" class="color-preset-box" value="#708237" aria-label="Voreingestellte Farbe 2">
-    <input type="color" id="color-preset-3" class="color-preset-box" value="#6495ED" aria-label="Voreingestellte Farbe 3">
+<div id="controls" class="flex flex-wrap items-center justify-center gap-3 p-4 bg-base-200 border-b border-base-content/20 hidden md:flex">
+    <label for="grid-size-slider" class="text-base-content">Gittergröße:</label>
+    <input type="range" id="grid-size-slider" min="5" max="180" value="10" aria-label="Gittergröße anpassen" class="range range-xs w-36">
+    <span id="grid-size-display" class="font-bold text-primary">10×10×10</span>
+    
+    <label for="color-picker" class="text-base-content">Farbe:</label>
+    <input type="color" id="color-picker" value="#ffffff" aria-label="Aktuelle Farbe wählen" class="input input-bordered w-10 h-10 p-0 rounded-full cursor-pointer border-base-content/20">
+    <input type="color" id="color-preset-1" class="color-preset-box w-10 h-10 rounded-md border-2 border-base-content/20 cursor-pointer transition-all duration-200 hover:scale-110" value="#8B4513" aria-label="Voreingestellte Farbe 1">
+    <input type="color" id="color-preset-2" class="color-preset-box w-10 h-10 rounded-md border-2 border-base-content/20 cursor-pointer transition-all duration-200 hover:scale-110" value="#708237" aria-label="Voreingestellte Farbe 2">
+    <input type="color" id="color-preset-3" class="color-preset-box w-10 h-10 rounded-md border-2 border-base-content/20 cursor-pointer transition-all duration-200 hover:scale-110" value="#6495ED" aria-label="Voreingestellte Farbe 3">
 
-    <button id="modeToggle" aria-label="Modus wechseln">Modus wechseln</button><span id="current-mode">Modus: Hinzufügen</span>
-    <button id="clearBtn" aria-label="Alles löschen">Alles löschen</button>
-    <button id="fillLevelBtn" aria-label="Ebene füllen">Ebene füllen</button>
-    <button id="saveBtn" aria-label="Projekt speichern" aria-describedby="save-description">Projekt speichern</button>
+    <button id="modeToggle" aria-label="Modus wechseln" class="btn btn-sm btn-neutral">Modus wechseln</button><span id="current-mode" class="font-bold text-success min-w-40 text-center">Modus: Hinzufügen</span>
+    <button id="clearBtn" aria-label="Alles löschen" class="btn btn-sm btn-neutral">Alles löschen</button>
+    <button id="fillLevelBtn" aria-label="Ebene füllen" class="btn btn-sm btn-neutral">Ebene füllen</button>
+    <button id="saveBtn" aria-label="Projekt speichern" aria-describedby="save-description" class="btn btn-sm btn-neutral">Projekt speichern</button>
     <div id="save-description" class="sr-only">Speichert das aktuelle Projekt als JSON-Datei</div>
-    <button id="loadBtn" aria-label="Projekt laden">Projekt laden</button>
-    <button id="exportStlBtn" aria-label="STL Export">STL Export</button>
-    <button id="exportObjBtn" aria-label="OBJ Export">OBJ Export</button>
+    <button id="loadBtn" aria-label="Projekt laden" class="btn btn-sm btn-neutral">Projekt laden</button>
+    <button id="exportStlBtn" aria-label="STL Export" class="btn btn-sm btn-neutral">STL Export</button>
+    <button id="exportObjBtn" aria-label="OBJ Export" class="btn btn-sm btn-neutral">OBJ Export</button>
 
-    <label for="fly-speed-slider">Fluggeschwindigkeit:</label>
-    <input type="range" id="fly-speed-slider" min="0.01" max="1.0" step="0.01" value="0.1" aria-label="Fluggeschwindigkeit anpassen">
-    <span id="fly-speed-display">0.10</span>
+    <label for="fly-speed-slider" class="text-base-content">Fluggeschwindigkeit:</label>
+    <input type="range" id="fly-speed-slider" min="0.01" max="1.0" step="0.01" value="0.1" aria-label="Fluggeschwindigkeit anpassen" class="range range-xs w-36">
+    <span id="fly-speed-display" class="font-bold text-primary">0.10</span>
 
-    <label>Feste Blockgröße:</label>
-    <button id="block-size-1x1" class="block-size-btn active" aria-label="Blockgröße 1x1x1">1x1x1</button>
-    <button id="block-size-4x4" class="block-size-btn" aria-label="Blockgröße 4x4x4">4x4x4</button>
-    <button id="block-size-8x8" class="block-size-btn" aria-label="Blockgröße 8x8x8">8x8x8</button>
-    <button id="block-size-10x10" class="block-size-btn" aria-label="Blockgröße 10x10x10">10x10x10</button>
+    <label class="text-base-content">Feste Blockgröße:</label>
+    <button id="block-size-1x1" class="block-size-btn btn btn-sm btn-neutral active" aria-label="Blockgröße 1x1x1">1x1x1</button>
+    <button id="block-size-4x4" class="block-size-btn btn btn-sm btn-neutral" aria-label="Blockgröße 4x4x4">4x4x4</button>
+    <button id="block-size-8x8" class="block-size-btn btn btn-sm btn-neutral" aria-label="Blockgröße 8x8x8">8x8x8</button>
+    <button id="block-size-10x10" class="block-size-btn btn btn-sm btn-neutral" aria-label="Blockgröße 10x10x10">10x10x10</button>
 
-    <label>Dynamische Blockgröße:</label>
-    <div class="dynamic-block-input-group">
-        <input type="number" id="dynamic-block-x" class="dynamic-block-input" value="1" min="1" max="180" aria-label="Dynamische Blockbreite (X)">
-        <span>x</span>
-        <input type="number" id="dynamic-block-y" class="dynamic-block-input" value="1" min="1" max="180" aria-label="Dynamische Blockhöhe (Y)">
-        <span>x</span>
-        <input type="number" id="dynamic-block-z" class="dynamic-block-input" value="1" min="1" max="180" aria-label="Dynamische Blocktiefe (Z)">
+    <label class="text-base-content">Dynamische Blockgröße:</label>
+    <div class="dynamic-block-input-group flex items-center gap-2">
+        <input type="number" id="dynamic-block-x" class="dynamic-block-input input input-bordered input-sm w-20 bg-base-300 border-base-content/20 text-base-content text-center" value="1" min="1" max="180" aria-label="Dynamische Blockbreite (X)">
+        <span class="text-base-content">x</span>
+        <input type="number" id="dynamic-block-y" class="dynamic-block-input input input-bordered input-sm w-20 bg-base-300 border-base-content/20 text-base-content text-center" value="1" min="1" max="180" aria-label="Dynamische Blockhöhe (Y)">
+        <span class="text-base-content">x</span>
+        <input type="number" id="dynamic-block-z" class="dynamic-block-input input input-bordered input-sm w-20 bg-base-300 border-base-content/20 text-base-content text-center" value="1" min="1" max="180" aria-label="Dynamische Blocktiefe (Z)">
     </div>
-    <button id="setDynamicBlockSizeBtn" aria-label="Dynamische Größe festlegen">Größe festlegen</button>
+    <button id="setDynamicBlockSizeBtn" aria-label="Dynamische Größe festlegen" class="btn btn-sm btn-neutral">Größe festlegen</button>
 
-    <button id="measureDistanceBtn" aria-label="Abstand messen">Abstand messen</button>
+    <button id="measureDistanceBtn" aria-label="Abstand messen" class="btn btn-sm btn-neutral">Abstand messen</button>
 
-    <button id="helpToggleBtn" aria-label="Hilfe umschalten">Hilfe</button>
-    <button id="resetCameraBtn" aria-label="Kamera zurücksetzen">Zur Szene zurückkehen</button>
+    <button id="helpToggleBtn" aria-label="Hilfe umschalten" class="btn btn-sm btn-neutral">Hilfe</button>
+    <button id="resetCameraBtn" aria-label="Kamera zurücksetzen" class="btn btn-sm btn-neutral">Zur Szene zurückkehen</button>
 
-    <button id="loadImageTemplateBtn" aria-label="Bild als Vorlage laden">Bild als Vorlage laden</button>
-    <button id="removeImageTemplateBtn" style="display:none;" aria-label="Bildvorlage entfernen">Bildvorlage entfernen</button>
-    <input type="file" id="imageFileInput" accept="image/*" style="display:none;">
+    <button id="loadImageTemplateBtn" aria-label="Bild als Vorlage laden" class="btn btn-sm btn-neutral">Bild als Vorlage laden</button>
+    <button id="removeImageTemplateBtn" class="btn btn-sm btn-neutral hidden" aria-label="Bildvorlage entfernen">Bildvorlage entfernen</button>
+    <input type="file" id="imageFileInput" accept="image/*" class="hidden">
 
-    <button id="loginLogoutBtn" aria-label="Anmelden oder Abmelden">Anmelden</button>
-    <span id="userIdDisplay"></span>
-    <button id="uploadToHubBtn" aria-label="Auf Hub hochladen" style="display:none;">Auf Hub hochladen</button>
-    <button id="goToHubBtn" aria-label="Zum VoxelShaper Hub wechseln">Zum Hub</button>
+    <button id="loginLogoutBtn" aria-label="Anmelden oder Abmelden" class="btn btn-sm btn-info">Anmelden</button>
+    <span id="userIdDisplay" class="font-bold text-info ml-2 mr-2 whitespace-nowrap overflow-hidden text-ellipsis max-w-xs flex items-center gap-1"></span>
+    <button id="uploadToHubBtn" aria-label="Auf Hub hochladen" class="btn btn-sm btn-warning hidden">Auf Hub hochladen</button>
+    <button id="goToHubBtn" aria-label="Zum VoxelShaper Hub wechseln" class="btn btn-sm btn-secondary">Zum Hub</button>
 </div>
 
-<div id="container">
-    <canvas id="voxelCanvas"></canvas>
-    <div class="info-box" id="infoBox"> <strong>Steuerung</strong><br>
+<div id="container" class="flex-1 relative border-2 border-transparent box-border overflow-hidden touch-none">
+    <canvas id="voxelCanvas" class="w-full h-full block box-border"></canvas>
+    <div id="infoBox" class="info-box absolute bottom-4 left-4 p-3 rounded-lg text-sm bg-base-300 text-base-content shadow-lg pointer-events-none"> <strong>Steuerung</strong><br>
     Rechte MT gehalten + Maus → Kamera drehen (Fly Mode)<br>
     WASD / E / Q → bewegen<br>
     Linke MT → Voxel hinzuf./löschen/zeichnen<br>
@@ -757,95 +176,95 @@ input[type="color"].color-preset-box::-moz-color-swatch {
     **NEU: Abstand messen (Modus "Messen")**<br>
     **Linke MT → Erster Klick setzt Startpunkt, Zweiter Klick setzt Endpunkt und zeigt Distanz**
     </div>
-    <div id="touch-indicator" class="touch-indicator"></div>
-    <input type="file" id="fileInput" accept=".json">
-    <div id="distanceDisplay">Distanz: 0.00 mm</div>
+    <div id="touch-indicator" class="touch-indicator absolute w-10 h-10 rounded-full bg-blue-500/30 transform -translate-x-1/2 -translate-y-1/2 pointer-events-none hidden z-[2000]"></div>
+    <input type="file" id="fileInput" accept=".json" class="hidden">
+    <div id="distanceDisplay" class="absolute bottom-4 right-4 p-2 bg-base-300 text-base-content rounded-md text-sm hidden z-[900]">Distanz: 0.00 mm</div>
 </div>
 
-<dialog id="clearConfirmationModal" class="app-modal-dialog">
-    <div class="modal-content">
-        <h3>Projekt löschen</h3>
-        <p>Möchten Sie das aktuelle Projekt speichern, bevor Sie alle Voxel löschen?</p>
-        <div class="modal-buttons">
-            <button id="saveAndClearBtn" class="confirm-save">Speichern & Löschen</button>
-            <button id="clearWithoutSaveBtn" class="confirm-no-save">Ohne Speichern löschen</button>
-            <button id="cancelClearBtn" class="cancel">Abbrechen</button>
+<dialog id="clearConfirmationModal" class="modal">
+    <div class="modal-box bg-base-200 text-base-content p-8 text-center shadow-xl max-w-md">
+        <h3 class="font-bold text-lg text-primary mb-4">Projekt löschen</h3>
+        <p class="py-4">Möchten Sie das aktuelle Projekt speichern, bevor Sie alle Voxel löschen?</p>
+        <div class="modal-buttons flex justify-around gap-4 mt-6">
+            <button id="saveAndClearBtn" class="confirm-save btn btn-success flex-1">Speichern & Löschen</button>
+            <button id="clearWithoutSaveBtn" class="confirm-no-save btn btn-error flex-1">Ohne Speichern löschen</button>
+            <button id="cancelClearBtn" class="cancel btn btn-ghost flex-1">Abbrechen</button>
         </div>
     </div>
 </dialog>
 
-<dialog id="uploadProjectModal" class="app-modal-dialog">
-    <div class="upload-modal-content">
-        <h3>Projekt auf Hub hochladen</h3>
-        <label for="uploadTitle">Titel:</label>
-        <input type="text" id="uploadTitle" placeholder="Ein aussagekräftiger Titel für Ihr Projekt" maxlength="100">
+<dialog id="uploadProjectModal" class="modal">
+    <div class="upload-modal-content modal-box bg-base-200 text-base-content p-8 shadow-xl max-w-xl w-11/12 text-left">
+        <h3 class="font-bold text-lg text-primary text-center mb-6">Projekt auf Hub hochladen</h3>
+        <label for="uploadTitle" class="label block mb-2 font-bold">Titel:</label>
+        <input type="text" id="uploadTitle" placeholder="Ein aussagekräftiger Titel für Ihr Projekt" maxlength="100" class="input input-bordered w-full bg-base-300 border-base-content/20 mb-4">
 
-        <label for="uploadDescription">Beschreibung:</label>
-        <textarea id="uploadDescription" placeholder="Beschreiben Sie Ihr Projekt kurz" maxlength="500"></textarea>
+        <label for="uploadDescription" class="label block mb-2 font-bold">Beschreibung:</label>
+        <textarea id="uploadDescription" placeholder="Beschreiben Sie Ihr Projekt kurz" maxlength="500" class="textarea textarea-bordered w-full bg-base-300 border-base-content/20 h-24 mb-4 resize-y"></textarea>
 
-        <label for="uploadTags">Tags (Komma-getrennt):</label>
-        <input type="text" id="uploadTags" placeholder="z.B. Haus, Baum, Auto, Gebäude" maxlength="100">
+        <label for="uploadTags" class="label block mb-2 font-bold">Tags (Komma-getrennt):</label>
+        <input type="text" id="uploadTags" placeholder="z.B. Haus, Baum, Auto, Gebäude" maxlength="100" class="input input-bordered w-full bg-base-300 border-base-content/20 mb-4">
 
-        <label>Sichtbarkeit:</label>
-        <div class="radio-group">
-            <label>
-                <input type="radio" name="uploadVisibility" value="public" checked> Öffentlich
+        <label class="label block mb-2 font-bold">Sichtbarkeit:</label>
+        <div class="radio-group flex gap-4 mb-4">
+            <label class="flex items-center font-normal">
+                <input type="radio" name="uploadVisibility" value="public" checked class="radio radio-primary mr-2"> Öffentlich
             </label>
-            <label>
-                <input type="radio" name="uploadVisibility" value="private"> Privat
+            <label class="flex items-center font-normal">
+                <input type="radio" name="uploadVisibility" value="private" class="radio radio-primary mr-2"> Privat
             </label>
         </div>
 
-        <div class="upload-modal-buttons">
-            <button id="uploadConfirmBtn" class="upload-confirm">Hochladen</button>
-            <button id="uploadCancelBtn" class="upload-cancel">Abbrechen</button>
+        <div class="upload-modal-buttons flex justify-around gap-4 mt-6">
+            <button id="uploadConfirmBtn" class="upload-confirm btn btn-success flex-1">Hochladen</button>
+            <button id="uploadCancelBtn" class="upload-cancel btn btn-ghost flex-1">Abbrechen</button>
         </div>
     </div>
 </dialog>
 
-<dialog id="authModal" class="app-modal-dialog">
-    <div class="auth-modal-content">
-        <h3>Anmelden bei VoxelShaper Hub</h3>
-        <div class="provider-buttons">
-            <button id="signInGoogleBtn" class="google">
-                <img src="https://www.gstatic.com/firebasejs/ui/2.0.0/images/auth/google.svg" alt="Google Icon" style="width:20px; height:20px;">
+<dialog id="authModal" class="modal">
+    <div class="auth-modal-content modal-box bg-base-200 text-base-content p-8 shadow-xl max-w-lg w-11/12 text-center">
+        <h3 class="font-bold text-lg text-primary mb-6">Anmelden bei VoxelShaper Hub</h3>
+        <div class="provider-buttons flex flex-col gap-3">
+            <button id="signInGoogleBtn" class="google btn btn-error text-white">
+                <img src="https://www.gstatic.com/firebasejs/ui/2.0.0/images/auth/google.svg" alt="Google Icon" class="w-5 h-5">
                 Mit Google anmelden
             </button>
-            <button id="signInGithubBtn" class="github">
-                <img src="https://www.gstatic.com/firebasejs/ui/2.0.0/images/auth/github.svg" alt="GitHub Icon" style="width:20px; height:20px;">
+            <button id="signInGithubBtn" class="github btn bg-neutral text-neutral-content hover:bg-neutral-focus">
+                <img src="https://www.gstatic.com/firebasejs/ui/2.0.0/images/auth/github.svg" alt="GitHub Icon" class="w-5 h-5">
                 Mit GitHub anmelden
             </button>
-            <button id="showEmailLoginFormBtn" class="email">
+            <button id="showEmailLoginFormBtn" class="email btn btn-info">
                 Mit E-Mail anmelden
             </button>
         </div>
 
-        <div id="emailLoginForm" class="email-login-form" style="display:none;">
+        <div id="emailLoginForm" class="email-login-form mt-6 pt-6 border-t border-base-content/20 hidden">
             <form id="emailAuthForm">
-                <input type="email" id="emailInput" placeholder="E-Mail" autocomplete="email">
-                <input type="password" id="passwordInput" placeholder="Passwort" autocomplete="current-password">
-                <button type="submit" id="emailSignInBtn">Anmelden</button>
-                <button type="button" id="emailSignUpBtn" style="margin-top: 10px;">Registrieren</button>
+                <input type="email" id="emailInput" placeholder="E-Mail" autocomplete="email" class="input input-bordered w-full bg-base-300 border-base-content/20 mb-3">
+                <input type="password" id="passwordInput" placeholder="Passwort" autocomplete="current-password" class="input input-bordered w-full bg-base-300 border-base-content/20 mb-3">
+                <button type="submit" id="emailSignInBtn" class="btn btn-primary w-full">Anmelden</button>
+                <button type="button" id="emailSignUpBtn" class="btn btn-secondary w-full mt-2">Registrieren</button>
             </form>
         </div>
 
-        <div class="close-button-container">
-            <button id="authModalCloseBtn">Schließen</button>
+        <div class="close-button-container mt-6">
+            <button id="authModalCloseBtn" class="btn btn-ghost">Schließen</button>
         </div>
     </div>
 </dialog>
 
 
-<div id="toast-container"></div>
+<div id="toast-container" class="toast toast-end z-50"></div>
 
 
-<div id="mobile-controls" class="mobile-only">
-    <button class="mobile-btn" id="mobile-undo" aria-label="Rückgängig machen">↺</button>
-    <button class="mobile-btn" id="mobile-redo" aria-label="Wiederholen">↻</button>
-    <button class="mobile-btn" id="mobile-save" aria-label="Speichern">💾</button>
-    <button class="mobile-btn" id="mobile-camera" aria-label="Kamera wechseln">📷</button>
-    <button class="mobile-btn" id="mobile-assist" aria-label="Touch-Assist umschalten">🧲</button>
-    <button class="mobile-btn" id="mobile-login-logout" aria-label="Anmelden oder Abmelden">🔑</button>
+<div id="mobile-controls" class="hidden md:hidden flex-col gap-3 fixed bottom-4 right-4 z-[1000]">
+    <button class="mobile-btn w-16 h-16 text-3xl rounded-full bg-base-300 text-base-content border-2 border-base-content cursor-pointer flex items-center justify-center shadow-lg hover:bg-base-content/20" id="mobile-undo" aria-label="Rückgängig machen">↺</button>
+    <button class="mobile-btn w-16 h-16 text-3xl rounded-full bg-base-300 text-base-content border-2 border-base-content cursor-pointer flex items-center justify-center shadow-lg hover:bg-base-content/20" id="mobile-redo" aria-label="Wiederholen">↻</button>
+    <button class="mobile-btn w-16 h-16 text-3xl rounded-full bg-base-300 text-base-content border-2 border-base-content cursor-pointer flex items-center justify-center shadow-lg hover:bg-base-content/20" id="mobile-save" aria-label="Speichern">💾</button>
+    <button class="mobile-btn w-16 h-16 text-3xl rounded-full bg-base-300 text-base-content border-2 border-base-content cursor-pointer flex items-center justify-center shadow-lg hover:bg-base-content/20" id="mobile-camera" aria-label="Kamera wechseln">📷</button>
+    <button class="mobile-btn w-16 h-16 text-3xl rounded-full bg-base-300 text-base-content border-2 border-base-content cursor-pointer flex items-center justify-center shadow-lg hover:bg-base-content/20" id="mobile-assist" aria-label="Touch-Assist umschalten">🧲</button>
+    <button class="mobile-btn w-16 h-16 text-3xl rounded-full bg-base-300 text-base-content border-2 border-base-content cursor-pointer flex items-center justify-center shadow-lg hover:bg-base-content/20" id="mobile-login-logout" aria-label="Anmelden oder Abmelden">🔑</button>
 </div>
 
 
@@ -1216,6 +635,10 @@ let db;
 let currentUserId = null;
 let currentUser = null;
 
+// Global variables for infoBox and helpToggleBtn
+let infoBox;
+let helpToggleBtn;
+
 function getChunkCoords(gx, gy, gz) {
     return {
         cx: Math.floor(gx / CHUNK_SIZE),
@@ -1465,7 +888,7 @@ function releasePointer(id, eventType) {
         touchIndicator.style.display = 'none';
         fixedDragPlaneParams = { level: null, axis: null };
         if (currentMode !== Modes.MEASURE || (currentMode === Modes.MEASURE && measurementStartPoint === null && measurementEndPoint === null)) {
-            distanceDisplay.style.display = 'none';
+            distanceDisplay.classList.add('hidden');
         }
         initialDragVoxelWorldPos = null;
         dragAxisLock = null;
@@ -1535,7 +958,7 @@ function cycleMode() {
             currentMode = Modes.ADD;
             measurementStartPoint = null;
             measurementEndPoint = null;
-            distanceDisplay.style.display = 'none';
+            distanceDisplay.classList.add('hidden');
             previewLineInstancedMesh.count = 0;
             previewLineInstancedMesh.instanceMatrix.needsUpdate = true;
             previewLineVoxels = [];
@@ -1556,8 +979,10 @@ function setActivePreset(index) {
         presetBoxes.forEach((box, i) => {
             if (i === index) {
                 box.classList.add('active');
+                box.classList.add('border-primary', 'shadow-lg', 'shadow-primary/50');
             } else {
                 box.classList.remove('active');
+                box.classList.remove('border-primary', 'shadow-lg', 'shadow-primary/50');
             }
         });
         activePresetIndex = index;
@@ -2066,7 +1491,7 @@ function resetToDefaultProject() {
     localStorage.setItem('voxelPresetColor3', presetColors[2]);
     presetBoxes.forEach((box, i) => {
         box.value = presetColors[i];
-        box.classList.remove('active');
+        box.classList.remove('active', 'border-primary', 'shadow-lg', 'shadow-primary/50');
     });
     activePresetIndex = -1;
 
@@ -2077,7 +1502,7 @@ function resetToDefaultProject() {
 
     measurementStartPoint = null;
     measurementEndPoint = null;
-    distanceDisplay.style.display = 'none';
+    distanceDisplay.classList.add('hidden');
     previewLineInstancedMesh.count = 0;
     previewLineInstancedMesh.instanceMatrix.needsUpdate = true;
     previewLineVoxels = [];
@@ -2209,12 +1634,12 @@ function loadProjectData(projectData) {
                     templateImageMesh.scale.fromArray(templateImageData.scale);
                     templateImageMesh.renderOrder = -1;
                     scene.add(templateImageMesh);
-                    document.getElementById('removeImageTemplateBtn').style.display = 'inline-block';
+                    document.getElementById('removeImageTemplateBtn').classList.remove('hidden');
                 }, undefined, (err) => {
                     console.error('Error loading template image texture:', err);
                     templateImageMesh = null;
                     templateImageData = null;
-                    document.getElementById('removeImageTemplateBtn').style.display = 'none';
+                    document.getElementById('removeImageTemplateBtn').classList.add('hidden');
                 });
             }
         }
@@ -2224,7 +1649,7 @@ function loadProjectData(projectData) {
 
         measurementStartPoint = null;
         measurementEndPoint = null;
-        distanceDisplay.style.display = 'none';
+        distanceDisplay.classList.add('hidden');
         previewLineInstancedMesh.count = 0;
         previewLineInstancedMesh.instanceMatrix.needsUpdate = true;
         previewLineVoxels = [];
@@ -2397,19 +1822,23 @@ function exportOBJ() {
 function showToast(title, message, type = 'info', duration = 3000) {
     const toastContainer = document.getElementById('toast-container');
     const toast = document.createElement('div');
-    toast.className = `toast-message ${type}`;
+    toast.className = `alert shadow-lg ${type === 'info' ? 'alert-info' : type === 'success' ? 'alert-success' : type === 'error' ? 'alert-error' : type === 'warning' ? 'alert-warning' : ''}`;
     toast.innerHTML = `
+        ${type === 'info' ? '<svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" class="stroke-current shrink-0 h-6 w-6"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>' : ''}
+        ${type === 'success' ? '<svg xmlns="http://www.w3.org/2000/svg" class="stroke-current shrink-0 h-6 w-6" fill="none" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>' : ''}
+        ${type === 'error' ? '<svg xmlns="http://www.w3.org/2000/svg" class="stroke-current shrink-0 h-6 w-6" fill="none" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 14l2-2m0 0l2-2m-2 2l-2-2m2 2l2 2m7-2a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>' : ''}
+        ${type === 'warning' ? '<svg xmlns="http://www.w3.org/2000/svg" class="stroke-current shrink-0 h-6 w-6" fill="none" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 14l2-2m0 0l2-2m-2 2l-2-2m2 2l2 2m7-2a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>' : ''}
         <div>
             <strong>${title}</strong><br>
             <span>${message}</span>
         </div>
-        <button class="close-btn">&times;</button>
+        <button class="close-btn btn btn-ghost btn-sm">&times;</button>
     `;
 
     toastContainer.appendChild(toast);
 
-    void toast.offsetWidth;
-    toast.classList.add('show');
+    void toast.offsetWidth; // Trigger reflow to apply initial opacity
+    toast.classList.add('show'); // This class is not defined in DaisyUI, will need to be handled by custom animation or removed
 
     const closeBtn = toast.querySelector('.close-btn');
     closeBtn.addEventListener('click', () => {
@@ -2481,7 +1910,7 @@ function handleImageFileSelect(event) {
                 scaledHeight: planeHeight
             };
 
-            document.getElementById('removeImageTemplateBtn').style.display = 'inline-block';
+            document.getElementById('removeImageTemplateBtn').classList.remove('hidden');
             showToast('Bildvorlage geladen', 'Bild als Vorlage erfolgreich geladen.', 'success');
         };
         img.src = base64Image;
@@ -2496,7 +1925,7 @@ function removeImageTemplate(fromLoad = false) {
         templateImageMesh.material.dispose();
         templateImageMesh = null;
         templateImageData = null;
-        document.getElementById('removeImageTemplateBtn').style.display = 'none';
+        document.getElementById('removeImageTemplateBtn').classList.add('hidden');
         if (!fromLoad) {
             showToast('Bildvorlage entfernt', 'Bildvorlage erfolgreich entfernt.', 'info');
         }
@@ -2673,7 +2102,7 @@ async function uploadProjectToHub() {
 
 function openAuthModal() {
     document.getElementById('authModal').showModal();
-    document.getElementById('emailLoginForm').style.display = 'none';
+    document.getElementById('emailLoginForm').classList.add('hidden');
 }
 
 function closeAuthModal() {
@@ -2770,6 +2199,9 @@ window.onload = async function() {
         containerDiv = document.getElementById('container');
         touchIndicator = document.getElementById('touch-indicator');
         distanceDisplay = document.getElementById('distanceDisplay');
+        // Assign infoBox and helpToggleBtn here
+        infoBox = document.getElementById('infoBox');
+        helpToggleBtn = document.getElementById('helpToggleBtn');
 
         scene = new THREE.Scene();
         scene.background = new THREE.Color(0x282c34);
@@ -2790,7 +2222,7 @@ window.onload = async function() {
         ren.shadowMap.enabled = true;
         ren.shadowMap.type = THREE.PCFSoftShadowMap;
       
-        const ambientLight = new THREE.AmbientLight(0x202020);
+        const ambientLight = new THREE.AmbientLight(0x606060);
         scene.add(ambientLight);
 
         mainDirectionalLight = new THREE.DirectionalLight(0xffffff, 1.0);
@@ -2896,7 +2328,7 @@ window.onload = async function() {
         document.getElementById('color-picker').addEventListener('input', (e) => {
             currentColor = e.target.value;
             localStorage.setItem('voxelEditorColor', currentColor);
-            presetBoxes.forEach(box => box.classList.remove('active'));
+            presetBoxes.forEach(box => box.classList.remove('active', 'border-primary', 'shadow-lg', 'shadow-primary/50'));
             activePresetIndex = -1;
         });
         document.getElementById('color-picker').addEventListener('blur', (e) => {
@@ -3011,27 +2443,29 @@ window.onload = async function() {
             document.getElementById('current-mode').textContent = `Modus: ${currentMode}`;
             measurementStartPoint = null;
             measurementEndPoint = null;
-            distanceDisplay.style.display = 'none';
+            distanceDisplay.classList.add('hidden');
             updatePreviewVoxel(0, 0, 0, false);
             previewLineInstancedMesh.count = 0;
             previewLineInstancedMesh.instanceMatrix.needsUpdate = true;
             previewLineVoxels = [];
         });
 
-        const infoBox = document.getElementById('infoBox');
-        const helpToggleBtn = document.getElementById('helpToggleBtn');
-        let showInfoBox = localStorage.getItem('showInfoBox') === 'true'; 
-
+        // Ensure infoBox and helpToggleBtn are initialized before this
         function updateInfoBoxVisibility() {
-            infoBox.style.display = showInfoBox ? 'block' : 'none';
-            helpToggleBtn.textContent = showInfoBox ? 'Hilfe ausblenden' : 'Hilfe anzeigen';
+            if (infoBox) { // Add a check to ensure infoBox is not null
+                infoBox.classList.toggle('hidden', !showInfoBox);
+            }
+            if (helpToggleBtn) { // Add a check to ensure helpToggleBtn is not null
+                helpToggleBtn.textContent = showInfoBox ? 'Hilfe ausblenden' : 'Hilfe anzeigen';
+            }
             localStorage.setItem('showInfoBox', showInfoBox);
         }
+        let showInfoBox = localStorage.getItem('showInfoBox') === 'true'; 
         helpToggleBtn.addEventListener('click', () => {
             showInfoBox = !showInfoBox;
             updateInfoBoxVisibility();
         });
-        updateInfoBoxVisibility();
+        updateInfoBoxVisibility(); // Call initially after elements are assigned
 
         document.getElementById('resetCameraBtn').addEventListener('click', resetCameraPosition);
 
@@ -3042,10 +2476,13 @@ window.onload = async function() {
         const menuToggle = document.getElementById('menuToggle');
         menuToggle.addEventListener('click', () => {
             const controlsPanel = document.getElementById('controls');
-            if (controlsPanel.style.display === 'none' || controlsPanel.style.display === '') {
-                controlsPanel.style.display = 'flex';
+            // Toggle 'hidden' class based on its current state
+            controlsPanel.classList.toggle('hidden');
+            // If controls are visible, ensure they are flex on mobile
+            if (!controlsPanel.classList.contains('hidden')) {
+                controlsPanel.classList.add('flex');
             } else {
-                controlsPanel.style.display = 'none';
+                controlsPanel.classList.remove('flex');
             }
         });
 
@@ -3053,17 +2490,19 @@ window.onload = async function() {
         function handleMediaQueryChange(e) {
             isMobile = e.matches;
             const controlsPanel = document.getElementById('controls');
+            const mobileControls = document.getElementById('mobile-controls');
             if (e.matches) {
-                controlsPanel.style.display = 'none';
-                menuToggle.style.display = 'block';
+                controlsPanel.classList.add('hidden'); // Hide desktop controls on mobile
+                mobileControls.classList.remove('hidden'); // Show mobile controls
             } else {
-                controlsPanel.style.display = 'flex';
-                menuToggle.style.display = 'none';
+                controlsPanel.classList.remove('hidden'); // Show desktop controls on desktop
+                controlsPanel.classList.add('flex'); // Ensure flex display for desktop controls
+                mobileControls.classList.add('hidden'); // Hide mobile controls
             }
             onResize();
         }
         mediaQuery.addListener(handleMediaQueryChange);
-        handleMediaQueryChange(mediaQuery);
+        handleMediaQueryChange(mediaQuery); // Initial check
 
         document.getElementById('mobile-undo').addEventListener('click', undo);
         document.getElementById('mobile-redo').addEventListener('click', redo);
@@ -3074,7 +2513,8 @@ window.onload = async function() {
         document.getElementById('mobile-assist').addEventListener('click', () => {
             touchAssistEnabled = !touchAssistEnabled;
             const assistButton = document.getElementById('mobile-assist');
-            assistButton.style.borderColor = touchAssistEnabled ? '#90caf9' : 'white';
+            assistButton.classList.toggle('border-primary', touchAssistEnabled);
+            assistButton.classList.toggle('border-base-content', !touchAssistEnabled); // Revert to default border
             showToast('Touch Assist', `Magnetisches Zielen ist jetzt ${touchAssistEnabled ? 'aktiviert' : 'deaktiviert'}.`, 'info');
         });
         document.getElementById('mobile-login-logout').addEventListener('click', loginLogout);
@@ -3137,9 +2577,9 @@ window.onload = async function() {
     currentUser = user;
     loginLogoutBtn.textContent = user ? 'Abmelden' : 'Anmelden';
     userIdDisplay.innerHTML = user
-        ? `<img src="${user.photoURL || 'https://placehold.co/24x24/cccccc/000000?text=U'}" alt="User Avatar"> ${user.uid}`
+        ? `<img src="${user.photoURL || 'https://placehold.co/24x24/cccccc/000000?text=U'}" alt="User Avatar" class="w-6 h-6 rounded-full align-middle"> ${user.uid}`
         : '';
-    uploadToHubBtn.style.display = user ? 'inline-block' : 'none';
+    uploadToHubBtn.classList.toggle('hidden', !user);
     document.getElementById('mobile-login-logout').textContent = user ? '🚪' : '🔑';
 
     if (user) {
@@ -3206,7 +2646,7 @@ window.onload = async function() {
         document.getElementById('emailSignInBtn').addEventListener('click', window.signInEmailPassword);
         document.getElementById('emailSignUpBtn').addEventListener('click', window.signUpEmailPassword);
         document.getElementById('showEmailLoginFormBtn').addEventListener('click', () => {
-            document.getElementById('emailLoginForm').style.display = 'block';
+            document.getElementById('emailLoginForm').classList.remove('hidden');
         });
 
         document.getElementById('uploadToHubBtn').addEventListener('click', openUploadModal);
@@ -3368,7 +2808,7 @@ function onPointerDown(e) {
 
                     lastActionVoxelCoords = { ...initialDragVoxelCoords };
                     initialDragVoxelWorldPos = new THREE.Vector3(initialDragVoxelCoords.gx * VS + HALF, initialDragVoxelCoords.gy * VS + HALF, initialDragVoxelCoords.gz * VS + HALF);
-                    distanceDisplay.style.display = 'block';
+                    distanceDisplay.classList.remove('hidden');
                 }
             }
         } else {
@@ -3390,7 +2830,7 @@ function onPointerDown(e) {
                     if (measurementStartPoint === null) {
                         measurementStartPoint = { ...clickedVoxel };
                         measurementEndPoint = null;
-                        distanceDisplay.style.display = 'none';
+                        distanceDisplay.classList.add('hidden');
                         previewLineVoxels = [{ gx: measurementStartPoint.gx, gy: measurementStartPoint.gy, gz: measurementStartPoint.gz }];
                         updatePreviewLineMesh();
                     } else {
@@ -3398,7 +2838,7 @@ function onPointerDown(e) {
                         const dist = new THREE.Vector3(measurementStartPoint.gx * VS, measurementStartPoint.gy * VS, measurementStartPoint.gz * VS).distanceTo(
                                      new THREE.Vector3(measurementEndPoint.gx * VS, measurementEndPoint.gy * VS, measurementEndPoint.gz * VS));
                         distanceDisplay.textContent = `Distanz: ${dist.toFixed(2)} mm`;
-                        distanceDisplay.style.display = 'block';
+                        distanceDisplay.classList.remove('hidden');
                         previewLineInstancedMesh.count = 0;
                         previewLineInstancedMesh.instanceMatrix.needsUpdate = true;
                         previewLineVoxels = [];
@@ -3448,7 +2888,7 @@ function onPointerDown(e) {
                 if (measurementStartPoint === null) {
                     measurementStartPoint = { ...clickedVoxel };
                     measurementEndPoint = null;
-                    distanceDisplay.style.display = 'none';
+                    distanceDisplay.classList.add('hidden');
                     previewLineVoxels = [{ gx: measurementStartPoint.gx, gy: measurementStartPoint.gy, gz: measurementStartPoint.gz }];
                     updatePreviewLineMesh();
                 } else {
@@ -3456,7 +2896,7 @@ function onPointerDown(e) {
                     const dist = new THREE.Vector3(measurementStartPoint.gx * VS, measurementStartPoint.gy * VS, measurementStartPoint.gz * VS).distanceTo(
                                      new THREE.Vector3(measurementEndPoint.gx * VS, measurementEndPoint.gy * VS, measurementEndPoint.gz * VS));
                     distanceDisplay.textContent = `Distanz: ${dist.toFixed(2)} mm`;
-                    distanceDisplay.style.display = 'block';
+                    distanceDisplay.classList.remove('hidden');
                     previewLineInstancedMesh.count = 0;
                     previewLineInstancedMesh.instanceMatrix.needsUpdate = true;
                     previewLineVoxels = [];
@@ -3485,7 +2925,7 @@ function onPointerDown(e) {
                 voxelsAtDragStart = null;
                 currentDragVoxels.clear();
                 previousFrameDragVoxels.clear();
-                distanceDisplay.style.display = 'none';
+                distanceDisplay.classList.add('hidden');
                 initialDragVoxelWorldPos = null;
                 return;
             }
@@ -3523,7 +2963,7 @@ function onPointerDown(e) {
 
             lastActionVoxelCoords = { ...initialDragVoxelCoords };
             initialDragVoxelWorldPos = new THREE.Vector3(initialDragVoxelCoords.gx * VS + HALF, initialDragVoxelCoords.gy * VS + HALF, initialDragVoxelCoords.gz * VS + HALF);
-            distanceDisplay.style.display = 'block';
+            distanceDisplay.classList.remove('hidden');
         } else {
             pointerIsDown = false;
             initialClickPos = null;
@@ -3531,7 +2971,7 @@ function onPointerDown(e) {
             voxelsAtDragStart = null;
             currentDragVoxels.clear();
             previousFrameDragVoxels.clear();
-            distanceDisplay.style.display = 'none';
+            distanceDisplay.classList.add('hidden');
             initialDragVoxelWorldPos = null;
         }
     }
@@ -3646,11 +3086,11 @@ function onPointerMove(e) {
                 const dist = new THREE.Vector3(measurementStartPoint.gx * VS, measurementStartPoint.gy * VS, measurementStartPoint.gz * VS).distanceTo(
                              new THREE.Vector3(currentTargetVoxel.gx * VS, currentTargetVoxel.gy * VS, currentTargetVoxel.gz * VS));
                 distanceDisplay.textContent = `Distanz: ${dist.toFixed(2)} mm`;
-                distanceDisplay.style.display = 'block';
+                distanceDisplay.classList.remove('hidden');
                 previewLineVoxels = getVoxelsOnLine(measurementStartPoint, currentTargetVoxel, currentMode, currentColor, 1, 1, 1);
                 updatePreviewLineMesh();
             } else {
-                distanceDisplay.style.display = 'none';
+                distanceDisplay.classList.add('hidden');
                 previewLineInstancedMesh.count = 0;
                 previewLineInstancedMesh.instanceMatrix.needsUpdate = true;
                 previewLineVoxels = [];
@@ -3660,7 +3100,7 @@ function onPointerMove(e) {
 
         handleGesture();
         updatePreviewVoxel(0, 0, 0, false);
-        distanceDisplay.style.display = 'none';
+        distanceDisplay.classList.add('hidden');
         previewLineInstancedMesh.count = 0;
         previewLineInstancedMesh.instanceMatrix.needsUpdate = true;
         previewLineVoxels = [];
@@ -3685,11 +3125,11 @@ function onPointerMove(e) {
                 const dist = new THREE.Vector3(measurementStartPoint.gx * VS, measurementStartPoint.gy * VS, measurementStartPoint.gz * VS).distanceTo(
                              new THREE.Vector3(tempTargetVoxel.gx * VS, tempTargetVoxel.gy * VS, tempTargetVoxel.gz * VS));
                 distanceDisplay.textContent = `Distanz: ${dist.toFixed(2)} mm`;
-                distanceDisplay.style.display = 'block';
+                distanceDisplay.classList.remove('hidden');
                 previewLineVoxels = getVoxelsOnLine(measurementStartPoint, tempTargetVoxel, currentMode, currentColor, 1, 1, 1);
                 updatePreviewLineMesh();
             } else {
-                distanceDisplay.style.display = 'none';
+                distanceDisplay.classList.add('hidden');
                 previewLineInstancedMesh.count = 0;
                 previewLineInstancedMesh.instanceMatrix.needsUpdate = true;
                 previewLineVoxels = [];
@@ -3799,9 +3239,9 @@ function onPointerMove(e) {
                 const currentVoxelWorldPos = new THREE.Vector3(finalTargetVoxelForDrawing.gx * VS + HALF, finalTargetVoxelForDrawing.gy * VS + HALF, finalTargetVoxelForDrawing.gz * VS + HALF);
                 const distance = initialDragVoxelWorldPos.distanceTo(currentVoxelWorldPos);
                 distanceDisplay.textContent = `Distanz: ${distance.toFixed(2)} mm`;
-                distanceDisplay.style.display = 'block';
+                distanceDisplay.classList.remove('hidden');
             } else {
-                distanceDisplay.style.display = 'none';
+                distanceDisplay.classList.add('hidden');
             }
 
             if (finalTargetVoxelForDrawing) {
@@ -3811,7 +3251,7 @@ function onPointerMove(e) {
             }
 
         } else {
-            distanceDisplay.style.display = 'none';
+            distanceDisplay.classList.add('hidden');
             let hoverTargetVoxel = calculateTargetVoxelCoords(e.clientX, e.clientY, currentMode, 'mouse');
             if (hoverTargetVoxel) {
                 hoverTargetVoxel.gx = Math.max(0, Math.min(GRID - dimX, hoverTargetVoxel.gx));
@@ -3914,7 +3354,7 @@ function onPointerUp(e) {
         }
         releasePointer(e.pointerId, e);
         if (currentMode !== Modes.MEASURE || (currentMode === Modes.MEASURE && measurementStartPoint === null && measurementEndPoint === null)) {
-            distanceDisplay.style.display = 'none';
+            distanceDisplay.classList.add('hidden');
         }
         initialDragVoxelWorldPos = null;
         dragAxisLock = null;
@@ -4017,7 +3457,7 @@ function onPointerUp(e) {
     voxelsAtDragStart = null;
     fixedDragPlaneParams = { level: null, axis: null };
     if (currentMode !== Modes.MEASURE || (currentMode === Modes.MEASURE && measurementStartPoint === null && measurementEndPoint === null)) {
-        distanceDisplay.style.display = 'none';
+        distanceDisplay.classList.add('hidden');
     }
     initialDragVoxelWorldPos = null;
     dragAxisLock = null;
@@ -4092,7 +3532,7 @@ function onPointerLeave(e) {
             voxelsAtDragStart = null;
             updatePreviewVoxel(0, 0, 0, false);
             if (currentMode !== Modes.MEASURE || (currentMode === Modes.MEASURE && measurementStartPoint === null && measurementEndPoint === null)) {
-                distanceDisplay.style.display = 'none';
+                distanceDisplay.classList.add('hidden');
             }
             initialDragVoxelWorldPos = null;
             dragAxisLock = null;
@@ -4413,44 +3853,19 @@ function onKeyUp(e) {
 
 function updateBlockSizeButtonsActiveState() {
     document.querySelectorAll('.block-size-btn').forEach(btn => {
-        btn.classList.remove('active');
+        btn.classList.remove('active', 'border-primary', 'shadow-lg', 'shadow-primary/50');
     });
 
-    document.getElementById('setDynamicBlockSizeBtn').classList.remove('active');
+    document.getElementById('setDynamicBlockSizeBtn').classList.remove('active', 'border-primary', 'shadow-lg', 'shadow-primary/50');
 
     if (useDynamicBlockDim) {
-        document.getElementById('setDynamicBlockSizeBtn').classList.add('active');
+        document.getElementById('setDynamicBlockSizeBtn').classList.add('active', 'border-primary', 'shadow-lg', 'shadow-primary/50');
     } else {
         const activeBtn = document.getElementById(`block-size-${currentBlockSize}x${currentBlockSize}`);
         if (activeBtn) {
-            activeBtn.classList.add('active');
+            activeBtn.classList.add('active', 'border-primary', 'shadow-lg', 'shadow-primary/50');
         } else {
-            document.getElementById('block-size-1x1').classList.add('active');
-            currentBlockSize = 1;
-            localStorage.setItem('voxelEditorCurrentBlockSize', currentBlockSize);
-        }
-    }
-}
-
-function updateBlockSizeButtonsActiveState() {
-    // Remove active class from all fixed size buttons
-    document.querySelectorAll('.block-size-btn').forEach(btn => {
-        btn.classList.remove('active');
-    });
-
-    // Remove active class from dynamic block size button
-    document.getElementById('setDynamicBlockSizeBtn').classList.remove('active');
-
-    if (useDynamicBlockDim) {
-        document.getElementById('setDynamicBlockSizeBtn').classList.add('active');
-    } else {
-        // Add active class to the currently selected fixed size button
-        const activeBtn = document.getElementById(`block-size-${currentBlockSize}x${currentBlockSize}`);
-        if (activeBtn) {
-            activeBtn.classList.add('active');
-        } else {
-            // If currentBlockSize doesn't match a fixed button, default to 1x1x1
-            document.getElementById('block-size-1x1').classList.add('active');
+            document.getElementById('block-size-1x1').classList.add('active', 'border-primary', 'shadow-lg', 'shadow-primary/50');
             currentBlockSize = 1;
             localStorage.setItem('voxelEditorCurrentBlockSize', currentBlockSize);
         }
