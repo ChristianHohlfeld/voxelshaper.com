@@ -68,9 +68,9 @@ input[type="color"]::-moz-color-swatch { border: none; border-radius: 50%; }
     
     <label for="color-picker" class="text-base-content">Farbe:</label>
     <input type="color" id="color-picker" value="#ffffff" aria-label="Aktuelle Farbe wählen" class="input input-bordered w-10 h-10 p-0 rounded-full cursor-pointer border-base-content/20">
-    <input type="color" id="color-preset-1" class="color-preset-box w-10 h-10 rounded-md border-2 border-base-content/20 cursor-pointer transition-all duration-200 hover:scale-110" value="#8B4513" aria-label="Voreingestellte Farbe 1">
-    <input type="color" id="color-preset-2" class="color-preset-box w-10 h-10 rounded-md border-2 border-base-content/20 cursor-pointer transition-all duration-200 hover:scale-110" value="#708237" aria-label="Voreingestellte Farbe 2">
-    <input type="color" id="color-preset-3" class="color-preset-box w-10 h-10 rounded-md border-2 border-base-content/20 cursor-pointer transition-all duration-200 hover:scale-110" value="#6495ED" aria-label="Voreingestellte Farbe 3">
+    <input type="color" id="color-preset-1" class="color-preset-box w-10 h-10 rounded-md border-2 border-base-content/20 cursor-pointer transition-all duration-200 hover:scale-110" value="#E4002B" aria-label="Voreingestellte Farbe 1">
+    <input type="color" id="color-preset-2" class="color-preset-box w-10 h-10 rounded-md border-2 border-base-content/20 cursor-pointer transition-all duration-200 hover:scale-110" value="#00A040" aria-label="Voreingestellte Farbe 2">
+    <input type="color" id="color-preset-3" class="color-preset-box w-10 h-10 rounded-md border-2 border-base-content/20 cursor-pointer transition-all duration-200 hover:scale-110" value="#0057B8" aria-label="Voreingestellte Farbe 3">
 
     <button id="modeToggle" aria-label="Modus wechseln" class="btn btn-sm btn-neutral">Modus wechseln</button><span id="current-mode" class="font-bold text-success min-w-40 text-center">Modus: Hinzufügen (Linie/Fläche)</span>
     <button id="clearBtn" aria-label="Alles löschen" class="btn btn-sm btn-neutral">Alles löschen</button>
@@ -315,9 +315,9 @@ let dynamicBlockDim = {
 let useDynamicBlockDim = localStorage.getItem('voxelEditorUseDynamicBlockDim') === 'true';
 
 const presetColors = [
-    localStorage.getItem('voxelPresetColor1') || '#8B4513',
-    localStorage.getItem('voxelPresetColor2') || '#708237',
-    localStorage.getItem('voxelPresetColor3') || '#6495ED'
+    localStorage.getItem('voxelPresetColor1') || '#E4002B', // Mario Red
+    localStorage.getItem('voxelPresetColor2') || '#00A040', // Luigi Green
+    localStorage.getItem('voxelPresetColor3') || '#0057B8'  // Nintendo Blue
 ];
 let activePresetIndex = -1;
 let presetBoxes = [];
@@ -384,6 +384,104 @@ const predefinedCategories = ["Spielzeug", "Dekoration", "Funktional", "Kunst", 
 
 let auth, db, currentUserId, currentUser;
 let infoBox, helpToggleBtn;
+
+// Minimal VoxelShaperIO for OBJ export
+const VoxelShaperIO = {
+    voxToOBJ: function(voxModel, voxelSize) {
+        let obj = '# VoxelShaper OBJ Export\n';
+        let mtls = '# VoxelShaper MTL Export\n';
+        let vertexCount = 0;
+        const materials = new Map(); // Map color hex to material name
+
+        // Collect unique colors and assign material names
+        voxModel.voxels.forEach(v => {
+            if (!materials.has(v.color)) {
+                const matName = `material_${materials.size + 1}`;
+                materials.set(v.color, matName);
+                const c = new THREE.Color(v.color);
+                mtls += `newmtl ${matName}\n`;
+                mtls += `Kd ${c.r.toFixed(4)} ${c.g.toFixed(4)} ${c.b.toFixed(4)}\n`; // Diffuse color
+                mtls += `Ka ${c.r.toFixed(4)} ${c.g.toFixed(4)} ${c.b.toFixed(4)}\n`; // Ambient color
+                mtls += `Ks 0.0 0.0 0.0\n`; // Specular color (no shininess)
+                mtls += `Ns 0.0\n`; // Shininess
+                mtls += `d 1.0\n`; // Dissolve (alpha)
+                mtls += `illum 1\n\n`; // Illumination model
+            }
+        });
+
+        obj += `mtllib voxel_model.mtl\n`;
+
+        voxModel.voxels.forEach(v => {
+            const x = v.x * voxelSize;
+            const y = v.y * voxelSize;
+            const z = v.z * voxelSize;
+
+            // Vertices for a unit cube
+            const verts = [
+                [x, y, z], [x + voxelSize, y, z], [x, y + voxelSize, z], [x + voxelSize, y + voxelSize, z],
+                [x, y, z + voxelSize], [x + voxelSize, y, z + voxelSize], [x, y + voxelSize, z + voxelSize], [x + voxelSize, y + voxelSize, z + voxelSize]
+            ];
+
+            verts.forEach(vert => {
+                obj += `v ${vert[0].toFixed(4)} ${vert[1].toFixed(4)} ${vert[2].toFixed(4)}\n`;
+            });
+
+            const matName = materials.get(v.color);
+            obj += `usemtl ${matName}\n`;
+
+            // Faces (assuming standard cube faces)
+            const faces = [
+                [1, 2, 4, 3], // Front
+                [5, 6, 8, 7], // Back
+                [1, 5, 7, 3], // Left
+                [2, 6, 8, 4], // Right
+                [3, 4, 8, 7], // Top
+                [1, 2, 6, 5]  // Bottom
+            ];
+
+            faces.forEach(idx => {
+                obj += `f`;
+                idx.forEach(vIdx => {
+                    obj += ` ${vertexCount + vIdx}`;
+                });
+                obj += `\n`;
+            });
+            vertexCount += 8;
+        });
+
+        return { obj: obj, mtl: mtls };
+    },
+    saveBlob: function(data, filename) {
+        const objBlob = new Blob([data.obj], { type: 'text/plain' });
+        const mtlBlob = new Blob([data.mtl], { type: 'text/plain' });
+
+        const objUrl = URL.createObjectURL(objBlob);
+        const mtlUrl = URL.createObjectURL(mtlBlob);
+
+        const aObj = document.createElement('a');
+        aObj.href = objUrl;
+        aObj.download = filename;
+        document.body.appendChild(aObj);
+        aObj.click();
+        document.body.removeChild(aObj);
+        URL.revokeObjectURL(objUrl);
+
+        const aMtl = document.createElement('a');
+        aMtl.href = mtlUrl;
+        aMtl.download = filename.replace('.obj', '.mtl');
+        document.body.appendChild(aMtl);
+        aMtl.click();
+        document.body.removeChild(aMtl);
+        URL.revokeObjectURL(mtlUrl);
+    },
+    VoxModel: function(width, height, depth, voxels) {
+        this.width = width;
+        this.height = height;
+        this.depth = depth;
+        this.voxels = voxels; // Array of {x, y, z, c}
+    }
+};
+
 
 function getChunkCoords(gx, gy, gz) { return { cx: Math.floor(gx / CHUNK_SIZE), cy: Math.floor(gy / CHUNK_SIZE), cz: Math.floor(gz / CHUNK_SIZE) }; }
 function getChunkKey(cx, cy, cz) { return `${cx},${cy},${cz}`; }
@@ -806,7 +904,7 @@ function resetToDefaultProject() {
     dynamicBlockDim = { x: 1, y: 1, z: 1 }; useDynamicBlockDim = false;
     localStorage.setItem('voxelEditorDynamicBlockDimX', dynamicBlockDim.x); localStorage.setItem('voxelEditorDynamicBlockDimY', dynamicBlockDim.y); localStorage.setItem('voxelEditorDynamicBlockDimZ', dynamicBlockDim.z); localStorage.setItem('voxelEditorUseDynamicBlockDim', useDynamicBlockDim);
     document.getElementById('dynamic-block-x').value = dynamicBlockDim.x; document.getElementById('dynamic-block-y').value = dynamicBlockDim.y; document.getElementById('dynamic-block-z').value = dynamicBlockDim.z; updateBlockSizeButtonsActiveState();
-    presetColors[0] = '#8B4513'; presetColors[1] = '#708237'; presetColors[2] = '#6495ED';
+    presetColors[0] = '#E4002B'; presetColors[1] = '#00A040'; presetColors[2] = '#0057B8';
     localStorage.setItem('voxelPresetColor1', presetColors[0]); localStorage.setItem('voxelPresetColor2', presetColors[1]); localStorage.setItem('voxelPresetColor3', presetColors[2]);
     presetBoxes.forEach((box, i) => { box.value = presetColors[i]; box.classList.remove('active', 'border-primary', 'shadow-lg', 'shadow-primary/50'); });
     activePresetIndex = -1; removeImageTemplate(true); history.length = 0; historyPointer = -1;
@@ -951,7 +1049,7 @@ function exportOBJ() {
     if (voxels.size === 0) { showToast('Export fehlgeschlagen', 'Keine Voxel zum Exportieren vorhanden!', 'warning'); return; }
     const voxelsToExport = []; let maxX = 0, maxY = 0, maxZ = 0;
     voxels.forEach((data, k) => {
-        const [x, y, z] = parseKey(k); voxelsToExport.push({ x, y, z, c: 1 });
+        const [x, y, z] = parseKey(k); voxelsToExport.push({ x, y, z, c: 1, color: data.color }); // Pass color for OBJ export
         maxX = Math.max(maxX, x); maxY = Math.max(maxY, y); maxZ = Math.max(maxZ, z);
     });
     const voxModel = new VoxelShaperIO.VoxModel(maxX + 1, maxY + 1, maxZ + 1, voxelsToExport);
@@ -1013,8 +1111,14 @@ function removeImageTemplate(fromLoad = false) {
 
 function getCurrentBlockDimensions() {
     let dimX = 1, dimY = 1, dimZ = 1;
+    // If in FREE_ADD mode, always draw 1x1x1 voxels
+    if (currentMode === Modes.FREE_ADD) {
+        return { dimX: 1, dimY: 1, dimZ: 1 };
+    }
+    // Existing logic for other modes
     if (useDynamicBlockDim) { dimX = dynamicBlockDim.x; dimY = dynamicBlockDim.y; dimZ = dynamicBlockDim.z; }
     else {
+        // For fixed block sizes, the dimensions depend on the drawing axis
         if (currentDrawingAxis === 'y') { dimX = currentBlockSize; dimZ = currentBlockSize; }
         else if (currentDrawingAxis === 'x') { dimY = currentBlockSize; dimZ = currentBlockSize; }
         else { dimX = currentBlockSize; dimY = currentBlockSize; }
@@ -1032,7 +1136,7 @@ function openUploadModal() {
     if (voxels.size === 0) { showToast('Upload fehlgeschlagen', 'Die Szene ist leer. Bitte erstellen Sie zuerst ein Modell.', 'warning'); return; }
     document.getElementById('uploadTitle').value = projectTitle; document.getElementById('uploadDescription').value = projectDescription;
     document.getElementById('uploadCategory').value = projectCategory; document.getElementById('uploadTags').value = projectTags.join(', ');
-    document.querySelector(`input[name="uploadVisibility"][value="${projectVisibility}"]`).checked = true;
+    document.querySelector(`input[name="uploadVisibility"][value="${projectVisibility}"]`).checked = true; // Corrected to use value directly
     const uploadCategorySelect = document.getElementById('uploadCategory');
     uploadCategorySelect.innerHTML = '<option value="" disabled selected>Kategorie auswählen</option>';
     predefinedCategories.forEach(cat => { const opt = document.createElement('option'); opt.value = cat; opt.textContent = cat; uploadCategorySelect.appendChild(opt); });
@@ -1097,265 +1201,97 @@ function closeAllModals() {
 }
 window.closeAllModals = closeAllModals;
 
-window.onload = async function() {
-    closeAllModals();
-    try {
-        cvs = document.getElementById('voxelCanvas'); containerDiv = document.getElementById('container');
-        touchIndicator = document.getElementById('touch-indicator'); distanceDisplay = document.getElementById('distanceDisplay');
-        infoBox = document.getElementById('infoBox'); helpToggleBtn = document.getElementById('helpToggleBtn');
-        scene = new THREE.Scene(); scene.background = new THREE.Color(0x282c34);
-        cam = new THREE.PerspectiveCamera(75, containerDiv.clientWidth / containerDiv.clientHeight, 0.1, 1000);
-        resetCameraPosition(); euler = new THREE.Euler(0, 0, 0, 'YXZ');
-        ren = new THREE.WebGLRenderer({ canvas: cvs, antialias: true });
-        ren.setSize(containerDiv.clientWidth, containerDiv.clientHeight);
-        isMobile = window.matchMedia('(max-width: 768px)').matches;
-        ren.setPixelRatio(isMobile ? Math.min(1.5, window.devicePixelRatio) : window.devicePixelRatio);
-        ren.shadowMap.enabled = true; ren.shadowMap.type = THREE.PCFSoftShadowMap;
-      
-        scene.add(new THREE.AmbientLight(0x606060));
-        mainDirectionalLight = new THREE.DirectionalLight(0xffffff, 1.0);
-        mainDirectionalLight.position.set(10, 20, 15); mainDirectionalLight.castShadow = true;
-        mainDirectionalLight.shadow.mapSize.width = mainDirectionalLight.shadow.mapSize.height = 2048;
-        mainDirectionalLight.shadow.camera.near = 0.5; mainDirectionalLight.shadow.camera.far = 50;
-        mainDirectionalLight.shadow.camera.left = -30; mainDirectionalLight.shadow.camera.right = 30;
-        mainDirectionalLight.shadow.camera.top = 30; mainDirectionalLight.shadow.camera.bottom = -30;
-        mainDirectionalLight.shadow.bias = -0.0005; mainDirectionalLight.shadow.normalBias = 0.02;
-        scene.add(mainDirectionalLight);
-        // Corrected: Create light, set position, then add.
-        const secondDirectionalLight = new THREE.DirectionalLight(0xffffff, 0.3);
-        secondDirectionalLight.position.set(-10, 10, -15);
-        scene.add(secondDirectionalLight);
-        scene.add(new THREE.HemisphereLight(0xffffff, 0x444444, 0.6));
-        
-        scene.add(previewVoxelMesh); updatePreviewVoxel(0,0,0,false);
-        previewLineInstancedMesh = new THREE.InstancedMesh(new THREE.BoxGeometry(VS, VS, VS), new THREE.MeshBasicMaterial({ color: 0x00ff00, transparent: true, opacity: 0.3, depthTest: false }), maxPreviewInstances);
-        previewLineInstancedMesh.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
-        // Corrected: Use standard Float32Array
-        previewLineInstancedMesh.instanceColor = new THREE.InstancedBufferAttribute(new Float32Array(maxPreviewInstances * 3), 3);
-        previewLineInstancedMesh.instanceColor.setUsage(THREE.DynamicDrawUsage); scene.add(previewLineInstancedMesh);
-        rebuildHelpers();
+// Event handlers defined here to ensure they are in scope for window.onload
+function onPointerLockChange() {
+    if (document.pointerLockElement === cvs) { isPointerLocked = true; firstMoveAfterLock = true; mouseMovementX = mouseMovementY = 0; updatePreviewVoxel(0,0,0,false); euler.setFromQuaternion(cam.quaternion, 'YXZ'); }
+    else { isPointerLocked = false; }
+}
 
-        window.addEventListener('resize', onResize);
-        containerDiv.addEventListener('pointerdown', onPointerDown);
-        containerDiv.addEventListener('pointermove', onPointerMove);
-        containerDiv.addEventListener('pointerup', onPointerUp);
-        containerDiv.addEventListener('pointercancel', onPointerUp);
-        containerDiv.addEventListener('pointerleave', onPointerLeave);
-        containerDiv.addEventListener('wheel', onMouseWheel, { passive: false });
-        containerDiv.addEventListener('touchmove', (e) => { if (activePointers.size > 0) e.preventDefault(); }, { passive: false });
-        document.addEventListener('keydown', onKeyDown); document.addEventListener('keyup', onKeyUp);
-        document.addEventListener('pointerlockchange', onPointerLockChange, false);
-        document.addEventListener('mousemove', (e) => { if (isPointerLocked) { mouseMovementX = e.movementX; mouseMovementY = e.movementY; } });
-        containerDiv.addEventListener('contextmenu', (e) => e.preventDefault());
-
-        document.getElementById('grid-size-slider').addEventListener('input', (e) => {
-            const oldGrid = GRID; const newGrid = parseInt(e.target.value);
-            const oldVoxelState = [...voxels.entries()].map(([id, data]) => { const p = parseKey(id); return { gx: p[0], gy: p[1], gz: p[2], color: data.color }; });
-            for (const chunk of chunks.values()) chunk.dispose(); chunks.clear(); voxels.clear();
-            oldVoxelState.filter(v => v.gx < newGrid && v.gy < newGrid && v.gz < newGrid).forEach(v => _addSingleVoxel(v.gx, v.gy, v.gz, v.color));
-            GRID = newGrid; document.getElementById('grid-size-display').textContent = `${GRID}×${GRID}×${GRID}`; localStorage.setItem('voxelEditorGridSize', GRID);
-            addCommand('resizeGrid', oldVoxelState, [...voxels.entries()].map(([id, data]) => { const p = parseKey(id); return { gx: p[0], gy: p[1], gz: p[2], color: data.color }; }), { oldGrid: oldGrid, newGrid: GRID });
-            rebuildHelpers(); resetCameraPosition();
-        });
-
-        document.getElementById('color-picker').addEventListener('input', (e) => {
-            currentColor = e.target.value; localStorage.setItem('voxelEditorColor', currentColor);
-            presetBoxes.forEach(box => box.classList.remove('active', 'border-primary', 'shadow-lg', 'shadow-primary/50')); activePresetIndex = -1;
-        });
-        document.getElementById('color-picker').addEventListener('blur', (e) => {
-            currentColor = e.target.value; localStorage.setItem('voxelEditorColor', currentColor);
-        });
-
-        presetBoxes = [document.getElementById('color-preset-1'), document.getElementById('color-preset-2'), document.getElementById('color-preset-3')];
-        presetColors.forEach((color, i) => {
-            const box = presetBoxes[i]; box.value = color;
-            box.addEventListener('click', (e) => setActivePreset(i));
-            box.addEventListener('input', (e) => savePresetColor(i, e.target.value));
-        });
-        if (activePresetIndex !== -1) setActivePreset(activePresetIndex); else document.getElementById('color-picker').value = currentColor;
-
-        document.getElementById('modeToggle').addEventListener('click', cycleMode);
-        document.getElementById('current-mode').textContent = `Modus: ${currentMode}`;
-
-        document.getElementById('clearBtn').addEventListener('click', () => document.getElementById('clearConfirmationModal').showModal());
-        document.getElementById('saveAndClearBtn').addEventListener('click', () => { saveJSON(); clearAll(); document.getElementById('clearConfirmationModal').close(); });
-        document.getElementById('clearWithoutSaveBtn').addEventListener('click', () => { clearAll(); document.getElementById('clearConfirmationModal').close(); });
-        document.getElementById('cancelClearBtn').addEventListener('click', () => document.getElementById('clearConfirmationModal').close());
-        document.getElementById('clearConfirmationModal').addEventListener('cancel', () => document.getElementById('clearConfirmationModal').close());
-
-        document.getElementById('fillLevelBtn').addEventListener('click', fillActiveLevel);
-        document.getElementById('saveBtn').addEventListener('click', saveJSON);
-        document.getElementById('loadBtn').addEventListener('click', () => document.getElementById('fileInput').click());
-        document.getElementById('fileInput').addEventListener('change', loadJSON);
-        document.getElementById('exportStlBtn').addEventListener('click', exportSTL);
-        document.getElementById('exportObjBtn').addEventListener('click', exportOBJ);
-
-        document.getElementById('fly-speed-slider').addEventListener('input', (e) => {
-            moveSpeed = parseFloat(e.target.value); document.getElementById('fly-speed-display').textContent = moveSpeed.toFixed(2); localStorage.setItem('voxelEditorFlySpeed', moveSpeed);
-        });
-
-        document.getElementById('block-size-1x1').addEventListener('click', () => setFixedBlockSize(1));
-        document.getElementById('block-size-4x4').addEventListener('click', () => setFixedBlockSize(4));
-        document.getElementById('block-size-8x8').addEventListener('click', () => setFixedBlockSize(8));
-        document.getElementById('block-size-10x10').addEventListener('click', () => setFixedBlockSize(10));
-
-        const dynamicXInput = document.getElementById('dynamic-block-x');
-        const dynamicYInput = document.getElementById('dynamic-block-y');
-        const dynamicZInput = document.getElementById('dynamic-block-z');
-        const setDynamicBlockSizeBtn = document.getElementById('setDynamicBlockSizeBtn');
-
-        dynamicXInput.addEventListener('input', (e) => { dynamicBlockDim.x = parseInt(e.target.value) || 1; localStorage.setItem('voxelEditorDynamicBlockDimX', dynamicBlockDim.x); });
-        dynamicYInput.addEventListener('input', (e) => { dynamicBlockDim.y = parseInt(e.target.value) || 1; localStorage.setItem('voxelEditorDynamicBlockDimY', dynamicBlockDim.y); });
-        dynamicZInput.addEventListener('input', (e) => { dynamicBlockDim.z = parseInt(e.target.value) || 1; localStorage.setItem('voxelEditorDynamicBlockDimZ', dynamicBlockDim.z); });
-        setDynamicBlockSizeBtn.addEventListener('click', setDynamicBlockDimensions);
-
-        [dynamicXInput, dynamicYInput, dynamicZInput].forEach(input => {
-            input.addEventListener('keydown', (e) => { if (e.key === 'Tab') e.stopPropagation(); });
-            input.addEventListener('focus', () => { isPointerLocked = false; document.exitPointerLock(); });
-            input.addEventListener('blur', () => cvs.focus());
-        });
-
-        document.getElementById('measureDistanceBtn').addEventListener('click', () => {
-            currentMode = Modes.MEASURE; document.getElementById('current-mode').textContent = `Modus: ${currentMode}`;
-            measurementStartPoint = null; measurementEndPoint = null; distanceDisplay.classList.add('hidden');
-            updatePreviewVoxel(0, 0, 0, false);
-            previewLineInstancedMesh.count = 0; previewLineInstancedMesh.instanceMatrix.needsUpdate = true; previewLineVoxels = [];
-        });
-
-        let showInfoBox = localStorage.getItem('showInfoBox') === 'true';
-        function updateInfoBoxVisibility() {
-            if (infoBox) infoBox.classList.toggle('hidden', !showInfoBox);
-            if (helpToggleBtn) helpToggleBtn.textContent = showInfoBox ? 'Hilfe ausblenden' : 'Hilfe anzeigen';
-            localStorage.setItem('showInfoBox', showInfoBox);
-        }
-        helpToggleBtn.addEventListener('click', () => { showInfoBox = !showInfoBox; updateInfoBoxVisibility(); });
-        updateInfoBoxVisibility();
-
-        document.getElementById('resetCameraBtn').addEventListener('click', resetCameraPosition);
-        document.getElementById('loadImageTemplateBtn').addEventListener('click', loadImageTemplate);
-        document.getElementById('imageFileInput').addEventListener('change', handleImageFileSelect);
-        document.getElementById('removeImageTemplateBtn').addEventListener('click', removeImageTemplate);
-
-        document.getElementById('menuToggle').addEventListener('click', () => {
-            const controlsPanel = document.getElementById('controls');
-            controlsPanel.classList.toggle('hidden');
-            if (!controlsPanel.classList.contains('hidden')) controlsPanel.classList.add('flex');
-            else controlsPanel.classList.remove('flex');
-        });
-
-        const mediaQuery = window.matchMedia('(max-width: 768px)');
-        function handleMediaQueryChange(e) {
-            isMobile = e.matches;
-            const controlsPanel = document.getElementById('controls');
-            const mobileControls = document.getElementById('mobile-controls');
-            if (e.matches) { controlsPanel.classList.add('hidden'); mobileControls.classList.remove('hidden'); }
-            else { controlsPanel.classList.remove('hidden'); controlsPanel.classList.add('flex'); mobileControls.classList.add('hidden'); }
-            onResize();
-        }
-        mediaQuery.addListener(handleMediaQueryChange); handleMediaQueryChange(mediaQuery);
-
-        document.getElementById('mobile-undo').addEventListener('click', undo);
-        document.getElementById('mobile-redo').addEventListener('click', redo);
-        document.getElementById('mobile-save').addEventListener('click', saveJSON);
-        document.getElementById('mobile-camera').addEventListener('click', resetCameraPosition);
-        document.getElementById('mobile-assist').addEventListener('click', () => {
-            touchAssistEnabled = !touchAssistEnabled;
-            const assistBtn = document.getElementById('mobile-assist');
-            assistBtn.classList.toggle('border-primary', touchAssistEnabled); assistBtn.classList.toggle('border-base-content', !touchAssistEnabled);
-            showToast('Touch Assist', `Magnetisches Zielen ist jetzt ${touchAssistEnabled ? 'aktiviert' : 'deaktiviert'}.`, 'info');
-        });
-        document.getElementById('mobile-login-logout').addEventListener('click', loginLogout);
-
-        document.getElementById('grid-size-slider').value = GRID; document.getElementById('grid-size-display').textContent = `${GRID}×${GRID}×${GRID}`;
-        document.getElementById('color-picker').value = currentColor;
-        document.getElementById('fly-speed-slider').value = moveSpeed; document.getElementById('fly-speed-display').textContent = moveSpeed.toFixed(2);
-        document.getElementById('dynamic-block-x').value = dynamicBlockDim.x; document.getElementById('dynamic-block-y').value = dynamicBlockDim.y; document.getElementById('dynamic-block-z').value = dynamicBlockDim.z;
-        updateBlockSizeButtonsActiveState();
-
-        const app = window.firebase.initializeApp(window.firebaseConfig);
-        auth = window.firebase.getAuth(app); db = window.firebase.getFirestore(app);
-        const loginLogoutBtn = document.getElementById('loginLogoutBtn');
-        const uploadToHubBtn = document.getElementById('uploadToHubBtn');
-        const userIdDisplay = document.getElementById('userIdDisplay');
-        const goToHubBtn = document.getElementById('goToHubBtn');
-        let projectLoadedFromUrl = false;
-
-        predefinedCategories.forEach(cat => { const opt = document.createElement('option'); opt.value = cat; opt.textContent = cat; document.getElementById('uploadCategory').appendChild(opt); });
-
-        window.firebase.setPersistence(auth, window.firebase.browserLocalPersistence)
-            .then(async () => {
-                if (typeof __initial_auth_token !== 'undefined' && __initial_auth_token) {
-                    try { await window.firebase.signInWithCustomToken(auth, __initial_auth_token); }
-                    catch (e) { console.error("Firebase Auth Token Error:", e); try { await window.firebase.signInAnonymously(auth); } catch (ae) { console.error("Firebase Anonymous Auth Error:", ae); showToast('Anmeldefehler', `Anonymer Anmeldefehler: ${ae.message}.`, 'error', 5000); } }
-                } else {
-                    try { await window.firebase.signInAnonymously(auth); }
-                    catch (e) { console.error("Firebase Anonymous Auth Error:", e); showToast('Anmeldefehler', `Anonymer Anmeldefehler: ${e.message}.`, 'error', 5000); }
-                }
-
-                window.firebase.onAuthStateChanged(auth, async (user) => {
-                    currentUserId = user ? user.uid : null; currentUser = user;
-                    loginLogoutBtn.textContent = user ? 'Abmelden' : 'Anmelden';
-                    userIdDisplay.innerHTML = user ? `<img src="${user.photoURL || 'https://placehold.co/24x24/cccccc/000000?text=U'}" alt="User Avatar" class="w-6 h-6 rounded-full align-middle"> ${user.uid}` : '';
-                    uploadToHubBtn.classList.toggle('hidden', !user);
-                    document.getElementById('mobile-login-logout').textContent = user ? '🚪' : '🔑';
-                    if (user) document.getElementById('authModal').close();
-
-                    if (!projectLoadedFromUrl) {
-                        const urlParams = new URLSearchParams(window.location.search);
-                        const modelId = urlParams.get('modelId'); const encodedJson = urlParams.get('projectJson');
-                        if (modelId) { await loadProjectFromModelId(modelId); projectLoadedFromUrl = true; }
-                        else if (encodedJson) {
-                            try {
-                                const decodedJson = decodeURIComponent(encodedJson);
-                                loadProjectData(JSON.parse(decodedJson));
-                                showToast('Projekt geladen', 'Projekt erfolgreich aus URL-Parameter geladen.', 'success');
-                                projectLoadedFromUrl = true;
-                            } catch (e) { console.error("Error loading project from URL param:", e); showToast('Fehler', 'Fehler beim Laden des Projekts aus der URL. Ungültige oder beschädigte Projektdaten. Fehler: ' + e.message, 'error'); resetToDefaultProject(); }
-                        } else { projectRemixOf = ''; projectSourceJsonUrl = ''; }
-                    }
-                });
-                animate();
-            })
-            .catch((e) => { console.error("Firebase setPersistence Error:", e); showToast('Anmeldefehler', `Fehler bei der Anmeldungspersistenz: ${e.message}.`, 'error', 10000); animate(); });
-
-        document.getElementById('goToHubBtn').addEventListener('click', () => window.open('https://hub.voxelshaper.com', '_blank'));
-        loginLogoutBtn.addEventListener('click', loginLogout);
-        document.getElementById('authModal').addEventListener('click', (e) => { if (e.target === document.getElementById('authModal')) closeAuthModal(); });
-        document.getElementById('authModalCloseBtn').addEventListener('click', closeAuthModal);
-        document.getElementById('signInGoogleBtn').addEventListener('click', window.signInWithGoogle);
-        document.getElementById('signInGithubBtn').addEventListener('click', window.signInWithGithub);
-        document.getElementById('emailSignInBtn').addEventListener('click', window.signInEmailPassword);
-        document.getElementById('emailSignUpBtn').addEventListener('click', window.signUpEmailPassword);
-        document.getElementById('showEmailLoginFormBtn').addEventListener('click', () => document.getElementById('emailLoginForm').classList.remove('hidden'));
-        document.getElementById('uploadToHubBtn').addEventListener('click', openUploadModal);
-        document.getElementById('uploadProjectModal').addEventListener('click', (e) => { if (e.target === document.getElementById('uploadProjectModal')) { document.getElementById('uploadProjectModal').close(); cvs.focus(); } });
-        document.getElementById('uploadConfirmBtn').addEventListener('click', uploadProjectToHub);
-        document.getElementById('uploadCancelBtn').addEventListener('click', () => { document.getElementById('uploadProjectModal').close(); cvs.focus(); });
-    } catch (e) { console.error("VoxelShaper Initialization Error:", e); showToast('Schwerer Fehler', `Ein unerwarteter Fehler ist aufgetreten: ${e.message}.`, 'error', 10000); }
-};
-
-const frustum = new THREE.Frustum(); const tempCameraMatrix = new THREE.Matrix4();
-function animate() {
-    requestAnimationFrame(animate);
-    if (isPointerLocked) {
-        if (firstMoveAfterLock) { firstMoveAfterLock = false; mouseMovementX = mouseMovementY = 0; return; }
-        euler.y -= (mouseMovementX || 0) * rotSpeed; euler.x -= (mouseMovementY || 0) * rotSpeed;
-        euler.x = Math.max(-Math.PI / 2, Math.min(Math.PI / 2, euler.x)); cam.quaternion.setFromEuler(euler);
-        mouseMovementX = mouseMovementY = 0;
-        const camDir = new THREE.Vector3(); cam.getWorldDirection(camDir);
-        const rightDir = new THREE.Vector3().crossVectors(camDir, cam.up).normalize();
-        const upVec = new THREE.Vector3(0, 1, 0); const currMoveSpeed = moveSpeed * 0.5;
-        if (keyboard['w']) cam.position.addScaledVector(camDir, currMoveSpeed);
-        if (keyboard['s']) cam.position.addScaledVector(camDir, -currMoveSpeed);
-        if (keyboard['a']) cam.position.addScaledVector(rightDir, -currMoveSpeed);
-        if (keyboard['d']) cam.position.addScaledVector(rightDir, currMoveSpeed);
-        if (keyboard['e']) cam.position.addScaledVector(upVec, currMoveSpeed);
-        if (keyboard['q']) cam.position.addScaledVector(upVec, -currMoveSpeed);
+function onMouseWheel(e) {
+    e.preventDefault();
+    if (e.altKey) {
+        if (currentMode === Modes.LINE_ADD || currentMode === Modes.FREE_ADD) {
+            if (e.shiftKey) { activeDrawingLevel.z = Math.max(0, Math.min(GRID - 1, activeDrawingLevel.z - Math.sign(e.deltaY))); currentDrawingAxis = 'z'; }
+            else if (e.ctrlKey) { activeDrawingLevel.x = Math.max(0, Math.min(GRID - 1, activeDrawingLevel.x - Math.sign(e.deltaY))); currentDrawingAxis = 'x'; }
+            else { activeDrawingLevel.y = Math.max(0, Math.min(GRID - 1, activeDrawingLevel.y - Math.sign(e.deltaY))); currentDrawingAxis = 'y'; }
+            updateGridHelperPosition();
+        } else { cam.position.addScaledVector(cam.getWorldDirection(new THREE.Vector3()), e.deltaY * 0.005 * moveSpeed * 5); }
+    } else {
+        moveSpeed = Math.max(0.01, Math.min(1.0, moveSpeed - Math.sign(e.deltaY) * 0.01));
+        document.getElementById('fly-speed-slider').value = moveSpeed; document.getElementById('fly-speed-display').textContent = moveSpeed.toFixed(2); localStorage.setItem('voxelEditorFlySpeed', moveSpeed);
     }
-    cam.updateMatrixWorld(); tempCameraMatrix.multiplyMatrices(cam.projectionMatrix, cam.matrixWorldInverse);
-    frustum.setFromProjectionMatrix(tempCameraMatrix);
-    for (const chunk of chunks.values()) chunk.instancedMesh.visible = frustum.intersectsBox(chunk.boundingBox);
-    ren.render(scene, cam);
+}
+
+const keyboard = {};
+function onKeyDown(e) {
+    const activeModals = ['authModal', 'uploadProjectModal', 'clearConfirmationModal'].some(id => document.getElementById(id).open);
+    if (activeModals) { if (e.key === 'Escape') { closeAllModals(); e.preventDefault(); } return; }
+    keyboard[e.key.toLowerCase()] = true;
+    if (e.key === 'Shift') isShiftDragging = true;
+    if (e.key === 'Control' || e.metaKey) isControlDragging = true;
+    if ((e.ctrlKey || e.metaKey) && e.key === 'z') { e.preventDefault(); undo(); }
+    if (((e.ctrlKey || e.metaKey) && e.key === 'y') || ((e.ctrlKey || e.metaKey) && e.shiftKey && e.key === 'Z')) { e.preventDefault(); redo(); }
+    if ((e.ctrlKey || e.metaKey) && e.key === 'd') e.preventDefault();
+    if (e.key === 'Tab') { if (!(document.activeElement && document.activeElement.classList.contains('dynamic-block-input'))) { e.preventDefault(); cycleMode(); }}
+    switch (e.key) { case '1': setActivePreset(0); break; case '2': setActivePreset(1); break; case '3': setActivePreset(2); break; }
+}
+
+function onKeyUp(e) {
+    keyboard[e.key.toLowerCase()] = false;
+    if (e.key === 'Shift') isShiftDragging = false;
+    if (e.key === 'Control' || e.metaKey) isControlDragging = false;
+}
+
+function onPointerLeave(e) {
+    if (e.pointerType === 'mouse') {
+        if (!rightMouseButtonDown || (pointerIsDown && e.button === 0)) {
+            if (pointerIsDown && initialDragVoxelCoords) {
+                if ((currentMode === Modes.FREE_ADD || currentMode === Modes.DELETE || currentMode === Modes.DRAW) && !isShiftDragging && !isControlDragging) {
+                    if (currentStrokeVoxels.size > 0) {
+                        const oldState = []; const newState = [];
+                        for (const [gKey, change] of currentStrokeVoxels.entries()) {
+                            const [gx, gy, gz] = parseKey(gKey); oldState.push({ gx, gy, gz, color: change.initialColor });
+                            newState.push({ gx, gy, gz, color: voxels.has(gKey) ? voxels.get(gKey).color : null });
+                        } addCommand('batch', oldState, newState);
+                    }
+                } else {
+                    applyStrokeChanges([], voxelsAtDragStart, currentMode, currentColor); // Rollback live changes
+                    const oldState = [...voxelsAtDragStart.entries()].map(([id, data]) => { const p = parseKey(id); return { gx: p[0], gy: p[1], gz: p[2], color: data.color }; });
+                    const { dimX, dimY, dimZ } = getCurrentBlockDimensions();
+                    let finalTarget = null; let rawFinalTarget = calculateTargetVoxelCoords(e.clientX, e.clientY, currentMode, 'mouse');
+                    if (rawFinalTarget) {
+                        if (dragAxisLock) {
+                            const snappedFinalTarget = { ...rawFinalTarget };
+                            if (dragAxisLock === 'x') { snappedFinalTarget.gy = initialDragVoxelCoords.gy; snappedFinalTarget.gz = initialDragVoxelCoords.gz; }
+                            else if (dragAxisLock === 'y') { snappedFinalTarget.gx = initialDragVoxelCoords.gx; snappedFinalTarget.gz = initialDragVoxelCoords.gz; }
+                            else if (dragAxisLock === 'z') { snappedFinalTarget.gx = initialDragVoxelCoords.gx; snappedFinalTarget.gy = initialDragVoxelCoords.gy; }
+                            finalTarget = snappedFinalTarget;
+                        } else { finalTarget = initialDragVoxelCoords; }
+                        if (finalTarget) { finalTarget.gx = Math.max(0, Math.min(GRID - dimX, finalTarget.gx)); finalTarget.gy = Math.max(0, Math.min(GRID - dimY, finalTarget.gy)); finalTarget.gz = Math.max(0, Math.min(GRID - dimZ, finalTarget.gz)); }
+                    } else { finalTarget = initialDragVoxelCoords; }
+                    const finalVoxels = finalTarget ? getVoxelsOnLine(initialDragVoxelCoords, finalTarget, currentMode, currentColor, dimX, dimY, dimZ) : [];
+                    for (const v of finalVoxels) performVoxelModification(v.gx, v.gy, v.gz, currentMode, currentColor);
+                    addCommand('batch', oldState, [...voxels.entries()].map(([id, data]) => { const p = parseKey(id); return { gx: p[0], gy: p[1], gz: p[2], color: data.color }; }));
+                }
+            }
+            pointerIsDown = false; lastActionVoxelCoords = null; initialDragVoxelCoords = null; voxelsAtDragStart = null; currentStrokeVoxels.clear();
+            updatePreviewVoxel(0, 0, 0, false);
+            if (currentMode !== Modes.MEASURE || (currentMode === Modes.MEASURE && measurementStartPoint === null && measurementEndPoint === null)) distanceDisplay.classList.add('hidden');
+            initialDragVoxelWorldPos = null; dragAxisLock = null;
+            previewLineInstancedMesh.count = 0; previewLineInstancedMesh.instanceMatrix.needsUpdate = true; previewLineVoxels = [];
+        }
+    }
+}
+
+function updateBlockSizeButtonsActiveState() {
+    document.querySelectorAll('.block-size-btn').forEach(btn => btn.classList.remove('active', 'border-primary', 'shadow-lg', 'shadow-primary/50'));
+    document.getElementById('setDynamicBlockSizeBtn').classList.remove('active', 'border-primary', 'shadow-lg', 'shadow-primary/50');
+    if (useDynamicBlockDim) { document.getElementById('setDynamicBlockSizeBtn').classList.add('active', 'border-primary', 'shadow-lg', 'shadow-primary/50'); }
+    else {
+        const activeBtn = document.getElementById(`block-size-${currentBlockSize}x${currentBlockSize}`);
+        if (activeBtn) { activeBtn.classList.add('active', 'border-primary', 'shadow-lg', 'shadow-primary/50'); }
+        else { document.getElementById('block-size-1x1').classList.add('active', 'border-primary', 'shadow-lg', 'shadow-primary/50'); currentBlockSize = 1; localStorage.setItem('voxelEditorCurrentBlockSize', currentBlockSize); }
+    }
 }
 
 let pointerIsDown = false; let rightMouseButtonDown = false;
@@ -1427,7 +1363,8 @@ function onPointerDown(e) {
         gestureState.initialPointerCount = activePointers.size;
         if (activePointers.size === 1) { gestureState.type = 'rotate'; gestureState.lastMid = { x: e.clientX, y: e.clientY }; }
         else if (activePointers.size >= 2) {
-            const [p0, p1] = pointers;
+            const pointersArr = [...activePointers.values()]; // Convert Map to array to access elements by index
+            const [p0, p1] = pointersArr;
             const midX = (p0.x + p1.x) * 0.5; const midY = (p0.y + p1.y) * 0.5; const dist = Math.hypot(p1.x - p0.x, p1.y - p0.y);
             gestureState.type = 'none'; gestureState.startMid = gestureState.lastMid = { x: midX, y: midY };
             gestureState.startDist = gestureState.lastDist = dist;
@@ -1458,7 +1395,7 @@ function onPointerDown(e) {
         if ((currentMode === Modes.FREE_ADD || currentMode === Modes.DELETE || currentMode === Modes.DRAW) && !isShiftDragging && !isControlDragging) {
             initialDragVoxelCoords = rawTarget; dragAxisLock = null; voxelsAtDragStart = new Map(voxels); currentStrokeVoxels.clear();
             if (initialDragVoxelCoords) {
-                const { dimX, dimY, dimZ } = getCurrentBlockDimensions();
+                const { dimX, dimY, dimZ } = getCurrentBlockDimensions(); // Get 1x1x1 for FREE_ADD
                 initialDragVoxelCoords.gx = Math.max(0, Math.min(GRID - dimX, initialDragVoxelCoords.gx)); initialDragVoxelCoords.gy = Math.max(0, Math.min(GRID - dimY, initialDragVoxelCoords.gy)); initialDragVoxelCoords.gz = Math.max(0, Math.min(GRID - dimZ, initialDragVoxelCoords.gz));
                 performVoxelModification(initialDragVoxelCoords.gx, initialDragVoxelCoords.gy, initialDragVoxelCoords.gz, currentMode, currentColor);
                 currentStrokeVoxels.set(key(initialDragVoxelCoords.gx, initialDragVoxelCoords.gy, initialDragVoxelCoords.gz), { newColor: voxels.has(key(initialDragVoxelCoords.gx, initialDragVoxelCoords.gy, initialDragVoxelCoords.gz)) ? voxels.get(key(initialDragVoxelCoords.gx, initialDragVoxelCoords.gy, initialDragVoxelCoords.gz)).color : null, initialColor: voxelsAtDragStart.has(key(initialDragVoxelCoords.gx, initialDragVoxelCoords.gy, initialDragVoxelCoords.gz)) ? voxelsAtDragStart.get(key(initialDragVoxelCoords.gx, initialDragVoxelCoords.gy, initialDragVoxelCoords.gz)).color : null });
@@ -1493,13 +1430,18 @@ function onPointerMove(e) {
     const { dimX, dimY, dimZ } = getCurrentBlockDimensions();
     if (e.pointerType === 'touch') {
         if (!activePointers.has(e.pointerId)) return;
-        activePancers.set(e.pointerId, { x: e.clientX, y: e.clientY, pointerType: e.pointerType });
+        activePointers.set(e.pointerId, { x: e.clientX, y: e.clientY, pointerType: e.pointerType });
         touchIndicator.style.left = `${e.clientX}px`; touchIndicator.style.top = `${e.clientY}px`;
         if (doubleTapDragActive && currentMode !== Modes.MEASURE) {
             let rawCurrentTarget = calculateTargetVoxelCoords(e.clientX, e.clientY, currentMode, 'touch');
             if ((currentMode === Modes.FREE_ADD || currentMode === Modes.DELETE || currentMode === Modes.DRAW) && !isShiftDragging && !isControlDragging) {
                 if (rawCurrentTarget && lastActionVoxelCoords) {
                     const currentGKey = key(rawCurrentTarget.gx, rawCurrentTarget.gy, rawCurrentTarget.gz);
+                    // Ensure rawCurrentTarget is clamped based on 1x1x1 dimensions for FREE_ADD
+                    rawCurrentTarget.gx = Math.max(0, Math.min(GRID - 1, rawCurrentTarget.gx));
+                    rawCurrentTarget.gy = Math.max(0, Math.min(GRID - 1, rawCurrentTarget.gy));
+                    rawCurrentTarget.gz = Math.max(0, Math.min(GRID - 1, rawCurrentTarget.gz));
+
                     if (currentGKey !== key(lastActionVoxelCoords.gx, lastActionVoxelCoords.gy, lastActionVoxelCoords.gz)) {
                         performVoxelModification(rawCurrentTarget.gx, rawCurrentTarget.gy, rawCurrentTarget.gz, currentMode, currentColor);
                         if (!currentStrokeVoxels.has(currentGKey)) currentStrokeVoxels.set(currentGKey, { newColor: voxels.has(currentGKey) ? voxels.get(currentGKey).color : null, initialColor: voxelsAtDragStart.has(currentGKey) ? voxelsAtDragStart.get(currentGKey).color : null });
@@ -1573,6 +1515,11 @@ function onPointerMove(e) {
         if (pointerIsDown && (currentMode === Modes.FREE_ADD || currentMode === Modes.DELETE || currentMode === Modes.DRAW) && !isShiftDragging && !isControlDragging) {
             if (rawCurrentTarget && lastActionVoxelCoords) {
                 const currentGKey = key(rawCurrentTarget.gx, rawCurrentTarget.gy, rawCurrentTarget.gz);
+                // Ensure rawCurrentTarget is clamped based on 1x1x1 dimensions for FREE_ADD
+                rawCurrentTarget.gx = Math.max(0, Math.min(GRID - 1, rawCurrentTarget.gx));
+                rawCurrentTarget.gy = Math.max(0, Math.min(GRID - 1, rawCurrentTarget.gy));
+                rawCurrentTarget.gz = Math.max(0, Math.min(GRID - 1, rawCurrentTarget.gz));
+
                 if (currentGKey !== key(lastActionVoxelCoords.gx, lastActionVoxelCoords.gy, lastActionVoxelCoords.gz)) {
                     performVoxelModification(rawCurrentTarget.gx, rawCurrentTarget.gy, rawCurrentTarget.gz, currentMode, currentColor);
                     if (!currentStrokeVoxels.has(currentGKey)) currentStrokeVoxels.set(currentGKey, { newColor: voxels.has(currentGKey) ? voxels.get(currentGKey).color : null, initialColor: voxelsAtDragStart.has(currentGKey) ? voxelsAtDragStart.get(currentGKey).color : null });
@@ -1720,66 +1667,6 @@ function onPointerUp(e) {
     previewLineInstancedMesh.count = 0; previewLineInstancedMesh.instanceMatrix.needsUpdate = true; previewLineVoxels = [];
 }
 
-function onPointerLeave(e) {
-    if (e.pointerType === 'mouse') {
-        if (!rightMouseButtonDown || (pointerIsDown && e.button === 0)) {
-            if (pointerIsDown && initialDragVoxelCoords) {
-                if ((currentMode === Modes.FREE_ADD || currentMode === Modes.DELETE || currentMode === Modes.DRAW) && !isShiftDragging && !isControlDragging) {
-                    if (currentStrokeVoxels.size > 0) {
-                        const oldState = []; const newState = [];
-                        for (const [gKey, change] of currentStrokeVoxels.entries()) {
-                            const [gx, gy, gz] = parseKey(gKey); oldState.push({ gx, gy, gz, color: change.initialColor });
-                            newState.push({ gx, gy, gz, color: voxels.has(gKey) ? voxels.get(gKey).color : null });
-                        } addCommand('batch', oldState, newState);
-                    }
-                } else {
-                    applyStrokeChanges([], voxelsAtDragStart, currentMode, currentColor); // Rollback live changes
-                    const oldState = [...voxelsAtDragStart.entries()].map(([id, data]) => { const p = parseKey(id); return { gx: p[0], gy: p[1], gz: p[2], color: data.color }; });
-                    const { dimX, dimY, dimZ } = getCurrentBlockDimensions();
-                    let finalTarget = null; let rawFinalTarget = calculateTargetVoxelCoords(e.clientX, e.clientY, currentMode, 'mouse');
-                    if (rawFinalTarget) {
-                        if (dragAxisLock) {
-                            const snappedFinalTarget = { ...rawFinalTarget };
-                            if (dragAxisLock === 'x') { snappedFinalTarget.gy = initialDragVoxelCoords.gy; snappedFinalTarget.gz = initialDragVoxelCoords.gz; }
-                            else if (dragAxisLock === 'y') { snappedFinalTarget.gx = initialDragVoxelCoords.gx; snappedFinalTarget.gz = initialDragVoxelCoords.gz; }
-                            else if (dragAxisLock === 'z') { snappedFinalTarget.gx = initialDragVoxelCoords.gx; snappedFinalTarget.gy = initialDragVoxelCoords.gy; }
-                            finalTarget = snappedFinalTarget;
-                        } else { finalTarget = initialDragVoxelCoords; }
-                        if (finalTarget) { finalTarget.gx = Math.max(0, Math.min(GRID - dimX, finalTarget.gx)); finalTarget.gy = Math.max(0, Math.min(GRID - dimY, finalTarget.gy)); finalTarget.gz = Math.max(0, Math.min(GRID - dimZ, finalTarget.gz)); }
-                    } else { finalTarget = initialDragVoxelCoords; }
-                    const finalVoxels = finalTarget ? getVoxelsOnLine(initialDragVoxelCoords, finalTarget, currentMode, currentColor, dimX, dimY, dimZ) : [];
-                    for (const v of finalVoxels) performVoxelModification(v.gx, v.gy, v.gz, currentMode, currentColor);
-                    addCommand('batch', oldState, [...voxels.entries()].map(([id, data]) => { const p = parseKey(id); return { gx: p[0], gy: p[1], gz: p[2], color: data.color }; }));
-                }
-            }
-            pointerIsDown = false; lastActionVoxelCoords = null; initialDragVoxelCoords = null; voxelsAtDragStart = null; currentStrokeVoxels.clear();
-            updatePreviewVoxel(0, 0, 0, false);
-            if (currentMode !== Modes.MEASURE || (currentMode === Modes.MEASURE && measurementStartPoint === null && measurementEndPoint === null)) distanceDisplay.classList.add('hidden');
-            initialDragVoxelWorldPos = null; dragAxisLock = null;
-            previewLineInstancedMesh.count = 0; previewLineInstancedMesh.instanceMatrix.needsUpdate = true; previewLineVoxels = [];
-        }
-    }
-}
-
-function onPointerLockChange() {
-    if (document.pointerLockElement === cvs) { isPointerLocked = true; firstMoveAfterLock = true; mouseMovementX = mouseMovementY = 0; updatePreviewVoxel(0,0,0,false); euler.setFromQuaternion(cam.quaternion, 'YXZ'); }
-    else { isPointerLocked = false; }
-}
-
-function onMouseWheel(e) {
-    e.preventDefault();
-    if (e.altKey) {
-        if (currentMode === Modes.LINE_ADD || currentMode === Modes.FREE_ADD) {
-            if (e.shiftKey) { activeDrawingLevel.z = Math.max(0, Math.min(GRID - 1, activeDrawingLevel.z - Math.sign(e.deltaY))); currentDrawingAxis = 'z'; }
-            else if (e.ctrlKey) { activeDrawingLevel.x = Math.max(0, Math.min(GRID - 1, activeDrawingLevel.x - Math.sign(e.deltaY))); currentDrawingAxis = 'x'; }
-            else { activeDrawingLevel.y = Math.max(0, Math.min(GRID - 1, activeDrawingLevel.y - Math.sign(e.deltaY))); currentDrawingAxis = 'y'; }
-            updateGridHelperPosition();
-        } else { cam.position.addScaledVector(cam.getWorldDirection(new THREE.Vector3()), e.deltaY * 0.005 * moveSpeed * 5); }
-    } else {
-        moveSpeed = Math.max(0.01, Math.min(1.0, moveSpeed - Math.sign(e.deltaY) * 0.01));
-        document.getElementById('fly-speed-slider').value = moveSpeed; document.getElementById('fly-speed-display').textContent = moveSpeed.toFixed(2); localStorage.setItem('voxelEditorFlySpeed', moveSpeed);
-    }
-}
 
 function getPointOnFixedPlane(clientX, clientY, axis, level) {
     const rect = cvs.getBoundingClientRect();
@@ -1860,36 +1747,6 @@ function updatePreviewLineMesh() {
     previewLineInstancedMesh.instanceMatrix.needsUpdate = true; previewLineInstancedMesh.instanceColor.needsUpdate = true;
 }
 
-const keyboard = {};
-function onKeyDown(e) {
-    const activeModals = ['authModal', 'uploadProjectModal', 'clearConfirmationModal'].some(id => document.getElementById(id).open);
-    if (activeModals) { if (e.key === 'Escape') { closeAllModals(); e.preventDefault(); } return; }
-    keyboard[e.key.toLowerCase()] = true;
-    if (e.key === 'Shift') isShiftDragging = true;
-    if (e.key === 'Control' || e.metaKey) isControlDragging = true;
-    if ((e.ctrlKey || e.metaKey) && e.key === 'z') { e.preventDefault(); undo(); }
-    if (((e.ctrlKey || e.metaKey) && e.key === 'y') || ((e.ctrlKey || e.metaKey) && e.shiftKey && e.key === 'Z')) { e.preventDefault(); redo(); }
-    if ((e.ctrlKey || e.metaKey) && e.key === 'd') e.preventDefault();
-    if (e.key === 'Tab') { if (!(document.activeElement && document.activeElement.classList.contains('dynamic-block-input'))) { e.preventDefault(); cycleMode(); }}
-    switch (e.key) { case '1': setActivePreset(0); break; case '2': setActivePreset(1); break; case '3': setActivePreset(2); break; }
-}
-
-function onKeyUp(e) {
-    keyboard[e.key.toLowerCase()] = false;
-    if (e.key === 'Shift') isShiftDragging = false;
-    if (e.key === 'Control' || e.metaKey) isControlDragging = false;
-}
-
-function updateBlockSizeButtonsActiveState() {
-    document.querySelectorAll('.block-size-btn').forEach(btn => btn.classList.remove('active', 'border-primary', 'shadow-lg', 'shadow-primary/50'));
-    document.getElementById('setDynamicBlockSizeBtn').classList.remove('active', 'border-primary', 'shadow-lg', 'shadow-primary/50');
-    if (useDynamicBlockDim) { document.getElementById('setDynamicBlockSizeBtn').classList.add('active', 'border-primary', 'shadow-lg', 'shadow-primary/50'); }
-    else {
-        const activeBtn = document.getElementById(`block-size-${currentBlockSize}x${currentBlockSize}`);
-        if (activeBtn) { activeBtn.classList.add('active', 'border-primary', 'shadow-lg', 'shadow-primary/50'); }
-        else { document.getElementById('block-size-1x1').classList.add('active', 'border-primary', 'shadow-lg', 'shadow-primary/50'); currentBlockSize = 1; localStorage.setItem('voxelEditorCurrentBlockSize', currentBlockSize); }
-    }
-}
 </script>
 </body>
 </html>
