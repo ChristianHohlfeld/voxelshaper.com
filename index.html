@@ -2551,9 +2551,9 @@ async function loadProjectFromModelId(modelId) {
         // Ensure __app_id is defined; otherwise, use a default for local testing
         const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
         // Construct the document reference for the public data path
-        const docRef = window.firebase.doc(db, `artifacts/${appId}/public/data/models`, modelId);
+      const docRef = window.firebase.doc(db, "models", modelId);
+const docSnap = await window.firebase.getDoc(docRef);
         
-        const docSnap = await window.firebase.getDoc(docRef); // This is where the permission error occurs
 
         if (docSnap.exists()) {
             const projectData = docSnap.data();
