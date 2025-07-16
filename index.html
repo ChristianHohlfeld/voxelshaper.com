@@ -975,7 +975,7 @@ async function loadProjectFromModelId(modelId) {
     } catch (error) {
         console.error("Error loading project from model ID:", error);
         if (error.code === 'permission-denied') showToast('Zugriff verweigert', `Berechtigungsfehler beim Laden des Projekts. Stellen Sie sicher, dass das Modell öffentlich ist oder Sie der Eigentümer sind.`, 'error');
-        else showToast('Fehler', `Fehler beim Laden des Projekts: ${error.message}`, 'error');
+        else showToast('Fehler', `Fehler beim Laden des Projekts: ${e.message}`, 'error');
         resetToDefaultProject();
     }
 }
@@ -1642,7 +1642,29 @@ window.onload = async function() {
         containerDiv.addEventListener('contextmenu', (e) => e.preventDefault());
 
         document.getElementById('grid-size-slider').addEventListener('input', (e) => {
-            const oldGrid = GRID; const newGrid = parseInt(e.target.value);
+            const oldGrid = GRID;
+            const newGrid = parseInt(e.target.value);
+
+            // Only perform check if scaling down
+            if (newGrid < oldGrid) {
+                let voxelsWouldBeLost = false;
+                for (const [id, data] of voxels.entries()) {
+                    const p = parseKey(id);
+                    if (p[0] >= newGrid || p[1] >= newGrid || p[2] >= newGrid) {
+                        voxelsWouldBeLost = true;
+                        break;
+                    }
+                }
+
+                if (voxelsWouldBeLost) {
+                    showToast('Warnung', 'Gittergröße kann nicht reduziert werden, da sonst vorhandene Voxel außerhalb des Rasters verloren gehen würden.', 'warning', 5000);
+                    // Revert slider value
+                    e.target.value = oldGrid;
+                    document.getElementById('grid-size-display').textContent = `${oldGrid}×${oldGrid}×${oldGrid}`;
+                    return; // Prevent further execution of scaling
+                }
+            }
+            
             const oldVoxelState = [...voxels.entries()].map(([id, data]) => { const p = parseKey(id); return { gx: p[0], gy: p[1], gz: p[2], color: data.color }; });
             for (const chunk of chunks.values()) chunk.dispose(); chunks.clear(); voxels.clear();
             oldVoxelState.filter(v => v.gx < newGrid && v.gy < newGrid && v.gz < newGrid).forEach(v => _addSingleVoxel(v.gx, v.gy, v.gz, v.color));
