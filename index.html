@@ -802,7 +802,7 @@ function calculateTargetVoxelCoords(clientX, clientY, mode, pointerType) {
         const hitVy = Math.floor(hitPointInside.y / VS);
         const hitVz = Math.floor(hitPointInside.z / VS);
 
-        if (mode === Modes.LINE_ADD || mode === Modes.FREE_ADD) {
+        if (mode === Modes.LINE_ADD) {
             // Add mode: place on the face normal
             targetVoxelCoords = {
                 gx: hitVx + Math.round(hit.face.normal.x),
@@ -810,7 +810,7 @@ function calculateTargetVoxelCoords(clientX, clientY, mode, pointerType) {
                 gz: hitVz + Math.round(hit.face.normal.z)
             };
         } else {
-            // Delete or Draw mode: target the hit voxel itself
+            // Delete, Draw, Free_Add, Measure mode: target the hit voxel itself
             targetVoxelCoords = { gx: hitVx, gy: hitVy, gz: hitVz };
         }
     } else {
@@ -860,10 +860,8 @@ function calculateTargetVoxelCoords(clientX, clientY, mode, pointerType) {
         // For DELETE or MEASURE mode, if no voxel is intersected, there's no target.
     }
 
-    // Clamp coordinates to grid boundaries
+    // Clamp coordinates to grid boundaries (this is a raw target, dimensions handled later)
     if (targetVoxelCoords) {
-        // The clamping based on dimX, dimY, dimZ will happen in the calling function
-        // This function just provides the raw target coordinate.
         targetVoxelCoords.gx = Math.max(0, Math.min(GRID - 1, targetVoxelCoords.gx));
         targetVoxelCoords.gy = Math.max(0, Math.min(GRID - 1, targetVoxelCoords.gy));
         targetVoxelCoords.gz = Math.max(0, Math.min(GRID - 1, targetVoxelCoords.gz));
@@ -1168,14 +1166,14 @@ function removeImageTemplate(fromLoad = false) {
 }
 
 function getCurrentBlockDimensions(isDragging = false, isShiftOrControl = false) {
-    let dimX = 1, dimY = 1, dimZ = 1;
-
-    // For freehand modes (FREE_ADD, DELETE, DRAW) when not holding Shift/Ctrl, always operate on 1x1x1 voxels.
-    if ((currentMode === Modes.FREE_ADD || currentMode === Modes.DELETE || currentMode === Modes.DRAW) && !isShiftOrControl) {
+    // For freehand modes (FREE_ADD, DELETE, DRAW), always operate on 1x1x1 voxels.
+    // The Shift/Ctrl keys are ignored in these modes for simplicity and intuitive freehand drawing.
+    if (currentMode === Modes.FREE_ADD || currentMode === Modes.DELETE || currentMode === Modes.DRAW) {
         return { dimX: 1, dimY: 1, dimZ: 1 };
     }
 
-    // For LINE_ADD mode, or when Shift/Ctrl is held (for line/stack drawing in other modes)
+    // For LINE_ADD mode, or when Shift/Ctrl is held (for line/stack drawing in LINE_ADD mode)
+    let dimX = 1, dimY = 1, dimZ = 1;
     if (useDynamicBlockDim) {
         dimX = dynamicBlockDim.x;
         dimY = dynamicBlockDim.y;
@@ -1316,7 +1314,11 @@ function onPointerLeave(e) {
     if (e.pointerType === 'mouse') {
         if (!rightMouseButtonDown || (pointerIsDown && e.button === 0)) {
             if (pointerIsDown && initialDragVoxelCoords) {
-                if ((currentMode === Modes.FREE_ADD || currentMode === Modes.DELETE || currentMode === Modes.DRAW) && !(isShiftDragging || isControlDragging)) {
+                // Determine if it was a freehand drag or line/stack drag
+                const isFreehandMode = (currentMode === Modes.FREE_ADD || currentMode === Modes.DELETE || currentMode === Modes.DRAW);
+                const isLineOrStackDrag = (currentMode === Modes.LINE_ADD || isShiftDragging || isControlDragging);
+
+                if (isFreehandMode && !isLineOrStackDrag) {
                     // End of freehand drag (mouse)
                     if (currentStrokeVoxels.size > 0) {
                         const oldState = []; const newState = [];
@@ -1325,22 +1327,21 @@ function onPointerLeave(e) {
                             newState.push({ gx, gy, gz, color: voxels.has(gKey) ? voxels.get(gKey).color : null });
                         } addCommand('batch', oldState, newState);
                     }
-                } else {
+                } else if (isLineOrStackDrag) {
                     // End of line/stack drag (mouse)
                     applyStrokeChanges([], voxelsAtDragStart, currentMode, currentColor); // Rollback live changes
                     const oldState = [...voxelsAtDragStart.entries()].map(([id, data]) => { const p = parseKey(id); return { gx: p[0], gy: p[1], gz: p[2], color: data.color }; });
                     const { dimX, dimY, dimZ } = getCurrentBlockDimensions(false, isShiftDragging || isControlDragging); // Get final action dimensions
-                    let finalTarget = null; let rawFinalTarget = calculateTargetVoxelCoords(e.clientX, e.clientY, currentMode, 'mouse');
-                    if (rawFinalTarget) {
-                        if (dragAxisLock) {
-                            const snappedFinalTarget = { ...rawFinalTarget };
-                            if (dragAxisLock === 'x') { snappedFinalTarget.gy = initialDragVoxelCoords.gy; snappedFinalTarget.gz = initialDragVoxelCoords.gz; }
-                            else if (dragAxisLock === 'y') { snappedFinalTarget.gx = initialDragVoxelCoords.gx; snappedFinalTarget.gz = initialDragVoxelCoords.gz; }
-                            else if (dragAxisLock === 'z') { snappedFinalTarget.gx = initialDragVoxelCoords.gx; snappedFinalTarget.gy = initialDragVoxelCoords.gy; }
-                            finalTarget = snappedFinalTarget;
-                        } else { finalTarget = initialDragVoxelCoords; } // If no drag lock, just use the initial point
-                        if (finalTarget) { finalTarget.gx = Math.max(0, Math.min(GRID - dimX, finalTarget.gx)); finalTarget.gy = Math.max(0, Math.min(GRID - dimY, finalTarget.gy)); finalTarget.gz = Math.max(0, Math.min(GRID - dimZ, finalTarget.gz)); }
-                    } else { finalTarget = initialDragVoxelCoords; } // Fallback if no raw target
+                    let finalTarget = null;
+                    // For line/stack drag, if pointer leaves, use the last valid target or initial point
+                    if (lastActionVoxelCoords) {
+                        finalTarget = lastActionVoxelCoords;
+                    } else {
+                        finalTarget = initialDragVoxelCoords;
+                    }
+                    
+                    if (finalTarget) { finalTarget.gx = Math.max(0, Math.min(GRID - dimX, finalTarget.gx)); finalTarget.gy = Math.max(0, Math.min(GRID - dimY, finalTarget.gy)); finalTarget.gz = Math.max(0, Math.min(GRID - dimZ, finalTarget.gz)); }
+                    
                     const finalVoxels = finalTarget ? getVoxelsOnLine(initialDragVoxelCoords, finalTarget, currentMode, currentColor, dimX, dimY, dimZ) : [];
                     for (const v of finalVoxels) performVoxelModification(v.gx, v.gy, v.gz, currentMode, currentColor);
                     addCommand('batch', oldState, [...voxels.entries()].map(([id, data]) => { const p = parseKey(id); return { gx: p[0], gy: p[1], gz: p[2], color: data.color }; }));
@@ -1372,24 +1373,34 @@ let lastX, lastY; let suppressNextTap = false;
 let initialDragVoxelCoords = null;
 
 function applyStrokeChanges(voxelsToApply, initialVoxelsState, mode, color) {
-    for (const [gKey, data] of currentStrokeVoxels.entries()) {
+    // Revert previous live changes
+    for (const [gKey, change] of currentStrokeVoxels.entries()) {
         const [gx, gy, gz] = parseKey(gKey);
-        if (initialVoxelsState.has(gKey)) _addSingleVoxel(gx, gy, gz, initialVoxelsState.get(gKey).color);
-        else _removeSingleVoxel(gx, gy, gz);
+        if (initialVoxelsState.has(gKey)) {
+            _addSingleVoxel(gx, gy, gz, initialVoxelsState.get(gKey).color);
+        } else {
+            _removeSingleVoxel(gx, gy, gz);
+        }
     }
     currentStrokeVoxels.clear();
+
+    // Apply new changes
     for (const voxel of voxelsToApply) {
         const gKey = key(voxel.gx, voxel.gy, voxel.gz);
         const hasVoxelBeforeDrag = initialVoxelsState.has(gKey);
         const initialColor = hasVoxelBeforeDrag ? initialVoxelsState.get(gKey).color : null;
+        
         performVoxelModification(voxel.gx, voxel.gy, voxel.gz, mode, color);
+        
+        // Record the change for potential future rollback
         currentStrokeVoxels.set(gKey, { newColor: color, initialColor: initialColor });
     }
 }
 
 function onPointerUp(e) {
     const isShiftOrControl = isShiftDragging || isControlDragging;
-    const { dimX, dimY, dimZ } = getCurrentBlockDimensions(false, isShiftOrControl); // Get final dimensions for single click logic
+    const isFreehandMode = (currentMode === Modes.FREE_ADD || currentMode === Modes.DELETE || currentMode === Modes.DRAW);
+    const isLineOrStackDrag = (currentMode === Modes.LINE_ADD || isShiftOrControl);
 
     if (e.pointerType === 'touch') {
         if (suppressNextTap) { suppressNextTap = false; }
@@ -1399,7 +1410,8 @@ function onPointerUp(e) {
             if (movedDist <= TAP_DIST_TH) {
                  const clickedVoxel = calculateTargetVoxelCoords(e.clientX, e.clientY, currentMode, 'touch');
                  if (clickedVoxel) {
-                     const { dimX: actionDimX, dimY: actionDimY, dimZ: actionDimZ } = getCurrentBlockDimensions(false, isShiftOrControl); // Get actual action dimensions (1x1x1 for freehand, block size for others)
+                     // For single tap in freehand modes, action is always 1x1x1
+                     const { dimX: actionDimX, dimY: actionDimY, dimZ: actionDimZ } = getCurrentBlockDimensions(false, isShiftOrControl);
                      clickedVoxel.gx = Math.max(0, Math.min(GRID - actionDimX, clickedVoxel.gx));
                      clickedVoxel.gy = Math.max(0, Math.min(GRID - actionDimY, clickedVoxel.gy));
                      clickedVoxel.gz = Math.max(0, Math.min(GRID - actionDimZ, clickedVoxel.gz));
@@ -1413,7 +1425,7 @@ function onPointerUp(e) {
         }
         if (doubleTapDragActive && currentMode !== Modes.MEASURE && initialDragVoxelCoords) {
             // End of continuous drag (touch)
-            if ((currentMode === Modes.FREE_ADD || currentMode === Modes.DELETE || currentMode === Modes.DRAW) && !isShiftOrControl) {
+            if (isFreehandMode && !isLineOrStackDrag) {
                 // Freehand mode
                 if (currentStrokeVoxels.size > 0) {
                     const oldState = []; const newState = [];
@@ -1422,13 +1434,14 @@ function onPointerUp(e) {
                         newState.push({ gx, gy, gz, color: voxels.has(gKey) ? voxels.get(gKey).color : null });
                     } addCommand('batch', oldState, newState);
                 }
-            } else {
+            } else if (isLineOrStackDrag) {
                 // Line/Stack mode
                 applyStrokeChanges([], voxelsAtDragStart, currentMode, currentColor); // Rollback live changes
                 const oldState = [...voxelsAtDragStart.entries()].map(([id, data]) => { const p = parseKey(id); return { gx: p[0], gy: p[1], gz: p[2], color: data.color }; });
                 let finalTarget = calculateTargetVoxelCoords(e.clientX, e.clientY, currentMode, 'touch');
+                const { dimX: actionDimX, dimY: actionDimY, dimZ: actionDimZ } = getCurrentBlockDimensions(false, isShiftOrControl); // Get final action dimensions
+
                 if (finalTarget) {
-                    const { dimX: actionDimX, dimY: actionDimY, dimZ: actionDimZ } = getCurrentBlockDimensions(false, isShiftOrControl); // Get final action dimensions
                     if (dragAxisLock) {
                         const snappedFinalTarget = { ...finalTarget };
                         if (dragAxisLock === 'x') { snappedFinalTarget.gy = initialDragVoxelCoords.gy; snappedFinalTarget.gz = initialDragVoxelCoords.gz; }
@@ -1443,7 +1456,7 @@ function onPointerUp(e) {
                     }
                 } else { finalTarget = initialDragVoxelCoords; } // Fallback if final target is null
 
-                const finalVoxels = finalTarget ? getVoxelsOnLine(initialDragVoxelCoords, finalTarget, currentMode, currentColor, dimX, dimY, dimZ) : [];
+                const finalVoxels = finalTarget ? getVoxelsOnLine(initialDragVoxelCoords, finalTarget, currentMode, currentColor, actionDimX, actionDimY, actionDimZ) : [];
                 for (const v of finalVoxels) performVoxelModification(v.gx, v.gy, v.gz, currentMode, currentColor);
                 addCommand('batch', oldState, [...voxels.entries()].map(([id, data]) => { const p = parseKey(id); return { gx: p[0], gy: p[1], gz: p[2], color: data.color }; }));
             }
@@ -1469,7 +1482,10 @@ function onPointerUp(e) {
         }
 
         if (pointerIsDown && !isPointerLocked && initialDragVoxelCoords) {
-            if ((currentMode === Modes.FREE_ADD || currentMode === Modes.DELETE || currentMode === Modes.DRAW) && !(isShiftOrControl)) {
+            const isFreehandMode = (currentMode === Modes.FREE_ADD || currentMode === Modes.DELETE || currentMode === Modes.DRAW);
+            const isLineOrStackDrag = (currentMode === Modes.LINE_ADD || isShiftOrControl);
+
+            if (isFreehandMode && !isLineOrStackDrag) {
                 // End of freehand drag (mouse)
                 if (currentStrokeVoxels.size > 0) {
                     const oldState = []; const newState = [];
@@ -1478,20 +1494,20 @@ function onPointerUp(e) {
                         newState.push({ gx, gy, gz, color: voxels.has(gKey) ? voxels.get(gKey).color : null });
                     } addCommand('batch', oldState, newState);
                 }
-            } else {
-                // End of line/stack drag (mouse)
+            } else if (isLineOrStackDrag) {
+                // Line/Stack mode
                 applyStrokeChanges([], voxelsAtDragStart, currentMode, currentColor); // Rollback live changes
                 const oldState = [...voxelsAtDragStart.entries()].map(([id, data]) => { const p = parseKey(id); return { gx: p[0], gy: p[1], gz: p[2], color: data.color }; });
                 let finalTarget = null;
                 let rawFinalTarget = calculateTargetVoxelCoords(e.clientX, e.clientY, currentMode, 'mouse');
+                const { dimX: actionDimX, dimY: actionDimY, dimZ: actionDimZ } = getCurrentBlockDimensions(false, isShiftOrControl); // Get final action dimensions
 
                 if (rawFinalTarget) {
-                    const { dimX: actionDimX, dimY: actionDimY, dimZ: actionDimZ } = getCurrentBlockDimensions(false, isShiftOrControl); // Get final action dimensions
                     if (dragAxisLock) {
                         const snappedFinalTarget = { ...rawFinalTarget };
                         if (dragAxisLock === 'x') { snappedFinalTarget.gy = initialDragVoxelCoords.gy; snappedFinalTarget.gz = initialDragVoxelCoords.gz; }
                         else if (dragAxisLock === 'y') { snappedFinalTarget.gx = initialDragVoxelCoords.gx; snappedFinalTarget.gz = initialDragVoxelCoords.gz; }
-                        else if (dragAxisLock === 'z') { snappedFinalTarget.gx = initialDragVoxelCoords.gx; snappedTarget.gy = initialDragVoxelCoords.gy; }
+                        else if (dragAxisLock === 'z') { snappedFinalTarget.gx = initialDragVoxelCoords.gx; snappedFinalTarget.gy = initialDragVoxelCoords.gy; }
                         finalTarget = snappedFinalTarget;
                     } else if (wasSingleClick) {
                         finalTarget = rawFinalTarget; // For single click, use the hovered target
@@ -1507,7 +1523,7 @@ function onPointerUp(e) {
                     finalTarget = initialDragVoxelCoords; // Fallback if no raw target
                 }
 
-                const finalVoxels = finalTarget ? getVoxelsOnLine(initialDragVoxelCoords, finalTarget, currentMode, currentColor, dimX, dimY, dimZ) : [];
+                const finalVoxels = finalTarget ? getVoxelsOnLine(initialDragVoxelCoords, finalTarget, currentMode, currentColor, actionDimX, actionDimY, actionDimZ) : [];
                 for (const v of finalVoxels) performVoxelModification(v.gx, v.gy, v.gz, currentMode, currentColor);
                 addCommand('batch', oldState, [...voxels.entries()].map(([id, data]) => { const p = parseKey(id); return { gx: p[0], gy: p[1], gz: p[2], color: data.color }; }));
             }
@@ -1534,7 +1550,7 @@ function getPointOnFixedPlane(clientX, clientY, axis, level) {
     if (raycaster.ray.intersectPlane(drawingPlane, intersectionPoint)) {
         let gx = Math.floor(intersectionPoint.x / VS); let gy = Math.floor(intersectionPoint.y / VS); let gz = Math.floor(intersectionPoint.z / VS);
         if (axis === 'y') gy = level; else if (axis === 'x') gx = level; else if (axis === 'z') gz = level;
-        const { dimX, dimY, dimZ } = getCurrentBlockDimensions();
+        const { dimX, dimY, dimZ } = getCurrentBlockDimensions(); // This will return 1x1x1 for freehand modes
         gx = Math.max(0, Math.min(GRID - 1, gx)); gy = Math.max(0, Math.min(GRID - 1, gy)); gz = Math.max(0, Math.min(GRID - 1, gz));
         return { gx, gy, gz };
     } return null;
@@ -1607,7 +1623,8 @@ function onPointerDown(e) {
     if (isPointerLocked) return;
     dragAxisLock = null;
     const isShiftOrControl = isShiftDragging || isControlDragging;
-    const { dimX, dimY, dimZ } = getCurrentBlockDimensions(false, isShiftOrControl); // Get initial dimensions
+    const isFreehandMode = (currentMode === Modes.FREE_ADD || currentMode === Modes.DELETE || currentMode === Modes.DRAW);
+    const isLineOrStackDrag = (currentMode === Modes.LINE_ADD || isShiftOrControl);
 
     if (e.pointerType === 'touch') {
         if (suppressNextTap) { suppressNextTap = false; return; }
@@ -1621,7 +1638,6 @@ function onPointerDown(e) {
             if (currentMode !== Modes.MEASURE) {
                 let rawTarget = calculateTargetVoxelCoords(e.clientX, e.clientY, currentMode, 'touch');
                 if (rawTarget) {
-                    // For freehand modes (FREE_ADD, DELETE, DRAW) without Shift/Ctrl, always use 1x1x1
                     const { dimX: actionDimX, dimY: actionDimY, dimZ: actionDimZ } = getCurrentBlockDimensions(true, isShiftOrControl); // Get actual action dimensions
                     rawTarget.gx = Math.max(0, Math.min(GRID - actionDimX, rawTarget.gx));
                     rawTarget.gy = Math.max(0, Math.min(GRID - actionDimY, rawTarget.gy));
@@ -1630,12 +1646,24 @@ function onPointerDown(e) {
                     initialDragVoxelCoords = rawTarget;
                     voxelsAtDragStart = new Map(voxels);
                     currentStrokeVoxels.clear();
-                    performVoxelModification(initialDragVoxelCoords.gx, initialDragVoxelCoords.gy, initialDragVoxelCoords.gz, currentMode, currentColor);
-                    currentStrokeVoxels.set(key(initialDragVoxelCoords.gx, initialDragVoxelCoords.gy, initialDragVoxelCoords.gz), { newColor: voxels.has(key(initialDragVoxelCoords.gx, initialDragVoxelCoords.gy, initialDragVoxelCoords.gz)) ? voxels.get(key(initialDragVoxelCoords.gx, initialDragVoxelCoords.gy, initialDragVoxelCoords.gz)).color : null, initialColor: voxelsAtDragStart.has(key(initialDragVoxelCoords.gx, initialDragVoxelCoords.gy, initialDragVoxelCoords.gz)) ? voxelsAtDragStart.get(key(initialDragVoxelCoords.gx, initialDragVoxelCoords.gy, initialDragVoxelCoords.gz)).color : null });
+                    
+                    if (isFreehandMode && !isLineOrStackDrag) {
+                        performVoxelModification(initialDragVoxelCoords.gx, initialDragVoxelCoords.gy, initialDragVoxelCoords.gz, currentMode, currentColor);
+                        currentStrokeVoxels.set(key(initialDragVoxelCoords.gx, initialDragVoxelCoords.gy, initialDragVoxelCoords.gz), { newColor: voxels.has(key(initialDragVoxelCoords.gx, initialDragVoxelCoords.gy, initialDragVoxelCoords.gz)) ? voxels.get(key(initialDragVoxelCoords.gx, initialDragVoxelCoords.gy, initialDragVoxelCoords.gz)).color : null, initialColor: voxelsAtDragStart.has(key(initialDragVoxelCoords.gx, initialDragVoxelCoords.gy, initialDragVoxelCoords.gz)) ? voxelsAtDragStart.get(key(initialDragVoxelCoords.gx, initialDragVoxelCoords.gy, initialDragVoxelCoords.gz)).color : null });
+                        updatePreviewVoxel(initialDragVoxelCoords.gx, initialDragVoxelCoords.gy, initialDragVoxelCoords.gz, true, 1, 1, 1); // Show 1x1x1 preview
+                        previewLineInstancedMesh.count = 0; // Hide line preview
+                    } else if (isLineOrStackDrag) {
+                        const initialVoxels = getVoxelsOnLine(initialDragVoxelCoords, initialDragVoxelCoords, currentMode, currentColor, actionDimX, actionDimY, actionDimZ);
+                        for (const v of initialVoxels) {
+                            performVoxelModification(v.gx, v.gy, v.gz, currentMode, currentColor);
+                            currentStrokeVoxels.set(key(v.gx, v.gy, v.gz), { newColor: currentColor, initialColor: voxelsAtDragStart.has(key(v.gx, v.gy, v.gz)) ? voxelsAtDragStart.get(key(v.gx, v.gy, v.gz)).color : null });
+                        }
+                        previewLineVoxels = initialVoxels;
+                        updatePreviewLineMesh();
+                        updatePreviewVoxel(0, 0, 0, false); // Hide single preview voxel
+                    }
                     lastActionVoxelCoords = { ...initialDragVoxelCoords };
                     initialDragVoxelWorldPos = new THREE.Vector3(initialDragVoxelCoords.gx * VS + HALF, initialDragVoxelCoords.gy * VS + HALF, initialDragVoxelCoords.gz * VS + HALF);
-                    updatePreviewVoxel(initialDragVoxelCoords.gx, initialDragVoxelCoords.gy, initialDragVoxelCoords.gz, true, actionDimX, actionDimY, actionDimZ); // Show preview for first voxel
-                    previewLineInstancedMesh.count = 0; // Hide line preview
                 }
             }
         } else {
@@ -1649,7 +1677,8 @@ function onPointerDown(e) {
             if (currentMode === Modes.MEASURE) {
                 const clickedVoxel = calculateTargetVoxelCoords(e.clientX, e.clientY, currentMode, 'touch');
                 if (clickedVoxel) {
-                    clickedVoxel.gx = Math.max(0, Math.min(GRID - dimX, clickedVoxel.gx)); clickedVoxel.gy = Math.max(0, Math.min(GRID - dimY, clickedVoxel.gy)); clickedVoxel.gz = Math.max(0, Math.min(GRID - dimZ, clickedVoxel.gz));
+                    // For measure mode, dimX, dimY, dimZ are always 1 for the click target
+                    clickedVoxel.gx = Math.max(0, Math.min(GRID - 1, clickedVoxel.gx)); clickedVoxel.gy = Math.max(0, Math.min(GRID - 1, clickedVoxel.gy)); clickedVoxel.gz = Math.max(0, Math.min(GRID - 1, clickedVoxel.gz));
                     if (measurementStartPoint === null) {
                         measurementStartPoint = { ...clickedVoxel }; measurementEndPoint = null; distanceDisplay.classList.add('hidden');
                         previewLineVoxels = [{ gx: measurementStartPoint.gx, gy: measurementStartPoint.gy, gz: measurementStartPoint.gz }]; updatePreviewLineMesh();
@@ -1685,7 +1714,8 @@ function onPointerDown(e) {
         if (currentMode === Modes.MEASURE) {
             const clickedVoxel = calculateTargetVoxelCoords(e.clientX, e.clientY, currentMode, 'mouse');
             if (clickedVoxel) {
-                clickedVoxel.gx = Math.max(0, Math.min(GRID - dimX, clickedVoxel.gx)); clickedVoxel.gy = Math.max(0, Math.min(GRID - dimY, clickedVoxel.gy)); clickedVoxel.gz = Math.max(0, Math.min(GRID - dimZ, clickedVoxel.gz));
+                // For measure mode, dimX, dimY, dimZ are always 1 for the click target
+                clickedVoxel.gx = Math.max(0, Math.min(GRID - 1, clickedVoxel.gx)); clickedVoxel.gy = Math.max(0, Math.min(GRID - 1, clickedVoxel.gy)); clickedVoxel.gz = Math.max(0, Math.min(GRID - 1, clickedVoxel.gz));
                 if (measurementStartPoint === null) {
                     measurementStartPoint = { ...clickedVoxel }; measurementEndPoint = null; distanceDisplay.classList.add('hidden');
                     previewLineVoxels = [{ gx: measurementStartPoint.gx, gy: measurementStartPoint.gy, gz: measurementStartPoint.gz }]; updatePreviewLineMesh();
@@ -1704,14 +1734,14 @@ function onPointerDown(e) {
             pointerIsDown = false; initialClickPos = null; return;
         }
 
-        if ((currentMode === Modes.FREE_ADD || currentMode === Modes.DELETE || currentMode === Modes.DRAW) && !(isShiftOrControl)) {
+        if (isFreehandMode && !isLineOrStackDrag) {
             // Start of freehand drag (mouse)
             initialDragVoxelCoords = rawTarget;
             dragAxisLock = null;
             voxelsAtDragStart = new Map(voxels);
             currentStrokeVoxels.clear();
 
-            const { dimX: actionDimX, dimY: actionDimY, dimZ: actionDimZ } = getCurrentBlockDimensions(true, isShiftOrControl); // Get actual action dimensions (1x1x1)
+            const { dimX: actionDimX, dimY: actionDimY, dimZ: actionDimZ } = getCurrentBlockDimensions(true, isShiftOrControl); // Always 1x1x1 for freehand
             initialDragVoxelCoords.gx = Math.max(0, Math.min(GRID - actionDimX, initialDragVoxelCoords.gx));
             initialDragVoxelCoords.gy = Math.max(0, Math.min(GRID - actionDimY, initialDragVoxelCoords.gy));
             initialDragVoxelCoords.gz = Math.max(0, Math.min(GRID - actionDimZ, initialDragVoxelCoords.gz));
@@ -1722,7 +1752,7 @@ function onPointerDown(e) {
             updatePreviewVoxel(initialDragVoxelCoords.gx, initialDragVoxelCoords.gy, initialDragVoxelCoords.gz, true, actionDimX, actionDimY, actionDimZ); // Show preview for first voxel
             previewLineInstancedMesh.count = 0; // Hide line preview
             return;
-        } else if ((currentMode === Modes.LINE_ADD || isShiftOrControl)) {
+        } else if (isLineOrStackDrag) {
             // Start of line/stack drag (mouse)
             if (isControlDragging && currentMode === Modes.LINE_ADD) { initialDragVoxelCoords = { gx: rawTarget.gx, gy: rawTarget.gy, gz: rawTarget.gz }; dragAxisLock = 'y'; }
             else if (isShiftDragging) { initialDragVoxelCoords = getPointOnFixedPlane(e.clientX, e.clientY, currentDrawingAxis, activeDrawingLevel[currentDrawingAxis]) || rawTarget; dragAxisLock = null; }
@@ -1759,7 +1789,11 @@ function onPointerMove(e) {
     lastY = e.clientY;
 
     const isShiftOrControl = isShiftDragging || isControlDragging;
-    const { dimX, dimY, dimZ } = getCurrentBlockDimensions(true, isShiftOrControl); // Pass true for isDragging, and isShiftOrControl
+    const isFreehandMode = (currentMode === Modes.FREE_ADD || currentMode === Modes.DELETE || currentMode === Modes.DRAW);
+    const isLineOrStackDrag = (currentMode === Modes.LINE_ADD || isShiftOrControl);
+
+    // Get dimensions for the current *action*, which might be different from hover dimensions
+    const { dimX, dimY, dimZ } = getCurrentBlockDimensions(true, isShiftOrControl);
 
     if (e.pointerType === 'touch') {
         if (!activePointers.has(e.pointerId)) return;
@@ -1772,8 +1806,8 @@ function onPointerMove(e) {
             let rawCurrentTarget = calculateTargetVoxelCoords(e.clientX, e.clientY, currentMode, 'touch');
 
             if (rawCurrentTarget) {
-                // Freehand mode (no Shift/Ctrl)
-                if ((currentMode === Modes.FREE_ADD || currentMode === Modes.DELETE || currentMode === Modes.DRAW) && !isShiftOrControl) {
+                if (isFreehandMode && !isLineOrStackDrag) {
+                    // Freehand mode (no Shift/Ctrl)
                     rawCurrentTarget.gx = Math.max(0, Math.min(GRID - 1, rawCurrentTarget.gx));
                     rawCurrentTarget.gy = Math.max(0, Math.min(GRID - 1, rawCurrentTarget.gy));
                     rawCurrentTarget.gz = Math.max(0, Math.min(GRID - 1, rawCurrentTarget.gz));
@@ -1792,9 +1826,8 @@ function onPointerMove(e) {
                     previewLineInstancedMesh.count = 0; // Hide line preview
                     distanceDisplay.classList.add('hidden'); // Hide distance display
                     return;
-                }
-                // Line/Stack mode (LINE_ADD or with Shift/Ctrl)
-                else if (initialDragVoxelCoords) {
+                } else if (isLineOrStackDrag && initialDragVoxelCoords) {
+                    // Line/Stack mode (LINE_ADD or with Shift/Ctrl)
                     let finalTarget = null;
                     if (dragAxisLock === null) {
                         const dx = Math.abs(rawCurrentTarget.gx - initialDragVoxelCoords.gx);
@@ -1849,9 +1882,9 @@ function onPointerMove(e) {
         } else if (currentMode === Modes.MEASURE && measurementStartPoint) {
             const currentTarget = calculateTargetVoxelCoords(e.clientX, e.clientY, currentMode, 'touch');
             if (currentTarget) {
-                currentTarget.gx = Math.max(0, Math.min(GRID - dimX, currentTarget.gx));
-                currentTarget.gy = Math.max(0, Math.min(GRID - dimY, currentTarget.gy));
-                currentTarget.gz = Math.max(0, Math.min(GRID - dimZ, currentTarget.gz));
+                currentTarget.gx = Math.max(0, Math.min(GRID - 1, currentTarget.gx));
+                currentTarget.gy = Math.max(0, Math.min(GRID - 1, currentTarget.gy));
+                currentTarget.gz = Math.max(0, Math.min(GRID - 1, currentTarget.gz));
                 distanceDisplay.textContent = `Distanz: ${new THREE.Vector3(measurementStartPoint.gx * VS, measurementStartPoint.gy * VS, measurementStartPoint.gz * VS).distanceTo(new THREE.Vector3(currentTarget.gx * VS, currentTarget.gy * VS, currentTarget.gz * VS)).toFixed(2)} mm`;
                 distanceDisplay.classList.remove('hidden');
                 previewLineVoxels = getVoxelsOnLine(measurementStartPoint, currentTarget, currentMode, currentColor, 1, 1, 1);
@@ -1884,9 +1917,9 @@ function onPointerMove(e) {
         if (measurementStartPoint) {
             const tempTarget = calculateTargetVoxelCoords(e.clientX, e.clientY, currentMode, 'mouse');
             if (tempTarget) {
-                tempTarget.gx = Math.max(0, Math.min(GRID - dimX, tempTarget.gx));
-                tempTarget.gy = Math.max(0, Math.min(GRID - dimY, tempTarget.gy));
-                tempTarget.gz = Math.max(0, Math.min(GRID - dimZ, tempTarget.gz));
+                tempTarget.gx = Math.max(0, Math.min(GRID - 1, tempTarget.gx));
+                tempTarget.gy = Math.max(0, Math.min(GRID - 1, tempTarget.gy));
+                tempTarget.gz = Math.max(0, Math.min(GRID - 1, tempTarget.gz));
                 distanceDisplay.textContent = `Distanz: ${new THREE.Vector3(measurementStartPoint.gx * VS, measurementStartPoint.gy * VS, measurementStartPoint.gz * VS).distanceTo(new THREE.Vector3(tempTarget.gx * VS, tempTarget.gy * VS, tempTarget.gz * VS)).toFixed(2)} mm`;
                 distanceDisplay.classList.remove('hidden');
                 previewLineVoxels = getVoxelsOnLine(measurementStartPoint, tempTarget, currentMode, currentColor, 1, 1, 1);
@@ -1909,7 +1942,7 @@ function onPointerMove(e) {
     } else {
         let rawCurrentTarget = calculateTargetVoxelCoords(e.clientX, e.clientY, currentMode, 'mouse');
 
-        if (pointerIsDown && (currentMode === Modes.FREE_ADD || currentMode === Modes.DELETE || currentMode === Modes.DRAW) && !(isShiftOrControl)) {
+        if (pointerIsDown && isFreehandMode && !isLineOrStackDrag) {
             // Freehand drag (mouse)
             if (rawCurrentTarget && lastActionVoxelCoords) {
                 rawCurrentTarget.gx = Math.max(0, Math.min(GRID - 1, rawCurrentTarget.gx));
