@@ -499,7 +499,8 @@ function parseKey(k) {
 
 let isHoldDrawingActive = false;
 const LONG_PRESS_DELAY_MS = 500;
-const VOXEL_DRAG_THRESHOLD = 2;
+// Reduzierter Schwellenwert für die Achsensperre, um sie reaktionsfreudiger zu machen.
+const VOXEL_DRAG_THRESHOLD = 1; 
 
 const PINCH_ZOOM_MULT = 40;
 const TAP_DIST_TH = 10;
@@ -620,7 +621,7 @@ let measurementStartPoint = null;
 let measurementEndPoint = null;
 
 let previewLineInstancedMesh;
-const maxPreviewInstances = 180 * 3;
+const maxPreviewInstances = 180 * 3; // Max voxels for a line (e.g., 180 length on any axis)
 let previewLineVoxels = [];
 
 let projectTitle = '';
@@ -893,6 +894,7 @@ function releasePointer(id, eventType) {
         initialDragVoxelWorldPos = null;
         dragAxisLock = null;
         
+        // Vorschau-Linie beim Loslassen des Pointers immer leeren
         previewLineInstancedMesh.count = 0;
         previewLineInstancedMesh.instanceMatrix.needsUpdate = true;
         previewLineVoxels = [];
@@ -959,6 +961,7 @@ function cycleMode() {
             measurementStartPoint = null;
             measurementEndPoint = null;
             distanceDisplay.classList.add('hidden');
+            // Vorschau-Linie beim Moduswechsel leeren
             previewLineInstancedMesh.count = 0;
             previewLineInstancedMesh.instanceMatrix.needsUpdate = true;
             previewLineVoxels = [];
@@ -1503,6 +1506,7 @@ function resetToDefaultProject() {
     measurementStartPoint = null;
     measurementEndPoint = null;
     distanceDisplay.classList.add('hidden');
+    // Vorschau-Linie beim Zurücksetzen des Projekts leeren
     previewLineInstancedMesh.count = 0;
     previewLineInstancedMesh.instanceMatrix.needsUpdate = true;
     previewLineVoxels = [];
@@ -1650,6 +1654,7 @@ function loadProjectData(projectData) {
         measurementStartPoint = null;
         measurementEndPoint = null;
         distanceDisplay.classList.add('hidden');
+        // Vorschau-Linie beim Laden des Projekts leeren
         previewLineInstancedMesh.count = 0;
         previewLineInstancedMesh.instanceMatrix.needsUpdate = true;
         previewLineVoxels = [];
@@ -2253,6 +2258,7 @@ window.onload = async function() {
         updatePreviewVoxel(0,0,0,false);
 
         const previewVoxelBaseGeometry = new THREE.BoxGeometry(VS, VS, VS);
+        // Grüne Vorschau-Linie für alle Drag-Operationen
         const previewVoxelLineMaterial = new THREE.MeshBasicMaterial({ color: 0x00ff00, transparent: true, opacity: 0.3, depthTest: false });
         previewLineInstancedMesh = new THREE.InstancedMesh(previewVoxelBaseGeometry, previewVoxelLineMaterial, maxPreviewInstances);
         previewLineInstancedMesh.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
@@ -2445,6 +2451,7 @@ window.onload = async function() {
             measurementEndPoint = null;
             distanceDisplay.classList.add('hidden');
             updatePreviewVoxel(0, 0, 0, false);
+            // Vorschau-Linie beim Moduswechsel leeren
             previewLineInstancedMesh.count = 0;
             previewLineInstancedMesh.instanceMatrix.needsUpdate = true;
             previewLineVoxels = [];
@@ -2763,7 +2770,7 @@ function onPointerDown(e) {
     // If pointer is locked (meaning right mouse button is down), do not process other clicks
     if (isPointerLocked) return;
 
-    dragAxisLock = null;
+    dragAxisLock = null; // Reset axis lock on new pointer down
 
     if (e.pointerType === 'touch') {
         if (suppressNextTap) {
@@ -2792,10 +2799,11 @@ function onPointerDown(e) {
 
                     initialDragVoxelCoords = rawTargetVoxel;
                     
-                    voxelsAtDragStart = new Map(voxels);
+                    voxelsAtDragStart = new Map(voxels); // Speichern des Zustands vor dem Ziehen
                     currentDragVoxels.clear();
                     previousFrameDragVoxels.clear();
 
+                    // Initialen Voxel-Bereich für die Vorschau und die erste Modifikation festlegen
                     const initialVoxels = getVoxelsOnLine(initialDragVoxelCoords, initialDragVoxelCoords, currentMode, currentColor, dimX, dimY, dimZ);
                     for (const voxel of initialVoxels) {
                         const globalKey = key(voxel.gx, voxel.gy, voxel.gz);
@@ -2806,6 +2814,9 @@ function onPointerDown(e) {
                         currentDragVoxels.set(globalKey, { color: currentColor, initialColor: initialColor });
                         previousFrameDragVoxels.add(globalKey);
                     }
+                    // Vorschau-Linie für den Startpunkt aktualisieren
+                    previewLineVoxels = initialVoxels;
+                    updatePreviewLineMesh();
 
                     lastActionVoxelCoords = { ...initialDragVoxelCoords };
                     initialDragVoxelWorldPos = new THREE.Vector3(initialDragVoxelCoords.gx * VS + HALF, initialDragVoxelCoords.gy * VS + HALF, initialDragVoxelCoords.gz * VS + HALF);
@@ -2819,6 +2830,10 @@ function onPointerDown(e) {
             initialDragVoxelWorldPos = null;
             currentDragVoxels.clear();
             previousFrameDragVoxels.clear();
+            // Vorschau-Linie leeren, wenn kein Drag beginnt
+            previewLineInstancedMesh.count = 0;
+            previewLineInstancedMesh.instanceMatrix.needsUpdate = true;
+            previewLineVoxels = [];
 
             if (currentMode === Modes.MEASURE) {
                 const clickedVoxel = calculateTargetVoxelCoords(e.clientX, e.clientY, currentMode, 'touch');
@@ -2918,7 +2933,7 @@ function onPointerDown(e) {
                     gy: rawTargetVoxel.gy,
                     gz: rawTargetVoxel.gz
                 };
-                dragAxisLock = 'y';
+                dragAxisLock = 'y'; // Erzwinge Y-Achsen-Sperre für Stapeln
             } else {
                 pointerIsDown = false;
                 initialClickPos = null;
@@ -2928,6 +2943,10 @@ function onPointerDown(e) {
                 previousFrameDragVoxels.clear();
                 distanceDisplay.classList.add('hidden');
                 initialDragVoxelWorldPos = null;
+                // Vorschau-Linie leeren
+                previewLineInstancedMesh.count = 0;
+                previewLineInstancedMesh.instanceMatrix.needsUpdate = true;
+                previewLineVoxels = [];
                 return;
             }
         } else if (isShiftDragging) {
@@ -2935,10 +2954,10 @@ function onPointerDown(e) {
             if (!initialDragVoxelCoords && rawTargetVoxel) {
                 initialDragVoxelCoords = rawTargetVoxel;
             }
-            dragAxisLock = null;
+            dragAxisLock = null; // Achsensperre wird durch Ziehrichtung bestimmt
         } else {
             initialDragVoxelCoords = rawTargetVoxel;
-            dragAxisLock = null;
+            dragAxisLock = null; // Achsensperre wird durch Ziehrichtung bestimmt
         }
 
         if (initialDragVoxelCoords) {
@@ -2947,10 +2966,11 @@ function onPointerDown(e) {
             initialDragVoxelCoords.gy = Math.max(0, Math.min(GRID - dimY, initialDragVoxelCoords.gy));
             initialDragVoxelCoords.gz = Math.max(0, Math.min(GRID - dimZ, initialDragVoxelCoords.gz));
 
-            voxelsAtDragStart = new Map(voxels);
+            voxelsAtDragStart = new Map(voxels); // Speichern des Zustands vor dem Ziehen
             currentDragVoxels.clear();
             previousFrameDragVoxels.clear();
 
+            // Initialen Voxel-Bereich für die Vorschau und die erste Modifikation festlegen
             const initialVoxels = getVoxelsOnLine(initialDragVoxelCoords, initialDragVoxelCoords, currentMode, currentColor, dimX, dimY, dimZ);
             for (const voxel of initialVoxels) {
                 const globalKey = key(voxel.gx, voxel.gy, voxel.gz);
@@ -2961,6 +2981,9 @@ function onPointerDown(e) {
                 currentDragVoxels.set(globalKey, { color: currentColor, initialColor: initialColor });
                 previousFrameDragVoxels.add(globalKey);
             }
+            // Vorschau-Linie für den Startpunkt aktualisieren
+            previewLineVoxels = initialVoxels;
+            updatePreviewLineMesh();
 
             lastActionVoxelCoords = { ...initialDragVoxelCoords };
             initialDragVoxelWorldPos = new THREE.Vector3(initialDragVoxelCoords.gx * VS + HALF, initialDragVoxelCoords.gy * VS + HALF, initialDragVoxelCoords.gz * VS + HALF);
@@ -2974,6 +2997,10 @@ function onPointerDown(e) {
             previousFrameDragVoxels.clear();
             distanceDisplay.classList.add('hidden');
             initialDragVoxelWorldPos = null;
+            // Vorschau-Linie leeren
+            previewLineInstancedMesh.count = 0;
+            previewLineInstancedMesh.instanceMatrix.needsUpdate = true;
+            previewLineVoxels = [];
         }
     }
 }
@@ -3038,6 +3065,7 @@ function onPointerMove(e) {
                     const voxelsToDrawThisFrame = getVoxelsOnLine(initialDragVoxelCoords, finalTargetVoxelForDrawing, currentMode, currentColor, dimX, dimY, dimZ);
                     const currentFrameVoxelsSet = new Set(voxelsToDrawThisFrame.map(v => key(v.gx, v.gy, v.gz)));
 
+                    // Rollback previous frame's changes
                     for (const globalKey of previousFrameDragVoxels) {
                         if (!currentFrameVoxelsSet.has(globalKey)) {
                             const [gx, gy, gz] = parseKey(globalKey);
@@ -3050,6 +3078,7 @@ function onPointerMove(e) {
                         }
                     }
 
+                    // Apply current frame's changes
                     for (const voxel of voxelsToDrawThisFrame) {
                         const globalKey = key(voxel.gx, voxel.gy, voxel.gz);
                         if (!currentDragVoxels.has(globalKey)) {
@@ -3072,9 +3101,14 @@ function onPointerMove(e) {
                     const currentVoxelWorldPos = new THREE.Vector3(finalTargetVoxelForDrawing.gx * VS + HALF, finalTargetVoxelForDrawing.gy * VS + HALF, finalTargetVoxelForDrawing.gz * VS + HALF);
                     const distance = initialDragVoxelWorldPos.distanceTo(currentVoxelWorldPos);
                     distanceDisplay.textContent = `Distanz: ${distance.toFixed(2)} mm`;
+                    distanceDisplay.classList.remove('hidden');
+
+                    // Vorschau-Linie für Drag-Operationen aktualisieren
+                    previewLineVoxels = voxelsToDrawThisFrame;
+                    updatePreviewLineMesh();
                 }
             }
-            updatePreviewVoxel(0, 0, 0, false);
+            updatePreviewVoxel(0, 0, 0, false); // Einzelne Vorschau-Voxel ausblenden, wenn Linie gezeichnet wird
             return;
         } else if (currentMode === Modes.MEASURE && measurementStartPoint) {
             const currentTargetVoxel = calculateTargetVoxelCoords(e.clientX, e.clientY, currentMode, 'touch');
@@ -3100,9 +3134,9 @@ function onPointerMove(e) {
         }
 
         handleGesture();
-        updatePreviewVoxel(0, 0, 0, false);
+        updatePreviewVoxel(0, 0, 0, false); // Einzelne Vorschau-Voxel ausblenden
         distanceDisplay.classList.add('hidden');
-        previewLineInstancedMesh.count = 0;
+        previewLineInstancedMesh.count = 0; // Vorschau-Linie leeren
         previewLineInstancedMesh.instanceMatrix.needsUpdate = true;
         previewLineVoxels = [];
         return;
@@ -3160,19 +3194,21 @@ function onPointerMove(e) {
 
                 if (dx > VOXEL_DRAG_THRESHOLD || dy > VOXEL_DRAG_THRESHOLD || dz > VOXEL_DRAG_THRESHOLD) {
                     if (isControlDragging && currentMode === Modes.ADD) {
-                        dragAxisLock = 'y';
+                        dragAxisLock = 'y'; // Erzwinge Y-Achsen-Sperre für Stapeln
                     } else if (isShiftDragging) {
+                        // Bei Shift-Drag auf der aktiven Ebene, sperre auf X oder Z
                         if (currentDrawingAxis === 'y') {
                             if (dx >= dz) dragAxisLock = 'x';
                             else dragAxisLock = 'z';
                         } else if (currentDrawingAxis === 'x') {
                             if (dy >= dz) dragAxisLock = 'y';
                             else dragAxisLock = 'z';
-                        } else {
+                        } else { // currentDrawingAxis === 'z'
                             if (dx >= dy) dragAxisLock = 'x';
                             else dragAxisLock = 'y';
                         }
                     } else {
+                        // Standardmäßige Achsensperre basierend auf der größten Bewegung
                         if (dx >= dy && dx >= dz) dragAxisLock = 'x';
                         else if (dy >= dx && dy >= dz) dragAxisLock = 'y';
                         else dragAxisLock = 'z';
@@ -3206,6 +3242,7 @@ function onPointerMove(e) {
                 const voxelsToDrawThisFrame = getVoxelsOnLine(initialDragVoxelCoords, finalTargetVoxelForDrawing, currentMode, currentColor, dimX, dimY, dimZ);
                 const currentFrameVoxelsSet = new Set(voxelsToDrawThisFrame.map(v => key(v.gx, v.gy, v.gz)));
 
+                // Rollback previous frame's changes
                 for (const globalKey of previousFrameDragVoxels) {
                     if (!currentFrameVoxelsSet.has(globalKey)) {
                         const [gx, gy, gz] = parseKey(globalKey);
@@ -3218,6 +3255,7 @@ function onPointerMove(e) {
                     }
                 }
 
+                // Apply current frame's changes
                 for (const voxel of voxelsToDrawThisFrame) {
                     const globalKey = key(voxel.gx, voxel.gy, voxel.gz);
                     if (!currentDragVoxels.has(globalKey)) {
@@ -3241,18 +3279,28 @@ function onPointerMove(e) {
                 const distance = initialDragVoxelWorldPos.distanceTo(currentVoxelWorldPos);
                 distanceDisplay.textContent = `Distanz: ${distance.toFixed(2)} mm`;
                 distanceDisplay.classList.remove('hidden');
+
+                // Vorschau-Linie für Drag-Operationen aktualisieren
+                previewLineVoxels = voxelsToDrawThisFrame;
+                updatePreviewLineMesh();
             } else {
                 distanceDisplay.classList.add('hidden');
+                // Vorschau-Linie leeren, wenn keine gültige Drag-Achse bestimmt wurde
+                previewLineInstancedMesh.count = 0;
+                previewLineInstancedMesh.instanceMatrix.needsUpdate = true;
+                previewLineVoxels = [];
             }
 
-            if (finalTargetVoxelForDrawing) {
-                updatePreviewVoxel(finalTargetVoxelForDrawing.gx, finalTargetVoxelForDrawing.gy, finalTargetVoxelForDrawing.gz, true, dimX, dimY, dimZ);
-            } else {
-                updatePreviewVoxel(0, 0, 0, false);
-            }
+            // Einzelne Vorschau-Voxel ausblenden, wenn Linie gezeichnet wird
+            updatePreviewVoxel(0, 0, 0, false); 
 
         } else {
             distanceDisplay.classList.add('hidden');
+            // Vorschau-Linie leeren, wenn kein Drag aktiv ist
+            previewLineInstancedMesh.count = 0;
+            previewLineInstancedMesh.instanceMatrix.needsUpdate = true;
+            previewLineVoxels = [];
+
             let hoverTargetVoxel = calculateTargetVoxelCoords(e.clientX, e.clientY, currentMode, 'mouse');
             if (hoverTargetVoxel) {
                 hoverTargetVoxel.gx = Math.max(0, Math.min(GRID - dimX, hoverTargetVoxel.gx));
@@ -3298,6 +3346,7 @@ function onPointerUp(e) {
             }
         }
         if (doubleTapDragActive && currentMode !== Modes.MEASURE && initialDragVoxelCoords) {
+            // Rollback all changes from live dragging
             for (const [globalKey, data] of currentDragVoxels.entries()) {
                 const [gx, gy, gz] = parseKey(globalKey);
                 if (voxelsAtDragStart.has(globalKey)) {
@@ -3330,7 +3379,7 @@ function onPointerUp(e) {
                     }
                     finalTargetVoxel = snappedFinalTargetVoxel;
                 } else {
-                    finalTargetVoxel = initialDragVoxelCoords;
+                    finalTargetVoxel = initialDragVoxelCoords; // If no lock, treat as single point
                 }
 
                 if (finalTargetVoxel) {
@@ -3339,7 +3388,7 @@ function onPointerUp(e) {
                     finalTargetVoxel.gz = Math.max(0, Math.min(GRID - dimZ, finalTargetVoxel.gz));
                 }
             } else {
-                finalTargetVoxel = initialDragVoxelCoords;
+                finalTargetVoxel = initialDragVoxelCoords; // If no target, use initial point
             }
 
             const finalVoxelsToDraw = getVoxelsOnLine(initialDragVoxelCoords, finalTargetVoxel, currentMode, currentColor, dimX, dimY, dimZ);
@@ -3361,6 +3410,10 @@ function onPointerUp(e) {
         dragAxisLock = null;
         currentDragVoxels.clear();
         previousFrameDragVoxels.clear();
+        // Vorschau-Linie beim Loslassen immer leeren
+        previewLineInstancedMesh.count = 0;
+        previewLineInstancedMesh.instanceMatrix.needsUpdate = true;
+        previewLineVoxels = [];
         return;
     }
 
@@ -3384,6 +3437,7 @@ function onPointerUp(e) {
         }
 
         if (pointerIsDown && !isPointerLocked && initialDragVoxelCoords) {
+            // Rollback all changes from live dragging
             for (const [globalKey, data] of currentDragVoxels.entries()) {
                 const [gx, gy, gz] = parseKey(globalKey);
                 if (voxelsAtDragStart.has(globalKey)) {
@@ -3419,7 +3473,7 @@ function onPointerUp(e) {
                 } else if (wasSingleClick) {
                     finalTargetVoxel = rawFinalTargetVoxel;
                 } else {
-                    finalTargetVoxel = initialDragVoxelCoords;
+                    finalTargetVoxel = initialDragVoxelCoords; // If no lock and not a single click, treat as initial point
                 }
 
                 if (finalTargetVoxel) {
@@ -3428,7 +3482,7 @@ function onPointerUp(e) {
                     finalTargetVoxel.gz = Math.max(0, Math.min(GRID - dimZ, finalTargetVoxel.gz));
                 }
             } else {
-                finalTargetVoxel = initialDragVoxelCoords;
+                finalTargetVoxel = initialDragVoxelCoords; // If no target, use initial point
             }
 
             if (finalTargetVoxel) {
@@ -3464,6 +3518,10 @@ function onPointerUp(e) {
     dragAxisLock = null;
     currentDragVoxels.clear();
     previousFrameDragVoxels.clear();
+    // Vorschau-Linie beim Loslassen immer leeren
+    previewLineInstancedMesh.count = 0;
+    previewLineInstancedMesh.instanceMatrix.needsUpdate = true;
+    previewLineVoxels = [];
 }
 
 function onPointerLeave(e) {
@@ -3472,6 +3530,7 @@ function onPointerLeave(e) {
         // and it was not a right-click initiated pointer lock.
         if (!rightMouseButtonDown || (pointerIsDown && e.button === 0)) {
             if (pointerIsDown && initialDragVoxelCoords) {
+                // Rollback all changes from live dragging
                 for (const [globalKey, data] of currentDragVoxels.entries()) {
                     const [gx, gy, gz] = parseKey(globalKey);
                     if (voxelsAtDragStart.has(globalKey)) {
@@ -3503,7 +3562,7 @@ function onPointerLeave(e) {
                         }
                         finalTargetVoxel = snappedFinalTargetVoxel;
                     } else {
-                        finalTargetVoxel = initialDragVoxelCoords;
+                        finalTargetVoxel = initialDragVoxelCoords; // If no lock, treat as single point
                     }
 
                     if (finalTargetVoxel) {
@@ -3512,7 +3571,7 @@ function onPointerLeave(e) {
                         finalTargetVoxel.gz = Math.max(0, Math.min(GRID - dimZ, finalTargetVoxel.gz));
                     }
                 } else {
-                    finalTargetVoxel = initialDragVoxelCoords;
+                    finalTargetVoxel = initialDragVoxelCoords; // If no target, use initial point
                 }
 
                 const finalVoxelsToDraw = getVoxelsOnLine(initialDragVoxelCoords, finalTargetVoxel, currentMode, currentColor, dimX, dimY, dimZ);
@@ -3539,6 +3598,10 @@ function onPointerLeave(e) {
             dragAxisLock = null;
             currentDragVoxels.clear();
             previousFrameDragVoxels.clear();
+            // Vorschau-Linie beim Verlassen immer leeren
+            previewLineInstancedMesh.count = 0;
+            previewLineInstancedMesh.instanceMatrix.needsUpdate = true;
+            previewLineVoxels = [];
         }
     }
 }
@@ -3649,6 +3712,10 @@ function setFixedBlockSize(size) {
         onPointerMove(mouseEvent);
     } else {
         updatePreviewVoxel(0,0,0,false);
+        // Vorschau-Linie leeren
+        previewLineInstancedMesh.count = 0;
+        previewLineInstancedMesh.instanceMatrix.needsUpdate = true;
+        previewLineVoxels = [];
     }
 }
 
@@ -3685,6 +3752,10 @@ function setDynamicBlockDimensions() {
         onPointerMove(mouseEvent);
     } else {
         updatePreviewVoxel(0,0,0,false);
+        // Vorschau-Linie leeren
+        previewLineInstancedMesh.count = 0;
+        previewLineInstancedMesh.instanceMatrix.needsUpdate = true;
+        previewLineVoxels = [];
     }
 }
 
@@ -3776,7 +3847,12 @@ function updatePreviewLineMesh() {
         dummy.position.set(voxel.gx * VS + HALF, voxel.gy * VS + HALF, voxel.gz * VS + HALF);
         dummy.updateMatrix();
         previewLineInstancedMesh.setMatrixAt(i, dummy.matrix);
-        previewLineInstancedMesh.instanceColor.setXYZ(i, 0, 1, 0);
+        // Farbe der Vorschau-Linie an den Modus anpassen (z.B. rot für Löschen)
+        if (currentMode === Modes.DELETE) {
+            previewLineInstancedMesh.instanceColor.setXYZ(i, 1, 0, 0); // Rot für Löschen
+        } else {
+            previewLineInstancedMesh.instanceColor.setXYZ(i, 0, 1, 0); // Grün für Hinzufügen/Zeichnen/Messen
+        }
         previewLineInstancedMesh.count++;
     }
     previewLineInstancedMesh.instanceMatrix.needsUpdate = true;
@@ -3872,6 +3948,3 @@ function updateBlockSizeButtonsActiveState() {
         }
     }
 }
-</script>
-</body>
-</html>
