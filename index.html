@@ -186,6 +186,8 @@ input[type="color"]::-moz-color-swatch { border: none; border-radius: 50%; }
     <button class="mobile-btn w-16 h-16 text-3xl rounded-full bg-base-300 text-base-content border-2 border-base-content cursor-pointer flex items-center justify-center shadow-lg hover:bg-base-content/20" id="mobile-redo" aria-label="Wiederholen">↻</button>
     <button class="mobile-btn w-16 h-16 text-3xl rounded-full bg-base-300 text-base-content border-2 border-base-content cursor-pointer flex items-center justify-center shadow-lg hover:bg-base-content/20" id="mobile-save" aria-label="Speichern">💾</button>
     <button class="mobile-btn w-16 h-16 text-3xl rounded-full bg-base-300 text-base-content border-2 border-base-content cursor-pointer flex items-center justify-center shadow-lg hover:bg-base-content/20" id="mobile-camera" aria-label="Kamera wechseln">📷</button>
+    <button class="mobile-btn w-16 h-16 text-3xl rounded-full bg-base-300 text-base-content border-2 border-base-content cursor-pointer flex items-center justify-center shadow-lg hover:bg-base-content/20" id="mobile-mode-toggle" aria-label="Modus wechseln">🔄</button>
+    <button class="mobile-btn w-16 h-16 text-3xl rounded-full bg-base-300 text-base-content border-2 border-base-content cursor-pointer flex items-center justify-center shadow-lg hover:bg-base-content/20" id="mobile-color-picker-btn" aria-label="Farbe auswählen">🎨</button>
     <button class="mobile-btn w-16 h-16 text-3xl rounded-full bg-base-300 text-base-content border-2 border-base-content cursor-pointer flex items-center justify-center shadow-lg hover:bg-base-content/20" id="mobile-login-logout" aria-label="Anmelden oder Abmelden">🔑</button>
 </div>
 
@@ -1217,12 +1219,28 @@ function onPointerLeave(e) {
             // Apply collected changes as a batch on pointer leave if dragging
             const oldState = [];
             const newState = [];
-            for (const [gKey, change] of currentStrokeVoxels.entries()) {
+            // Iterate over the keys in currentStrokeVoxels to get the affected voxels
+            for (const gKey of currentStrokeVoxels.keys()) {
                 const [gx, gy, gz] = parseKey(gKey);
-                oldState.push({ gx, gy, gz, color: voxelsAtDragStart.has(gKey) ? voxelsAtDragStart.get(gKey).color : null });
-                newState.push({ gx, gy, gz, color: voxels.has(gKey) ? voxels.get(gKey).color : null });
+                // Get the initial color from the snapshot taken at the start of the drag
+                const initialColor = voxelsAtDragStart.has(gKey) ? voxelsAtDragStart.get(gKey).color : null;
+                // Get the new color from the current state of the voxels map
+                const newColor = voxels.has(gKey) ? voxels.get(gKey).color : null;
+
+                // Only add to oldState/newState if a change actually occurred
+                // This prevents adding redundant entries for voxels that were touched but not changed
+                if (initialColor !== newColor) {
+                    oldState.push({ gx, gy, gz, color: initialColor });
+                    newState.push({ gx, gy, gz, color: newColor });
+                } else if (currentMode === Modes.ADD && initialColor === null && newColor !== null) {
+                    // Special case for ADD mode: if a voxel was added (initial was null, new is not null)
+                    oldState.push({ gx, gy, gz, color: null });
+                    newState.push({ gx, gy, gz, color: newColor });
+                }
             }
-            addCommand('batch', oldState, newState);
+            if (oldState.length > 0) { // Only add command if there were actual changes
+                addCommand('batch', oldState, newState);
+            }
         }
         // Reset all states and previews after any pointer up/leave
         pointerIsDown = false; // lastActionVoxelCoords should NOT be reset here for continuity
@@ -1331,9 +1349,21 @@ function onPointerUp(e) {
 
             if (finalVoxelCoords) {
                 // Perform the single voxel modification and record it as a batch
-                const oldState = [...voxels.entries()].map(([id, data]) => { const p = parseKey(id); return { gx: p[0], gy: p[1], gz: p[2], color: data.color }; });
+                const oldState = [];
+                const newState = [];
+                const gKey = key(finalVoxelCoords.gx, finalVoxelCoords.gy, finalVoxelCoords.gz);
+                const initialColor = voxelsAtDragStart.has(gKey) ? voxelsAtDragStart.get(gKey).color : null;
+                
                 performVoxelModification(finalVoxelCoords.gx, finalVoxelCoords.gy, finalVoxelCoords.gz, currentMode, currentColor);
-                addCommand('batch', oldState, [...voxels.entries()].map(([id, data]) => { const p = parseKey(id); return { gx: p[0], gy: p[1], gz: p[2], color: data.color }; }));
+                
+                const newColor = voxels.has(gKey) ? voxels.get(gKey).color : null;
+                if (initialColor !== newColor || (currentMode === Modes.ADD && initialColor === null && newColor !== null)) {
+                    oldState.push({ gx: finalVoxelCoords.gx, gy: finalVoxelCoords.gy, gz: finalVoxelCoords.gz, color: initialColor });
+                    newState.push({ gx: finalVoxelCoords.gx, gy: finalVoxelCoords.gy, gz: finalVoxelCoords.gz, color: newColor });
+                }
+                if (oldState.length > 0) {
+                    addCommand('batch', oldState, newState);
+                }
             }
         }
     } else if ((pointerIsDown || doubleTapDragActive) && currentStrokeVoxels.size > 0) { // Check currentStrokeVoxels.size for drag
@@ -1342,12 +1372,19 @@ function onPointerUp(e) {
         const newState = [];
 
         // Capture initial state of all affected voxels for undo
-        for (const [gKey, change] of currentStrokeVoxels.entries()) {
+        for (const gKey of currentStrokeVoxels.keys()) {
             const [gx, gy, gz] = parseKey(gKey);
-            oldState.push({ gx, gy, gz, color: voxelsAtDragStart.has(gKey) ? voxelsAtDragStart.get(gKey).color : null });
-            newState.push({ gx, gy, gz, color: voxels.has(gKey) ? voxels.get(gKey).color : null });
+            const initialColor = voxelsAtDragStart.has(gKey) ? voxelsAtDragStart.get(gKey).color : null;
+            const newColor = voxels.has(gKey) ? voxels.get(gKey).color : null;
+            
+            if (initialColor !== newColor || (currentMode === Modes.ADD && initialColor === null && newColor !== null)) {
+                oldState.push({ gx, gy, gz, color: initialColor });
+                newState.push({ gx, gy, gz, color: newColor });
+            }
         }
-        addCommand('batch', oldState, newState);
+        if (oldState.length > 0) {
+            addCommand('batch', oldState, newState);
+        }
     }
 
     // Reset all states and previews after any pointer up
@@ -1451,16 +1488,9 @@ function onPointerDown(e) {
                 const initialColor = voxelsAtDragStart.has(gKey) ? voxelsAtDragStart.get(gKey).color : null;
 
                 // Apply change immediately for all modes, and record for undo/redo
-                if (currentMode === Modes.ADD) {
-                    _addSingleVoxel(initialDragVoxelCoords.gx, initialDragVoxelCoords.gy, initialDragVoxelCoords.gz, currentColor);
-                    currentStrokeVoxels.set(gKey, { newColor: currentColor, initialColor: initialColor });
-                } else if (currentMode === Modes.DELETE) {
-                    _removeSingleVoxel(initialDragVoxelCoords.gx, initialDragVoxelCoords.gy, initialDragVoxelCoords.gz);
-                    currentStrokeVoxels.set(gKey, { newColor: null, initialColor: initialColor });
-                } else if (currentMode === Modes.DRAW) {
-                    _recolorSingleVoxel(initialDragVoxelCoords.gx, initialDragVoxelCoords.gy, initialDragVoxelCoords.gz, currentColor);
-                    currentStrokeVoxels.set(gKey, { newColor: currentColor, initialColor: initialColor });
-                }
+                performVoxelModification(initialDragVoxelCoords.gx, initialDragVoxelCoords.gy, initialDragVoxelCoords.gz, currentMode, currentColor);
+                const newColor = voxels.has(gKey) ? voxels.get(gKey).color : null;
+                currentStrokeVoxels.set(gKey, { newColor: newColor, initialColor: initialColor });
 
                 updatePreviewVoxel(initialDragVoxelCoords.gx, initialDragVoxelCoords.gy, initialDragVoxelCoords.gz, true); // Show 1x1x1 preview
                 previewLineInstancedMesh.count = 0; // Hide line preview
@@ -1558,16 +1588,9 @@ function onPointerDown(e) {
             const initialColor = voxelsAtDragStart.has(gKey) ? voxelsAtDragStart.get(gKey).color : null;
 
             // Apply change immediately for all modes, and record for undo/redo
-            if (currentMode === Modes.ADD) {
-                _addSingleVoxel(initialDragVoxelCoords.gx, initialDragVoxelCoords.gy, initialDragVoxelCoords.gz, currentColor);
-                currentStrokeVoxels.set(gKey, { newColor: currentColor, initialColor: initialColor });
-            } else if (currentMode === Modes.DELETE) {
-                _removeSingleVoxel(initialDragVoxelCoords.gx, initialDragVoxelCoords.gy, initialDragVoxelCoords.gz);
-                currentStrokeVoxels.set(gKey, { newColor: null, initialColor: initialColor });
-            } else if (currentMode === Modes.DRAW) {
-                _recolorSingleVoxel(initialDragVoxelCoords.gx, initialDragVoxelCoords.gy, initialDragVoxelCoords.gz, currentColor);
-                currentStrokeVoxels.set(gKey, { newColor: currentColor, initialColor: initialColor });
-            }
+            performVoxelModification(initialDragVoxelCoords.gx, initialDragVoxelCoords.gy, initialDragVoxelCoords.gz, currentMode, currentColor);
+            const newColor = voxels.has(gKey) ? voxels.get(gKey).color : null;
+            currentStrokeVoxels.set(gKey, { newColor: newColor, initialColor: initialColor });
 
             updatePreviewVoxel(initialDragVoxelCoords.gx, initialDragVoxelCoords.gy, initialDragVoxelCoords.gz, true); // Show preview for first voxel
             previewLineInstancedMesh.count = 0; // Hide line preview
@@ -1841,6 +1864,8 @@ window.onload = async function() {
         document.getElementById('mobile-redo').addEventListener('click', redo);
         document.getElementById('mobile-save').addEventListener('click', saveJSON);
         document.getElementById('mobile-camera').addEventListener('click', resetCameraPosition);
+        document.getElementById('mobile-mode-toggle').addEventListener('click', cycleMode);
+        document.getElementById('mobile-color-picker-btn').addEventListener('click', () => document.getElementById('color-picker').click()); // Trigger desktop color picker
         document.getElementById('mobile-login-logout').addEventListener('click', loginLogout);
 
         document.getElementById('grid-size-slider').value = GRID; document.getElementById('grid-size-display').textContent = `${GRID}×${GRID}×${GRID}`;
@@ -1870,7 +1895,8 @@ window.onload = async function() {
                 window.firebase.onAuthStateChanged(auth, async (user) => {
                     currentUserId = user ? user.uid : null; currentUser = user;
                     loginLogoutBtn.textContent = user ? 'Abmelden' : 'Anmelden';
-                    userIdDisplay.innerHTML = user ? `<img src="${user.photoURL || 'https://placehold.co/24x24/cccccc/000000?text=U'}" alt="User Avatar" class="w-6 h-6 rounded-full align-middle"> ${user.uid}` : '';
+                    // Updated userIdDisplay to only show photo, not UID
+                    userIdDisplay.innerHTML = user ? `<img src="${user.photoURL || 'https://placehold.co/24x24/cccccc/000000?text=U'}" alt="User Avatar" class="w-6 h-6 rounded-full align-middle">` : '';
                     uploadToHubBtn.classList.toggle('hidden', !user);
                     document.getElementById('mobile-login-logout').textContent = user ? '🚪' : '🔑';
                     if (user) document.getElementById('authModal').close();
