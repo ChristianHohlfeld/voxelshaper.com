@@ -3255,6 +3255,36 @@ function animate() {
         cam.quaternion.setFromEuler(euler);
         mouseMovementX = 0; // Reset for next frame
         mouseMovementY = 0;
+
+        // Apply WASD, E, Q movement
+        const cameraDirection = new THREE.Vector3();
+        cam.getWorldDirection(cameraDirection); // Get the current forward direction of the camera
+
+        const rightDirection = new THREE.Vector3();
+        rightDirection.crossVectors(cameraDirection, cam.up).normalize(); // Get the right direction
+
+        const upVector = new THREE.Vector3(0, 1, 0); // Global up
+
+        const currentMoveSpeed = moveSpeed * 0.1; // Adjust speed for keyboard movement
+
+        if (keyboard['w']) {
+            cam.position.addScaledVector(cameraDirection, currentMoveSpeed);
+        }
+        if (keyboard['s']) {
+            cam.position.addScaledVector(cameraDirection, -currentMoveSpeed);
+        }
+        if (keyboard['a']) {
+            cam.position.addScaledVector(rightDirection, -currentMoveSpeed);
+        }
+        if (keyboard['d']) {
+            cam.position.addScaledVector(rightDirection, currentMoveSpeed);
+        }
+        if (keyboard['e']) {
+            cam.position.addScaledVector(upVector, currentMoveSpeed);
+        }
+        if (keyboard['q']) {
+            cam.position.addScaledVector(upVector, -currentMoveSpeed);
+        }
     }
 
     cam.updateMatrixWorld();
@@ -4333,7 +4363,7 @@ function onKeyDown(e) {
         return;
     }
 
-    keyboard[e.key] = true;
+    keyboard[e.key.toLowerCase()] = true; // Store key in lowercase for consistency
 
     if (e.key === 'Shift') {
         isShiftDragging = true;
@@ -4370,7 +4400,7 @@ function onKeyDown(e) {
 }
 
 function onKeyUp(e) {
-    keyboard[e.key] = false;
+    keyboard[e.key.toLowerCase()] = false; // Store key in lowercase for consistency
 
     if (e.key === 'Shift') {
         isShiftDragging = false;
