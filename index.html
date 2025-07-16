@@ -1225,7 +1225,8 @@ function onPointerLeave(e) {
             addCommand('batch', oldState, newState);
         }
         // Reset all states and previews after any pointer up/leave
-        pointerIsDown = false; lastActionVoxelCoords = null; initialDragVoxelCoords = null; voxelsAtDragStart = null; currentStrokeVoxels.clear();
+        pointerIsDown = false; // lastActionVoxelCoords should NOT be reset here for continuity
+        initialDragVoxelCoords = null; voxelsAtDragStart = null; currentStrokeVoxels.clear();
         updatePreviewVoxel(0, 0, 0, false);
         previewLineInstancedMesh.count = 0; previewLineInstancedMesh.instanceMatrix.needsUpdate = true; previewLineVoxels = [];
     }
@@ -1377,7 +1378,7 @@ function onPointerDown(e) {
                     if (proposedVoxel.gx >= 0 && proposedVoxel.gx < GRID &&
                         proposedVoxel.gy >= 0 && proposedVoxel.gy < GRID &&
                         proposedVoxel.gz >= 0 && proposedVoxel.gz < GRID &&
-                        !voxels.has(key(proposedVoxel.gx, proposedVoxel.gy, proposedVoxel.gz))) {
+                        !voxels.has(key(proposedVoxel.gx, proposedPoxel.gy, proposedVoxel.gz))) {
                         initialActionVoxel = proposedVoxel;
                     } else {
                         // Cannot place here (either out of bounds or occupied)
@@ -1592,9 +1593,9 @@ function onPointerMove(e) {
                 }
                 updatePreviewVoxel(currentTargetVoxelCoords.gx, currentTargetVoxelCoords.gy, currentTargetVoxelCoords.gz, showPreview);
             } else {
-                // If ray leaves grid during drag, hide preview and clear lastActionVoxelCoords
+                // If ray leaves grid during drag, hide preview but DO NOT reset lastActionVoxelCoords
                 updatePreviewVoxel(0, 0, 0, false);
-                lastActionVoxelCoords = null; // Important: Reset lastActionVoxelCoords to break the line on re-entry
+                // lastActionVoxelCoords is intentionally NOT reset here to maintain drag continuity
             }
             previewLineInstancedMesh.count = 0; // Hide line preview
         } else { // Hovering (not dragging)
