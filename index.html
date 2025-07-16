@@ -111,7 +111,7 @@ input[type="color"]::-moz-color-swatch {
     <input type="color" id="color-preset-2" class="color-preset-box w-10 h-10 rounded-md border-2 border-base-content/20 cursor-pointer transition-all duration-200 hover:scale-110" value="#708237" aria-label="Voreingestellte Farbe 2">
     <input type="color" id="color-preset-3" class="color-preset-box w-10 h-10 rounded-md border-2 border-base-content/20 cursor-pointer transition-all duration-200 hover:scale-110" value="#6495ED" aria-label="Voreingestellte Farbe 3">
 
-    <button id="modeToggle" aria-label="Modus wechseln" class="btn btn-sm btn-neutral">Modus wechseln</button><span id="current-mode" class="font-bold text-success min-w-40 text-center">Modus: Hinzufügen</span>
+    <button id="modeToggle" aria-label="Modus wechseln" class="btn btn-sm btn-neutral">Modus wechseln</button><span id="current-mode" class="font-bold text-success min-w-40 text-center">Modus: Hinzufügen (Linie/Fläche)</span>
     <button id="clearBtn" aria-label="Alles löschen" class="btn btn-sm btn-neutral">Alles löschen</button>
     <button id="fillLevelBtn" aria-label="Ebene füllen" class="btn btn-sm btn-neutral">Ebene füllen</button>
     <button id="saveBtn" aria-label="Projekt speichern" aria-describedby="save-description" class="btn btn-sm btn-neutral">Projekt speichern</button>
@@ -164,12 +164,12 @@ input[type="color"]::-moz-color-swatch {
     **Alt + Mausrad → Zeichenebene Y hoch/runter (Gitter folgt)**<br>
     **Alt + Shift + Mausrad → Zeicheneben Z hoch/runter (Gitter folgt)**<br>
     **Alt + Control + Mausrad → Zeichenebene X hoch/runter (Gitter folgt)**<br>
-    **Shift + Linke MT gedrückt + Maus ziehen → Voxel Aktion auf aktiver Ebene (Hinzufügen / Löschen / Zeichnen)**<br>
-    **Control + Linke MT gedrückt + Maus ziehen → Voxel ziehen zum Hinzufügen (Stapeln, nur im Hinzufügen-Modus)**<br>
-    **NEU: Linien zeichnen (Modus "Hinzufügen", "Löschen", "Zeichnen")**<br>
+    **Shift + Linke MT gedrückt + Maus ziehen → Voxel Aktion auf aktiver Ebene (Hinzufügen (Linie/Fläche) / Löschen / Zeichnen)**<br>
+    **Control + Linke MT gedrückt + Maus ziehen → Voxel ziehen zum Hinzufügen (Stapeln, nur im Hinzufügen (Linie/Fläche)-Modus)**<br>
+    **NEU: Linien zeichnen (Modus "Hinzufügen (Linie/Fläche)", "Löschen", "Zeichnen")**<br>
     **Linke MT gedrückt + Maus ziehen → Linie von Voxeln zeichnen**<br>
     Mausrad → Kamera Geschwindigkeit anpassen<br>
-    **Tab → Modus wechseln (Hinzufügen / Löschen / Zeichnen / Messen)**<br>
+    **Tab → Modus wechseln (Hinzufügen (Linie/Fläche) / Hinzufügen (Freihand) / Löschen / Zeichnen / Messen)**<br>
     **1, 2, 3 → Voreingestellte Farbe wählen**<br>
     **Strg + Z → Rückgängig (Undo)**<br>
     **Strg + Y oder Strg + Shift + Z → Wiederholen (Redo)**<br>
@@ -599,12 +599,13 @@ previewVoxelMaterial.polygonOffsetFactor = -1;
 let previewVoxelMesh = new THREE.Mesh(previewVoxelGeometry, previewVoxelMaterial);
 
 const Modes = {
-    ADD: 'Hinzufügen',
+    LINE_ADD: 'Hinzufügen (Linie/Fläche)',
+    FREE_ADD: 'Hinzufügen (Freihand)',
     DELETE: 'Löschen',
     DRAW: 'Zeichnen',
     MEASURE: 'Messen',
 };
-let currentMode = Modes.ADD;
+let currentMode = Modes.LINE_ADD; // Default to LINE_ADD
 
 let history = [];
 let historyPointer = -1;
@@ -958,7 +959,10 @@ function cycleMode() {
     }
 
     switch (currentMode) {
-        case Modes.ADD:
+        case Modes.LINE_ADD:
+            currentMode = Modes.FREE_ADD;
+            break;
+        case Modes.FREE_ADD:
             currentMode = Modes.DELETE;
             break;
         case Modes.DELETE:
@@ -968,7 +972,7 @@ function cycleMode() {
             currentMode = Modes.MEASURE;
             break;
         case Modes.MEASURE:
-            currentMode = Modes.ADD;
+            currentMode = Modes.LINE_ADD;
             measurementStartPoint = null;
             measurementEndPoint = null;
             distanceDisplay.classList.add('hidden');
@@ -1135,7 +1139,8 @@ function performVoxelModification(gx, gy, gz, mode, color) {
     const hasVoxel = voxels.has(globalKey);
 
     switch (mode) {
-        case Modes.ADD:
+        case Modes.LINE_ADD: // For single click or line add
+        case Modes.FREE_ADD: // For free draw add
             if (!hasVoxel || voxels.get(globalKey).color !== color) {
                 _addSingleVoxel(gx, gy, gz, color);
             }
@@ -1219,7 +1224,7 @@ function calculateTargetVoxelCoords(clientX, clientY, mode, pointerType) {
         const hitVoxelY = Math.floor(hitPointInside.y / VS);
         const hitVoxelZ = Math.floor(hitPointInside.z / VS);
 
-        if (mode === Modes.ADD) {
+        if (mode === Modes.LINE_ADD || mode === Modes.FREE_ADD) {
             let normalX = 0, normalY = 0, normalZ = 0;
             const absX = Math.abs(hit.face.normal.x);
             const absY = Math.abs(hit.face.normal.y);
@@ -1248,7 +1253,7 @@ function calculateTargetVoxelCoords(clientX, clientY, mode, pointerType) {
             targetVoxelCoords = { gx: hitVoxelX, gy: hitVoxelY, gz: hitVoxelZ };
         }
     } else {
-        if (mode === Modes.ADD || mode === Modes.DRAW) { // For ADD and DRAW, if no voxel is hit, use drawing plane
+        if (mode === Modes.LINE_ADD || mode === Modes.FREE_ADD || mode === Modes.DRAW) { // For ADD, FREE_ADD and DRAW, if no voxel is hit, use drawing plane
             let planeNormal = new THREE.Vector3();
             let planeConstant = 0;
             if (currentDrawingAxis === 'y') {
@@ -1714,18 +1719,18 @@ async function loadProjectFromModelId(modelId) {
                     resetToDefaultProject();
                 }
             } else {
-                showToast('Fehler', 'Sie haben keine Berechtigung, dieses private Projekt zu laden.', 'error');
+                showToast('Zugriff verweigert', 'Sie haben keine Berechtigung, dieses private Projekt zu laden.', 'error');
                 console.error("loadProjectFromModelId: Client-side permission check failed. Model is not public and user is not owner.");
                 resetToDefaultProject();
             }
         } else {
-            showToast('Fehler', `Kein Projekt mit ID ${modelId} gefunden.`, 'error');
+            showToast('Projekt nicht gefunden', `Kein Projekt mit ID "${modelId}" gefunden.`, 'warning');
             resetToDefaultProject();
         }
     } catch (error) {
         console.error("Error loading project from model ID:", error);
         if (error.code === 'permission-denied') {
-            showToast('Fehler', `Berechtigungsfehler beim Laden des Projekts. Stellen Sie sicher, dass das Modell öffentlich ist oder Sie der Eigentümer sind.`, 'error');
+            showToast('Zugriff verweigert', `Berechtigungsfehler beim Laden des Projekts. Stellen Sie sicher, dass das Modell öffentlich ist oder Sie der Eigentümer sind.`, 'error');
         } else {
             showToast('Fehler', `Fehler beim Laden des Projekts: ${error.message}`, 'error');
         }
@@ -1974,13 +1979,15 @@ function getCurrentBlockDimensions() {
         dimX = 1;
         dimY = 1;
         dimZ = 1;
+        // The fixed block size is applied based on the current drawing axis
+        // For example, if drawing on Y-plane, X and Z dimensions are affected
         if (currentDrawingAxis === 'y') {
             dimX = currentBlockSize;
             dimZ = currentBlockSize;
         } else if (currentDrawingAxis === 'x') {
             dimY = currentBlockSize;
             dimZ = currentBlockSize;
-        } else {
+        } else { // currentDrawingAxis === 'z'
             dimX = currentBlockSize;
             dimY = currentBlockSize;
         }
@@ -2375,7 +2382,7 @@ window.onload = async function() {
 
             rebuildHelpers();
             resetCameraPosition();
-            showToast('Gittergröße geändert', `Gittergröße auf ${GRID}x${GRID}x${GRID} geändert.`, 'info');
+            // Removed toast for grid size change
         });
 
         document.getElementById('color-picker').addEventListener('input', (e) => {
@@ -2447,6 +2454,7 @@ window.onload = async function() {
             moveSpeed = parseFloat(e.target.value);
             document.getElementById('fly-speed-display').textContent = moveSpeed.toFixed(2);
             localStorage.setItem('voxelEditorFlySpeed', moveSpeed);
+            // Removed toast for fly speed change
         });
 
         document.getElementById('block-size-1x1').addEventListener('click', () => setFixedBlockSize(1));
@@ -2860,9 +2868,9 @@ function onPointerDown(e) {
                     voxelsAtDragStart = new Map(voxels); // Save state before drag
                     currentStrokeVoxels.clear(); // Clear for new stroke
 
-                    if (currentMode === Modes.ADD || currentMode === Modes.DELETE || currentMode === Modes.DRAW) {
+                    if (currentMode === Modes.LINE_ADD || currentMode === Modes.FREE_ADD || currentMode === Modes.DELETE || currentMode === Modes.DRAW) {
                         // For free-draw modes, apply initial action and record it
-                        const globalKey = key(initialDragVoxelCoords.gx, initialDragVoxelCoords.gy, initialDragVoxelCoords.gz);
+                        const globalKey = key(initialDragVoxelCoords.gx, initialDragVoxelCoords.gy, initialDragVoxelCoords.gx);
                         const initialColor = voxelsAtDragStart.has(globalKey) ? voxelsAtDragStart.get(globalKey).color : null;
                         
                         performVoxelModification(initialDragVoxelCoords.gx, initialDragVoxelCoords.gy, initialDragVoxelCoords.gz, currentMode, currentColor);
@@ -2982,52 +2990,19 @@ function onPointerDown(e) {
         
         let rawTargetVoxel = calculateTargetVoxelCoords(e.clientX, e.clientY, currentMode, 'mouse');
         
-        if (isControlDragging && currentMode === Modes.ADD) {
-            if (rawTargetVoxel) {
-                initialDragVoxelCoords = {
-                    gx: rawTargetVoxel.gx,
-                    gy: rawTargetVoxel.gy,
-                    gz: rawTargetVoxel.gz
-                };
-                dragAxisLock = 'y'; // Force Y-axis lock for stacking
-            } else {
-                pointerIsDown = false;
-                initialClickPos = null;
-                initialDragVoxelCoords = null;
-                voxelsAtDragStart = null;
-                currentStrokeVoxels.clear(); // Clear for new stroke
-                distanceDisplay.classList.add('hidden');
-                initialDragVoxelWorldPos = null;
-                // Clear preview line
-                previewLineInstancedMesh.count = 0;
-                previewLineInstancedMesh.instanceMatrix.needsUpdate = true;
-                previewLineVoxels = [];
-                return;
-            }
-        } else if (isShiftDragging) {
-            initialDragVoxelCoords = getPointOnFixedPlane(e.clientX, e.clientY, currentDrawingAxis, activeDrawingLevel[currentDrawingAxis]);
-            if (!initialDragVoxelCoords && rawTargetVoxel) {
-                initialDragVoxelCoords = rawTargetVoxel;
-            }
-            dragAxisLock = null; // Axis lock determined by drag direction
-        } else { // Regular click/drag for ADD, DELETE, DRAW (free draw)
-            initialDragVoxelCoords = rawTargetVoxel;
-            dragAxisLock = null; // Axis lock determined by drag direction
+        // Handle free draw for FREE_ADD, DELETE, DRAW modes (no Shift/Control)
+        if ((currentMode === Modes.FREE_ADD || currentMode === Modes.DELETE || currentMode === Modes.DRAW) && !isShiftDragging && !isControlDragging) {
+            initialDragVoxelCoords = rawTargetVoxel; // For free draw, initial point is the first hit/plane voxel
+            dragAxisLock = null; // No axis lock for free draw
+            voxelsAtDragStart = new Map(voxels); // Save state before drag
+            currentStrokeVoxels.clear(); // Clear for new stroke
+            
+            if (initialDragVoxelCoords) {
+                const { dimX, dimY, dimZ } = getCurrentBlockDimensions();
+                initialDragVoxelCoords.gx = Math.max(0, Math.min(GRID - dimX, initialDragVoxelCoords.gx));
+                initialDragVoxelCoords.gy = Math.max(0, Math.min(GRID - dimY, initialDragDragVoxelCoords.gy));
+                initialDragVoxelCoords.gz = Math.max(0, Math.min(GRID - dimZ, initialDragVoxelCoords.gz));
 
-            if (currentMode === Modes.ADD || currentMode === Modes.DELETE || currentMode === Modes.DRAW) {
-                voxelsAtDragStart = new Map(voxels); // Save state before drag
-                currentStrokeVoxels.clear(); // Clear for new stroke
-            }
-        }
-
-        if (initialDragVoxelCoords) {
-            const { dimX, dimY, dimZ } = getCurrentBlockDimensions();
-            initialDragVoxelCoords.gx = Math.max(0, Math.min(GRID - dimX, initialDragVoxelCoords.gx));
-            initialDragVoxelCoords.gy = Math.max(0, Math.min(GRID - dimY, initialDragVoxelCoords.gy));
-            initialDragVoxelCoords.gz = Math.max(0, Math.min(GRID - dimZ, initialDragVoxelCoords.gz));
-
-            if (currentMode === Modes.ADD || currentMode === Modes.DELETE || currentMode === Modes.DRAW) {
-                // For free-draw modes, apply initial action and record it
                 const globalKey = key(initialDragVoxelCoords.gx, initialDragVoxelCoords.gy, initialDragVoxelCoords.gz);
                 const initialColor = voxelsAtDragStart.has(globalKey) ? voxelsAtDragStart.get(globalKey).color : null;
                 
@@ -3037,29 +3012,81 @@ function onPointerDown(e) {
                     newColor: voxels.has(globalKey) ? voxels.get(globalKey).color : null,
                     initialColor: initialColor
                 });
-            } else { // For line/stacking modes
-                // Initialen Voxel-Bereich für die Vorschau und die erste Modifikation festlegen
-                const initialVoxels = getVoxelsOnLine(initialDragVoxelCoords, initialDragVoxelCoords, currentMode, currentColor, dimX, dimY, dimZ);
-                for (const voxel of initialVoxels) {
-                    performVoxelModification(voxel.gx, voxel.gy, voxel.gz, currentMode, currentColor);
+                lastActionVoxelCoords = { ...initialDragVoxelCoords };
+            } else {
+                pointerIsDown = false; // No target, no action
+            }
+            distanceDisplay.classList.add('hidden'); // Hide distance for free draw
+            previewLineInstancedMesh.count = 0; // Hide line preview for free draw
+            previewLineInstancedMesh.instanceMatrix.needsUpdate = true;
+            previewLineVoxels = [];
+            return; // Exit after handling free draw
+        }
+
+        // Handle line/stacking for LINE_ADD mode or any mode with Shift/Control
+        if ((currentMode === Modes.LINE_ADD || isShiftDragging || isControlDragging) && rawTargetVoxel) {
+            if (isControlDragging && currentMode === Modes.LINE_ADD) {
+                initialDragVoxelCoords = {
+                    gx: rawTargetVoxel.gx,
+                    gy: rawTargetVoxel.gy,
+                    gz: rawTargetVoxel.gz
+                };
+                dragAxisLock = 'y'; // Force Y-axis lock for stacking
+            } else if (isShiftDragging) {
+                initialDragVoxelCoords = getPointOnFixedPlane(e.clientX, e.clientY, currentDrawingAxis, activeDrawingLevel[currentDrawingAxis]);
+                if (!initialDragVoxelCoords && rawTargetVoxel) {
+                    initialDragVoxelCoords = rawTargetVoxel;
                 }
-                // Vorschau-Linie für den Startpunkt aktualisieren
-                previewLineVoxels = initialVoxels;
-                updatePreviewLineMesh();
+                dragAxisLock = null; // Axis lock determined by drag direction
+            } else { // Single click in LINE_ADD mode
+                initialDragVoxelCoords = rawTargetVoxel;
+                dragAxisLock = null;
             }
 
-            lastActionVoxelCoords = { ...initialDragVoxelCoords };
-            initialDragVoxelWorldPos = new THREE.Vector3(initialDragVoxelCoords.gx * VS + HALF, initialDragVoxelCoords.gy * VS + HALF, initialDragVoxelCoords.gz * VS + HALF);
-            distanceDisplay.classList.remove('hidden');
-        } else {
+            if (initialDragVoxelCoords) {
+                const { dimX, dimY, dimZ } = getCurrentBlockDimensions();
+                initialDragVoxelCoords.gx = Math.max(0, Math.min(GRID - dimX, initialDragVoxelCoords.gx));
+                initialDragVoxelCoords.gy = Math.max(0, Math.min(GRID - dimY, initialDragVoxelCoords.gy));
+                initialDragVoxelCoords.gz = Math.max(0, Math.min(GRID - dimZ, initialDragVoxelCoords.gz));
+
+                voxelsAtDragStart = new Map(voxels); // Save state before drag for line mode
+                currentStrokeVoxels.clear(); // Clear for new stroke
+
+                // Initial action for line/stacking modes (single voxel placement)
+                const initialVoxels = getVoxelsOnLine(initialDragVoxelCoords, initialDragVoxelCoords, currentMode, currentColor, dimX, dimY, dimZ);
+                for (const voxel of initialVoxels) {
+                    const globalKey = key(voxel.gx, voxel.gy, voxel.gz);
+                    const hasVoxelBeforeDrag = voxelsAtDragStart.has(globalKey);
+                    const initialColor = hasVoxelBeforeDrag ? voxelsAtDragStart.get(globalKey).color : null;
+                    performVoxelModification(voxel.gx, voxel.gy, voxel.gz, currentMode, currentColor);
+                    currentStrokeVoxels.set(globalKey, { newColor: currentColor, initialColor: initialColor });
+                }
+                lastActionVoxelCoords = { ...initialDragVoxelCoords };
+                initialDragVoxelWorldPos = new THREE.Vector3(initialDragVoxelCoords.gx * VS + HALF, initialDragVoxelCoords.gy * VS + HALF, initialDragVoxelCoords.gz * VS + HALF);
+                distanceDisplay.classList.remove('hidden'); // Show distance for line/stacking
+                previewLineVoxels = initialVoxels;
+                updatePreviewLineMesh();
+            } else {
+                pointerIsDown = false; // No target, no action
+                initialClickPos = null;
+                initialDragVoxelCoords = null;
+                voxelsAtDragStart = null;
+                currentStrokeVoxels.clear();
+                distanceDisplay.classList.add('hidden');
+                initialDragVoxelWorldPos = null;
+                previewLineInstancedMesh.count = 0;
+                previewLineInstancedMesh.instanceMatrix.needsUpdate = true;
+                previewLineVoxels = [];
+            }
+            return; // Exit after handling LINE_ADD or Shift/Control drag
+        } else { // No valid target voxel for any action, or not in an active mode.
             pointerIsDown = false;
             initialClickPos = null;
             initialDragVoxelCoords = null;
             voxelsAtDragStart = null;
-            currentStrokeVoxels.clear(); // Clear for new stroke
+            currentStrokeVoxels.clear();
             distanceDisplay.classList.add('hidden');
             initialDragVoxelWorldPos = null;
-            // Clear preview line
             previewLineInstancedMesh.count = 0;
             previewLineInstancedMesh.instanceMatrix.needsUpdate = true;
             previewLineVoxels = [];
@@ -3087,8 +3114,8 @@ function onPointerMove(e) {
         if (doubleTapDragActive && currentMode !== Modes.MEASURE) {
             let rawCurrentTargetVoxel = calculateTargetVoxelCoords(e.clientX, e.clientY, currentMode, 'touch');
             
-            if (currentMode === Modes.ADD || currentMode === Modes.DELETE || currentMode === Modes.DRAW) {
-                // Free draw for touch
+            // Free draw for touch (FREE_ADD, DELETE, DRAW)
+            if ((currentMode === Modes.FREE_ADD || currentMode === Modes.DELETE || currentMode === Modes.DRAW) && !isShiftDragging && !isControlDragging) {
                 if (rawCurrentTargetVoxel && lastActionVoxelCoords) {
                     const currentGlobalKey = key(rawCurrentTargetVoxel.gx, rawCurrentTargetVoxel.gy, rawCurrentTargetVoxel.gz);
                     const lastGlobalKey = key(lastActionVoxelCoords.gx, lastActionVoxelCoords.gy, lastActionVoxelCoords.gz);
@@ -3115,19 +3142,37 @@ function onPointerMove(e) {
                 previewLineVoxels = [];
                 distanceDisplay.classList.add('hidden'); // Hide distance for free draw
                 return;
-            } else { // Line/stacking for touch
+            } 
+            // Line/stacking for touch (LINE_ADD or with Shift/Control)
+            else if ((currentMode === Modes.LINE_ADD || isShiftDragging || isControlDragging) && initialDragVoxelCoords) {
                 let finalTargetVoxelForDrawing = null;
                 
-                if (rawCurrentTargetVoxel && initialDragVoxelCoords) {
+                if (rawCurrentTargetVoxel) {
                     if (dragAxisLock === null) {
                         const dx = Math.abs(rawCurrentTargetVoxel.gx - initialDragVoxelCoords.gx);
                         const dy = Math.abs(rawCurrentTargetVoxel.gy - initialDragVoxelCoords.gy);
                         const dz = Math.abs(rawCurrentTargetVoxel.gz - initialDragVoxelCoords.gz);
 
                         if (dx > VOXEL_DRAG_THRESHOLD || dy > VOXEL_DRAG_THRESHOLD || dz > VOXEL_DRAG_THRESHOLD) {
-                            if (dx >= dy && dx >= dz) dragAxisLock = 'x';
-                            else if (dy >= dx && dy >= dz) dragAxisLock = 'y';
-                            else dragAxisLock = 'z';
+                             if (isControlDragging && currentMode === Modes.LINE_ADD) {
+                                dragAxisLock = 'y'; // Force Y-axis lock for stacking
+                            } else if (isShiftDragging) {
+                                // For Shift-Drag on active plane, lock to X or Z
+                                if (currentDrawingAxis === 'y') {
+                                    if (dx >= dz) dragAxisLock = 'x';
+                                    else dragAxisLock = 'z';
+                                } else if (currentDrawingAxis === 'x') {
+                                    if (dy >= dz) dragAxisLock = 'y';
+                                    else dragAxisLock = 'z';
+                                } else { // currentDrawingAxis === 'z'
+                                    if (dx >= dy) dragAxisLock = 'x';
+                                    else dragAxisLock = 'y';
+                                }
+                            } else {
+                                if (dx >= dy && dx >= dz) dragAxisLock = 'x';
+                                else if (dy >= dx && dy >= dz) dragAxisLock = 'y';
+                                else dragAxisLock = 'z';
+                            }
                         }
                     }
 
@@ -3152,46 +3197,54 @@ function onPointerMove(e) {
                         finalTargetVoxelForDrawing.gy = Math.max(0, Math.min(GRID - dimY, finalTargetVoxelForDrawing.gy));
                         finalTargetVoxelForDrawing.gz = Math.max(0, Math.min(GRID - dimZ, finalTargetVoxelForDrawing.gz));
                     }
-
-                    if (dragAxisLock && finalTargetVoxelForDrawing) {
-                        // Rollback previous frame's changes
-                        for (const [globalKey, data] of currentStrokeVoxels.entries()) {
-                            const [gx, gy, gz] = parseKey(globalKey);
-                            if (voxelsAtDragStart.has(globalKey)) {
-                                _addSingleVoxel(gx, gy, gz, voxelsAtDragStart.get(globalKey).color);
-                            } else {
-                                _removeSingleVoxel(gx, gy, gz);
-                            }
-                        }
-                        currentStrokeVoxels.clear(); // Clear for this frame's new set
-
-                        const voxelsToDrawThisFrame = getVoxelsOnLine(initialDragVoxelCoords, finalTargetVoxelForDrawing, currentMode, currentColor, dimX, dimY, dimZ);
-                        
-                        // Apply current frame's changes
-                        for (const voxel of voxelsToDrawThisFrame) {
-                            const globalKey = key(voxel.gx, voxel.gy, voxel.gz);
-                            const hasVoxelBeforeDrag = voxelsAtDragStart.has(globalKey);
-                            const initialColor = hasVoxelBeforeDrag ? voxelsAtDragStart.get(globalKey).color : null;
-
-                            performVoxelModification(voxel.gx, voxel.gy, voxel.gz, currentMode, currentColor);
-                            currentStrokeVoxels.set(globalKey, { newColor: currentColor, initialColor: initialColor });
-                        }
-                        
-                        lastActionVoxelCoords = { ...finalTargetVoxelForDrawing };
-
-                        const currentVoxelWorldPos = new THREE.Vector3(finalTargetVoxelForDrawing.gx * VS + HALF, finalTargetVoxelForDrawing.gy * VS + HALF, finalTargetVoxelForDrawing.gz * VS + HALF);
-                        const distance = initialDragVoxelWorldPos.distanceTo(currentVoxelWorldPos);
-                        distanceDisplay.textContent = `Distanz: ${distance.toFixed(2)} mm`;
-                        distanceDisplay.classList.remove('hidden');
-
-                        // Update preview line for drag operations
-                        previewLineVoxels = voxelsToDrawThisFrame;
-                        updatePreviewLineMesh();
-                    }
+                } else {
+                    finalTargetVoxelForDrawing = initialDragVoxelCoords;
                 }
-                updatePreviewVoxel(0, 0, 0, false); // Hide single preview voxel when line is drawn
-                return;
+
+                if (dragAxisLock && finalTargetVoxelForDrawing) {
+                    // Rollback previous frame's changes
+                    for (const [globalKey, data] of currentStrokeVoxels.entries()) {
+                        const [gx, gy, gz] = parseKey(globalKey);
+                        if (voxelsAtDragStart.has(globalKey)) {
+                            _addSingleVoxel(gx, gy, gz, voxelsAtDragStart.get(globalKey).color);
+                        } else {
+                            _removeSingleVoxel(gx, gy, gz);
+                        }
+                    }
+                    currentStrokeVoxels.clear(); // Clear for this frame's new set
+
+                    const voxelsToDrawThisFrame = getVoxelsOnLine(initialDragVoxelCoords, finalTargetVoxelForDrawing, currentMode, currentColor, dimX, dimY, dimZ);
+                    
+                    // Apply current frame's changes
+                    for (const voxel of voxelsToDrawThisFrame) {
+                        const globalKey = key(voxel.gx, voxel.gy, voxel.gz);
+                        const hasVoxelBeforeDrag = voxelsAtDragStart.has(globalKey);
+                        const initialColor = hasVoxelBeforeDrag ? voxelsAtDragStart.get(globalKey).color : null;
+
+                        performVoxelModification(voxel.gx, voxel.gy, voxel.gz, currentMode, currentColor);
+                        currentStrokeVoxels.set(globalKey, { newColor: currentColor, initialColor: initialColor });
+                    }
+                    
+                    lastActionVoxelCoords = { ...finalTargetVoxelForDrawing };
+
+                    const currentVoxelWorldPos = new THREE.Vector3(finalTargetVoxelForDrawing.gx * VS + HALF, finalTargetVoxelForDrawing.gy * VS + HALF, finalTargetVoxelForDrawing.gz * VS + HALF);
+                    const distance = initialDragVoxelWorldPos.distanceTo(currentVoxelWorldPos);
+                    distanceDisplay.textContent = `Distanz: ${distance.toFixed(2)} mm`;
+                    distanceDisplay.classList.remove('hidden');
+
+                    // Update preview line for drag operations
+                    previewLineVoxels = voxelsToDrawThisFrame;
+                    updatePreviewLineMesh();
+                } else {
+                    distanceDisplay.classList.add('hidden');
+                    // Clear preview line if no valid drag axis determined
+                    previewLineInstancedMesh.count = 0;
+                    previewLineInstancedMesh.instanceMatrix.needsUpdate = true;
+                    previewLineVoxels = [];
+                }
             }
+            updatePreviewVoxel(0, 0, 0, false); // Hide single preview voxel when line is drawn
+            return;
         } else if (currentMode === Modes.MEASURE && measurementStartPoint) {
             const currentTargetVoxel = calculateTargetVoxelCoords(e.clientX, e.clientY, currentMode, 'touch');
             if (currentTargetVoxel) {
@@ -3267,8 +3320,8 @@ function onPointerMove(e) {
     } else {
         let rawCurrentTargetVoxel = calculateTargetVoxelCoords(e.clientX, e.clientY, currentMode, 'mouse');
         
-        if (pointerIsDown && (currentMode === Modes.ADD || currentMode === Modes.DELETE || currentMode === Modes.DRAW) && !isShiftDragging && !isControlDragging) {
-            // Free draw for mouse
+        // Free draw for mouse (FREE_ADD, DELETE, DRAW)
+        if (pointerIsDown && (currentMode === Modes.FREE_ADD || currentMode === Modes.DELETE || currentMode === Modes.DRAW) && !isShiftDragging && !isControlDragging) {
             if (rawCurrentTargetVoxel && lastActionVoxelCoords) {
                 const currentGlobalKey = key(rawCurrentTargetVoxel.gx, rawCurrentTargetVoxel.gy, rawCurrentTargetVoxel.gz);
                 const lastGlobalKey = key(lastActionVoxelCoords.gx, lastActionVoxelCoords.gy, lastActionVoxelCoords.gz);
@@ -3295,7 +3348,9 @@ function onPointerMove(e) {
             previewLineVoxels = [];
             distanceDisplay.classList.add('hidden'); // Hide distance for free draw
             return;
-        } else if (isDraggingVoxelAction && rawCurrentTargetVoxel && initialDragVoxelCoords) { // Line/stacking for mouse
+        } 
+        // Line/stacking for mouse (LINE_ADD or with Shift/Control)
+        else if (isDraggingVoxelAction && rawCurrentTargetVoxel && initialDragVoxelCoords) {
             let finalTargetVoxelForDrawing = null;
 
             if (dragAxisLock === null) {
@@ -3304,7 +3359,7 @@ function onPointerMove(e) {
                 const dz = Math.abs(rawCurrentTargetVoxel.gz - initialDragVoxelCoords.gz);
 
                 if (dx > VOXEL_DRAG_THRESHOLD || dy > VOXEL_DRAG_THRESHOLD || dz > VOXEL_DRAG_THRESHOLD) {
-                    if (isControlDragging && currentMode === Modes.ADD) {
+                    if (isControlDragging && currentMode === Modes.LINE_ADD) {
                         dragAxisLock = 'y'; // Force Y-axis lock for stacking
                     } else if (isShiftDragging) {
                         // For Shift-Drag on active plane, lock to X or Z
@@ -3406,7 +3461,12 @@ function onPointerMove(e) {
                 hoverTargetVoxel.gx = Math.max(0, Math.min(GRID - dimX, hoverTargetVoxel.gx));
                 hoverTargetVoxel.gy = Math.max(0, Math.min(GRID - dimY, hoverTargetVoxel.gy));
                 hoverTargetVoxel.gz = Math.max(0, Math.min(GRID - dimZ, hoverTargetVoxel.gz));
-                updatePreviewVoxel(hoverTargetVoxel.gx, hoverTargetVoxel.gy, hoverTargetVoxel.gz, true, 1, 1, 1);
+                // Only show single preview voxel for non-line modes
+                if (!pointerIsDown || ((currentMode === Modes.FREE_ADD || currentMode === Modes.DELETE || currentMode === Modes.DRAW) && !isShiftDragging && !isControlDragging)) {
+                    updatePreviewVoxel(hoverTargetVoxel.gx, hoverTargetVoxel.gy, hoverTargetVoxel.gz, true, 1, 1, 1);
+                } else {
+                    updatePreviewVoxel(0, 0, 0, false);
+                }
             } else {
                 updatePreviewVoxel(0, 0, 0, false);
             }
@@ -3446,8 +3506,8 @@ function onPointerUp(e) {
             }
         }
         if (doubleTapDragActive && currentMode !== Modes.MEASURE && initialDragVoxelCoords) {
-            // If it was a free-draw operation (DELETE, DRAW), batch the changes
-            if (currentMode === Modes.ADD || currentMode === Modes.DELETE || currentMode === Modes.DRAW) {
+            // If it was a free-draw operation (FREE_ADD, DELETE, DRAW), batch the changes
+            if ((currentMode === Modes.FREE_ADD || currentMode === Modes.DELETE || currentMode === Modes.DRAW) && !isShiftDragging && !isControlDragging) {
                 if (currentStrokeVoxels.size > 0) {
                     const oldStateForHistory = [];
                     const newStateForHistory = [];
@@ -3551,8 +3611,8 @@ function onPointerUp(e) {
         }
 
         if (pointerIsDown && !isPointerLocked && initialDragVoxelCoords) {
-            // If it was a free-draw operation (DELETE, DRAW), batch the changes
-            if ((currentMode === Modes.ADD || currentMode === Modes.DELETE || currentMode === Modes.DRAW) && !isShiftDragging && !isControlDragging) {
+            // If it was a free-draw operation (FREE_ADD, DELETE, DRAW), batch the changes
+            if ((currentMode === Modes.FREE_ADD || currentMode === Modes.DELETE || currentMode === Modes.DRAW) && !isShiftDragging && !isControlDragging) {
                 if (currentStrokeVoxels.size > 0) {
                     const oldStateForHistory = [];
                     const newStateForHistory = [];
@@ -3658,8 +3718,8 @@ function onPointerLeave(e) {
         // and it was not a right-click initiated pointer lock.
         if (!rightMouseButtonDown || (pointerIsDown && e.button === 0)) {
             if (pointerIsDown && initialDragVoxelCoords) {
-                // If it was a free-draw operation (DELETE, DRAW), batch the changes
-                if ((currentMode === Modes.ADD || currentMode === Modes.DELETE || currentMode === Modes.DRAW) && !isShiftDragging && !isControlDragging) {
+                // If it was a free-draw operation (FREE_ADD, DELETE, DRAW), batch the changes
+                if ((currentMode === Modes.FREE_ADD || currentMode === Modes.DELETE || currentMode === Modes.DRAW) && !isShiftDragging && !isControlDragging) {
                     if (currentStrokeVoxels.size > 0) {
                         const oldStateForHistory = [];
                         const newStateForHistory = [];
@@ -3766,7 +3826,7 @@ function onMouseWheel(e) {
 
     if (e.altKey) {
         // Logic to move the drawing plane
-        if (currentMode === Modes.ADD) {
+        if (currentMode === Modes.LINE_ADD || currentMode === Modes.FREE_ADD) { // Only allow plane movement in ADD modes
             if (e.shiftKey) {
                 activeDrawingLevel.z = Math.max(0, Math.min(GRID - 1, activeDrawingLevel.z - Math.sign(e.deltaY)));
                 currentDrawingAxis = 'z';
@@ -3860,7 +3920,6 @@ function setFixedBlockSize(size) {
         previewLineVoxels = [];
     }
 }
-
 function setDynamicBlockDimensions() {
     const x = parseInt(document.getElementById('dynamic-block-x').value);
     const y = parseInt(document.getElementById('dynamic-block-y').value);
