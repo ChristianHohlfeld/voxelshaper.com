@@ -3544,59 +3544,54 @@ window.onload = async function() {
 
                 // Listener für Authentifizierungsstatusänderungen
                 // This listener will now handle loading project from URL AFTER authentication is established
-                window.firebase.onAuthStateChanged(auth, async (user) => {
-                    console.log("VoxelShaper: Auth-Status geändert. Benutzer:", user ? user.uid : "null");
-                    
-                    // <<< WICHTIGE ÄNDERUNG HIER >>>
-                    // Nur fortfahren, wenn die Authentifizierung etabliert ist UND das Projekt noch nicht von der URL geladen wurde
-                    if (user && !projectLoadedFromUrl) {
-                        currentUserId = user.uid;
-                        currentUser = user;
-                        loginLogoutBtn.textContent = 'Abmelden';
-                        userIdDisplay.innerHTML = `<img src="${user.photoURL || 'https://placehold.co/24x24/cccccc/000000?text=U'}" alt="User Avatar"> ${user.uid}`;
-                        uploadToHubBtn.style.display = 'inline-block';
-                        document.getElementById('mobile-login-logout').textContent = '🚪'; // Tür-Symbol für Abmelden
-                        document.getElementById('authModal').close(); // Anmeldedialog bei erfolgreicher Anmeldung schließen
+            window.firebase.onAuthStateChanged(auth, async (user) => {
+    console.log("VoxelShaper: Auth-Status geändert. Benutzer:", user ? user.uid : "null");
 
-                        // URL-Parameter für das Laden von Projekten überprüfen (modelId oder projectJson)
-                        const urlParams = new URLSearchParams(window.location.search);
-                        const modelId = urlParams.get('modelId');
-                        const encodedJson = urlParams.get('projectJson');
+    const urlParams = new URLSearchParams(window.location.search);
+    const modelId = urlParams.get('modelId');
+    const encodedJson = urlParams.get('projectJson');
 
-                        if (modelId) {
-                            await loadProjectFromModelId(modelId);
-                            projectLoadedFromUrl = true; // Projekt als geladen markieren
-                        } else if (encodedJson) {
-                            try {
-                                const decodedJsonString = decodeURIComponent(encodedJson);
-                                const projectData = JSON.parse(decodedJsonString);
-                                projectRemixOf = 'Direct JSON Load';
-                                projectSourceJsonUrl = window.location.href;
-                                loadProjectData(projectData);
-                                showToast('Projekt geladen', 'Projekt erfolgreich aus URL-Parameter geladen.', 'success');
-                                projectLoadedFromUrl = true; // Projekt als geladen markieren
-                            } catch (error) {
-                                console.error("Error loading project from URL parameter (projectJson):", error);
-                                showToast('Fehler', 'Fehler beim Laden des Projekts aus der URL. Ungültige oder beschädigte Projektdaten. Fehler: ' + error.message, 'error');
-                                resetToDefaultProject();
-                            }
-                        } else {
-                            projectRemixOf = '';
-                            projectSourceJsonUrl = '';
-                        }
-                    } else if (!user) { // Wenn Benutzer abgemeldet ist oder initial null
-                        currentUserId = null;
-                        currentUser = null;
-                        loginLogoutBtn.textContent = 'Anmelden';
-                        userIdDisplay.innerHTML = ''; // Benutzerinformationen löschen
-                        uploadToHubBtn.style.display = 'none';
-                        document.getElementById('mobile-login-logout').textContent = '🔑'; // Schlüssel-Symbol für Anmelden
-                        // Wenn kein Benutzer angemeldet ist, stellen Sie sicher, dass keine URL-Modelle geladen werden, die Auth erfordern
-                        projectRemixOf = '';
-                        projectSourceJsonUrl = '';
-                        projectLoadedFromUrl = false; // Flag zurücksetzen, falls Benutzer sich abmeldet
-                    }
-                });
+    currentUser = user || null;
+    currentUserId = user ? user.uid : null;
+
+    if (user) {
+        loginLogoutBtn.textContent = 'Abmelden';
+        userIdDisplay.innerHTML = `<img src="${user.photoURL || 'https://placehold.co/24x24/cccccc/000000?text=U'}" alt="User Avatar"> ${user.uid}`;
+        uploadToHubBtn.style.display = 'inline-block';
+        document.getElementById('mobile-login-logout').textContent = '🚪';
+        document.getElementById('authModal').close();
+    } else {
+        loginLogoutBtn.textContent = 'Anmelden';
+        userIdDisplay.innerHTML = '';
+        uploadToHubBtn.style.display = 'none';
+        document.getElementById('mobile-login-logout').textContent = '🔑';
+    }
+
+    // Nur einmal versuchen zu laden
+    if (!projectLoadedFromUrl) {
+        try {
+            if (modelId) {
+                await loadProjectFromModelId(modelId); // Funktioniert für public Modelle auch ohne Login
+                projectLoadedFromUrl = true;
+            } else if (encodedJson) {
+                const decodedJsonString = decodeURIComponent(encodedJson);
+                const projectData = JSON.parse(decodedJsonString);
+                projectRemixOf = 'Direct JSON Load';
+                projectSourceJsonUrl = window.location.href;
+                loadProjectData(projectData);
+                showToast('Projekt geladen', 'Projekt erfolgreich aus URL-Parameter geladen.', 'success');
+                projectLoadedFromUrl = true;
+            } else {
+                projectRemixOf = '';
+                projectSourceJsonUrl = '';
+            }
+        } catch (error) {
+            console.error("Fehler beim Laden des Projekts:", error);
+            showToast('Fehler', 'Fehler beim Laden des Projekts: ' + error.message, 'error');
+            resetToDefaultProject();
+        }
+    }
+});
 
                 animate(); // Start the animation loop
 
