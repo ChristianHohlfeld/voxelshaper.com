@@ -887,6 +887,8 @@ input[type="color"].color-preset-box::-moz-color-swatch {
         addDoc,
         serverTimestamp
     };
+ window.firebase.doc = doc;
+window.firebase.getDoc = getDoc;
 
     const firebaseConfig = typeof __firebase_config !== 'undefined' ? JSON.parse(__firebase_config) : {
         apiKey: "AIzaSyB9-mpyAu9W6oiVtB0fYG8E6YFvTAsjtAA",
@@ -3518,8 +3520,8 @@ window.firebase.setPersistence(auth, window.firebase.browserLocalPersistence)
                     const encodedJson = urlParams.get('projectJson');
 
                     if (modelId) {
-                        const docRef = doc(db, "models", modelId);
-                        const docSnap = await getDoc(docRef);
+const docRef = window.firebase.doc(db, "models", modelId);
+const docSnap = await window.firebase.getDoc(docRef);
 
                         if (docSnap.exists()) {
                             const modelData = docSnap.data();
