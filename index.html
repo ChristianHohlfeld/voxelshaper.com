@@ -26,7 +26,7 @@
 /* Custom styles for specific animations or low-level interactions not covered by Tailwind/DaisyUI */
 body {
     padding-top: env(safe-area-inset-top);
-    padding-bottom: env(safe-area-inset-bottom);
+    padding-bottom: env(safe(safe-area-inset-bottom);
     padding-left: env(safe-area-inset-left);
     padding-right: env(safe-area-inset-right);
     box-sizing: border-box;
@@ -201,6 +201,12 @@ input[type="color"]::-moz-color-swatch {
 
         <label for="uploadDescription" class="label block mb-2 font-bold">Beschreibung:</label>
         <textarea id="uploadDescription" placeholder="Beschreiben Sie Ihr Projekt kurz" maxlength="500" class="textarea textarea-bordered w-full bg-base-300 border-base-content/20 h-24 mb-4 resize-y"></textarea>
+
+        <label for="uploadCategory" class="label block mb-2 font-bold">Kategorie:</label>
+        <select id="uploadCategory" class="select select-bordered w-full bg-base-300 border-base-content/20 mb-4" required>
+            <option value="" disabled selected>Kategorie auswählen</option>
+            <!-- Categories will be dynamically loaded here -->
+        </select>
 
         <label for="uploadTags" class="label block mb-2 font-bold">Tags (Komma-getrennt):</label>
         <input type="text" id="uploadTags" placeholder="z.B. Haus, Baum, Auto, Gebäude" maxlength="100" class="input input-bordered w-full bg-base-300 border-base-content/20 mb-4">
@@ -626,10 +632,13 @@ let previewLineVoxels = [];
 
 let projectTitle = '';
 let projectDescription = '';
+let projectCategory = 'Allgemein'; // Default category
 let projectTags = [];
 let projectRemixOf = '';
 let projectSourceJsonUrl = '';
 let projectVisibility = 'public';
+
+const predefinedCategories = ["Spielzeug", "Dekoration", "Funktional", "Kunst", "Allgemein", "Charaktere", "Fahrzeuge", "Natur", "Architektur", "Abstrakt"];
 
 let auth;
 let db;
@@ -1397,6 +1406,7 @@ function saveJSON() {
     const projectData = {
         title: projectTitle,
         description: projectDescription,
+        category: projectCategory, // Added category
         remixOf: projectRemixOf,
         sourceJsonUrl: projectSourceJsonUrl,
         tags: projectTags,
@@ -1513,6 +1523,7 @@ function resetToDefaultProject() {
 
     projectTitle = '';
     projectDescription = '';
+    projectCategory = 'Allgemein'; // Reset category
     projectTags = [];
     projectRemixOf = '';
     projectSourceJsonUrl = '';
@@ -1534,6 +1545,7 @@ function loadProjectData(projectData) {
 
         projectTitle = projectData.title || '';
         projectDescription = projectData.description || '';
+        projectCategory = projectData.category || 'Allgemein'; // Load category
         projectTags = Array.isArray(projectData.tags) ? projectData.tags : (typeof projectData.tags === 'string' ? projectData.tags.split(',').map(tag => tag.trim()).filter(tag => tag !== '') : []);
         projectRemixOf = projectData.remixOf || '';
         projectSourceJsonUrl = projectData.sourceJsonUrl || '';
@@ -1994,10 +2006,28 @@ function openUploadModal() {
         openAuthModal();
         return;
     }
+
+    if (voxels.size === 0) {
+        showToast('Upload fehlgeschlagen', 'Die Szene ist leer. Bitte erstellen Sie zuerst ein Modell.', 'warning');
+        return;
+    }
+
     document.getElementById('uploadTitle').value = projectTitle;
     document.getElementById('uploadDescription').value = projectDescription;
+    document.getElementById('uploadCategory').value = projectCategory; // Set category
     document.getElementById('uploadTags').value = projectTags.join(', ');
     document.querySelector(`input[name="uploadVisibility"][value="${projectVisibility}"]`).checked = true;
+
+    // Populate category dropdown
+    const uploadCategorySelect = document.getElementById('uploadCategory');
+    uploadCategorySelect.innerHTML = '<option value="" disabled selected>Kategorie auswählen</option>';
+    predefinedCategories.forEach(category => {
+        const option = document.createElement('option');
+        option.value = category;
+        option.textContent = category;
+        uploadCategorySelect.appendChild(option);
+    });
+    uploadCategorySelect.value = projectCategory; // Set selected category
 
     document.getElementById('uploadProjectModal').showModal();
 }
@@ -2008,13 +2038,23 @@ async function uploadProjectToHub() {
         return;
     }
 
+    if (voxels.size === 0) {
+        showToast('Upload fehlgeschlagen', 'Die Szene ist leer. Bitte erstellen Sie zuerst ein Modell.', 'warning');
+        return;
+    }
+
     const title = document.getElementById('uploadTitle').value.trim();
     const description = document.getElementById('uploadDescription').value.trim();
+    const category = document.getElementById('uploadCategory').value; // Get category from dropdown
     const tags = document.getElementById('uploadTags').value.split(',').map(tag => tag.trim()).filter(tag => tag !== '');
     const visibility = document.querySelector('input[name="uploadVisibility"]:checked').value;
 
     if (!title) {
         showToast('Fehler', 'Bitte geben Sie einen Titel für Ihr Projekt ein.', 'warning');
+        return;
+    }
+    if (!category) {
+        showToast('Fehler', 'Bitte wählen Sie eine Kategorie für Ihr Projekt aus.', 'warning');
         return;
     }
 
@@ -2046,6 +2086,7 @@ async function uploadProjectToHub() {
         const firestoreDocument = {
             title: title,
             description: description,
+            category: category, // Added category to Firestore document
             tags: tags,
             visibility: visibility,
             remixOf: projectRemixOf || "",
@@ -2089,6 +2130,7 @@ async function uploadProjectToHub() {
 
         projectTitle = title;
         projectDescription = description;
+        projectCategory = category; // Update projectCategory after successful upload
         projectTags = tags;
         projectVisibility = visibility;
 
@@ -2549,6 +2591,16 @@ window.onload = async function() {
         const goToHubBtn = document.getElementById('goToHubBtn');
       
         let projectLoadedFromUrl = false;
+
+        // Populate category dropdown in upload modal
+        const uploadCategorySelect = document.getElementById('uploadCategory');
+        predefinedCategories.forEach(category => {
+            const option = document.createElement('option');
+            option.value = category;
+            option.textContent = category;
+            uploadCategorySelect.appendChild(option);
+        });
+
 
         window.firebase.setPersistence(auth, window.firebase.browserLocalPersistence)
             .then(async () => {
