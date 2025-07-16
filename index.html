@@ -4118,10 +4118,8 @@ function onPointerLockChange() {
 function onMouseWheel(e) {
     e.preventDefault();
 
-    const sensitivity = 0.005;
-    let zoomAmount = e.deltaY * sensitivity;
-
     if (e.altKey) {
+        // Logik zum Verschieben der Zeichenebene
         if (currentMode === Modes.ADD) {
             if (e.shiftKey) {
                 activeDrawingLevel.z = Math.max(0, Math.min(GRID - 1, activeDrawingLevel.z - Math.sign(e.deltaY)));
@@ -4135,22 +4133,24 @@ function onMouseWheel(e) {
             }
             updateGridHelperPosition();
         } else {
+            // Wenn Alt gedrückt ist, aber nicht im ADD-Modus, zoome die Kamera
+            const sensitivity = 0.005;
+            let zoomAmount = e.deltaY * sensitivity;
             cam.position.addScaledVector(
                 cam.getWorldDirection(new THREE.Vector3()),
                 zoomAmount * moveSpeed * 5
             );
         }
     } else {
+        // Logik zum Anpassen der Fluggeschwindigkeit
         const speedChange = -Math.sign(e.deltaY) * 0.01;
         moveSpeed = Math.max(0.01, Math.min(1.0, moveSpeed + speedChange));
         document.getElementById('fly-speed-slider').value = moveSpeed;
         document.getElementById('fly-speed-display').textContent = moveSpeed.toFixed(2);
         localStorage.setItem('voxelEditorFlySpeed', moveSpeed);
 
-        cam.position.addScaledVector(
-            cam.getWorldDirection(new THREE.Vector3()),
-            zoomAmount * moveSpeed * 5
-        );
+        // Die Kamera wird hier NICHT direkt bewegt.
+        // Die Bewegung im Fly-Modus erfolgt über WASD/EQ, die die 'moveSpeed' nutzen.
     }
 }
 
