@@ -828,32 +828,54 @@ function fillActiveLevel() {
 }
 
 function saveJSON() {
-    const data = {}; voxels.forEach((value, k) => { const [gx,gy,gz] = parseKey(k); data[`${gx},${gy},${gz}`] = value.color; });
+    const data = {}; // This will contain the voxel data in "x,y,z": "color" format
+    voxels.forEach((value, k) => {
+        const [gx, gy, gz] = parseKey(k);
+        data[`${gx},${gy},${gz}`] = value.color;
+    });
+
     const settings = {
-        gridSize: GRID, cameraPosition: cam.position.toArray(), cameraQuaternion: cam.quaternion.toArray(),
-        activeDrawingLevel: activeDrawingLevel, currentDrawingAxis: currentDrawingAxis, currentColor: currentColor,
-        presetColors: presetColors, activePresetIndex: activePresetIndex, moveSpeed: moveSpeed,
+        gridSize: GRID,
+        cameraPosition: cam.position.toArray(),
+        cameraQuaternion: cam.quaternion.toArray(),
+        activeDrawingLevel: activeDrawingLevel,
+        currentDrawingAxis: currentDrawingAxis,
+        currentColor: currentColor,
+        presetColors: presetColors,
+        activePresetIndex: activePresetIndex,
+        moveSpeed: moveSpeed,
         templateImageData: templateImageData // Keep image template data
     };
-    const projectData = {
-        title: projectTitle, description: projectDescription, category: projectCategory, remixOf: projectRemixOf,
-        sourceJsonUrl: projectSourceJsonUrl, tags: projectTags, visibility: projectVisibility, downloads: 0,
-        rating: 0, ratingCount: 0, verified: false, fileName: `${projectTitle.replace(/\s+/g, "_") || "voxel_project"}.json`,
-        timestamp: new Date(), uploaderEmail: currentUser?.email || "", uploaderUid: currentUser?.uid || "",
-        uploaderPhotoURL: currentUser?.photoURL || "",
+
+    // This is the main object that will be saved to the JSON file
+    const fileContent = {
+        // Top-level metadata for the project (useful if this file is shared directly)
+        title: projectTitle,
+        description: projectDescription,
+        category: projectCategory,
+        tags: projectTags,
+        remixOf: projectRemixOf,
+        sourceJsonUrl: projectSourceJsonUrl,
+        visibility: projectVisibility, // Not strictly used for local file, but good for consistency
+        fileName: `${projectTitle.replace(/\s+/g, "_") || "voxel_project"}.json`,
+        timestamp: new Date().toISOString(), // Use ISO string for consistent date format
+
+        // The actual project data (settings and voxels)
         projectData: {
-            description: description, remixOf: projectRemixOf, sourceJsonUrl: projectSourceJsonUrl,
-            settings: settings, activeDrawingLevel: activeDrawingLevel, activePresetIndex: activePresetIndex,
-            cameraPosition: cam.position.toArray(), cameraQuaternion: cam.quaternion.toArray(),
-            currentColor: currentColor, currentDrawingAxis: currentDrawingAxis,
-            gridSize: GRID, moveSpeed: moveSpeed, presetColors: presetColors, templateImageData: templateImageData,
+            settings: settings,
             voxels: data
         }
     };
-    const blob = new Blob([JSON.stringify(projectData, null, 2)], { type: 'application/json' });
+
+    const blob = new Blob([JSON.stringify(fileContent, null, 2)], { type: 'application/json' });
     const url = URL.createObjectURL(blob);
-    const a = document.createElement('a'); a.href = url; a.download = 'voxel_project.json';
-    document.body.appendChild(a); a.click(); document.body.removeChild(a); URL.revokeObjectURL(url);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = fileContent.fileName; // Use the dynamically generated filename
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
     showToast('Speichern erfolgreich', 'Projekt als JSON-Datei gespeichert.', 'success');
 }
 
