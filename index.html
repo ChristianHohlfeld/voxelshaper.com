@@ -2548,11 +2548,9 @@ async function loadProjectFromModelId(modelId) {
         console.log(`loadProjectFromModelId: Attempting to load model ID: ${modelId}`);
         showToast('Lade Projekt', `Lade Projekt mit ID: ${modelId}...`, 'info');
         
-        // Ensure __app_id is defined; otherwise, use a default for local testing
-        const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
         // Construct the document reference for the public data path
       const docRef = window.firebase.doc(db, "models", modelId);
-const docSnap = await window.firebase.getDoc(docRef);
+      const docSnap = await window.firebase.getDoc(docRef);
         
 
         if (docSnap.exists()) {
@@ -3033,8 +3031,8 @@ async function uploadProjectToHub() {
             }
         };
 
-        const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
-        const modelsCollectionRef = window.firebase.collection(db, `artifacts/${appId}/public/data/models`);
+        // KORREKTUR: Ändere den Firestore-Pfad von `artifacts/${appId}/public/data/models` zu `models`
+        const modelsCollectionRef = window.firebase.collection(db, "models");
 
         const docRef = await window.firebase.addDoc(modelsCollectionRef, firestoreDocument);
 
@@ -4469,7 +4467,7 @@ function onPointerUp(e) {
 
             if (rawFinalTargetVoxel) {
                 if (dragAxisLock) { // If an axis lock was established during the drag
-                    const snappedFinalTargetVoxel = { ...rawFinalTargetVoxel };
+                    const snappedFinalTargetVoxel = { ...rawCurrentTargetVoxel };
                     if (dragAxisLock === 'x') {
                         snappedFinalTargetVoxel.gy = initialDragVoxelCoords.gy;
                         snappedFinalTargetVoxel.gz = initialDragVoxelCoords.gz;
@@ -4753,10 +4751,6 @@ function setFixedBlockSize(size) {
         updatePreviewVoxel(0,0,0,false); // Hide preview if mouse is outside
     }
 }
-
-/**
- * Sets the dynamic block dimensions from input fields and updates UI/localStorage.
- */
 
 function setDynamicBlockDimensions() {
     const x = parseInt(document.getElementById('dynamic-block-x').value);
