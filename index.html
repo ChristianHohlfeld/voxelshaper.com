@@ -1235,22 +1235,6 @@ function getVoxelsOnLine(start, end) {
     return voxelsOnLine;
 }
 
-// Helper to find the next empty voxel for preview during ADD mode drag
-function findNextEmptyVoxelForPreview(startVoxelCoords, targetRayPoint) {
-    const pathVoxels = getVoxelsOnLine(startVoxelCoords, targetRayPoint);
-    for (const voxel of pathVoxels) {
-        const gKey = key(voxel.gx, voxel.gy, voxel.gz);
-        if (!voxels.has(gKey) && // Check if empty in the actual voxel map
-            voxel.gx >= 0 && voxel.gx < GRID &&
-            voxel.gy >= 0 && voxel.gy < GRID &&
-            voxel.gz >= 0 && voxel.gz < GRID) {
-            return voxel; // Return the first empty spot found
-        } else if (voxels.has(gKey)) {
-            return null; // Hit an existing voxel, no empty spot along this path
-        }
-    }
-    return null; // No empty spot found along the line
-}
 
 function onPointerUp(e) {
     if (e.button === 2) { rightMouseButtonDown = false; document.exitPointerLock(); return; }
@@ -1488,107 +1472,58 @@ function onPointerMove(e) {
         const isDraggingVoxelAction = (pointerIsDown || doubleTapDragActive) && (movedDist > MOVE_PX || lastActionVoxelCoords !== null);
 
         if (isDraggingVoxelAction) { // Logic for active drag
-            let currentRayTarget = calculateRayTargetVoxelCoords(e.clientX, e.clientY);
-            if (!currentRayTarget) {
+            let currentRayHit = calculateRayTargetVoxelCoords(e.clientX, e.clientY);
+            if (!currentRayHit) {
                 updatePreviewVoxel(0, 0, 0, false);
                 return;
             }
 
-            // Determine the start point for this segment of the stroke
-            // This should be the last *successfully processed* voxel, or the initial drag point.
-            let strokeSegmentStart = lastActionVoxelCoords || initialDragVoxelCoords;
-            if (!strokeSegmentStart) { // Fallback if somehow not set (shouldn't happen if initialDragVoxelCoords is set on pointerDown)
-                strokeSegmentStart = currentRayTarget;
-            }
+            let targetVoxelForAction = { gx: currentRayHit.gx, gy: currentRayHit.gy, gz: currentRayHit.gz };
 
-            const pathVoxels = getVoxelsOnLine(strokeSegmentStart, currentRayTarget);
-            let lastProcessedVoxel = null; // Track the last voxel *attempted* to be processed
-
-            for (const voxel of pathVoxels) {
-                const gKey = key(voxel.gx, voxel.gy, voxel.gz);
-                const hasVoxelAtCurrentSpot = voxels.has(gKey);
-                const initialColor = voxelsAtDragStart.has(gKey) ? voxelsAtDragStart.get(gKey).color : null;
-
-                if (currentMode === Modes.ADD) {
-                    let targetVoxelForAction = { gx: voxel.gx, gy: voxel.gy, gz: voxel.gz };
-
-                    // If the current voxel in the path is an existing voxel and we have a face normal,
-                    // propose adding on that face instead.
-                    if (hasVoxelAtCurrentSpot && currentRayTarget.faceNormal) {
-                        targetVoxelForAction.gx = voxel.gx + Math.round(currentRayTarget.faceNormal.x);
-                        targetVoxelForAction.gy = voxel.gy + Math.round(currentRayTarget.faceNormal.y);
-                        targetVoxelForAction.gz = voxel.gz + Math.round(currentRayTarget.faceNormal.z);
-                    }
-
-                    // Clamp to grid boundaries
-                    targetVoxelForAction.gx = Math.max(0, Math.min(GRID - 1, targetVoxelForAction.gx));
-                    targetVoxelForAction.gy = Math.max(0, Math.min(GRID - 1, targetVoxelForAction.gy));
-                    targetVoxelForAction.gz = Math.max(0, Math.min(GRID - 1, targetVoxelForAction.gz));
-
-                    const gKeyForAction = key(targetVoxelForAction.gx, targetVoxelForAction.gy, targetVoxelForAction.gz);
-
-                    // Only add if the target spot is empty
-                    if (!voxels.has(gKeyForAction)) {
-                        _addSingleVoxel(targetVoxelForAction.gx, targetVoxelForAction.gy, targetVoxelForAction.gz, currentColor);
-                        if (!currentStrokeVoxels.has(gKeyForAction)) {
-                            currentStrokeVoxels.set(gKeyForAction, { newColor: currentColor, initialColor: initialColor });
-                        }
-                    }
-                    lastProcessedVoxel = targetVoxelForAction; // Update lastProcessedVoxel to the *actual* voxel added/attempted
-                } else if (currentMode === Modes.DELETE) {
-                    if (hasVoxelAtCurrentSpot) {
-                        _removeSingleVoxel(voxel.gx, voxel.gy, voxel.gz);
-                        if (!currentStrokeVoxels.has(gKey)) {
-                            currentStrokeVoxels.set(gKey, { newColor: null, initialColor: initialColor });
-                        }
-                    }
-                    lastProcessedVoxel = voxel;
-                } else if (currentMode === Modes.DRAW) {
-                    if (hasVoxelAtCurrentSpot) {
-                        if (voxels.get(gKey).color !== currentColor) { // Only recolor if different
-                            _recolorSingleVoxel(voxel.gx, voxel.gy, voxel.gz, currentColor);
-                            if (!currentStrokeVoxels.has(gKey)) {
-                                currentStrokeVoxels.set(gKey, { newColor: currentColor, initialColor: initialColor });
-                            } else {
-                                currentStrokeVoxels.get(gKey).newColor = currentColor;
-                            }
-                        }
-                    }
-                    lastProcessedVoxel = voxel;
-                }
-            }
-
-            // Update lastActionVoxelCoords to the last voxel that was successfully processed (or the ray target if no specific voxel was processed)
-            // This is critical for continuous drawing.
-            lastActionVoxelCoords = lastProcessedVoxel || currentRayTarget;
-
-            // Update visual preview (single voxel preview) based on the *next potential* action
             if (currentMode === Modes.ADD) {
-                let previewTarget = null;
-                if (lastActionVoxelCoords) {
-                    // Find the next empty spot *from* the last processed voxel *towards* the current ray target
-                    const nextEmpty = findNextEmptyVoxelForPreview(lastActionVoxelCoords, currentRayTarget);
-                    if (nextEmpty) {
-                         previewTarget = nextEmpty;
-                    }
+                // If we hit an existing voxel AND we have a face normal,
+                // the intended action is to add on that face.
+                if (voxels.has(key(currentRayHit.gx, currentRayHit.gy, currentRayHit.gz)) && currentRayHit.faceNormal) {
+                    targetVoxelForAction.gx += Math.round(currentRayHit.faceNormal.x);
+                    targetVoxelForAction.gy += Math.round(currentRayHit.faceNormal.y);
+                    targetVoxelForAction.gz += Math.round(currentRayHit.faceNormal.z);
                 }
-                if (previewTarget) {
-                     updatePreviewVoxel(previewTarget.gx, previewTarget.gy, previewTarget.gz, true);
-                } else {
-                    updatePreviewVoxel(0, 0, 0, false);
-                }
-            } else if (currentMode === Modes.DELETE || currentMode === Modes.DRAW) {
-                // In DELETE/DRAW, preview should show the voxel *under* the cursor if it exists
-                if (currentRayTarget && voxels.has(key(currentRayTarget.gx, currentRayTarget.gy, currentRayTarget.gz))) {
-                    updatePreviewVoxel(currentRayTarget.gx, currentRayTarget.gy, currentRayTarget.gz, true);
-                } else {
-                    updatePreviewVoxel(0, 0, 0, false);
-                }
+                // If we hit empty space, targetVoxelForAction is already currentRayHit (the empty spot).
+                // If we hit an existing voxel but no clear face normal (e.g., edge/corner),
+                // the targetVoxelForAction remains currentRayHit. performVoxelModification will prevent adding if occupied.
             }
+
+            // Clamp targetVoxelForAction to grid boundaries
+            targetVoxelForAction.gx = Math.max(0, Math.min(GRID - 1, targetVoxelForAction.gx));
+            targetVoxelForAction.gy = Math.max(0, Math.min(GRID - 1, targetVoxelForAction.gy));
+            targetVoxelForAction.gz = Math.max(0, Math.min(GRID - 1, targetVoxelForAction.gz));
+
+            // Determine the path of voxels to affect
+            const pathVoxels = getVoxelsOnLine(lastActionVoxelCoords, targetVoxelForAction);
+            let lastProcessedVoxel = null;
+
+            for (const voxelCoord of pathVoxels) {
+                // Perform modification based on mode
+                performVoxelModification(voxelCoord.gx, voxelCoord.gy, voxelCoord.gz, currentMode, currentColor);
+
+                // Record the change for undo/redo
+                const gKey = key(voxelCoord.gx, voxelCoord.gy, voxelCoord.gz);
+                const initialColor = voxelsAtDragStart.has(gKey) ? voxelsAtDragStart.get(gKey).color : null;
+                const newColor = voxels.has(gKey) ? voxels.get(gKey).color : null;
+
+                if (initialColor !== newColor || (initialColor === null && newColor !== null)) {
+                    currentStrokeVoxels.set(gKey, { newColor: newColor, initialColor: initialColor });
+                }
+                lastProcessedVoxel = voxelCoord;
+            }
+
+            lastActionVoxelCoords = lastProcessedVoxel || targetVoxelForAction; // Update lastActionVoxelCoords
+
+            // Update preview voxel based on the current target for action
+            updatePreviewVoxel(targetVoxelForAction.gx, targetVoxelForAction.gy, targetVoxelForAction.gz, true);
             previewLineInstancedMesh.count = 0; // Hide line preview, using single voxel preview
             return;
         } else { // Hovering (not dragging)
-            // This part of the code seems fine for hover previews.
             previewLineInstancedMesh.count = 0;
             previewLineInstancedMesh.instanceMatrix.needsUpdate = true;
             previewLineVoxels = [];
@@ -1600,11 +1535,13 @@ function onPointerMove(e) {
                 let previewZ = hoverTarget.gz;
 
                 if (currentMode === Modes.ADD) {
+                    // If hovering over an existing voxel with a face normal, preview on that face
                     if (voxels.has(key(hoverTarget.gx, hoverTarget.gy, hoverTarget.gz)) && hoverTarget.faceNormal) {
                         previewX = hoverTarget.gx + Math.round(hoverTarget.faceNormal.x);
                         previewY = hoverTarget.gy + Math.round(hoverTarget.faceNormal.y);
                         previewZ = hoverTarget.gz + Math.round(hoverTarget.faceNormal.z);
-                        if (voxels.has(key(previewX, previewY, previewZ))) { // Proposed spot occupied
+                        // If the proposed spot is already occupied, don't show preview
+                        if (voxels.has(key(previewX, previewY, previewZ))) {
                             updatePreviewVoxel(0, 0, 0, false);
                             return;
                         }
@@ -1613,6 +1550,7 @@ function onPointerMove(e) {
                         updatePreviewVoxel(0, 0, 0, false);
                         return;
                     }
+                    // If hovering over empty space, preview at that empty space.
                 } else if (currentMode === Modes.DELETE && !voxels.has(key(hoverTarget.gx, hoverTarget.gy, hoverTarget.gz))) {
                     // In DELETE mode, if there's no voxel, hide preview
                     updatePreviewVoxel(0, 0, 0, false);
