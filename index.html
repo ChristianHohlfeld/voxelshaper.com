@@ -3561,51 +3561,78 @@ window.onload = async function() {
 
                 // Listener für Authentifizierungsstatusänderungen
                 // This listener will now handle loading project from URL AFTER authentication is established
-            window.firebase.onAuthStateChanged(auth, async (user) => {
+   window.firebase.onAuthStateChanged(auth, async (user) => {
     console.log("VoxelShaper: Auth-Status geändert. Benutzer:", user ? user.uid : "null");
 
     currentUserId = user ? user.uid : null;
     currentUser = user;
+
     loginLogoutBtn.textContent = user ? 'Abmelden' : 'Anmelden';
     userIdDisplay.innerHTML = user
         ? `<img src="${user.photoURL || 'https://placehold.co/24x24/cccccc/000000?text=U'}" alt="User Avatar"> ${user.uid}`
         : '';
-    uploadToHubBtn.style.display = user ? 'inline-block' : 'none';
     document.getElementById('mobile-login-logout').textContent = user ? '🚪' : '🔑';
+    uploadToHubBtn.style.display = user ? 'inline-block' : 'none';
 
     if (user) {
         document.getElementById('authModal').close();
     }
 
-    // Lade Modell aus URL (unabhängig vom Login!)
+    // Nur einmal aus URL laden
     if (!projectLoadedFromUrl) {
-        const urlParams = new URLSearchParams(window.location.search);
-        const modelId = urlParams.get('modelId');
-        const encodedJson = urlParams.get('projectJson');
+        try {
+            const urlParams = new URLSearchParams(window.location.search);
+            const modelId = urlParams.get('modelId');
+            const encodedJson = urlParams.get('projectJson');
 
-        if (modelId) {
-            await loadProjectFromModelId(modelId);
-            projectLoadedFromUrl = true;
-        } else if (encodedJson) {
-            try {
-                const decodedJsonString = decodeURIComponent(encodedJson);
-                const projectData = JSON.parse(decodedJsonString);
-                projectRemixOf = 'Direct JSON Load';
-                projectSourceJsonUrl = window.location.href;
-                loadProjectData(projectData);
-                showToast('Projekt geladen', 'Projekt erfolgreich aus URL-Parameter geladen.', 'success');
+            if (modelId) {
+                const docRef = doc(db, "models", modelId);
+                const docSnap = await getDoc(docRef);
+
+                if (docSnap.exists()) {
+                    const modelData = docSnap.data();
+                    const projectData = modelData.projectData;
+                    projectRemixOf = modelData.remixOf || '';
+                    projectSourceJsonUrl = `https://hub.voxelshaper.com?modelId=${modelId}`;
+
+                    loadProjectData(projectData);
+                    showToast('Modell geladen', 'Das Modell wurde erfolgreich aus der Datenbank geladen.', 'success');
+                } else {
+                    console.warn("VoxelShaper: Modell nicht gefunden:", modelId);
+                    showToast('Nicht gefunden', 'Das angeforderte Modell existiert nicht.', 'error');
+                    resetToDefaultProject();
+                }
+
                 projectLoadedFromUrl = true;
-            } catch (error) {
-                console.error("Error loading project from URL parameter (projectJson):", error);
-                showToast('Fehler', 'Fehler beim Laden des Projekts aus der URL. Ungültige oder beschädigte Projektdaten. Fehler: ' + error.message, 'error');
+            } else if (encodedJson) {
+                try {
+                    const decodedJsonString = decodeURIComponent(encodedJson);
+                    const projectData = JSON.parse(decodedJsonString);
+
+                    projectRemixOf = 'Direct JSON Load';
+                    projectSourceJsonUrl = window.location.href;
+                    loadProjectData(projectData);
+                    showToast('Projekt geladen', 'Projekt erfolgreich aus URL-Parameter geladen.', 'success');
+                } catch (err) {
+                    console.error("Fehler beim Parsen des Projekts aus URL:", err);
+                    showToast('Fehler', 'Ungültige Projektdaten in URL. Fehler: ' + err.message, 'error');
+                    resetToDefaultProject();
+                }
+
+                projectLoadedFromUrl = true;
+            } else {
+                projectRemixOf = '';
+                projectSourceJsonUrl = '';
                 resetToDefaultProject();
             }
-        } else {
-            projectRemixOf = '';
-            projectSourceJsonUrl = '';
+        } catch (error) {
+            console.error("VoxelShaper: Fehler beim Laden des Modells:", error);
+            showToast('Fehler', `Fehler beim Laden des Modells: ${error.message}`, 'error');
+            resetToDefaultProject();
         }
     }
 });
+
 
 
                 animate(); // Start the animation loop
