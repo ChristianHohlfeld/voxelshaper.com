@@ -1270,19 +1270,25 @@ function onPointerUp(e) {
         if (clickedVoxel) {
             let finalVoxelCoords = null;
             if (currentMode === Modes.ADD) {
+                // If we hit an existing voxel AND we have a face normal,
+                // the intended action is to add on that face.
                 if (voxels.has(key(clickedVoxel.gx, clickedVoxel.gy, clickedVoxel.gz)) && clickedVoxel.faceNormal) {
                     const proposedVoxel = {
                         gx: clickedVoxel.gx + Math.round(clickedVoxel.faceNormal.x),
                         gy: clickedVoxel.gy + Math.round(clickedVoxel.faceNormal.y),
                         gz: clickedVoxel.gz + Math.round(clickedVoxel.faceNormal.z)
                     };
+                    // Only set as final if the proposed spot is not already occupied
                     if (!voxels.has(key(proposedVoxel.gx, proposedVoxel.gy, proposedVoxel.gz))) {
                         finalVoxelCoords = proposedVoxel;
                     }
                 } else if (!voxels.has(key(clickedVoxel.gx, clickedVoxel.gy, clickedVoxel.gz))) {
+                    // If we hit empty space (or existing without face normal, which means hitting the plane),
+                    // and the spot is empty, then add at clicked position.
                     finalVoxelCoords = { gx: clickedVoxel.gx, gy: clickedVoxel.gy, gz: clickedVoxel.gz };
                 }
             } else { // DELETE or DRAW mode
+                // For delete and draw, the action always applies to the clicked voxel itself
                 finalVoxelCoords = { gx: clickedVoxel.gx, gy: clickedVoxel.gy, gz: clickedVoxel.gz };
             }
 
@@ -1355,12 +1361,33 @@ function onPointerDown(e) {
                             gy: rawTarget.gy + Math.round(rawTarget.faceNormal.y),
                             gz: rawTarget.gz + Math.round(rawTarget.faceNormal.z)
                         };
-                        initialActionVoxel = proposedVoxel; // Always attempt to place on face for initial drag point
-                    } else {
+                        // Only set as initial if the proposed spot is not already occupied
+                        if (!voxels.has(key(proposedVoxel.gx, proposedVoxel.gy, proposedVoxel.gz))) {
+                            initialActionVoxel = proposedVoxel;
+                        } else {
+                            // If proposed spot is occupied, we can't start adding there.
+                            // This prevents starting a drag to add on an already filled spot.
+                            doubleTapDragActive = false;
+                            return;
+                        }
+                    } else if (!voxels.has(key(rawTarget.gx, rawTarget.gy, rawTarget.gz))) {
+                        // If we hit empty space (or existing without face normal, which means hitting the plane),
+                        // and the spot is empty, then add at clicked position.
                         initialActionVoxel = { gx: rawTarget.gx, gy: rawTarget.gy, gz: rawTarget.gz };
+                    } else {
+                        // If we hit an existing voxel directly (not on a face), and the spot is occupied,
+                        // we can't start adding there.
+                        doubleTapDragActive = false;
+                        return;
                     }
                 } else { // DELETE or DRAW mode
+                    // For delete and draw, the action always applies to the clicked voxel itself
                     initialActionVoxel = { gx: rawTarget.gx, gy: rawTarget.gy, gz: rawTarget.gz };
+                    // If no voxel exists at the target for DELETE/DRAW, prevent drag
+                    if (!voxels.has(key(initialActionVoxel.gx, initialActionVoxel.gy, initialActionVoxel.gz))) {
+                        doubleTapDragActive = false;
+                        return;
+                    }
                 }
 
                 if (initialActionVoxel) {
@@ -1376,17 +1403,17 @@ function onPointerDown(e) {
 
                     // Apply change immediately for all modes, and record for undo/redo
                     if (currentMode === Modes.ADD) {
-                        if (!voxels.has(gKey)) {
+                        if (!voxels.has(gKey)) { // Double check if it's still empty
                             _addSingleVoxel(initialDragVoxelCoords.gx, initialDragVoxelCoords.gy, initialDragVoxelCoords.gz, currentColor);
                             currentStrokeVoxels.set(gKey, { newColor: currentColor, initialColor: initialColor });
                         }
                     } else if (currentMode === Modes.DELETE) {
-                        if (voxels.has(gKey)) {
+                        if (voxels.has(gKey)) { // Double check if it exists
                             _removeSingleVoxel(initialDragVoxelCoords.gx, initialDragVoxelCoords.gy, initialDragVoxelCoords.gz);
                             currentStrokeVoxels.set(gKey, { newColor: null, initialColor: initialColor });
                         }
                     } else if (currentMode === Modes.DRAW) {
-                        if (voxels.has(gKey)) {
+                        if (voxels.has(gKey)) { // Double check if it exists
                             _recolorSingleVoxel(initialDragVoxelCoords.gx, initialDragVoxelCoords.gy, initialDragVoxelCoords.gz, currentColor);
                             currentStrokeVoxels.set(gKey, { newColor: currentColor, initialColor: initialColor });
                         }
@@ -1436,12 +1463,32 @@ function onPointerDown(e) {
                     gy: rawTarget.gy + Math.round(rawTarget.faceNormal.y),
                     gz: rawTarget.gz + Math.round(rawTarget.faceNormal.z)
                 };
-                initialActionVoxel = proposedVoxel; // Always attempt to place on face for initial drag point
-            } else {
+                // Only set as initial if the proposed spot is not already occupied
+                if (!voxels.has(key(proposedVoxel.gx, proposedVoxel.gy, proposedVoxel.gz))) {
+                    initialActionVoxel = proposedVoxel;
+                } else {
+                    // If proposed spot is occupied, we can't start adding there.
+                    pointerIsDown = false; initialClickPos = null;
+                    return;
+                }
+            } else if (!voxels.has(key(rawTarget.gx, rawTarget.gy, rawTarget.gz))) {
+                // If we hit empty space (or existing without face normal, which means hitting the plane),
+                // and the spot is empty, then add at clicked position.
                 initialActionVoxel = { gx: rawTarget.gx, gy: rawTarget.gy, gz: rawTarget.gz };
+            } else {
+                // If we hit an existing voxel directly (not on a face), and the spot is occupied,
+                // we can't start adding there.
+                pointerIsDown = false; initialClickPos = null;
+                return;
             }
         } else { // DELETE or DRAW mode
+            // For delete and draw, the action always applies to the clicked voxel itself
             initialActionVoxel = { gx: rawTarget.gx, gy: rawTarget.gy, gz: rawTarget.gz };
+            // If no voxel exists at the target for DELETE/DRAW, prevent drag
+            if (!voxels.has(key(initialActionVoxel.gx, initialActionVoxel.gy, initialActionVoxel.gz))) {
+                pointerIsDown = false; initialClickPos = null;
+                return;
+            }
         }
 
         if (initialActionVoxel) {
@@ -1457,17 +1504,17 @@ function onPointerDown(e) {
 
             // Apply change immediately for all modes, and record for undo/redo
             if (currentMode === Modes.ADD) {
-                if (!voxels.has(gKey)) {
+                if (!voxels.has(gKey)) { // Double check if it's still empty
                     _addSingleVoxel(initialDragVoxelCoords.gx, initialDragVoxelCoords.gy, initialDragVoxelCoords.gz, currentColor);
                     currentStrokeVoxels.set(gKey, { newColor: currentColor, initialColor: initialColor });
                 }
             } else if (currentMode === Modes.DELETE) {
-                if (voxels.has(gKey)) {
+                if (voxels.has(gKey)) { // Double check if it exists
                     _removeSingleVoxel(initialDragVoxelCoords.gx, initialDragVoxelCoords.gy, initialDragVoxelCoords.gz);
                     currentStrokeVoxels.set(gKey, { newColor: null, initialColor: initialColor });
                 }
             } else if (currentMode === Modes.DRAW) {
-                if (voxels.has(gKey)) {
+                if (voxels.has(gKey)) { // Double check if it exists
                     _recolorSingleVoxel(initialDragVoxelCoords.gx, initialDragVoxelCoords.gy, initialDragVoxelCoords.gz, currentColor);
                     currentStrokeVoxels.set(gKey, { newColor: currentColor, initialColor: initialColor });
                 }
