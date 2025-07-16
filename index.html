@@ -274,8 +274,8 @@ let activePresetIndex = -1;
 let presetBoxes = [];
 
 let mainDirectionalLight, fillDirectionalLight, hemisphereLight;
-let isShiftDragging = false; // Keep for camera controls or future features, but not for block size
-let isControlDragging = false; // Keep for camera controls or future features, but not for block size
+let isShiftDragging = false; // Keep for camera controls or future features
+let isControlDragging = false; // Keep for camera controls or future features
 let isPointerLocked = false;
 let lastActionVoxelCoords = null;
 let initialClickPos = null;
@@ -313,8 +313,8 @@ let templateImageData = null;
 
 let isMobile = window.matchMedia('(max-width: 768px)').matches;
 
-let initialDragVoxelWorldPos = null;
-let dragAxisLock = null;
+let initialDragVoxelWorldPos = null; // Not strictly needed, but harmless
+let dragAxisLock = null; // Not strictly needed, but harmless
 
 let projectTitle = '';
 let projectDescription = '';
@@ -679,7 +679,7 @@ function _recolorSingleVoxel(gx, gy, gz, newColorHex) {
 function performVoxelModification(gx, gy, gz, mode, color) {
     const gKey = key(gx, gy, gz); const hasVoxel = voxels.has(gKey);
     switch (mode) {
-        case Modes.ADD: if (!hasVoxel || voxels.get(gKey).color !== color) _addSingleVoxel(gx, gy, gz, color); break;
+        case Modes.ADD: if (!hasVoxel) _addSingleVoxel(gx, gy, gz, color); break; // Changed: Only add if no voxel exists
         case Modes.DELETE: if (hasVoxel) _removeSingleVoxel(gx, gy, gz); break;
         case Modes.DRAW: if (hasVoxel && voxels.get(gKey).color !== color) _recolorSingleVoxel(gx, gy, gz, color); else if (!hasVoxel) _addSingleVoxel(gx, gy, gz, color); break;
     }
@@ -1193,21 +1193,18 @@ function onKeyUp(e) {
 
 function onPointerLeave(e) {
     if (e.pointerType === 'mouse') {
-        if (!rightMouseButtonDown || (pointerIsDown && e.button === 0)) {
-            // End of freehand drag (mouse)
-            if (currentStrokeVoxels.size > 0) {
-                const oldState = []; const newState = [];
-                for (const [gKey, change] of currentStrokeVoxels.entries()) {
-                    const [gx, gy, gz] = parseKey(gKey); oldState.push({ gx, gy, gz, color: change.initialColor });
-                    newState.push({ gx, gy, gz, color: voxels.has(gKey) ? voxels.get(gKey).color : null });
-                } addCommand('batch', oldState, newState);
-            }
-            // Reset all states and previews after any pointer up
-            pointerIsDown = false; lastActionVoxelCoords = null; initialDragVoxelCoords = null; voxelsAtDragStart = null; currentStrokeVoxels.clear();
-            updatePreviewVoxel(0, 0, 0, false);
-            initialDragVoxelWorldPos = null; dragAxisLock = null;
-            previewLineInstancedMesh.count = 0; previewLineInstancedMesh.instanceMatrix.needsUpdate = true; previewLineVoxels = [];
+        // End of freehand drag (mouse)
+        if (pointerIsDown && currentStrokeVoxels.size > 0) {
+            const oldState = []; const newState = [];
+            for (const [gKey, change] of currentStrokeVoxels.entries()) {
+                const [gx, gy, gz] = parseKey(gKey); oldState.push({ gx, gy, gz, color: change.initialColor });
+                newState.push({ gx, gy, gz, color: voxels.has(gKey) ? voxels.get(gKey).color : null });
+            } addCommand('batch', oldState, newState);
         }
+        // Reset all states and previews after any pointer up
+        pointerIsDown = false; lastActionVoxelCoords = null; initialDragVoxelCoords = null; voxelsAtDragStart = null; currentStrokeVoxels.clear();
+        updatePreviewVoxel(0, 0, 0, false);
+        previewLineInstancedMesh.count = 0; previewLineInstancedMesh.instanceMatrix.needsUpdate = true; previewLineVoxels = [];
     }
 }
 
@@ -1241,49 +1238,26 @@ function applyStrokeChanges(voxelsToApply, initialVoxelsState, mode, color) {
 }
 
 function onPointerUp(e) {
-    if (e.pointerType === 'touch') {
-        if (suppressNextTap) { suppressNextTap = false; }
-        else if (activePointers.size === 1 && !doubleTapDragActive) {
-            // Single tap for non-drag action
-            const movedDist = initialClickPos ? Math.hypot(e.clientX - initialClickPos.x, e.clientY - initialClickPos.y) : 0;
-            if (movedDist <= TAP_DIST_TH) {
-                 const clickedVoxel = calculateTargetVoxelCoords(e.clientX, e.clientY, currentMode, 'touch');
-                 if (clickedVoxel) {
-                     clickedVoxel.gx = Math.max(0, Math.min(GRID - 1, clickedVoxel.gx));
-                     clickedVoxel.gy = Math.max(0, Math.min(GRID - 1, clickedVoxel.gy));
-                     clickedVoxel.gz = Math.max(0, Math.min(GRID - 1, clickedVoxel.gz));
-
-                     const oldState = [...voxels.entries()].map(([id, data]) => { const p = parseKey(id); return { gx: p[0], gy: p[1], gz: p[2], color: data.color }; });
-                     const voxelsToModify = [{ gx: clickedVoxel.gx, gy: clickedVoxel.gy, gz: clickedVoxel.gz, color: currentColor }];
-                     for(const v of voxelsToModify) performVoxelModification(v.gx, v.gy, v.gz, currentMode, currentColor);
-                     addCommand('batch', oldState, [...voxels.entries()].map(([id, data]) => { const p = parseKey(id); return { gx: p[0], gy: p[1], gz: p[2], color: data.color }; }));
-                 }
-            }
-        }
-        if (doubleTapDragActive && initialDragVoxelCoords) {
-            // End of continuous drag (touch)
-            if (currentStrokeVoxels.size > 0) {
-                const oldState = []; const newState = [];
-                for (const [gKey, change] of currentStrokeVoxels.entries()) {
-                    const [gx, gy, gz] = parseKey(gKey); oldState.push({ gx, gy, gz, color: change.initialColor });
-                    newState.push({ gx, gy, gz, color: voxels.has(gKey) ? voxels.get(gKey).color : null });
-                } addCommand('batch', oldState, newState);
-            }
-        }
-        releasePointer(e.pointerId, e);
-        // Reset all previews and states after touch up
-        updatePreviewVoxel(0, 0, 0, false);
-        previewLineInstancedMesh.count = 0; previewLineInstancedMesh.instanceMatrix.needsUpdate = true; previewLineVoxels = [];
-        initialDragVoxelWorldPos = null; dragAxisLock = null; currentStrokeVoxels.clear();
-        return;
-    }
-
     if (e.button === 2) { rightMouseButtonDown = false; document.exitPointerLock(); return; }
+    
+    // For single tap (mouse or touch)
     const movedDist = initialClickPos ? Math.hypot(e.clientX - initialClickPos.x, e.clientY - initialClickPos.y) : 0;
-    const wasSingleClick = movedDist <= MOVE_PX;
+    const isSingleClickOrTap = movedDist <= TAP_DIST_TH;
 
-    if (pointerIsDown && !isPointerLocked && initialDragVoxelCoords) {
-        // End of freehand drag (mouse)
+    // This block handles single clicks/taps that were NOT part of a drag
+    if (!pointerIsDown && !doubleTapDragActive && isSingleClickOrTap) {
+        const clickedVoxel = calculateTargetVoxelCoords(e.clientX, e.clientY, currentMode, e.pointerType);
+        if (clickedVoxel) {
+            clickedVoxel.gx = Math.max(0, Math.min(GRID - 1, clickedVoxel.gx));
+            clickedVoxel.gy = Math.max(0, Math.min(GRID - 1, clickedVoxel.gy));
+            clickedVoxel.gz = Math.max(0, Math.min(GRID - 1, clickedVoxel.gz));
+
+            const oldState = [...voxels.entries()].map(([id, data]) => { const p = parseKey(id); return { gx: p[0], gy: p[1], gz: p[2], color: data.color }; });
+            performVoxelModification(clickedVoxel.gx, clickedVoxel.gy, clickedVoxel.gz, currentMode, currentColor);
+            addCommand('batch', oldState, [...voxels.entries()].map(([id, data]) => { const p = parseKey(id); return { gx: p[0], gy: p[1], gz: p[2], color: data.color }; }));
+        }
+    } else if ((pointerIsDown || doubleTapDragActive) && initialDragVoxelCoords) {
+        // This block handles the end of a drag (mouse or touch)
         if (currentStrokeVoxels.size > 0) {
             const oldState = []; const newState = [];
             for (const [gKey, change] of currentStrokeVoxels.entries()) {
@@ -1292,12 +1266,22 @@ function onPointerUp(e) {
             } addCommand('batch', oldState, newState);
         }
     }
+
     // Reset all states and previews after any pointer up
-    pointerIsDown = false; isControlDragging = false; isShiftDragging = false; lastActionVoxelCoords = null;
-    initialClickPos = null; initialDragVoxelCoords = null; voxelsAtDragStart = null; currentStrokeVoxels.clear();
+    pointerIsDown = false;
+    doubleTapDragActive = false; // Reset double tap drag for touch
+    lastActionVoxelCoords = null;
+    initialClickPos = null;
+    initialDragVoxelCoords = null;
+    voxelsAtDragStart = null;
+    currentStrokeVoxels.clear();
     updatePreviewVoxel(0, 0, 0, false); // Hide single preview voxel
     previewLineInstancedMesh.count = 0; previewLineInstancedMesh.instanceMatrix.needsUpdate = true; previewLineVoxels = [];
-    initialDragVoxelWorldPos = null; dragAxisLock = null;
+    
+    // Release pointer for touch events
+    if (e.pointerType === 'touch') {
+        releasePointer(e.pointerId, e);
+    }
 }
 
 
@@ -1360,8 +1344,8 @@ function updatePreviewLineMesh() {
 function onPointerDown(e) {
     if (e.button === 2) { e.preventDefault(); rightMouseButtonDown = true; cvs.requestPointerLock(); cvs.focus(); return; }
     if (isPointerLocked) return;
-    dragAxisLock = null;
     
+    // Handle touch events
     if (e.pointerType === 'touch') {
         if (suppressNextTap) { suppressNextTap = false; return; }
         activePointers.set(e.pointerId, { x: e.clientX, y: e.clientY, pointerType: e.pointerType });
@@ -1369,7 +1353,7 @@ function onPointerDown(e) {
         const now = performance.now();
 
         if (tapCandidate && (now - tapCandidate.time < DT_MS) && (Math.hypot(e.clientX - tapCandidate.x, e.clientY - tapCandidate.y) < TAP_DIST_TH)) {
-            // Double tap for continuous drag
+            // Double tap for continuous drag (freehand drawing)
             doubleTapDragActive = true; tapCandidate = null;
             let rawTarget = calculateTargetVoxelCoords(e.clientX, e.clientY, currentMode, 'touch');
             if (rawTarget) {
@@ -1378,21 +1362,20 @@ function onPointerDown(e) {
                 rawTarget.gz = Math.max(0, Math.min(GRID - 1, rawTarget.gz));
 
                 initialDragVoxelCoords = rawTarget;
-                voxelsAtDragStart = new Map(voxels);
-                currentStrokeVoxels.clear();
-                
+                voxelsAtDragStart = new Map(voxels); // Capture state for undo
+                currentStrokeVoxels.clear(); // Clear for new stroke
+
                 performVoxelModification(initialDragVoxelCoords.gx, initialDragVoxelCoords.gy, initialDragVoxelCoords.gz, currentMode, currentColor);
                 currentStrokeVoxels.set(key(initialDragVoxelCoords.gx, initialDragVoxelCoords.gy, initialDragVoxelCoords.gz), { newColor: voxels.has(key(initialDragVoxelCoords.gx, initialDragVoxelCoords.gy, initialDragVoxelCoords.gz)) ? voxels.get(key(initialDragVoxelCoords.gx, initialDragVoxelCoords.gy, initialDragVoxelCoords.gz)).color : null, initialColor: voxelsAtDragStart.has(key(initialDragVoxelCoords.gx, initialDragVoxelCoords.gy, initialDragVoxelCoords.gz)) ? voxelsAtDragStart.get(key(initialDragVoxelCoords.gx, initialDragVoxelCoords.gy, initialDragVoxelCoords.gz)).color : null });
                 updatePreviewVoxel(initialDragVoxelCoords.gx, initialDragVoxelCoords.gy, initialDragVoxelCoords.gz, true); // Show 1x1x1 preview
                 previewLineInstancedMesh.count = 0; // Hide line preview
                 
                 lastActionVoxelCoords = { ...initialDragVoxelCoords };
-                initialDragVoxelWorldPos = new THREE.Vector3(initialDragVoxelCoords.gx * VS + HALF, initialDragVoxelCoords.gy * VS + HALF, initialDragVoxelCoords.gz * VS + HALF);
             }
         } else {
             // Single tap or start of multi-touch gesture
             tapCandidate = { x: e.clientX, y: e.clientY, time: now };
-            initialDragVoxelCoords = null; voxelsAtDragStart = null; initialDragVoxelWorldPos = null; currentStrokeVoxels.clear();
+            initialDragVoxelCoords = null; voxelsAtDragStart = null; currentStrokeVoxels.clear();
             previewLineInstancedMesh.count = 0; previewLineInstancedMesh.instanceMatrix.needsUpdate = true; previewLineVoxels = [];
             updatePreviewVoxel(0, 0, 0, false); // Hide preview voxel on new tap/gesture start
         }
@@ -1408,7 +1391,7 @@ function onPointerDown(e) {
         initialClickPos = { x: e.clientX, y: e.clientY }; return;
     }
 
-    // Mouse pointer handling
+    // Handle mouse events (left click)
     if (e.pointerType === 'mouse' && e.button === 0) {
         pointerIsDown = true; lastX = e.clientX; lastY = e.clientY; initialClickPos = { x: e.clientX, y: e.clientY };
         updatePreviewVoxel(0, 0, 0, false); // Hide preview on mouse down until movement or specific mode
@@ -1419,11 +1402,10 @@ function onPointerDown(e) {
             pointerIsDown = false; initialClickPos = null; return;
         }
         
-        // Start of freehand drag (mouse)
+        // Start of freehand drag (mouse) or single click
         initialDragVoxelCoords = rawTarget;
-        dragAxisLock = null;
-        voxelsAtDragStart = new Map(voxels);
-        currentStrokeVoxels.clear();
+        voxelsAtDragStart = new Map(voxels); // Capture state for undo
+        currentStrokeVoxels.clear(); // Clear for new stroke
 
         initialDragVoxelCoords.gx = Math.max(0, Math.min(GRID - 1, initialDragVoxelCoords.gx));
         initialDragVoxelCoords.gy = Math.max(0, Math.min(GRID - 1, initialDragVoxelCoords.gy));
@@ -1497,7 +1479,7 @@ function onPointerMove(e) {
             rawCurrentTarget.gy = Math.max(0, Math.min(GRID - 1, rawCurrentTarget.gy));
             rawCurrentTarget.gz = Math.max(0, Math.min(GRID - 1, rawCurrentTarget.gz));
 
-            if (key(rawCurrentTarget.gx, rawCurrentTarget.gy, rawCurrentTarget.gz) !== key(lastActionVoxelCoords.gx, lastActionVoxelCoords.gy, lastActionVoxelCoords.gz)) {
+            if (!lastActionVoxelCoords || key(rawCurrentTarget.gx, rawCurrentTarget.gy, rawCurrentTarget.gz) !== key(lastActionVoxelCoords.gx, lastActionVoxelCoords.gy, lastActionVoxelCoords.gz)) {
                 performVoxelModification(rawCurrentTarget.gx, rawCurrentTarget.gy, rawCurrentTarget.gz, currentMode, currentColor);
                 const currentGKey = key(rawCurrentTarget.gx, rawCurrentTarget.gy, rawCurrentTarget.gz);
                 if (!currentStrokeVoxels.has(currentGKey)) {
@@ -1667,9 +1649,9 @@ window.onload = async function() {
             .then(async () => {
                 if (typeof __initial_auth_token !== 'undefined' && __initial_auth_token) {
                     try { await window.firebase.signInWithCustomToken(auth, __initial_auth_token); }
-                    catch (e) { console.error("Firebase Auth Token Error:", e); showToast('Anmeldefehler', `Fehler beim Anmelden mit Token: ${e.message}.`, 'error', 5000); }
+                    catch (e) { console.error("Firebase Auth Token Error:", e); showToast('Anmeldefehler', `Fehler beim Anmelden mit Token: ${e.message}. Bitte versuchen Sie es erneut.`, 'error', 5000); }
                 } else {
-                    // No anonymous login if no token provided. User must explicitly sign in.
+                    // User is not signed in automatically. They must explicitly sign in.
                     console.log("No initial auth token. User will not be signed in automatically.");
                 }
 
