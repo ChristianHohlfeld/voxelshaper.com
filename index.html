@@ -138,7 +138,7 @@ input[type="color"]::-moz-color-swatch { border: none; border-radius: 50%; }
     <input type="color" id="color-picker" value="#ffffff" aria-label="Aktuelle Farbe wählen" class="input input-bordered w-10 h-10 p-0 rounded-full cursor-pointer border-base-content/20">
     <input type="color" id="color-preset-1" class="color-preset-box w-10 h-10 rounded-md border-2 border-base-content/20 cursor-pointer transition-all duration-200 hover:scale-110" value="#E4002B" aria-label="Voreingestellte Farbe 1">
     <input type="color" id="color-preset-2" class="color-preset-box w-10 h-10 rounded-md border-2 border-base-content/20 cursor-pointer transition-all duration-200 hover:scale-110" value="#00A040" aria-label="Voreingestellte Farbe 2">
-    <input type="color" id="color-preset-3" class="color-preset-box w-10 h-10 rounded-md border-2 border-base-content/20 cursor-pointer transition-all duration-200 hover:scale-110" value="#0057B8" aria-label="Voreingestellte Farbe 3">
+    <input type="color" id="color-preset-3" class="color-preset-box w-10 h-10 rounded-md border-2 border-base-content/20 cursor-pointer flex items-center justify-center shadow-lg hover:bg-base-content/20" value="#0057B8" aria-label="Voreingestellte Farbe 3">
 
     <button id="modeToggle" aria-label="Modus wechseln" class="btn btn-sm btn-neutral">Modus wechseln</button><span id="current-mode" class="font-bold text-success min-w-40 text-center">Modus: Hinzufügen</span>
     <button id="clearBtn" aria-label="Alles löschen" class="btn btn-sm btn-neutral">Alles löschen</button>
@@ -148,6 +148,7 @@ input[type="color"]::-moz-color-swatch { border: none; border-radius: 50%; }
     <button id="loadBtn" aria-label="Projekt laden" class="btn btn-sm btn-neutral">Projekt laden</button>
     <button id="exportStlBtn" aria-label="STL Export" class="btn btn-sm btn-neutral">STL Export</button>
     <button id="exportObjBtn" aria-label="OBJ Export" class="btn btn-sm btn-neutral">OBJ Export</button>
+    <button id="exportGlbBtn" aria-label="GLB Export" class="btn btn-sm btn-neutral">GLB Export</button> <!-- New GLB Export Button -->
 
     <label for="fly-speed-slider" class="text-base-content">Fluggeschwindigkeit:</label>
     <input type="range" id="fly-speed-slider" min="0.01" max="1.0" step="0.01" value="0.1" aria-label="Fluggeschwindigkeit anpassen" class="range range-xs w-36">
@@ -292,6 +293,7 @@ input[type="color"]::-moz-color-swatch { border: none; border-radius: 50%; }
 <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/build/three.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/utils/BufferGeometryUtils.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/exporters/STLExporter.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/exporters/GLTFExporter.js"></script> <!-- GLTF Exporter for GLB -->
 
 <script type="module">
     import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
@@ -778,6 +780,7 @@ function handleGesture() {
 
         if (gestureState.type === 'none') {
             const dMid = Math.hypot(midX - gestureState.startMid.x, midY - gestureState.startMid.y);
+            const PINCH_REL_TH = 0.05; // Define PINCH_REL_TH here or globally if not already defined
             const relDelta = Math.abs(dist - gestureState.startDist) / gestureState.startDist;
             if (relDelta > PINCH_REL_TH) {
                 gestureState.type = 'pinch';
@@ -1401,6 +1404,82 @@ function exportOBJ() {
     showToast('Export erfolgreich', 'OBJ-Modell erfolgreich mit Farben exportiert!', 'success');
 }
 
+// Exportiert das Modell als GLB-Datei
+function exportGLB() {
+    if (voxels.size === 0) {
+        showToast('Export fehlgeschlagen', 'Keine Voxel zum Exportieren vorhanden!', 'warning');
+        return;
+    }
+
+    // Stelle sicher, dass der GLTFExporter geladen ist
+    if (typeof THREE.GLTFExporter === 'undefined') {
+        showToast('Export fehlgeschlagen', 'GLTFExporter-Bibliothek nicht geladen. Bitte versuchen Sie es erneut.', 'error');
+        return;
+    }
+
+    const exporter = new THREE.GLTFExporter();
+    const tempGroup = new THREE.Group();
+    const tempGeometry = new THREE.BoxGeometry(VS, VS, VS); // Wiederverwendbare Geometrie
+
+    // Cache für Materialien, um Duplikate zu vermeiden
+    const materialCache = new Map();
+
+    voxels.forEach((data, k) => {
+        const [x, y, z] = parseKey(k);
+        const colorHex = data.color;
+
+        let material = materialCache.get(colorHex);
+        if (!material) {
+            // Verwende MeshStandardMaterial für bessere Kompatibilität mit PBR-Renderern wie Roblox
+            material = new THREE.MeshStandardMaterial({ color: new THREE.Color(colorHex) });
+            materialCache.set(colorHex, material);
+        }
+
+        const mesh = new THREE.Mesh(tempGeometry, material);
+        mesh.position.set(x * VS + HALF, y * VS + HALF, z * VS + HALF);
+        tempGroup.add(mesh);
+    });
+
+    exporter.parse(
+        tempGroup,
+        function (result) {
+            const blob = new Blob([result], { type: 'model/gltf-binary' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = 'voxel_model.glb';
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            URL.revokeObjectURL(url);
+            showToast('Export erfolgreich', 'GLB-Modell erfolgreich exportiert!', 'success');
+        },
+        function (error) {
+            console.error('Error exporting GLB:', error);
+            showToast('Export fehlgeschlagen', `Fehler beim Exportieren des GLB-Modells: ${error.message}`, 'error');
+        },
+        { binary: true } // Dies stellt die GLB-Ausgabe sicher
+    );
+
+    // Temporäre Ressourcen freigeben
+    tempGeometry.dispose();
+    materialCache.forEach(mat => mat.dispose()); // Alle gecachten Materialien freigeben
+    // Meshes innerhalb der tempGroup werden von GLTFExporter automatisch freigegeben,
+    // wenn sie nicht wiederverwendet werden. Für explizite Bereinigung könnte man
+    // die Meshes aus der Gruppe entfernen und einzeln freigeben, aber der Exporter
+    // handhabt dies in der Regel.
+    // Hier ist eine explizite Bereinigung, um sicherzustellen, dass keine Objekte im Speicher verbleiben:
+    while(tempGroup.children.length > 0){
+        const object = tempGroup.children[0];
+        tempGroup.remove(object);
+        // Da tempGeometry für alle Meshes verwendet wird, muss sie nur einmal entsorgt werden.
+        // Das Material wird über den materialCache entsorgt.
+        // object.geometry.dispose(); // Nicht nötig, da geteilt
+        // object.material.dispose(); // Nicht nötig, da gecacht und später entsorgt
+    }
+}
+
+
 // Zeigt eine Toast-Benachrichtigung an
 function showToast(title, message, type = 'info', duration = 3000) {
     // const toastContainer = document.getElementById('toast-container'); // This line is now redundant
@@ -1838,6 +1917,8 @@ function onPointerDown(e) {
         }
 
         // If only one pointer is active (single touch)
+        const TAP_DIST_TH = 10; // Define TAP_DIST_TH here or globally if not already defined
+        const DT_MS = 250; // Define DT_MS here or globally if not already defined
         if (tapCandidate && (now - tapCandidate.time < DT_MS) && (Math.hypot(e.clientX - tapCandidate.x, e.clientY - tapCandidate.y) < TAP_DIST_TH)) {
             // Double tap for continuous drag (freehand drawing)
             doubleTapDragActive = true; tapCandidate = null;
@@ -2104,8 +2185,8 @@ async function generateVoxelIdea() {
         // Der Prompt wurde angepasst, um die Gittergröße und die Komplexität besser zu berücksichtigen.
         const prompt = `Generate a detailed and recognizable voxel model as a JSON object based on the following theme.
         The model should effectively utilize the available 3D grid space, which ranges from (0,0,0) to (${GRID-1},${GRID-1},${GRID-1}).
-        Aim for a reasonable number of voxels, typically between 50 and 700, to create a well-defined, solid, and coherent structure with minimal internal gaps.
-        Ensure the model is visually distinct and uses multiple dimensions (X, Y, Z) to form a coherent shape, not just a flat plane or a simple column.
+        The model *must* form a **single, unified, and fully connected object**. It should be **solid, contiguous, and watertight**, without any internal gaps, disconnected parts, or floating voxels. Every voxel should be directly adjacent (face-to-face) to at least one other voxel within the generated set, forming a continuous, cohesive mass. No individual voxels or groups of voxels should be isolated or floating in space. Prioritize filling internal spaces to ensure no gaps within the overall form. When forming lines, surfaces, or volumes, ensure all intermediate voxels are included to prevent holes. Avoid generating sparse or hollow structures unless explicitly requested by the theme.
+        Aim for a reasonable number of voxels, typically between 50 and 700, to create a well-defined, robust structure.
         All x, y, z coordinates must be integers within the grid boundaries (0 to ${GRID-1}).
         Colors should be valid hex color codes (e.g., "#FF0000").
         
@@ -2206,6 +2287,11 @@ function applyAIGeneratedVoxels(aiData) {
 
     const newVoxels = [];
     aiData.voxels.forEach(v => {
+        // Check for potential out-of-bounds before clamping
+        if (v.x < 0 || v.x >= GRID || v.y < 0 || v.y >= GRID || v.z < 0 || v.z >= GRID) {
+            console.warn(`AI generated voxel out of bounds (before clamping): x=${v.x}, y=${v.y}, z=${v.z}. Clamping to grid.`);
+        }
+
         // Koordinaten auf Gittergrenzen klemmen und runden
         const gx = Math.max(0, Math.min(GRID - 1, Math.round(v.x)));
         const gy = Math.max(0, Math.min(GRID - 1, Math.round(v.y)));
@@ -2383,6 +2469,7 @@ window.onload = async function() {
         document.getElementById('fileInput').addEventListener('change', loadJSON);
         document.getElementById('exportStlBtn').addEventListener('click', exportSTL);
         document.getElementById('exportObjBtn').addEventListener('click', exportOBJ);
+        document.getElementById('exportGlbBtn').addEventListener('click', exportGLB); // Event listener for GLB export
 
         document.getElementById('fly-speed-slider').addEventListener('input', (e) => {
             moveSpeed = parseFloat(e.target.value); document.getElementById('fly-speed-display').textContent = moveSpeed.toFixed(2); localStorage.setItem('voxelEditorFlySpeed', moveSpeed);
