@@ -366,7 +366,7 @@ const SHIFT_X  = VOX_BITS * 2; // Shift-Wert für X-Koordinate
 const SHIFT_Y  = VOX_BITS; // Shift-Wert für Y-Koordinate
 
 // AI API Key (hardcoded as per user request)
-const AI_API_KEY = "AIzaSyD3uQ6BnGsliYAtR9r0jdBUq03KEfFO0";
+const AI_API_KEY = "AIzaSyD3uQ6BnGsliYAtR9r0jdBUq03KEfFO0"; 
 
 // Erzeugt einen eindeutigen Key für Voxel-Koordinaten
 function key(x, y, z) { return ((x << SHIFT_X) | (y << SHIFT_Y) | z) >>> 0; }
@@ -1516,8 +1516,7 @@ function handleImageFileSelect(event) {
             templateImageMesh.position.set((GRID * VS) / 2, (GRID * VS) / 2, -0.001);
             templateImageMesh.rotation.set(0, 0, 0); // Keine Rotation erforderlich, standardmäßig nach positivem Z ausgerichtet
 
-            templateImageMesh.renderOrder = -1; // Hinter anderen Objekten rendern
-            scene.add(templateImageMesh);
+            templateImageMesh.renderOrder = -1; scene.add(templateImageMesh);
             templateImageData = {
                 src: base64Image,
                 position: templateImageMesh.position.toArray(),
@@ -2409,7 +2408,14 @@ window.onload = async function() {
         // It's crucial to still have touch-action: none on the canvas itself.
         document.addEventListener('keydown', onKeyDown); document.addEventListener('keyup', onKeyUp);
         document.addEventListener('pointerlockchange', onPointerLockChange, false);
-        document.addEventListener('mousemove', (e) => { if (isPointerLocked) { mouseMovementX = e.movementX; mouseMovementY = e.movementY; } });
+        // Changed mousemove listener from document to containerDiv
+        containerDiv.addEventListener('mousemove', (e) => {
+            if (isPointerLocked) {
+                mouseMovementX = e.movementX;
+                mouseMovementY = e.movementY;
+                e.preventDefault(); // Prevent default browser actions for mousemove when locked
+            }
+        });
         containerDiv.addEventListener('contextmenu', (e) => e.preventDefault()); // Prevent default right-click menu
 
         document.getElementById('grid-size-slider').addEventListener('input', (e) => {
