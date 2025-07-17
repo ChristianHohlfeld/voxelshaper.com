@@ -279,18 +279,10 @@ input[type="color"]::-moz-color-swatch { border: none; border-radius: 50%; }
         <span id="mobile-mode-icon" class="fas fa-plus"></span>
     </button>
 
-    <!-- New buttons for Drawing Level Control -->
-    <button class="mobile-btn w-16 h-16 text-3xl rounded-full bg-base-300 text-base-content border-2 border-base-content cursor-pointer flex items-center justify-center shadow-lg hover:bg-base-content/20" id="mobile-axis-toggle" aria-label="Zeichenachse wechseln">
-        <span id="mobile-axis-icon" class="fas fa-arrows-alt-v"></span>
-    </button>
-    <button class="mobile-btn w-16 h-16 text-3xl rounded-full bg-base-300 text-base-content border-2 border-base-content cursor-pointer flex items-center justify-center shadow-lg hover:bg-base-content/20" id="mobile-level-up" aria-label="Zeichenebene nach oben">
-        <span class="fas fa-arrow-up"></span>
-    </button>
-    <button class="mobile-btn w-16 h-16 text-3xl rounded-full bg-base-300 text-base-content border-2 border-base-content cursor-pointer flex items-center justify-center shadow-lg hover:bg-base-content/20" id="mobile-level-down" aria-label="Zeichenebene nach unten">
-        <span class="fas fa-arrow-down"></span>
-    </button>
-
+    <!-- Mobile Color Picker Button and hidden input -->
     <button class="mobile-btn w-16 h-16 text-3xl rounded-full bg-base-300 text-base-content border-2 border-base-content cursor-pointer flex items-center justify-center shadow-lg hover:bg-base-content/20" id="mobile-color-picker-btn" aria-label="Farbe auswählen">🎨</button>
+    <input type="color" id="mobile-color-input" value="#ffffff" class="hidden w-0 h-0 opacity-0 absolute pointer-events-none">
+
     <button class="mobile-btn w-16 h-16 text-3xl rounded-full bg-base-300 text-base-content border-2 border-base-content cursor-pointer flex items-center justify-center shadow-lg hover:bg-base-content/20" id="mobile-generate-idea" aria-label="Voxel-Idee generieren">✨</button>
     <button class="mobile-btn w-16 h-16 text-3xl rounded-full bg-base-300 text-base-content border-2 border-base-content cursor-pointer flex items-center justify-center shadow-lg hover:bg-base-content/20" id="mobile-login-logout" aria-label="Anmelden oder Abmelden">🔑</button>
 </div>
@@ -344,8 +336,11 @@ input[type="color"]::-moz-color-swatch { border: none; border-radius: 50%; }
         serverTimestamp
     };
 
+    // Firebase API Key (hardcoded as per user request)
+    const FIREBASE_API_KEY = "AIzaSyB9-mpyAu9W6oiVtB0fYG8E6YFvTAsjtAA"; 
+
     const firebaseConfig = typeof __firebase_config !== 'undefined' ? JSON.parse(__firebase_config) : {
-        apiKey: "AIzaSyB9-mpyAu9W6oiVtB0fYG8E6YFvTAsjtAA", // Added API Key as requested
+        apiKey: FIREBASE_API_KEY, // Using hardcoded Firebase API Key
         authDomain: "voxelshaper.firebaseapp.com",
         projectId: "voxelshaper",
         storageBucket: "voxelshaper.firebasestorage.app", 
@@ -364,6 +359,9 @@ const VOX_BITS = 10; // Anzahl der Bits pro Voxel-Koordinate in einem Key
 const VOX_MASK = (1 << VOX_BITS) - 1; // Maske zum Extrahieren einer Koordinate
 const SHIFT_X  = VOX_BITS * 2; // Shift-Wert für X-Koordinate
 const SHIFT_Y  = VOX_BITS; // Shift-Wert für Y-Koordinate
+
+// AI API Key (hardcoded as per user request)
+const AI_API_KEY = "AIzaSyD3uQ6BnGsliYAtfRh9r0jdBUq03KEfFO0";
 
 // Erzeugt einen eindeutigen Key für Voxel-Koordinaten
 function key(x, y, z) { return ((x << SHIFT_X) | (y << SHIFT_Y) | z) >>> 0; }
@@ -394,7 +392,7 @@ const chunks = new Map(); // Speichert Voxel-Chunks für effizientes Rendering
 
 let cvs, containerDiv; // Canvas- und Container-Elemente
 let activeDrawingLevel = { x: 0, y: 0, z: 0 }; // Aktuelle Zeichenebene
-let currentDrawingAxis = 'y'; // Aktuelle Zeichenachse
+let currentDrawingAxis = 'y'; // Aktuelle Zeichenachse (Standard für Mobile)
 
 let currentColor = localStorage.getItem('voxelEditorColor') || '#ffffff'; // Aktuelle Voxel-Farbe
 let moveSpeed = parseFloat(localStorage.getItem('voxelEditorFlySpeed') || '0.1'); // Fluggeschwindigkeit der Kamera
@@ -453,10 +451,10 @@ const ModeIcons = {
     DRAW: 'fas fa-paint-brush'
 };
 
-const AxisIcons = {
-    x: 'fas fa-arrows-alt-h', // Horizontal arrows for X
-    y: 'fas fa-arrows-alt-v', // Vertical arrows for Y
-    z: 'fas fa-arrows-alt'    // All directions for Z (or a specific Z icon if available)
+const AxisIcons = { // Still defined for desktop, but not used for mobile UI
+    x: 'fas fa-arrows-alt-h',
+    y: 'fas fa-arrows-alt-v',
+    z: 'fas fa-arrows-alt'
 };
 
 let currentMode = Modes.ADD; // Aktueller Modus
@@ -466,7 +464,7 @@ let historyPointer = -1; // Zeiger im Verlauf
 const MAX_HISTORY_SIZE = 100; // Maximale Größe des Verlaufs
 
 // currentStrokeVoxels speichert alle Änderungen für die aktuelle Drag-Operation, die in einem Batch auf pointerUp angewendet werden
-// Map: gKey -> { newColor: 'hex', initialColor: 'hex' }
+// Map: gKey -> { originalColor: 'hex', finalColor: 'hex' }
 let currentStrokeVoxels = new Map();
 let voxelsAtDragStart = null; // Schnappschuss der Haupt-Voxel-Map zu Beginn eines Drags
 
@@ -770,12 +768,18 @@ function releasePointer(id, eventType) {
 function rebuildHelpers() {
     if (gridHelper) scene.remove(gridHelper); if (boxHelper) scene.remove(boxHelper);
     const size = GRID * VS;
-    if (currentDrawingAxis === 'y') {
+    // On mobile, default to Y-axis for simplicity. Desktop can still change.
+    if (isMobile) {
+        currentDrawingAxis = 'y'; // Force Y-axis for mobile
         gridHelper = new THREE.GridHelper(size, GRID, 0x444444, 0x444444 ); gridHelper.position.set(size / 2, activeDrawingLevel.y * VS, size / 2);
-    } else if (currentDrawingAxis === 'x') {
-        gridHelper = new THREE.GridHelper(size, GRID, 0x444444, 0x444444); gridHelper.rotation.z = Math.PI / 2; gridHelper.position.set(activeDrawingLevel.x * VS, size / 2, size / 2);
-    } else if (currentDrawingAxis === 'z') {
-        gridHelper = new THREE.GridHelper(size, GRID, 0x444444, 0x444444); gridHelper.rotation.x = Math.PI / 2; gridHelper.position.set(size / 2, size / 2, activeDrawingLevel.z * VS);
+    } else {
+        if (currentDrawingAxis === 'y') {
+            gridHelper = new THREE.GridHelper(size, GRID, 0x444444, 0x444444 ); gridHelper.position.set(size / 2, activeDrawingLevel.y * VS, size / 2);
+        } else if (currentDrawingAxis === 'x') {
+            gridHelper = new THREE.GridHelper(size, GRID, 0x444444, 0x444444); gridHelper.rotation.z = Math.PI / 2; gridHelper.position.set(activeDrawingLevel.x * VS, size / 2, size / 2);
+        } else if (currentDrawingAxis === 'z') {
+            gridHelper = new THREE.GridHelper(size, GRID, 0x444444, 0x444444); gridHelper.rotation.x = Math.PI / 2; gridHelper.position.set(size / 2, size / 2, activeDrawingLevel.z * VS);
+        }
     }
     scene.add(gridHelper);
     const edges = new THREE.EdgesGeometry(new THREE.BoxGeometry(size, size, size));
@@ -815,6 +819,9 @@ function setActivePreset(index) {
     if (index >= 0 && index < presetColors.length) {
         currentColor = presetColors[index];
         document.getElementById('color-picker').value = currentColor;
+        // Sync mobile color input if it exists
+        const mobileColorInput = document.getElementById('mobile-color-input');
+        if (mobileColorInput) mobileColorInput.value = currentColor;
         localStorage.setItem('voxelEditorColor', currentColor);
         presetBoxes.forEach((box, i) => {
             if (i === index) { box.classList.add('active', 'border-primary', 'shadow-lg', 'shadow-primary/50'); }
@@ -834,8 +841,11 @@ function savePresetColor(index, colorValue) {
         presetColors[index] = colorValue;
         localStorage.setItem(`voxelPresetColor${index + 1}`, colorValue);
         if (activePresetIndex === index) {
-            document.getElementById('color-picker').value = colorValue;
-            localStorage.setItem('voxelEditorColor', colorValue);
+            currentColor = colorValue;
+            document.getElementById('color-picker').value = currentColor;
+            const mobileColorInput = document.getElementById('mobile-color-input');
+            if (mobileColorInput) mobileColorInput.value = currentColor;
+            localStorage.setItem('voxelEditorColor', currentColor);
         }
     }
 }
@@ -1148,6 +1158,10 @@ function resetToDefaultProject() {
     clearAllInternal(true); GRID = 10;
     document.getElementById('grid-size-slider').value = GRID; document.getElementById('grid-size-display').textContent = `${GRID}×${GRID}×${GRID}`; localStorage.setItem('voxelEditorGridSize', GRID);
     currentColor = '#ffffff'; document.getElementById('color-picker').value = currentColor; localStorage.setItem('voxelEditorColor', currentColor);
+    // Sync mobile color input if it exists
+    const mobileColorInput = document.getElementById('mobile-color-input');
+    if (mobileColorInput) mobileColorInput.value = currentColor;
+
     activeDrawingLevel = { x: 0, y: 0, z: 0 }; currentDrawingAxis = 'y';
     localStorage.setItem('voxelEditorActiveDrawingLevelX', activeDrawingLevel.x);
     localStorage.setItem('voxelEditorActiveDrawingLevelY', activeDrawingLevel.y);
@@ -1209,6 +1223,10 @@ function loadProjectData(projectData) {
             if (loadedSettings.currentDrawingAxis) { currentDrawingAxis = loadedSettings.currentDrawingAxis; localStorage.setItem('voxelEditorCurrentDrawingAxis', currentDrawingAxis); }
             updateGridHelperPosition();
             currentColor = loadedSettings.currentColor || '#ffffff'; document.getElementById('color-picker').value = currentColor;
+            // Sync mobile color input if it exists
+            const mobileColorInput = document.getElementById('mobile-color-input');
+            if (mobileColorInput) mobileColorInput.value = currentColor;
+
             if (loadedSettings.presetColors) {
                 for(let i = 0; i < loadedSettings.presetColors.length && i < presetColors.length; i++) {
                     presetColors[i] = loadedSettings.presetColors[i]; document.getElementById(`color-preset-${i + 1}`).value = presetColors[i]; localStorage.setItem(`voxelPresetColor${i + 1}`, presetColors[i]);
@@ -1521,8 +1539,8 @@ function onPointerLockChange() {
 function onMouseWheel(e) {
     e.preventDefault();
     if (e.altKey) {
-        // Alt + Mausrad für Zeichenebenen-Bewegung
-        if (currentMode === Modes.ADD || currentMode === Modes.DRAW) {
+        // Alt + Mausrad für Zeichenebenen-Bewegung (nur Desktop)
+        if (!isMobile && (currentMode === Modes.ADD || currentMode === Modes.DRAW)) {
             if (e.shiftKey) { activeDrawingLevel.z = Math.max(0, Math.min(GRID - 1, activeDrawingLevel.z - Math.sign(e.deltaY))); currentDrawingAxis = 'z'; }
             else if (e.ctrlKey) { activeDrawingLevel.x = Math.max(0, Math.min(GRID - 1, activeDrawingLevel.x - Math.sign(e.deltaY))); currentDrawingAxis = 'x'; }
             else { activeDrawingLevel.y = Math.max(0, Math.min(GRID - 1, activeDrawingLevel.y - Math.sign(e.deltaY))); currentDrawingAxis = 'y'; }
@@ -1570,14 +1588,8 @@ function onPointerLeave(e) {
             // Über die Keys in currentStrokeVoxels iterieren, um die betroffenen Voxel zu erhalten
             for (const [gKey, change] of currentStrokeVoxels.entries()) {
                 const [gx, gy, gz] = parseKey(gKey);
-                const initialColor = change.initialColor; // Color before the stroke started
-                const finalColorInScene = voxels.has(gKey) ? voxels.get(gKey).color : null; // Color after the stroke completed
-
-                // Only record if there's a net change from initial to final state
-                if (initialColor !== finalColorInScene) {
-                    oldState.push({ gx, gy, gz, color: initialColor });
-                    newState.push({ gx, gy, gz, color: finalColorInScene });
-                }
+                oldState.push({ gx, gy, gz, color: change.originalColor });
+                newState.push({ gx, gy, gz, color: change.finalColor });
             }
             if (oldState.length > 0) { // Nur Befehl hinzufügen, wenn es tatsächliche Änderungen gab
                 addCommand('batch', oldState, newState);
@@ -1644,14 +1656,8 @@ function onPointerUp(e) {
         // Apply all proposed changes from currentStrokeVoxels to the main voxels map
         for (const [gKey, change] of currentStrokeVoxels.entries()) {
             const [gx, gy, gz] = parseKey(gKey);
-            const initialColor = change.initialColor; // Color before the stroke started
-            const finalColorInScene = voxels.has(gKey) ? voxels.get(gKey).color : null; // Color after the stroke completed
-
-            // Only record if there's a net change from initial to final state
-            if (initialColor !== finalColorInScene) {
-                oldState.push({ gx, gy, gz, color: initialColor });
-                newState.push({ gx, gy, gz, color: finalColorInScene });
-            }
+            oldState.push({ gx, gy, gz, color: change.originalColor });
+            newState.push({ gx, gy, gz, color: change.finalColor });
         }
         if (oldState.length > 0) {
             addCommand('batch', oldState, newState);
@@ -1679,7 +1685,7 @@ function onPointerUp(e) {
                     if (!voxels.has(key(proposedVoxel.gx, proposedVoxel.gy, proposedVoxel.gz))) { finalVoxelCoords = proposedVoxel; }
                 } else { // Hit empty space or drawing plane
                     clickedVoxel.gx = Math.max(0, Math.min(GRID - 1, clickedVoxel.gx)); clickedVoxel.gy = Math.max(0, Math.min(GRID - 1, clickedVoxel.gy)); clickedVoxel.gz = Math.max(0, Math.min(GRID - 1, clickedVoxel.gz));
-                    if (!voxels.has(key(clickedVoxel.gx, clickedVoxel.gy, clickedVoxel.gz))) { finalVoxelCoords = { gx: clickedVoxel.gx, gy: clickedVoxel.gy, gz: clickedVoxel.gz }; }
+                    if (!voxels.has(key(clickedVoxel.gx, clickedVoxel.gy, clickedVoxel.gz))) { finalVoxelCoords = { gx: clickedVoxel.gx, gy: clickedVoxel.gy, gz: clickedCords.gz }; }
                 }
             } else { // DELETE or DRAW Mode
                 finalVoxelCoords = { gx: clickedVoxel.gx, gy: clickedVoxel.gy, gz: clickedVoxel.gz };
@@ -1689,8 +1695,6 @@ function onPointerUp(e) {
             }
 
             if (finalVoxelCoords) {
-                const oldState = [];
-                const newState = [];
                 const gKey = key(finalVoxelCoords.gx, finalVoxelCoords.gy, finalVoxelCoords.gz);
                 const initialColor = voxels.has(gKey) ? voxels.get(gKey).color : null;
                 
@@ -1698,11 +1702,7 @@ function onPointerUp(e) {
                 
                 const newColor = voxels.has(gKey) ? voxels.get(gKey).color : null;
                 if (initialColor !== newColor || (currentMode === Modes.ADD && initialColor === null && newColor !== null)) {
-                    oldState.push({ gx: finalVoxelCoords.gx, gy: finalVoxelCoords.gy, gz: finalVoxelCoords.gz, color: initialColor });
-                    newState.push({ gx: finalVoxelCoords.gx, gy: finalVoxelCoords.gy, gz: finalVoxelCoords.gz, color: newColor });
-                }
-                if (oldState.length > 0) {
-                    addCommand('batch', oldState, newState);
+                    addCommand('batch', [{ gx: finalVoxelCoords.gx, gy: finalVoxelCoords.gy, gz: finalVoxelCoords.gz, color: initialColor }], [{ gx: finalVoxelCoords.gx, gy: finalVoxelCoords.gy, gz: finalVoxelCoords.gz, color: newColor }]);
                 }
             }
         }
@@ -1727,11 +1727,20 @@ function onPointerUp(e) {
 
 // Event-Handler für Pointer-Down-Ereignisse
 function onPointerDown(e) {
-    if (e.button === 2) { e.preventDefault(); rightMouseButtonDown = true; cvs.requestPointerLock(); return; }
+    if (e.button === 2) {
+        e.preventDefault();
+        rightMouseButtonDown = true;
+        cvs.focus(); // Explicitly focus the canvas
+        mouseMovementX = 0; // Reset mouse movement on RMB down
+        mouseMovementY = 0; // Reset mouse movement on RMB down
+        cvs.requestPointerLock();
+        return;
+    }
     if (isPointerLocked) return;
     
     // Capture initial state for drag operations
     voxelsAtDragStart = new Map(voxels); // Snapshot of the entire voxel state
+    currentStrokeVoxels.clear(); // Clear the stroke for a new drag
     dragAxisLock = null; // Reset axis lock at the start of the drag
 
     // Handle touch events
@@ -1779,16 +1788,10 @@ function onPointerDown(e) {
                 
                 const gKey = key(initialDragVoxelCoords.gx, initialDragVoxelCoords.gy, initialDragVoxelCoords.gz);
                 const initialColor = voxelsAtDragStart.has(gKey) ? voxelsAtDragStart.get(gKey).color : null;
-                let proposedNewColor = undefined;
-
-                if (currentMode === Modes.ADD) { if (!voxelsAtDragStart.has(gKey)) proposedNewColor = currentColor; }
-                else if (currentMode === Modes.DELETE) { if (voxelsAtDragStart.has(gKey)) proposedNewColor = null; }
-                else if (currentMode === Modes.DRAW) { if (voxelsAtDragStart.has(gKey)) proposedNewColor = currentColor; }
-
-                if (proposedNewColor !== undefined) { // Always record, even if color is the same, for proper undo/redo state
-                    currentStrokeVoxels.set(gKey, { newColor: proposedNewColor, initialColor: initialColor });
-                    performVoxelModification(initialDragVoxelCoords.gx, initialDragVoxelCoords.gy, initialDragVoxelCoords.gz, currentMode, proposedNewColor);
-                }
+                
+                performVoxelModification(initialDragVoxelCoords.gx, initialDragVoxelCoords.gy, initialDragVoxelCoords.gz, currentMode, currentColor);
+                const finalColor = voxels.has(gKey) ? voxels.get(gKey).color : null;
+                currentStrokeVoxels.set(gKey, { originalColor: initialColor, finalColor: finalColor });
 
                 updatePreviewVoxel(0, 0, 0, false); // Hide preview voxel during drag
                 previewLineInstancedMesh.count = 0;
@@ -1853,16 +1856,11 @@ function onPointerDown(e) {
             
             const gKey = key(initialDragVoxelCoords.gx, initialDragVoxelCoords.gy, initialDragVoxelCoords.gz);
             const initialColor = voxelsAtDragStart.has(gKey) ? voxelsAtDragStart.get(gKey).color : null;
-            let proposedNewColor = undefined;
+            
+            performVoxelModification(initialDragVoxelCoords.gx, initialDragVoxelCoords.gy, initialDragVoxelCoords.gz, currentMode, currentColor);
+            const finalColor = voxels.has(gKey) ? voxels.get(gKey).color : null;
+            currentStrokeVoxels.set(gKey, { originalColor: initialColor, finalColor: finalColor });
 
-            if (currentMode === Modes.ADD) { if (!voxelsAtDragStart.has(gKey)) proposedNewColor = currentColor; }
-            else if (currentMode === Modes.DELETE) { if (voxelsAtDragStart.has(gKey)) proposedNewColor = null; }
-            else if (currentMode === Modes.DRAW) { if (voxelsAtDragStart.has(gKey)) proposedNewColor = currentColor; }
-
-            if (proposedNewColor !== undefined) { // Always record, even if color is the same, for proper undo/redo state
-                currentStrokeVoxels.set(gKey, { newColor: proposedNewColor, initialColor: initialColor });
-                performVoxelModification(initialDragVoxelCoords.gx, initialDragVoxelCoords.gy, initialDragVoxelCoords.gz, currentMode, proposedNewColor);
-            }
             updatePreviewVoxel(0, 0, 0, false);
             previewLineInstancedMesh.count = 0;
         }
@@ -1916,19 +1914,22 @@ function onPointerMove(e) {
         const startPointForLine = lastActionVoxelCoords || initialDragVoxelCoords;
         let endPointForLine = currentTargetVoxelCoords;
 
+        // If ray missed, use the last known valid voxel position for drawing continuity
+        // This helps prevent "non-finite coordinates" errors and makes drawing smoother
+        if (!endPointForLine) {
+            endPointForLine = lastActionVoxelCoords; // Stick to the last drawn voxel
+            if (!endPointForLine) { // If even lastActionVoxelCoords is null (shouldn't happen if initialDragVoxelCoords was set)
+                return; // Cannot draw a line without a start or end point
+            }
+        }
+
         // Explicitly ensure all coordinates are finite numbers before calling getVoxelsOnLine
         if (!startPointForLine || !Number.isFinite(startPointForLine.gx) || !Number.isFinite(startPointForLine.gy) || !Number.isFinite(startPointForLine.gz) ||
             !endPointForLine || !Number.isFinite(endPointForLine.gx) || !Number.isFinite(endPointForLine.gy) || !Number.isFinite(endPointForLine.gz)) {
-            console.error("Critical: Non-finite coordinates detected before calling getVoxelsOnLine.", { start: startPointForLine, end: endPointForLine });
+            console.error("Critical: Non-finite coordinates detected before calling getVoxelsOnLine. Aborting line drawing.", { start: startPointForLine, end: endPointForLine });
             // Revert changes in current stroke and reset state to prevent further errors
-            for (const [gKey, change] of currentStrokeVoxels.entries()) {
-                const [gx, gy, gz] = parseKey(gKey);
-                if (change.initialColor === null) {
-                    _removeSingleVoxel(gx, gy, gz);
-                } else {
-                    _recolorSingleVoxel(gx, gy, gz, change.initialColor);
-                }
-            }
+            // This part is handled by the batch command onPointerUp, so no need to revert here immediately
+            // Just clear the current stroke and reset state to prevent further errors during this move.
             currentStrokeVoxels.clear();
             updatePreviewVoxel(0, 0, 0, false);
             previewLineInstancedMesh.count = 0;
@@ -1946,43 +1947,17 @@ function onPointerMove(e) {
             const voxel = pathVoxels[i];
             const gKey = key(voxel.gx, voxel.gy, voxel.gz);
             const initialColorOfStroke = voxelsAtDragStart.has(gKey) ? voxelsAtDragStart.get(gKey).color : null;
-            const currentColorInScene = voxels.has(gKey) ? voxels.get(gKey).color : null;
+            
+            // Perform the modification immediately
+            performVoxelModification(voxel.gx, voxel.gy, voxel.gz, currentMode, currentColor);
+            
+            const finalColorAfterModification = voxels.has(gKey) ? voxels.get(gKey).color : null;
 
-            let proposedNewColor = undefined;
-
-            if (currentMode === Modes.ADD) {
-                if (!voxelsAtDragStart.has(gKey)) { // Only add if it wasn't there initially
-                    proposedNewColor = currentColor;
-                }
-            } else if (currentMode === Modes.DELETE) {
-                if (voxelsAtDragStart.has(gKey)) { // Only delete if it was there initially
-                    proposedNewColor = null;
-                }
-            } else if (currentMode === Modes.DRAW) {
-                if (voxelsAtDragStart.has(gKey)) { // Only draw if it was there initially
-                    proposedNewColor = currentColor;
-                }
-            }
-
-            // Apply the change immediately to the scene
-            if (proposedNewColor !== undefined && proposedNewColor !== currentColorInScene) {
-                performVoxelModification(voxel.gx, voxel.gy, voxel.gz, currentMode, proposedNewColor);
-                // Record the change for the stroke history
-                if (!currentStrokeVoxels.has(gKey)) { // Only record initial state once
-                     currentStrokeVoxels.set(gKey, { newColor: proposedNewColor, initialColor: initialColorOfStroke });
-                } else { // Update newColor if already part of stroke
-                    currentStrokeVoxels.get(gKey).newColor = proposedNewColor;
-                }
-            } else if (currentStrokeVoxels.has(gKey) && proposedNewColor === currentColorInScene) {
-                // If it was changed by this stroke but now the path moved back to its original state, revert it
-                // This handles cases where the drag path crosses itself and "undoes" a previous part of the same stroke
-                const originalChange = currentStrokeVoxels.get(gKey);
-                if (originalChange.initialColor === null) { // If it was added, remove it
-                    _removeSingleVoxel(voxel.gx, voxel.gy, voxel.gz);
-                } else { // If it was deleted or recolored, revert to initial color
-                    _recolorSingleVoxel(voxel.gx, voxel.gy, voxel.gz, originalChange.initialColor);
-                }
-                currentStrokeVoxels.delete(gKey); // Remove from current stroke
+            // Record the change for the stroke history
+            if (!currentStrokeVoxels.has(gKey)) { // Only record initial state once for this stroke
+                 currentStrokeVoxels.set(gKey, { originalColor: initialColorOfStroke, finalColor: finalColorAfterModification });
+            } else { // Update finalColor if already part of stroke
+                currentStrokeVoxels.get(gKey).finalColor = finalColorAfterModification;
             }
         }
 
@@ -2040,7 +2015,7 @@ async function generateVoxelIdea() {
         // Der Prompt wurde angepasst, um die Gittergröße und die Komplexität besser zu berücksichtigen.
         const prompt = `Generate a detailed and recognizable voxel model as a JSON object based on the following theme.
         The model should effectively utilize the available 3D grid space, which ranges from (0,0,0) to (${GRID-1},${GRID-1},${GRID-1}).
-        Aim for a reasonable number of voxels, typically between 50 and 500, to create a well-defined structure that fits within the ${GRID}x${GRID}x${GRID} grid.
+        Aim for a reasonable number of voxels, typically between 50 and 700, to create a well-defined, solid, and coherent structure with minimal internal gaps.
         Ensure the model is visually distinct and uses multiple dimensions (X, Y, Z) to form a coherent shape, not just a flat plane or a simple column.
         All x, y, z coordinates must be integers within the grid boundaries (0 to ${GRID-1}).
         Colors should be valid hex color codes (e.g., "#FF0000").
@@ -2053,7 +2028,7 @@ async function generateVoxelIdea() {
           "description": "A brief description of the model.",
           "voxels": [
             { "x": integer, "y": integer, "z": integer, "color": "hex_color_string" },
-            // ... up to 500 voxel objects, utilizing the grid space
+            // ... up to 700 voxel objects, utilizing the grid space
           ]
         }
         `;
@@ -2089,8 +2064,7 @@ async function generateVoxelIdea() {
             }
         };
 
-        const apiKey = "AIzaSyD3uQ6BnGsliYAtfRh9r0jdBUq03KEfFO0"; // Canvas stellt dies zur Laufzeit bereit, aber hier zur Klarheit eingefügt.
-        const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${apiKey}`;
+        const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${AI_API_KEY}`; // Using hardcoded AI API Key
 
         const response = await fetch(apiUrl, {
             method: 'POST',
@@ -2164,18 +2138,20 @@ function applyAIGeneratedVoxels(aiData) {
 }
 
 
-// Funktion zum Wechseln der Zeichenachse
+// Funktion zum Wechseln der Zeichenachse (Nur für Desktop-UI)
 function cycleDrawingAxis() {
+    if (isMobile) return; // Disabled for mobile
     const axes = ['x', 'y', 'z'];
     const currentIndex = axes.indexOf(currentDrawingAxis);
     currentDrawingAxis = axes[(currentIndex + 1) % axes.length];
-    document.getElementById('mobile-axis-icon').className = AxisIcons[currentDrawingAxis]; // Update mobile axis icon
+    // document.getElementById('mobile-axis-icon').className = AxisIcons[currentDrawingAxis]; // No mobile axis icon
     updateGridHelperPosition();
     showToast('Zeichenachse', `Achse: ${currentDrawingAxis.toUpperCase()}`, 'info', 1500);
 }
 
-// Funktion zum Bewegen der Zeichenebene
+// Funktion zum Bewegen der Zeichenebene (Nur für Desktop-UI)
 function moveDrawingLevel(direction) {
+    if (isMobile) return; // Disabled for mobile
     if (currentMode !== Modes.ADD && currentMode !== Modes.DRAW) {
         showToast('Hinweis', 'Ebenensteuerung nur im Hinzufügen- oder Zeichenmodus verfügbar.', 'warning', 2000);
         return;
@@ -2283,6 +2259,9 @@ window.onload = async function() {
 
         document.getElementById('color-picker').addEventListener('input', (e) => {
             currentColor = e.target.value; localStorage.setItem('voxelEditorColor', currentColor);
+            // Sync mobile color input if it exists
+            const mobileColorInput = document.getElementById('mobile-color-input');
+            if (mobileColorInput) mobileColorInput.value = currentColor;
             presetBoxes.forEach(box => box.classList.remove('active', 'border-primary', 'shadow-lg', 'shadow-primary/50')); activePresetIndex = -1;
             // Vorschau-Voxel sofort aktualisieren, wenn sichtbar
             if (previewVoxelMesh.visible) {
@@ -2355,6 +2334,7 @@ window.onload = async function() {
                 toastContainer.classList.add('toast-end'); // Apply desktop toast position
             }
             onResize();
+            rebuildHelpers(); // Rebuild helpers to reflect potential axis change for mobile
         }
         mediaQuery.addListener(handleMediaQueryChange); handleMediaQueryChange(mediaQuery);
 
@@ -2364,10 +2344,29 @@ window.onload = async function() {
         document.getElementById('mobile-save').addEventListener('click', (e) => { e.stopPropagation(); saveJSON(); });
         document.getElementById('mobile-camera').addEventListener('click', (e) => { e.stopPropagation(); resetCameraPosition(); });
         document.getElementById('mobile-mode-toggle').addEventListener('click', (e) => { e.stopPropagation(); cycleMode(); });
-        document.getElementById('mobile-axis-toggle').addEventListener('click', (e) => { e.stopPropagation(); cycleDrawingAxis(); }); // New event listener
-        document.getElementById('mobile-level-up').addEventListener('click', (e) => { e.stopPropagation(); moveDrawingLevel(1); }); // New event listener
-        document.getElementById('mobile-level-down').addEventListener('click', (e) => { e.stopPropagation(); moveDrawingLevel(-1); }); // New event listener
-        document.getElementById('mobile-color-picker-btn').addEventListener('click', (e) => { e.stopPropagation(); document.getElementById('color-picker').click(); }); // Desktop-Farbauswahl auslösen
+        
+        // Mobile Color Picker Fix: Create and wire up a hidden input for mobile
+        const mobileColorPickerBtn = document.getElementById('mobile-color-picker-btn');
+        const mobileColorInput = document.getElementById('mobile-color-input'); // Get the hidden input from HTML
+        
+        mobileColorPickerBtn.addEventListener('click', (e) => {
+            e.stopPropagation();
+            mobileColorInput.click(); // Trigger the native color picker
+        });
+
+        mobileColorInput.addEventListener('input', (e) => {
+            currentColor = e.target.value;
+            localStorage.setItem('voxelEditorColor', currentColor);
+            document.getElementById('color-picker').value = currentColor; // Sync with desktop picker
+            presetBoxes.forEach(box => box.classList.remove('active', 'border-primary', 'shadow-lg', 'shadow-primary/50'));
+            activePresetIndex = -1;
+            if (previewVoxelMesh.visible) {
+                previewVoxelMaterial.color.set(currentColor);
+            }
+        });
+        // Sync initial color for the mobile color input
+        mobileColorInput.value = currentColor;
+
         document.getElementById('mobile-generate-idea').addEventListener('click', (e) => { e.stopPropagation(); openIdeaGeneratorModal(); }); // Neuer mobiler Button-Event-Listener
         document.getElementById('mobile-login-logout').addEventListener('click', (e) => { e.stopPropagation(); loginLogout(); });
 
@@ -2375,9 +2374,8 @@ window.onload = async function() {
         document.getElementById('color-picker').value = currentColor;
         document.getElementById('fly-speed-slider').value = moveSpeed; document.getElementById('fly-speed-display').textContent = moveSpeed.toFixed(2);
         
-        // Initialize mobile mode icon and axis icon
+        // Initialize mobile mode icon
         document.getElementById('mobile-mode-icon').className = ModeIcons[currentMode];
-        document.getElementById('mobile-axis-icon').className = AxisIcons[currentDrawingAxis];
 
         const app = window.firebase.initializeApp(window.firebaseConfig);
         auth = window.firebase.getAuth(app); db = window.firebase.getFirestore(app);
