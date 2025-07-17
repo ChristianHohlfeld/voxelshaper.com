@@ -205,7 +205,23 @@ input[type="color"]::-moz-color-swatch { border: none; border-radius: 50%; }
     <button class="mobile-btn w-16 h-16 text-3xl rounded-full bg-base-300 text-base-content border-2 border-base-content cursor-pointer flex items-center justify-center shadow-lg hover:bg-base-content/20" id="mobile-redo" aria-label="Wiederholen">↻</button>
     <button class="mobile-btn w-16 h-16 text-3xl rounded-full bg-base-300 text-base-content border-2 border-base-content cursor-pointer flex items-center justify-center shadow-lg hover:bg-base-content/20" id="mobile-save" aria-label="Speichern">💾</button>
     <button class="mobile-btn w-16 h-16 text-3xl rounded-full bg-base-300 text-base-content border-2 border-base-content cursor-pointer flex items-center justify-center shadow-lg hover:bg-base-content/20" id="mobile-camera" aria-label="Kamera wechseln">📷</button>
-    <button class="mobile-btn w-16 h-16 text-3xl rounded-full bg-base-300 text-base-content border-2 border-base-content cursor-pointer flex items-center justify-center shadow-lg hover:bg-base-content/20" id="mobile-mode-toggle" aria-label="Modus wechseln">🔄</button>
+
+    <!-- Updated Mode Toggle Button with dynamic icon -->
+    <button class="mobile-btn w-16 h-16 text-3xl rounded-full bg-base-300 text-base-content border-2 border-base-content cursor-pointer flex items-center justify-center shadow-lg hover:bg-base-content/20" id="mobile-mode-toggle" aria-label="Modus wechseln">
+        <span id="mobile-mode-icon" class="fas fa-plus"></span>
+    </button>
+
+    <!-- New buttons for Drawing Level Control -->
+    <button class="mobile-btn w-16 h-16 text-3xl rounded-full bg-base-300 text-base-content border-2 border-base-content cursor-pointer flex items-center justify-center shadow-lg hover:bg-base-content/20" id="mobile-axis-toggle" aria-label="Zeichenachse wechseln">
+        <span id="mobile-axis-icon" class="fas fa-arrows-alt-v"></span>
+    </button>
+    <button class="mobile-btn w-16 h-16 text-3xl rounded-full bg-base-300 text-base-content border-2 border-base-content cursor-pointer flex items-center justify-center shadow-lg hover:bg-base-content/20" id="mobile-level-up" aria-label="Zeichenebene nach oben">
+        <span class="fas fa-arrow-up"></span>
+    </button>
+    <button class="mobile-btn w-16 h-16 text-3xl rounded-full bg-base-300 text-base-content border-2 border-base-content cursor-pointer flex items-center justify-center shadow-lg hover:bg-base-content/20" id="mobile-level-down" aria-label="Zeichenebene nach unten">
+        <span class="fas fa-arrow-down"></span>
+    </button>
+
     <button class="mobile-btn w-16 h-16 text-3xl rounded-full bg-base-300 text-base-content border-2 border-base-content cursor-pointer flex items-center justify-center shadow-lg hover:bg-base-content/20" id="mobile-color-picker-btn" aria-label="Farbe auswählen">🎨</button>
     <button class="mobile-btn w-16 h-16 text-3xl rounded-full bg-base-300 text-base-content border-2 border-base-content cursor-pointer flex items-center justify-center shadow-lg hover:bg-base-content/20" id="mobile-generate-idea" aria-label="Voxel-Idee generieren">✨</button>
     <button class="mobile-btn w-16 h-16 text-3xl rounded-full bg-base-300 text-base-content border-2 border-base-content cursor-pointer flex items-center justify-center shadow-lg hover:bg-base-content/20" id="mobile-login-logout" aria-label="Anmelden oder Abmelden">🔑</button>
@@ -347,12 +363,25 @@ previewVoxelMaterial.polygonOffset = true;
 previewVoxelMaterial.polygonOffsetFactor = -1;
 let previewVoxelMesh = new THREE.Mesh(previewVoxelGeometry, previewVoxelMaterial); // Mesh für das Vorschau-Voxel
 
-// Definition der verschiedenen Modi
+// Definition der verschiedenen Modi und ihrer Icons
 const Modes = {
     ADD: 'Hinzufügen',
     DELETE: 'Löschen',
     DRAW: 'Zeichnen',
 };
+
+const ModeIcons = {
+    ADD: 'fas fa-plus',
+    DELETE: 'fas fa-eraser', // Changed from trash to eraser for less destructive feel
+    DRAW: 'fas fa-paint-brush'
+};
+
+const AxisIcons = {
+    x: 'fas fa-arrows-alt-h', // Horizontal arrows for X
+    y: 'fas fa-arrows-alt-v', // Vertical arrows for Y
+    z: 'fas fa-arrows-alt'    // All directions for Z (or a specific Z icon if available)
+};
+
 let currentMode = Modes.ADD; // Aktueller Modus
 
 let history = []; // Verlauf der Aktionen für Undo/Redo
@@ -697,6 +726,7 @@ function cycleMode() {
         case Modes.DRAW: currentMode = Modes.ADD; break;
     }
     document.getElementById('current-mode').textContent = `Modus: ${currentMode}`;
+    document.getElementById('mobile-mode-icon').className = ModeIcons[currentMode]; // Update mobile icon
     lastActionVoxelCoords = null; updatePreviewVoxel(0, 0, 0, false);
     previewLineInstancedMesh.count = 0; previewLineInstancedMesh.instanceMatrix.needsUpdate = true; previewLineVoxels = [];
 }
@@ -824,9 +854,9 @@ function performVoxelModification(gx, gy, gz, mode, color) {
                 if (voxels.get(gKey).color !== color) {
                     _recolorSingleVoxel(gx, gy, gz, color);
                 }
-            } else { // Wenn kein Voxel existiert, füge es im DRAW-Modus hinzu
-                _addSingleVoxel(gx, gy, gz, color);
             }
+            // Im DRAW-Modus fügen wir KEINE neuen Voxel hinzu, wenn der Platz leer ist.
+            // Der Benutzer muss in den ADD-Modus wechseln, um neue Voxel zu platzieren.
             break;
     }
 }
@@ -1438,23 +1468,25 @@ function onPointerLeave(e) {
                 const initialColor = change.initialColor;
                 const newColor = change.newColor;
 
-                if (newColor === null) { // Proposed deletion
-                    if (voxels.has(gKey)) { // Only delete if it actually exists
+                if (newColor === null) { // Vorgeschlagene Löschung
+                    if (voxels.has(gKey)) { // Nur löschen, wenn es tatsächlich existiert
                         _removeSingleVoxel(gx, gy, gz);
                         oldState.push({ gx, gy, gz, color: initialColor });
                         newState.push({ gx, gy, gz, color: null });
                     }
-                } else { // Proposed addition or recoloring
-                    if (voxels.has(gKey)) { // Recolor existing
+                } else { // Vorgeschlagene Hinzufügung oder Umfärbung
+                    if (voxels.has(gKey)) { // Vorhandenes Voxel umfärben
                         if (voxels.get(gKey).color !== newColor) {
                             _recolorSingleVoxel(gx, gy, gz, newColor);
                             oldState.push({ gx, gy, gz, color: initialColor });
                             newState.push({ gx, gy, gz, color: newColor });
                         }
-                    } else { // Add new
-                        _addSingleVoxel(gx, gy, gz, newColor);
-                        oldState.push({ gx, gy, gz, color: null });
-                        newState.push({ gx, gy, gz, color: newColor });
+                    } else { // Neues Voxel hinzufügen (nur im ADD-Modus)
+                        if (currentMode === Modes.ADD) { // Nur im ADD-Modus hinzufügen
+                            _addSingleVoxel(gx, gy, gz, newColor);
+                            oldState.push({ gx, gy, gz, color: null });
+                            newState.push({ gx, gy, gz, color: newColor });
+                        }
                     }
                 }
             }
@@ -1568,8 +1600,10 @@ function onPointerUp(e) {
                 if (currentMode === Modes.DELETE && !voxels.has(key(finalVoxelCoords.gx, finalVoxelCoords.gy, finalVoxelCoords.gz))) {
                     finalVoxelCoords = null; // Prevent deletion if no voxel to delete
                 }
-                // For DRAW mode, no additional check needed here, it should always proceed if a target is found.
-                // performVoxelModification will handle adding or recoloring.
+                // If in DRAW mode and no voxel exists, prevent action.
+                if (currentMode === Modes.DRAW && !voxels.has(key(finalVoxelCoords.gx, finalVoxelCoords.gy, finalVoxelCoords.gz))) {
+                    finalVoxelCoords = null; // Prevent drawing if no voxel to draw on
+                }
             }
 
             if (finalVoxelCoords) {
@@ -1602,23 +1636,25 @@ function onPointerUp(e) {
             const initialColor = change.initialColor; // Use initialColor stored in currentStrokeVoxels
             const newColor = change.newColor; // Use newColor stored in currentStrokeVoxels
 
-            if (newColor === null) { // Proposed deletion
-                if (voxels.has(gKey)) { // Only delete if it actually exists
+            if (newColor === null) { // Vorgeschlagene Löschung
+                if (voxels.has(gKey)) { // Nur löschen, wenn es tatsächlich existiert
                     _removeSingleVoxel(gx, gy, gz);
                     oldState.push({ gx, gy, gz, color: initialColor });
                     newState.push({ gx, gy, gz, color: null });
                 }
-            } else { // Proposed addition or recoloring
-                if (voxels.has(gKey)) { // Recolor existing
+            } else { // Vorgeschlagene Hinzufügung oder Umfärbung
+                if (voxels.has(gKey)) { // Vorhandenes Voxel umfärben
                     if (voxels.get(gKey).color !== newColor) {
                         _recolorSingleVoxel(gx, gy, gz, newColor);
                         oldState.push({ gx, gy, gz, color: initialColor });
                         newState.push({ gx, gy, gz, color: newColor });
                     }
-                } else { // Add new
-                    _addSingleVoxel(gx, gy, gz, newColor);
-                    oldState.push({ gx, gy, gz, color: null });
-                    newState.push({ gx, gy, gz, color: newColor });
+                } else { // Neues Voxel hinzufügen (nur im ADD-Modus)
+                    if (currentMode === Modes.ADD) { // Nur im ADD-Modus hinzufügen
+                        _addSingleVoxel(gx, gy, gz, newColor);
+                        oldState.push({ gx, gy, gz, color: null });
+                        newState.push({ gx, gy, gz, color: newColor });
+                    }
                 }
             }
         }
@@ -1693,9 +1729,9 @@ function onPointerDown(e) {
                     proposedVoxel.gz = Math.max(0, Math.min(GRID - 1, proposedVoxel.gz));
 
                     // Nur als initial setzen, wenn der vorgeschlagene Platz innerhalb des Gitters und leer ist
-                    if (!voxels.has(key(proposedVoxel.gx, proposedVoxel.gy, proposedVoxel.gz))) {
+                    if (!voxelsAtDragStart.has(key(proposedVoxel.gx, proposedVoxel.gy, proposedVoxel.gz))) {
                         initialActionVoxel = proposedVoxel;
-                    } else {
+                    } else { // Wenn der Platz belegt ist, kann im ADD-Modus kein Drag gestartet werden
                         doubleTapDragActive = false; return;
                     }
                 } else { // Hat leeren Raum oder Zeichenebene getroffen
@@ -1706,9 +1742,9 @@ function onPointerDown(e) {
                     rawTarget.gz = Math.max(0, Math.min(GRID - 1, rawTarget.gz));
 
                     // Nur handeln, wenn der Platz innerhalb des Gitters und leer ist
-                    if (!voxels.has(key(rawTarget.gx, rawTarget.gy, rawTarget.gz))) {
+                    if (!voxelsAtDragStart.has(key(rawTarget.gx, rawTarget.gy, rawTarget.gz))) {
                         initialActionVoxel = { gx: rawTarget.gx, gy: rawTarget.gy, gz: rawTarget.gz };
-                    } else {
+                    } else { // Wenn der Platz belegt ist, kann im ADD-Modus kein Drag gestartet werden
                         doubleTapDragActive = false; return;
                     }
                 }
@@ -1716,11 +1752,10 @@ function onPointerDown(e) {
                 // Für Löschen und Zeichnen gilt die Aktion immer für das geklickte Voxel selbst
                 initialActionVoxel = { gx: rawTarget.gx, gy: rawTarget.gy, gz: rawTarget.gz };
                 // Wenn im Ziel kein Voxel für DELETE/DRAW existiert, Drag verhindern
-                if (currentMode === Modes.DELETE && !voxels.has(key(initialActionVoxel.gx, initialActionVoxel.gy, initialActionVoxel.gz))) {
+                if (!voxelsAtDragStart.has(key(initialActionVoxel.gx, initialActionVoxel.gy, initialActionVoxel.gz))) {
                     doubleTapDragActive = false;
                     return;
                 }
-                // For DRAW mode, no additional check needed here, it should always proceed if a target is found.
             }
 
             if (initialActionVoxel) {
@@ -1728,25 +1763,27 @@ function onPointerDown(e) {
                 initialDragVoxelCoords = initialActionVoxel;
                 lastActionVoxelCoords = { ...initialDragVoxelCoords }; // Für die erste Aktion im Drag setzen
                 
-                // For touch double-tap drag, we don't immediately modify the main voxels map.
-                // We just record the proposed change for the first voxel in currentStrokeVoxels.
+                // Für Touch-Doppeltipp-Drag wird die Haupt-Voxel-Map nicht sofort geändert.
+                // Es wird nur die vorgeschlagene Änderung für das erste Voxel in currentStrokeVoxels aufgezeichnet.
                 const gKey = key(initialDragVoxelCoords.gx, initialDragVoxelCoords.gy, initialDragVoxelCoords.gz);
                 const initialColor = voxelsAtDragStart.has(gKey) ? voxelsAtDragStart.get(gKey).color : null;
-                let proposedNewColor = null;
+                let proposedNewColor = undefined; // undefined bedeutet keine Änderung vorgeschlagen
+
                 if (currentMode === Modes.ADD) {
                     if (!voxelsAtDragStart.has(gKey)) proposedNewColor = currentColor;
                 } else if (currentMode === Modes.DELETE) {
-                    if (voxelsAtDragStart.has(gKey)) proposedNewColor = null;
+                    if (voxelsAtDragStart.has(gKey)) proposedNewColor = null; // null bedeutet Löschen
                 } else if (currentMode === Modes.DRAW) {
-                    proposedNewColor = currentColor;
+                    if (voxelsAtDragStart.has(gKey)) proposedNewColor = currentColor;
                 }
-                if (proposedNewColor !== initialColor) {
+
+                if (proposedNewColor !== undefined && proposedNewColor !== initialColor) {
                     currentStrokeVoxels.set(gKey, { newColor: proposedNewColor, initialColor: initialColor });
                 }
 
-                // Show preview for the first voxel in the drag
+                // Vorschau für das erste Voxel im Drag anzeigen
                 updatePreviewVoxel(initialDragVoxelCoords.gx, initialDragVoxelCoords.gy, initialDragVoxelCoords.gz, true);
-                previewLineInstancedMesh.count = 0; // Hide line preview initially
+                previewLineInstancedMesh.count = 0; // Linienvorschau anfänglich ausblenden
             }
         } else {
             // Einzelner Tap oder Beginn einer Multi-Touch-Geste
@@ -1803,9 +1840,9 @@ function onPointerDown(e) {
                 proposedVoxel.gz = Math.max(0, Math.min(GRID - 1, proposedVoxel.gz));
 
                 // Nur als initial setzen, wenn der vorgeschlagene Platz innerhalb des Gitters und leer ist
-                if (!voxels.has(key(proposedVoxel.gx, proposedVoxel.gy, proposedVoxel.gz))) {
+                if (!voxelsAtDragStart.has(key(proposedVoxel.gx, proposedVoxel.gy, proposedVoxel.gz))) {
                     initialActionVoxel = proposedVoxel;
-                } else {
+                } else { // Wenn der Platz belegt ist, kann im ADD-Modus kein Drag gestartet werden
                     pointerIsDown = false; initialClickPos = null;
                     return;
                 }
@@ -1817,9 +1854,9 @@ function onPointerDown(e) {
                 rawTarget.gz = Math.max(0, Math.min(GRID - 1, rawTarget.gz));
 
                 // Nur handeln, wenn der Platz innerhalb des Gitters und leer ist
-                if (!voxels.has(key(rawTarget.gx, rawTarget.gy, rawTarget.gz))) {
+                if (!voxelsAtDragStart.has(key(rawTarget.gx, rawTarget.gy, rawTarget.gz))) {
                     initialActionVoxel = { gx: rawTarget.gx, gy: rawTarget.gy, gz: rawTarget.gz };
-                } else {
+                } else { // Wenn der Platz belegt ist, kann im ADD-Modus kein Drag gestartet werden
                     pointerIsDown = false; initialClickPos = null;
                     return;
                 }
@@ -1828,11 +1865,10 @@ function onPointerDown(e) {
             // Für Löschen und Zeichnen gilt die Aktion immer für das geklickte Voxel selbst
             initialActionVoxel = { gx: rawTarget.gx, gy: rawTarget.gy, gz: rawTarget.gz };
             // Wenn im Ziel kein Voxel für DELETE/DRAW existiert, Drag verhindern
-            if (currentMode === Modes.DELETE && !voxels.has(key(initialActionVoxel.gx, initialActionVoxel.gy, initialActionVoxel.gz))) {
+            if (!voxelsAtDragStart.has(key(initialActionVoxel.gx, initialActionVoxel.gy, initialActionVoxel.gz))) {
                 pointerIsDown = false; initialClickPos = null;
                 return;
             }
-            // For DRAW mode, no additional check needed here, it should always proceed if a target is found.
         }
 
         if (initialActionVoxel) {
@@ -1840,19 +1876,21 @@ function onPointerDown(e) {
             initialDragVoxelCoords = initialActionVoxel;
             lastActionVoxelCoords = { ...initialDragVoxelCoords }; // Für die erste Aktion im Drag setzen
             
-            // For mouse drag, we don't immediately modify the main voxels map.
-            // We just record the proposed change for the first voxel in currentStrokeVoxels.
+            // Für Maus-Drag wird die Haupt-Voxel-Map nicht sofort geändert.
+            // Es wird nur die vorgeschlagene Änderung für das erste Voxel in currentStrokeVoxels aufgezeichnet.
             const gKey = key(initialDragVoxelCoords.gx, initialDragVoxelCoords.gy, initialDragVoxelCoords.gz);
             const initialColor = voxelsAtDragStart.has(gKey) ? voxelsAtDragStart.get(gKey).color : null;
-            let proposedNewColor = null;
+            let proposedNewColor = undefined; // undefined bedeutet keine Änderung vorgeschlagen
+
             if (currentMode === Modes.ADD) {
                 if (!voxelsAtDragStart.has(gKey)) proposedNewColor = currentColor;
             } else if (currentMode === Modes.DELETE) {
-                if (voxelsAtDragStart.has(gKey)) proposedNewColor = null;
+                if (voxelsAtDragStart.has(gKey)) proposedNewColor = null; // null bedeutet Löschen
             } else if (currentMode === Modes.DRAW) {
-                proposedNewColor = currentColor;
+                if (voxelsAtDragStart.has(gKey)) proposedNewColor = currentColor;
             }
-            if (proposedNewColor !== initialColor) {
+
+            if (proposedNewColor !== undefined && proposedNewColor !== initialColor) {
                 currentStrokeVoxels.set(gKey, { newColor: proposedNewColor, initialColor: initialColor });
             }
 
@@ -1907,6 +1945,8 @@ function onPointerMove(e) {
 
     if (isDraggingVoxelAction) {
         if (currentTargetVoxelCoords) { // Ray trifft ein gültiges Voxel oder eine Ebene
+            let finalTargetVoxelCoords = { ...currentTargetVoxelCoords }; // Start mit dem aktuellen Ziel
+
             // Achsensperr-Logik
             if (isShiftDragging) {
                 // dragAxisLock bestimmen, falls noch nicht gesetzt
@@ -1950,9 +1990,7 @@ function onPointerMove(e) {
                 dragAxisLock = null; // Sicherstellen, dass es zurückgesetzt wird, wenn Tasten während des Drags losgelassen werden
             }
 
-            let finalTargetVoxelCoords = { ...currentTargetVoxelCoords }; // Start mit dem aktuellen Ziel
-
-            // finalTargetVoxelCoords auf Gittergrenzen klemmen
+            // finalTargetVoxelCoords auf Gittergrenzen klemmen (nach Achsensperre)
             finalTargetVoxelCoords.gx = Math.max(0, Math.min(GRID - 1, finalTargetVoxelCoords.gx));
             finalTargetVoxelCoords.gy = Math.max(0, Math.min(GRID - 1, finalTargetVoxelCoords.gy));
             finalTargetVoxelCoords.gz = Math.max(0, Math.min(GRID - 1, finalTargetVoxelCoords.gz));
@@ -1963,13 +2001,13 @@ function onPointerMove(e) {
                 finalTargetVoxelCoords.gy !== lastActionVoxelCoords.gy ||
                 finalTargetVoxelCoords.gz !== lastActionVoxelCoords.gz) {
 
-                // Calculate the path from the *initial* drag point to the *current* target
+                // Den Pfad vom initialen Drag-Punkt zum aktuellen Ziel berechnen
                 const pathVoxels = getVoxelsOnLine(initialDragVoxelCoords, finalTargetVoxelCoords);
 
-                // Clear previous preview voxels and accumulated stroke for this new line segment
+                // Vorherige Vorschau-Voxel und akkumulierten Strich für dieses neue Liniensegment löschen
                 previewLineInstancedMesh.count = 0;
                 previewLineVoxels = [];
-                currentStrokeVoxels.clear(); // This is correct for a "line drawing" tool
+                currentStrokeVoxels.clear(); // Dies ist korrekt für ein "Linienzeichenwerkzeug"
 
                 for (let i = 0; i < pathVoxels.length; i++) {
                     const voxel = pathVoxels[i];
@@ -1977,7 +2015,7 @@ function onPointerMove(e) {
                     const hasVoxelInInitialState = voxelsAtDragStart.has(gKey);
                     const initialColor = hasVoxelInInitialState ? voxelsAtDragStart.get(gKey).color : null;
                     let previewColor = null;
-                    let proposedNewColor = undefined;
+                    let proposedNewColor = undefined; // undefined bedeutet keine Änderung vorgeschlagen
 
                     if (currentMode === Modes.ADD) {
                         if (!hasVoxelInInitialState) {
@@ -1986,12 +2024,14 @@ function onPointerMove(e) {
                         }
                     } else if (currentMode === Modes.DELETE) {
                         if (hasVoxelInInitialState) {
-                            previewColor = 0xff0000;
-                            proposedNewColor = null;
+                            previewColor = 0xff0000; // Rote Vorschau für Löschen
+                            proposedNewColor = null; // null bedeutet Löschen
                         }
                     } else if (currentMode === Modes.DRAW) {
-                        previewColor = currentColor;
-                        proposedNewColor = currentColor;
+                        if (hasVoxelInInitialState) { // Im DRAW-Modus nur umfärben, wenn Voxel existiert
+                            previewColor = currentColor;
+                            proposedNewColor = currentColor;
+                        }
                     }
 
                     if (previewColor !== null) {
@@ -2004,11 +2044,11 @@ function onPointerMove(e) {
                         previewLineVoxels.push(voxel);
                     }
 
-                    // Only add to currentStrokeVoxels if a change is proposed and it's different from initial
+                    // Nur zu currentStrokeVoxels hinzufügen, wenn eine Änderung vorgeschlagen wird UND sie sich vom Initialzustand unterscheidet
                     if (proposedNewColor !== undefined && proposedNewColor !== initialColor) {
                         currentStrokeVoxels.set(gKey, { newColor: proposedNewColor, initialColor: initialColor });
                     } else if (currentStrokeVoxels.has(gKey)) {
-                        // If it was previously marked for change but now is back to initial, remove it from stroke
+                        // Wenn es zuvor als Änderung markiert war, aber jetzt wieder im Initialzustand ist, aus dem Strich entfernen
                         currentStrokeVoxels.delete(gKey);
                     }
                 }
@@ -2017,17 +2057,17 @@ function onPointerMove(e) {
                 previewLineInstancedMesh.instanceColor.needsUpdate = true;
 
                 lastActionVoxelCoords = { ...finalTargetVoxelCoords };
-                updatePreviewVoxel(0, 0, 0, false);
+                updatePreviewVoxel(0, 0, 0, false); // Einzelnes Vorschau-Voxel ausblenden, wenn Linienvorschau aktiv ist
             }
         } else {
-            // If ray leaves grid during drag, clear preview
+            // Wenn der Ray während des Drags das Gitter verlässt, Vorschau löschen
             previewLineInstancedMesh.count = 0;
             previewLineInstancedMesh.instanceMatrix.needsUpdate = true;
             previewLineVoxels = [];
             updatePreviewVoxel(0, 0, 0, false);
         }
-    } else { // Hovering (no drag)
-        previewLineInstancedMesh.count = 0; // Ensure line preview is hidden when not dragging
+    } else { // Hovering (kein Drag)
+        previewLineInstancedMesh.count = 0; // Sicherstellen, dass die Linienvorschau ausgeblendet ist, wenn nicht gezogen wird
         previewLineInstancedMesh.instanceMatrix.needsUpdate = true;
         previewLineVoxels = [];
 
@@ -2037,8 +2077,10 @@ function onPointerMove(e) {
             const hasVoxelAtPreview = voxels.has(gKeyAtPreview);
 
             if (currentMode === Modes.ADD) {
+                // Vorschau nur anzeigen, wenn der Platz leer ist
                 if (!hasVoxelAtPreview) { showPreview = true; }
             } else if (currentMode === Modes.DELETE || currentMode === Modes.DRAW) {
+                // Vorschau nur anzeigen, wenn ein Voxel vorhanden ist
                 if (hasVoxelAtPreview) { showPreview = true; }
             }
             updatePreviewVoxel(currentTargetVoxelCoords.gx, currentTargetVoxelCoords.gy, currentTargetVoxelCoords.gz, showPreview);
@@ -2110,6 +2152,31 @@ async function generateVoxelIdea() {
         ideaLoadingIndicator.classList.add('hidden'); // Ladeanzeige ausblenden
     }
 }
+
+// Funktion zum Wechseln der Zeichenachse
+function cycleDrawingAxis() {
+    const axes = ['x', 'y', 'z'];
+    const currentIndex = axes.indexOf(currentDrawingAxis);
+    currentDrawingAxis = axes[(currentIndex + 1) % axes.length];
+    document.getElementById('mobile-axis-icon').className = AxisIcons[currentDrawingAxis]; // Update mobile axis icon
+    updateGridHelperPosition();
+    showToast('Zeichenachse', `Achse: ${currentDrawingAxis.toUpperCase()}`, 'info', 1500);
+}
+
+// Funktion zum Bewegen der Zeichenebene
+function moveDrawingLevel(direction) {
+    if (currentMode !== Modes.ADD && currentMode !== Modes.DRAW) {
+        showToast('Hinweis', 'Ebenensteuerung nur im Hinzufügen- oder Zeichenmodus verfügbar.', 'warning', 2000);
+        return;
+    }
+    let level = activeDrawingLevel[currentDrawingAxis];
+    level += direction;
+    level = Math.max(0, Math.min(GRID - 1, level)); // Clamp to grid boundaries
+    activeDrawingLevel[currentDrawingAxis] = level;
+    updateGridHelperPosition();
+    showToast('Zeichenebene', `Ebene ${currentDrawingAxis.toUpperCase()}: ${level}`, 'info', 1500);
+}
+
 
 // Initialisierungsfunktion, die beim Laden des Fensters ausgeführt wird
 window.onload = async function() {
@@ -2271,6 +2338,9 @@ window.onload = async function() {
         document.getElementById('mobile-save').addEventListener('click', (e) => { e.stopPropagation(); saveJSON(); });
         document.getElementById('mobile-camera').addEventListener('click', (e) => { e.stopPropagation(); resetCameraPosition(); });
         document.getElementById('mobile-mode-toggle').addEventListener('click', (e) => { e.stopPropagation(); cycleMode(); });
+        document.getElementById('mobile-axis-toggle').addEventListener('click', (e) => { e.stopPropagation(); cycleDrawingAxis(); }); // New event listener
+        document.getElementById('mobile-level-up').addEventListener('click', (e) => { e.stopPropagation(); moveDrawingLevel(1); }); // New event listener
+        document.getElementById('mobile-level-down').addEventListener('click', (e) => { e.stopPropagation(); moveDrawingLevel(-1); }); // New event listener
         document.getElementById('mobile-color-picker-btn').addEventListener('click', (e) => { e.stopPropagation(); document.getElementById('color-picker').click(); }); // Desktop-Farbauswahl auslösen
         document.getElementById('mobile-generate-idea').addEventListener('click', (e) => { e.stopPropagation(); openIdeaGeneratorModal(); }); // Neuer mobiler Button-Event-Listener
         document.getElementById('mobile-login-logout').addEventListener('click', (e) => { e.stopPropagation(); loginLogout(); });
@@ -2279,6 +2349,10 @@ window.onload = async function() {
         document.getElementById('color-picker').value = currentColor;
         document.getElementById('fly-speed-slider').value = moveSpeed; document.getElementById('fly-speed-display').textContent = moveSpeed.toFixed(2);
         
+        // Initialize mobile mode icon and axis icon
+        document.getElementById('mobile-mode-icon').className = ModeIcons[currentMode];
+        document.getElementById('mobile-axis-icon').className = AxisIcons[currentDrawingAxis];
+
         const app = window.firebase.initializeApp(window.firebaseConfig);
         auth = window.firebase.getAuth(app); db = window.firebase.getFirestore(app);
         const loginLogoutBtn = document.getElementById('loginLogoutBtn');
