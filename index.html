@@ -277,7 +277,7 @@ input[type="color"]::-moz-color-swatch { border: none; border-radius: 50%; }
     };
 
     const firebaseConfig = typeof __firebase_config !== 'undefined' ? JSON.parse(__firebase_config) : {
-        apiKey: "AIzaSyD3uQ6BnGsliYAtfRh9r0jdBUq03KEfFO0", // Updated API Key
+        apiKey: "AIzaSyD3uQ6BnGsliYAtfRh9r0jdBUq03KEfFO0", // Added API Key as requested
         authDomain: "voxelshaper.firebaseapp.com",
         projectId: "voxelshaper",
         storageBucket: "voxelshaper.firebasestorage.app", 
@@ -2096,10 +2096,12 @@ async function generateVoxelIdea() {
 
     try {
         // Prompt, um die KI zur Generierung von JSON für Voxel zu bewegen
-        const prompt = `Generate a voxel model as a JSON object based on the following theme.
-        The model should be simple to moderately complex, using up to ${GRID * GRID} voxels, depending on the theme and the grid size.
-        A higher grid size (${GRID}x${GRID}x${GRID}) allows for more voxels and finer details.
-        All x, y, z coordinates must be integers between 0 and ${GRID - 1}.
+        // Der Prompt wurde angepasst, um die Gittergröße und die Komplexität besser zu berücksichtigen.
+        const prompt = `Generate a detailed and recognizable voxel model as a JSON object based on the following theme.
+        The model should effectively utilize the available 3D grid space, which ranges from (0,0,0) to (${GRID-1},${GRID-1},${GRID-1}).
+        Aim for a reasonable number of voxels, typically between 50 and 500, to create a well-defined structure that fits within the ${GRID}x${GRID}x${GRID} grid.
+        Higher grid sizes allow for more intricate details and more voxels.
+        All x, y, z coordinates must be integers within the grid boundaries (0 to ${GRID-1}).
         Colors should be valid hex color codes (e.g., "#FF0000").
         
         Theme: "${promptText}"
@@ -2110,7 +2112,7 @@ async function generateVoxelIdea() {
           "description": "A brief description of the model.",
           "voxels": [
             { "x": integer, "y": integer, "z": integer, "color": "hex_color_string" },
-            // ... up to ${GRID * GRID} voxel objects
+            // ... up to 500 voxel objects, utilizing the grid space
           ]
         }
         `;
@@ -2146,7 +2148,7 @@ async function generateVoxelIdea() {
             }
         };
 
-        const apiKey = "AIzaSyD3uQ6BnGsliYAtfRh9r0jdBUq03KEfFO0"; // Canvas stellt dies zur Laufzeit bereit
+        const apiKey = "AIzaSyD3uQ6BnGsliYAtfRh9r0jdBUq03KEfFO0"; // Canvas stellt dies zur Laufzeit bereit, aber hier zur Klarheit eingefügt.
         const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${apiKey}`;
 
         const response = await fetch(apiUrl, {
