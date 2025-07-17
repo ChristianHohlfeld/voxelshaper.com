@@ -366,7 +366,7 @@ const SHIFT_X  = VOX_BITS * 2; // Shift-Wert für X-Koordinate
 const SHIFT_Y  = VOX_BITS; // Shift-Wert für Y-Koordinate
 
 // AI API Key (hardcoded as per user request)
-const AI_API_KEY = "AIzaSyD3uQ6BnGsliYAtfRh9r0jdBUq03KEfFO0";
+const AI_API_KEY = "AIzaSyD3uQ6BnGsliYAtR9r0jdBUq03KEfFO0";
 
 // Erzeugt einen eindeutigen Key für Voxel-Koordinaten
 function key(x, y, z) { return ((x << SHIFT_X) | (y << SHIFT_Y) | z) >>> 0; }
@@ -2030,13 +2030,40 @@ function onPointerMove(e) {
         }
     }
 
+    // --- NEW LOGIC FOR PLANE LOCKING DURING DRAG CYCLE ---
+    // If pointer is down and we have an initial target from pointerdown,
+    // enforce the plane constraint on the current target for both drawing and preview.
+    if (pointerIsDown && initialTargetVoxelCoords && currentTargetVoxelCoords) {
+        // Determine dragAxisLock if not already set and threshold is crossed
+        if (dragAxisLock === null && shouldStartDrag) { // Only set lock once drag starts
+            const dx = Math.abs(currentTargetVoxelCoords.gx - initialTargetVoxelCoords.gx);
+            const dy = Math.abs(currentTargetVoxelCoords.gy - initialTargetVoxelCoords.gy);
+            const dz = Math.abs(currentTargetVoxelCoords.gz - initialTargetVoxelCoords.gz);
+            const maxDelta = Math.max(dx, dy, dz);
+
+            if (maxDelta > MOVE_PX) { // Only lock axis if a significant drag has occurred
+                if (maxDelta === dx) { dragAxisLock = 'x'; }
+                else if (maxDelta === dy) { dragAxisLock = 'y'; }
+                else if (maxDelta === dz) { dragAxisLock = 'z'; }
+            }
+        }
+
+        // If an axis is locked, force the current target to that initial plane
+        if (dragAxisLock !== null) {
+            currentTargetVoxelCoords[dragAxisLock] = initialTargetVoxelCoords[initialTargetVoxelCoords.hitExistingVoxel ? dragAxisLock : currentDrawingAxis];
+            // If adding and not hitting an existing voxel, the plane is the current drawing plane.
+            // If hitting an existing voxel, the plane is the voxel's coordinate on the locked axis.
+            // This ensures the plane is consistent with the initial click's intent.
+        }
+    }
+    // --- END NEW LOGIC ---
+
     // Logic for actual voxel modification during drag
     if (pointerIsDown && currentTargetVoxelCoords) {
         if (!isDragging && shouldStartDrag) {
-            // This is the first time the drag threshold is crossed
             isDragging = true;
             // The first voxel in the drag stroke is the one initially targeted at pointerDown
-            if (initialTargetVoxelCoords) {
+            if (initialTargetVoxelCoords) { // This should always be true if pointerIsDown and currentTargetVoxelCoords are true here
                 lastActionVoxelCoords = { ...initialTargetVoxelCoords }; // Start the line from the initial click point
                 
                 // Perform the modification for the very first voxel of the drag
@@ -2050,33 +2077,9 @@ function onPointerMove(e) {
 
         if (isDragging) { // Continue the drag operation
             const startPointForLine = lastActionVoxelCoords;
-            let endPointForLine = { ...currentTargetVoxelCoords }; // Create a copy to modify
+            const endPointForLine = { ...currentTargetVoxelCoords }; // Use the already constrained currentTargetVoxelCoords
 
-            // Ensure startPointForLine is valid (it should be from initialTargetVoxelCoords or previous lastActionVoxelCoords)
-            if (!startPointForLine || !Number.isFinite(startPointForLine.gx) || !Number.isFinite(startPointForLine.gy) || !Number.isFinite(startPointForLine.gz)) {
-                console.error("Critical: startPointForLine is invalid during drag. Aborting line drawing.");
-                return;
-            }
-
-            // --- Start of Axis Locking and Height Limitation Logic ---
-            if (dragAxisLock === null && initialTargetVoxelCoords) { // Use initialTargetVoxelCoords for axis lock reference
-                const dx = Math.abs(currentTargetVoxelCoords.gx - initialTargetVoxelCoords.gx);
-                const dy = Math.abs(currentTargetVoxelCoords.gy - initialTargetVoxelCoords.gy);
-                const dz = Math.abs(currentTargetVoxelCoords.gz - initialTargetVoxelCoords.gz);
-                const maxDelta = Math.max(dx, dy, dz);
-
-                if (maxDelta > MOVE_PX) { // Only lock axis if a significant drag has occurred
-                    if (maxDelta === dx) { dragAxisLock = 'x'; }
-                    else if (maxDelta === dy) { dragAxisLock = 'y'; }
-                    else if (maxDelta === dz) { dragAxisLock = 'z'; }
-                }
-            }
-
-            if (dragAxisLock !== null && initialTargetVoxelCoords) {
-                // Clamp the current target's coordinate on the locked axis to the initial drag voxel's coordinate
-                endPointForLine[dragAxisLock] = initialTargetVoxelCoords[dragAxisLock];
-            }
-            // --- End of Axis Locking and Height Limitation Logic ---
+            // ... (pathVoxels calculation and modification remains the same) ...
 
             let pathVoxels = getVoxelsOnLine(startPointForLine, endPointForLine);
 
@@ -2107,7 +2110,7 @@ function onPointerMove(e) {
             previewLineInstancedMesh.count = 0; // Line preview not needed for instant drawing
 
         } else { // Pointer is down, but not yet dragging (within MOVE_PX threshold)
-            // Only show single voxel preview
+            // Only show single voxel preview, constrained by the initial plane if a lock is determined
             if (currentTargetVoxelCoords) {
                 let showPreview = false;
                 const gKeyAtPreview = key(currentTargetVoxelCoords.gx, currentTargetVoxelCoords.gy, currentTargetVoxelCoords.gz);
@@ -2130,9 +2133,21 @@ function onPointerMove(e) {
         previewLineInstancedMesh.instanceMatrix.needsUpdate = true;
         previewLineVoxels = [];
 
-        if (currentTargetVoxelCoords) { // Only show single voxel preview if a valid target is found
+        // Show single voxel preview for hovering, without plane constraint
+        if (currentRayHit) { // Use raw currentRayHit for hover preview
+            let hoverPreviewCoords = { gx: currentRayHit.gx, gy: currentRayHit.gy, gz: currentRayHit.gz };
+            if (currentMode === Modes.ADD && currentRayHit.faceNormal) {
+                hoverPreviewCoords.gx += currentRayHit.faceNormal.x;
+                hoverPreviewCoords.gy += currentRayHit.faceNormal.y;
+                hoverPreviewCoords.gz += currentRayHit.faceNormal.z;
+            }
+            // Clamp hover preview coords
+            hoverPreviewCoords.gx = Math.max(0, Math.min(GRID - 1, hoverPreviewCoords.gx));
+            hoverPreviewCoords.gy = Math.max(0, Math.min(GRID - 1, hoverPreviewCoords.gy));
+            hoverPreviewCoords.gz = Math.max(0, Math.min(GRID - 1, hoverPreviewCoords.gz));
+
             let showPreview = false;
-            const gKeyAtPreview = key(currentTargetVoxelCoords.gx, currentTargetVoxelCoords.gy, currentTargetVoxelCoords.gz);
+            const gKeyAtPreview = key(hoverPreviewCoords.gx, hoverPreviewCoords.gy, hoverPreviewCoords.gz);
             const hasVoxelAtPreview = voxels.has(gKeyAtPreview);
 
             if (currentMode === Modes.ADD) {
@@ -2140,7 +2155,7 @@ function onPointerMove(e) {
             } else if (currentMode === Modes.DELETE || currentMode === Modes.DRAW) {
                 if (hasVoxelAtPreview) { showPreview = true; }
             }
-            updatePreviewVoxel(currentTargetVoxelCoords.gx, currentTargetVoxelCoords.gy, currentTargetVoxelCoords.gz, showPreview);
+            updatePreviewVoxel(hoverPreviewCoords.gx, hoverPreviewCoords.gy, hoverPreviewCoords.gz, showPreview);
         } else {
             updatePreviewVoxel(0, 0, 0, false); // Hide preview if no target
         }
@@ -2604,7 +2619,7 @@ window.onload = async function() {
                     // userIdDisplay aktualisiert, um nur das Foto anzuzeigen, nicht die UID
                     userIdDisplay.innerHTML = user ? `<img src="${user.photoURL || 'https://placehold.co/24x24/cccccc/000000?text=U'}" alt="User Avatar" class="w-6 h-6 rounded-full align-middle">` : '';
                     uploadToHubBtn.classList.toggle('hidden', !user);
-                    document.getElementById('mobile-login-logout').textContent = user ? '🚪' : '?';
+                    document.getElementById('mobile-login-logout').textContent = user ? '🚪' : '🔑';
                     if (user) document.getElementById('authModal').close();
 
                     if (!projectLoadedFromUrl) {
