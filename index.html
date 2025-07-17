@@ -882,12 +882,6 @@
                 this.autoRotateEnabled = false; 
                 this.backgroundColor = backgroundColor; 
 
-                this.isDragging = false;
-                this.lastMouseX = 0;
-                this.isTouching = false;
-                this.lastTouchX = 0;
-                this.lastTouchY = 0; 
-
                 this.init();
             }
 
@@ -1599,8 +1593,6 @@
             const gridSize = (model.projectData && model.projectData.settings && model.projectData.settings.gridSize) ? model.projectData.settings.gridSize : 10;
             
             let previewRendererInstance = null; 
-            let retryCount = 0;
-            const MAX_RETRIES = 60; 
 
             // Show skeleton initially, hide canvas and message
             if (skeletonElement) skeletonElement.classList.remove('hidden');
@@ -1612,79 +1604,67 @@
             const currentTheme = htmlElement.getAttribute('data-theme');
             const threeJsBgColor = getDaisyUICSSColorForThreeJS(currentTheme);
 
-            function initializePreviewRendererWithRetry() {
-                console.log(`[VoxelPreviewRenderer] Versuch ${retryCount + 1} für Modell ${modelId}: Canvas clientWidth=${previewCanvas.clientWidth}, clientHeight=${previewCanvas.clientHeight}, offsetWidth=${previewCanvas.offsetWidth}, offsetHeight=${previewCanvas.offsetHeight}`);
+            // Use ResizeObserver to wait for the canvas to have dimensions
+            const resizeObserver = new ResizeObserver(entries => {
+                for (let entry of entries) {
+                    if (entry.target === previewCanvas) {
+                        const { width, height } = entry.contentRect;
+                        if (width > 0 && height > 0) {
+                            // Canvas has dimensions, initialize the renderer
+                            resizeObserver.disconnect(); // Stop observing once initialized
+                            try {
+                                console.log(`[VoxelPreviewRenderer] Canvas-Dimensionen sind ${width}x${height} für Modell ${modelId}. Initialisiere Renderer.`);
+                                previewRendererInstance = new VoxelPreviewRenderer(previewCanvas, voxelsData, gridSize, threeJsBgColor); 
+                                previewRendererInstance.renderer.render(previewRendererInstance.scene, previewRendererInstance.camera);
 
-                if (previewCanvas.offsetWidth === 0 || previewCanvas.offsetHeight === 0) { // Using offsetWidth/Height for more reliable rendered dimensions
-                    console.log(`[VoxelPreviewRenderer] Canvas-Dimensionen sind 0 für Modell ${modelId}. Wiederhole... (Versuch ${retryCount + 1}/${MAX_RETRIES})`);
-                    if (retryCount < MAX_RETRIES) {
-                        retryCount++;
-                        // Use a small timeout to give the browser more time for layout
-                        setTimeout(() => requestAnimationFrame(initializePreviewRendererWithRetry), 50); 
-                    } else {
-                        console.warn(`[VoxelPreviewRenderer] Canvas hat nach maximalen Wiederholungen für Modell ${modelId} keine Größe.`);
-                        console.error(`[VoxelPreviewRenderer] FEHLER beim Initialisieren des Renderers für Modell ${modelId} nach ${MAX_RETRIES} Versuchen aufgrund von Null-Canvas-Größe.`);
-                        previewCanvas.classList.add('hidden'); 
-                        if (skeletonElement) skeletonElement.classList.remove('hidden'); 
-                        if (previewMessageDiv) {
-                            previewMessageDiv.textContent = 'Keine Vorschau verfügbar (Canvas-Größe 0).';
-                            previewMessageDiv.classList.remove('hidden'); 
-                            previewMessageDiv.classList.add('text-error');
-                        }
-                        previewRendererInstance = null; 
-                    }
-                } else {
-                    try {
-                        console.log(`[VoxelPreviewRenderer] Canvas-Dimensionen sind ${previewCanvas.clientWidth}x${previewCanvas.clientHeight} für Modell ${modelId}. Initialisiere Renderer.`);
-                        previewRendererInstance = new VoxelPreviewRenderer(previewCanvas, voxelsData, gridSize, threeJsBgColor); 
-                        previewRendererInstance.renderer.render(previewRendererInstance.scene, previewRendererInstance.camera);
+                                if (skeletonElement) skeletonElement.classList.add('hidden');
+                                previewCanvas.classList.remove('opacity-0');
+                                previewCanvas.classList.add('opacity-100');
+                                if (previewMessageDiv) previewMessageDiv.classList.add('hidden');
 
-                        if (skeletonElement) skeletonElement.classList.add('hidden');
-                        previewCanvas.classList.remove('opacity-0');
-                        previewCanvas.classList.add('opacity-100');
-                        if (previewMessageDiv) previewMessageDiv.classList.add('hidden');
+                                rendererInstances.set(model.id, previewRendererInstance);
 
-                        rendererInstances.set(model.id, previewRendererInstance);
-
-                        if (!isMobileDevice) {
-                            card.addEventListener('mouseenter', () => {
-                                console.log(`Desktop: Maus betrat Karte für Modell ${model.id}. Starte automatische Rotation.`);
-                                if (previewRendererInstance) {
-                                    previewRendererInstance.startAutoRotation();
-                                }
-                            });
-                            card.addEventListener('mouseleave', () => {
-                                console.log(`Desktop: Maus verließ Karte für Modell ${model.id}. Stoppe automatische Rotation.`);
-                                if (previewRendererInstance) {
+                                if (!isMobileDevice) {
+                                    card.addEventListener('mouseenter', () => {
+                                        console.log(`Desktop: Maus betrat Karte für Modell ${model.id}. Starte automatische Rotation.`);
+                                        if (previewRendererInstance) {
+                                            previewRendererInstance.startAutoRotation();
+                                        }
+                                    });
+                                    card.addEventListener('mouseleave', () => {
+                                        console.log(`Desktop: Maus verließ Karte für Modell ${model.id}. Stoppe automatische Rotation.`);
+                                        if (previewRendererInstance) {
+                                            previewRendererInstance.stopAutoRotation();
+                                        }
+                                    });
+                                    previewRendererInstance.stopAutoRotation();
+                                } else {
+                                    if (intersectionObserver) {
+                                        console.log(`Mobile: Beobachte Karte für Modell ${model.id} mit IntersectionObserver.`);
+                                        intersectionObserver.observe(card); 
+                                    }
                                     previewRendererInstance.stopAutoRotation();
                                 }
-                            });
-                            previewRendererInstance.stopAutoRotation();
-                        } else {
-                            if (intersectionObserver) {
-                                console.log(`Mobile: Beobachte Karte für Modell ${model.id} mit IntersectionObserver.`);
-                                intersectionObserver.observe(card); 
+
+                                previewRendererInstance.startAnimation();
+
+                            } catch (error) {
+                                console.error("[VoxelPreviewRenderer] Fehler beim Initialisieren des VoxelPreviewRenderers für Modell", model.id, ":", error);
+                                previewCanvas.classList.add('hidden'); 
+                                if (skeletonElement) skeletonElement.classList.remove('hidden'); 
+                                if (previewMessageDiv) {
+                                    previewMessageDiv.textContent = 'Fehler beim Laden der Vorschau.';
+                                    previewMessageDiv.classList.remove('hidden'); 
+                                    previewMessageDiv.classList.add('text-error');
+                                }
+                                previewRendererInstance = null; 
                             }
-                            previewRendererInstance.stopAutoRotation();
                         }
-
-                        previewRendererInstance.startAnimation();
-
-                    } catch (error) {
-                        console.error("[VoxelPreviewRenderer] Fehler beim Initialisieren des VoxelPreviewRenderers für Modell", model.id, ":", error);
-                        previewCanvas.classList.add('hidden'); 
-                        if (skeletonElement) skeletonElement.classList.remove('hidden'); 
-                        if (previewMessageDiv) {
-                            previewMessageDiv.textContent = 'Fehler beim Laden der Vorschau.';
-                            previewMessageDiv.classList.remove('hidden'); 
-                            previewMessageDiv.classList.add('text-error');
-                        }
-                        previewRendererInstance = null; 
                     }
                 }
-            }
+            });
 
-            requestAnimationFrame(initializePreviewRendererWithRetry); 
+            resizeObserver.observe(previewCanvas); // Start observing the canvas
         }
 
 
