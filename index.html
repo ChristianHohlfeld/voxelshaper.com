@@ -1037,7 +1037,8 @@ function calculateRayTargetVoxelCoords(clientX, clientY) {
         const hitVoxelY = Math.floor(adjustedPoint.y / VS);
         const hitVoxelZ = Math.floor(adjustedPoint.z / VS);
         
-        const result = { gx: Number(hitVoxelX), gy: Number(hitVoxelY), gz: Number(hitVoxelZ), faceNormal: hitNormal };
+        // Füge hitExistingVoxel: true hinzu, da ein Voxel getroffen wurde
+        const result = { gx: Number(hitVoxelX), gy: Number(hitVoxelY), gz: Number(hitVoxelZ), faceNormal: hitNormal, hitExistingVoxel: true };
         if (!Number.isFinite(result.gx) || !Number.isFinite(result.gy) || !Number.isFinite(result.gz)) {
             console.error("calculateRayTargetVoxelCoords: Final result from object intersection has non-finite coordinates:", result);
             return null;
@@ -1088,7 +1089,8 @@ function calculateRayTargetVoxelCoords(clientX, clientY) {
                 return null;
             }
 
-            const result = { gx, gy, gz, faceNormal: null };
+            // Füge hitExistingVoxel: false hinzu, da nur die Ebene getroffen wurde
+            const result = { gx, gy, gz, faceNormal: null, hitExistingVoxel: false };
             return result;
         }
     }
@@ -1919,9 +1921,14 @@ function onPointerDown(e) {
                     rawTarget.gx = Math.max(0, Math.min(GRID - 1, rawTarget.gx)); rawTarget.gy = Math.max(0, Math.min(GRID - 1, rawTarget.gy)); rawTarget.gz = Math.max(0, Math.min(GRID - 1, rawTarget.gz));
                     if (!voxelsAtDragStart.has(key(rawTarget.gx, rawTarget.gy, rawTarget.gz))) { initialActionVoxel = { gx: rawTarget.gx, gy: rawTarget.gy, gz: rawTarget.gz }; } else { doubleTapDragActive = false; return; }
                 }
-            } else {
+            } else { // DELETE or DRAW mode
+                // For DELETE/DRAW, drag must start on an existing voxel
+                if (!rawTarget.hitExistingVoxel) { // New check: only start drag if an existing voxel is hit
+                    doubleTapDragActive = false; // Prevent drag if not hitting existing voxel
+                    return;
+                }
                 initialActionVoxel = { gx: rawTarget.gx, gy: rawTarget.gy, gz: rawTarget.gz };
-                if (!voxelsAtDragStart.has(key(initialActionVoxel.gx, initialActionVoxel.gy, initialActionVoxel.gz))) { doubleTapDragActive = false; return; }
+                // No need to check voxelsAtDragStart.has(key(...)) here, as hitExistingVoxel already covers it.
             }
 
             if (initialActionVoxel) {
@@ -1971,9 +1978,15 @@ function onPointerDown(e) {
                 rawTarget.gx = Math.max(0, Math.min(GRID - 1, rawTarget.gx)); rawTarget.gy = Math.max(0, Math.min(GRID - 1, rawTarget.gy)); rawTarget.gz = Math.max(0, Math.min(GRID - 1, rawTarget.gz));
                 if (!voxelsAtDragStart.has(key(rawTarget.gx, rawTarget.gy, rawTarget.gz))) { initialActionVoxel = { gx: rawTarget.gx, gy: rawTarget.gy, gz: rawTarget.gz }; } else { pointerIsDown = false; initialClickPos = null; return; }
             }
-        } else {
+        } else { // DELETE or DRAW mode
+            // For DELETE/DRAW, drag must start on an existing voxel
+            if (!rawTarget.hitExistingVoxel) { // New check: only start drag if an existing voxel is hit
+                pointerIsDown = false; // Prevent drag if not hitting existing voxel
+                initialClickPos = null;
+                return;
+            }
             initialActionVoxel = { gx: rawTarget.gx, gy: rawTarget.gy, gz: rawTarget.gz };
-            if (!voxelsAtDragStart.has(key(initialActionVoxel.gx, initialActionVoxel.gy, initialActionVoxel.gz))) { pointerIsDown = false; initialClickPos = null; return; }
+            // No need to check voxelsAtDragStart.has(key(...)) here, as hitExistingVoxel already covers it.
         }
 
         if (initialActionVoxel) {
@@ -2060,7 +2073,7 @@ function onPointerMove(e) {
     // Only proceed with drawing if a drag action is active AND we have a valid target voxel
     if (isDraggingVoxelAction && currentTargetVoxelCoords) {
         const startPointForLine = lastActionVoxelCoords || initialDragVoxelCoords;
-        const endPointForLine = currentTargetVoxelCoords; // Now guaranteed to be valid if we enter this block
+        let endPointForLine = { ...currentTargetVoxelCoords }; // Create a copy to modify
 
         // Ensure startPointForLine is also valid (it should be from onPointerDown)
         if (!startPointForLine || !Number.isFinite(startPointForLine.gx) || !Number.isFinite(startPointForLine.gy) || !Number.isFinite(startPointForLine.gz)) {
@@ -2070,7 +2083,32 @@ function onPointerMove(e) {
             return;
         }
 
-        const pathVoxels = getVoxelsOnLine(startPointForLine, endPointForLine);
+        // --- Start of new Axis Locking and Height Limitation Logic ---
+        if (dragAxisLock === null && initialDragVoxelCoords) {
+            const dx = Math.abs(currentTargetVoxelCoords.gx - initialDragVoxelCoords.gx);
+            const dy = Math.abs(currentTargetVoxelCoords.gy - initialDragVoxelCoords.gy);
+            const dz = Math.abs(currentTargetVoxelCoords.gz - initialDragVoxelCoords.gz);
+            const maxDelta = Math.max(dx, dy, dz);
+
+            if (maxDelta > MOVE_PX) { // Only lock axis if a significant drag has occurred
+                if (maxDelta === dx) { dragAxisLock = 'x'; }
+                else if (maxDelta === dy) { dragAxisLock = 'y'; }
+                else if (maxDelta === dz) { dragAxisLock = 'z'; }
+            }
+        }
+
+        if (dragAxisLock !== null && initialDragVoxelCoords) {
+            // Clamp the current target's coordinate on the locked axis to the initial drag voxel's coordinate
+            endPointForLine[dragAxisLock] = initialDragVoxelCoords[dragAxisLock];
+        }
+        // --- End of new Axis Locking and Height Limitation Logic ---
+
+        let pathVoxels = getVoxelsOnLine(startPointForLine, endPointForLine);
+
+        // Filter pathVoxels based on mode for DELETE/DRAW
+        if (currentMode === Modes.DELETE || currentMode === Modes.DRAW) {
+            pathVoxels = pathVoxels.filter(voxel => voxelsAtDragStart.has(key(voxel.gx, voxel.gy, voxel.gz)));
+        }
 
         for (let i = 0; i < pathVoxels.length; i++) {
             const voxel = pathVoxels[i];
@@ -2625,7 +2663,7 @@ function animate() {
             mouseMovementX = mouseMovementY = 0;
             return;
         }
-        euler.y -= (mouseMovementX || 0) * rotSpeed;
+        euler.y -= (mouseMovementX || 0) * rotSpeed; 
         euler.x -= (mouseMovementY || 0) * rotSpeed;
         euler.x = Math.max(-Math.PI / 2, Math.min(Math.PI / 2, euler.x));
         cam.quaternion.setFromEuler(euler);
