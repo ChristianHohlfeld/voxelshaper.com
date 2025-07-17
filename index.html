@@ -826,37 +826,32 @@ function _recolorSingleVoxel(gx, gy, gz, newColorHex) {
 }
 
 // Führt eine Voxel-Modifikation basierend auf dem Modus aus
-function performVoxelModification(gx, gy, gz, mode, color) {
+function performVoxelModification(gx, gy, gz, mode, newColor) { // newColor kann null für Löschen sein
     const gKey = key(gx, gy, gz);
     const hasVoxel = voxels.has(gKey);
 
-    // Koordinaten auf Gittergrenzen klemmen (sollte bereits in aufrufenden Funktionen geschehen, aber als letzte Absicherung gut)
+    // Koordinaten auf Gittergrenzen klemmen
     gx = Math.max(0, Math.min(GRID - 1, gx));
     gy = Math.max(0, Math.min(GRID - 1, gy));
     gz = Math.max(0, Math.min(GRID - 1, gz));
 
     switch (mode) {
         case Modes.ADD:
-            // Nur hinzufügen, wenn der Platz leer ist
             if (!hasVoxel) {
-                _addSingleVoxel(gx, gy, gz, color);
+                _addSingleVoxel(gx, gy, gz, newColor);
             }
             break;
         case Modes.DELETE:
-            // Nur löschen, wenn ein Voxel existiert
             if (hasVoxel) {
                 _removeSingleVoxel(gx, gy, gz);
             }
             break;
         case Modes.DRAW:
-            // Nur umfärben, wenn ein Voxel existiert UND die Farbe anders ist
             if (hasVoxel) {
-                if (voxels.get(gKey).color !== color) {
-                    _recolorSingleVoxel(gx, gy, gz, color);
+                if (voxels.get(gKey).color !== newColor) {
+                    _recolorSingleVoxel(gx, gy, gz, newColor);
                 }
             }
-            // Im DRAW-Modus fügen wir KEINE neuen Voxel hinzu, wenn der Platz leer ist.
-            // Der Benutzer muss in den ADD-Modus wechseln, um neue Voxel zu platzieren.
             break;
     }
 }
@@ -1465,29 +1460,13 @@ function onPointerLeave(e) {
             // Über die Keys in currentStrokeVoxels iterieren, um die betroffenen Voxel zu erhalten
             for (const [gKey, change] of currentStrokeVoxels.entries()) {
                 const [gx, gy, gz] = parseKey(gKey);
-                const initialColor = change.initialColor;
-                const newColor = change.newColor;
+                const initialColor = change.initialColor; // Color before the stroke started
+                const finalColorInScene = voxels.has(gKey) ? voxels.get(gKey).color : null; // Color after the stroke completed
 
-                if (newColor === null) { // Vorgeschlagene Löschung
-                    if (voxels.has(gKey)) { // Nur löschen, wenn es tatsächlich existiert
-                        _removeSingleVoxel(gx, gy, gz);
-                        oldState.push({ gx, gy, gz, color: initialColor });
-                        newState.push({ gx, gy, gz, color: null });
-                    }
-                } else { // Vorgeschlagene Hinzufügung oder Umfärbung
-                    if (voxels.has(gKey)) { // Vorhandenes Voxel umfärben
-                        if (voxels.get(gKey).color !== newColor) {
-                            _recolorSingleVoxel(gx, gy, gz, newColor);
-                            oldState.push({ gx, gy, gz, color: initialColor });
-                            newState.push({ gx, gy, gz, color: newColor });
-                        }
-                    } else { // Neues Voxel hinzufügen (nur im ADD-Modus)
-                        if (currentMode === Modes.ADD) { // Nur im ADD-Modus hinzufügen
-                            _addSingleVoxel(gx, gy, gz, newColor);
-                            oldState.push({ gx, gy, gz, color: null });
-                            newState.push({ gx, gy, gz, color: newColor });
-                        }
-                    }
+                // Only record if there's a net change from initial to final state
+                if (initialColor !== finalColorInScene) {
+                    oldState.push({ gx, gy, gz, color: initialColor });
+                    newState.push({ gx, gy, gz, color: finalColorInScene });
                 }
             }
             if (oldState.length > 0) { // Nur Befehl hinzufügen, wenn es tatsächliche Änderungen gab
@@ -1538,80 +1517,66 @@ function getVoxelsOnLine(start, end) {
 function onPointerUp(e) {
     if (e.button === 2) { rightMouseButtonDown = false; document.exitPointerLock(); return; }
     
+    // Check if it was a drag operation (moved significantly or double-tap drag active)
     const movedDist = initialClickPos ? Math.hypot(e.clientX - initialClickPos.x, e.clientY - initialClickPos.y) : 0;
-    const isSingleClickOrTap = movedDist <= TAP_DIST_TH;
+    const wasDrag = (pointerIsDown && movedDist > TAP_DIST_TH) || doubleTapDragActive;
 
-    // Behandelt einzelne Klicks/Taps (kein Drag)
-    // Diese Bedingung bedeutet: Es ist keine Drag-Operation (pointerIsDown ist false oder doubleTapDragActive ist false)
-    // UND es ist ein einzelner Klick/Tap (movedDist ist klein).
-    if (!pointerIsDown && !doubleTapDragActive && isSingleClickOrTap) {
+    if (wasDrag && currentStrokeVoxels.size > 0) {
+        // This block handles the end of a drag (mouse or touch)
+        const oldState = [];
+        const newState = [];
+
+        // Apply all proposed changes from currentStrokeVoxels to the main voxels map
+        for (const [gKey, change] of currentStrokeVoxels.entries()) {
+            const [gx, gy, gz] = parseKey(gKey);
+            const initialColor = change.initialColor; // Color before the stroke started
+            const finalColorInScene = voxels.has(gKey) ? voxels.get(gKey).color : null; // Color after the stroke completed
+
+            // Only record if there's a net change from initial to final state
+            if (initialColor !== finalColorInScene) {
+                oldState.push({ gx, gy, gz, color: initialColor });
+                newState.push({ gx, gy, gz, color: finalColorInScene });
+            }
+        }
+        if (oldState.length > 0) {
+            addCommand('batch', oldState, newState);
+        }
+    } else if (!wasDrag) { // It was a single click/tap (not a drag)
         const clickedVoxel = calculateRayTargetVoxelCoords(e.clientX, e.clientY);
         if (clickedVoxel) {
-            // Koordinaten vom Ray-Treffer vor der Verarbeitung validieren
             if (!Number.isFinite(clickedVoxel.gx) || !Number.isFinite(clickedVoxel.gy) || !Number.isFinite(clickedVoxel.gz)) {
                 console.warn("Geklickte Voxel-Koordinaten sind nicht-endlich. Einzelklick-Aktion abgebrochen.");
-                // Zustände zurücksetzen, um Probleme durch ungültige Koordinaten zu vermeiden
-                pointerIsDown = false;
-                doubleTapDragActive = false;
-                lastActionVoxelCoords = null;
-                initialClickPos = null;
-                initialDragVoxelCoords = null;
-                voxelsAtDragStart = null;
-                currentStrokeVoxels.clear();
-                updatePreviewVoxel(0, 0, 0, false);
-                previewLineInstancedMesh.count = 0;
+                // Reset states to avoid issues with invalid coordinates
+                pointerIsDown = false; doubleTapDragActive = false; lastActionVoxelCoords = null; initialClickPos = null; initialDragVoxelCoords = null; voxelsAtDragStart = null; currentStrokeVoxels.clear(); updatePreviewVoxel(0, 0, 0, false); previewLineInstancedMesh.count = 0;
                 return;
             }
 
             let finalVoxelCoords = null;
             if (currentMode === Modes.ADD) {
-                if (clickedVoxel.faceNormal) { // Hat eine Fläche eines vorhandenen Voxels getroffen
+                if (clickedVoxel.faceNormal) { // Hit a face of an existing voxel
                     const proposedVoxel = {
                         gx: clickedVoxel.gx + clickedVoxel.faceNormal.x,
                         gy: clickedVoxel.gy + clickedVoxel.faceNormal.y,
                         gz: clickedVoxel.gz + clickedVoxel.faceNormal.z
                     };
-
-                    // Vorgeschlagene Voxel-Koordinaten auf Gittergrenzen klemmen
-                    proposedVoxel.gx = Math.max(0, Math.min(GRID - 1, proposedVoxel.gx));
-                    proposedVoxel.gy = Math.max(0, Math.min(GRID - 1, proposedVoxel.gy));
-                    proposedVoxel.gz = Math.max(0, Math.min(GRID - 1, proposedVoxel.gz));
-
-                    // Nur als final setzen, wenn der vorgeschlagene Platz innerhalb des Gitters und leer ist
-                    if (!voxels.has(key(proposedVoxel.gx, proposedVoxel.gy, proposedVoxel.gz))) {
-                        finalVoxelCoords = proposedVoxel;
-                    }
-                } else { // Hat leeren Raum oder Zeichenebene getroffen
-                    // Die clickedVoxel.gx/gy/gz repräsentieren bereits die Zielzelle für die Platzierung
-                    // Auf Gittergrenzen klemmen
-                    clickedVoxel.gx = Math.max(0, Math.min(GRID - 1, clickedVoxel.gx));
-                    clickedVoxel.gy = Math.max(0, Math.min(GRID - 1, clickedVoxel.gy));
-                    clickedVoxel.gz = Math.max(0, Math.min(GRID - 1, clickedVoxel.gz));
-
-                    // Nur handeln, wenn der Platz innerhalb des Gitters und leer ist
-                    if (!voxels.has(key(clickedVoxel.gx, clickedVoxel.gy, clickedVoxel.gz))) {
-                        finalVoxelCoords = { gx: clickedVoxel.gx, gy: clickedVoxel.gy, gz: clickedVoxel.gz };
-                    }
+                    proposedVoxel.gx = Math.max(0, Math.min(GRID - 1, proposedVoxel.gx)); proposedVoxel.gy = Math.max(0, Math.min(GRID - 1, proposedVoxel.gy)); proposedVoxel.gz = Math.max(0, Math.min(GRID - 1, proposedVoxel.gz));
+                    if (!voxels.has(key(proposedVoxel.gx, proposedVoxel.gy, proposedVoxel.gz))) { finalVoxelCoords = proposedVoxel; }
+                } else { // Hit empty space or drawing plane
+                    clickedVoxel.gx = Math.max(0, Math.min(GRID - 1, clickedVoxel.gx)); clickedVoxel.gy = Math.max(0, Math.min(GRID - 1, clickedVoxel.gy)); clickedVoxel.gz = Math.max(0, Math.min(GRID - 1, clickedVoxel.gz));
+                    if (!voxels.has(key(clickedVoxel.gx, clickedVoxel.gy, clickedVoxel.gz))) { finalVoxelCoords = { gx: clickedVoxel.gx, gy: clickedVoxel.gy, gz: clickedVoxel.gz }; }
                 }
-            } else { // DELETE oder DRAW Modus
-                // Für Löschen und Zeichnen gilt die Aktion immer für das geklickte Voxel selbst
+            } else { // DELETE or DRAW Mode
                 finalVoxelCoords = { gx: clickedVoxel.gx, gy: clickedVoxel.gy, gz: clickedVoxel.gz };
-                // If in DELETE mode and no voxel exists, prevent action.
-                if (currentMode === Modes.DELETE && !voxels.has(key(finalVoxelCoords.gx, finalVoxelCoords.gy, finalVoxelCoords.gz))) {
-                    finalVoxelCoords = null; // Prevent deletion if no voxel to delete
-                }
-                // If in DRAW mode and no voxel exists, prevent action.
-                if (currentMode === Modes.DRAW && !voxels.has(key(finalVoxelCoords.gx, finalVoxelCoords.gy, finalVoxelCoords.gz))) {
-                    finalVoxelCoords = null; // Prevent drawing if no voxel to draw on
+                if ((currentMode === Modes.DELETE || currentMode === Modes.DRAW) && !voxels.has(key(finalVoxelCoords.gx, finalVoxelCoords.gy, finalVoxelCoords.gz))) {
+                    finalVoxelCoords = null;
                 }
             }
 
             if (finalVoxelCoords) {
-                // Die einzelne Voxel-Modifikation durchführen und als Batch aufzeichnen
                 const oldState = [];
                 const newState = [];
                 const gKey = key(finalVoxelCoords.gx, finalVoxelCoords.gy, finalVoxelCoords.gz);
-                const initialColor = voxels.has(gKey) ? voxels.get(gKey).color : null; // Get initial color from actual voxels map
+                const initialColor = voxels.has(gKey) ? voxels.get(gKey).color : null;
                 
                 performVoxelModification(finalVoxelCoords.gx, finalVoxelCoords.gy, finalVoxelCoords.gz, currentMode, currentColor);
                 
@@ -1625,55 +1590,19 @@ function onPointerUp(e) {
                 }
             }
         }
-    } else if ((pointerIsDown || doubleTapDragActive) && currentStrokeVoxels.size > 0) { // currentStrokeVoxels.size für Drag prüfen
-        // Dieser Block behandelt das Ende eines Drags (Maus oder Touch)
-        const oldState = [];
-        const newState = [];
-
-        // Apply all proposed changes from currentStrokeVoxels to the main voxels map
-        for (const [gKey, change] of currentStrokeVoxels.entries()) {
-            const [gx, gy, gz] = parseKey(gKey);
-            const initialColor = change.initialColor; // Use initialColor stored in currentStrokeVoxels
-            const newColor = change.newColor; // Use newColor stored in currentStrokeVoxels
-
-            if (newColor === null) { // Vorgeschlagene Löschung
-                if (voxels.has(gKey)) { // Nur löschen, wenn es tatsächlich existiert
-                    _removeSingleVoxel(gx, gy, gz);
-                    oldState.push({ gx, gy, gz, color: initialColor });
-                    newState.push({ gx, gy, gz, color: null });
-                }
-            } else { // Vorgeschlagene Hinzufügung oder Umfärbung
-                if (voxels.has(gKey)) { // Vorhandenes Voxel umfärben
-                    if (voxels.get(gKey).color !== newColor) {
-                        _recolorSingleVoxel(gx, gy, gz, newColor);
-                        oldState.push({ gx, gy, gz, color: initialColor });
-                        newState.push({ gx, gy, gz, color: newColor });
-                    }
-                } else { // Neues Voxel hinzufügen (nur im ADD-Modus)
-                    if (currentMode === Modes.ADD) { // Nur im ADD-Modus hinzufügen
-                        _addSingleVoxel(gx, gy, gz, newColor);
-                        oldState.push({ gx, gy, gz, color: null });
-                        newState.push({ gx, gy, gz, color: newColor });
-                    }
-                }
-            }
-        }
-        if (oldState.length > 0) {
-            addCommand('batch', oldState, newState);
-        }
     }
 
-    // Alle Zustände und Vorschauen nach jedem Pointer-Up zurücksetzen
+    // Reset all states and previews after any pointer up
     pointerIsDown = false;
     doubleTapDragActive = false;
     lastActionVoxelCoords = null;
     initialClickPos = null;
     initialDragVoxelCoords = null;
     voxelsAtDragStart = null;
-    currentStrokeVoxels.clear(); // Den Strich löschen, nachdem er committet wurde
-    updatePreviewVoxel(0, 0, 0, false); // Einzelnes Vorschau-Voxel ausblenden
+    currentStrokeVoxels.clear(); // Clear the stroke after it's committed
+    updatePreviewVoxel(0, 0, 0, false); // Hide single preview voxel
     previewLineInstancedMesh.count = 0; previewLineInstancedMesh.instanceMatrix.needsUpdate = true; previewLineVoxels = [];
-    dragAxisLock = null; // Achsensperre zurücksetzen
+    dragAxisLock = null; // Reset axis lock
     
     if (e.pointerType === 'touch') {
         releasePointer(e.pointerId, e);
@@ -1682,14 +1611,14 @@ function onPointerUp(e) {
 
 // Event-Handler für Pointer-Down-Ereignisse
 function onPointerDown(e) {
-    if (e.button === 2) { e.preventDefault(); rightMouseButtonDown = true; cvs.requestPointerLock(); return; } // Removed cvs.focus()
+    if (e.button === 2) { e.preventDefault(); rightMouseButtonDown = true; cvs.requestPointerLock(); return; }
     if (isPointerLocked) return;
     
-    // Anfangszustand für Drag-Operationen erfassen
-    voxelsAtDragStart = new Map(voxels); // Schnappschuss des gesamten Voxel-Zustands
-    dragAxisLock = null; // Achsensperre zu Beginn des Drags zurücksetzen
+    // Capture initial state for drag operations
+    voxelsAtDragStart = new Map(voxels); // Snapshot of the entire voxel state
+    dragAxisLock = null; // Reset axis lock at the start of the drag
 
-    // Touch-Events behandeln
+    // Handle touch events
     if (e.pointerType === 'touch') {
         if (suppressNextTap) { suppressNextTap = false; return; }
         activePointers.set(e.pointerId, { x: e.clientX, y: e.clientY, pointerType: e.pointerType });
@@ -1697,100 +1626,57 @@ function onPointerDown(e) {
         const now = performance.now();
 
         if (tapCandidate && (now - tapCandidate.time < DT_MS) && (Math.hypot(e.clientX - tapCandidate.x, e.clientY - tapCandidate.y) < TAP_DIST_TH)) {
-            // Doppeltipp für kontinuierlichen Drag (Freihandzeichnen)
+            // Double tap for continuous drag (freehand drawing)
             doubleTapDragActive = true; tapCandidate = null;
             let rawTarget = calculateRayTargetVoxelCoords(e.clientX, e.clientY);
 
-            // Wichtig: rawTarget sofort validieren
             if (!rawTarget || !Number.isFinite(rawTarget.gx) || !Number.isFinite(rawTarget.gy) || !Number.isFinite(rawTarget.gz)) {
-                console.warn("onPointerDown (touch, double-tap): Ungültige rawTarget-Koordinaten. Drag-Initiierung abgebrochen.");
-                doubleTapDragActive = false;
-                // Alle relevanten Zustände zurücksetzen
-                lastActionVoxelCoords = null;
-                initialDragVoxelCoords = null;
-                currentStrokeVoxels.clear();
-                updatePreviewVoxel(0, 0, 0, false);
-                previewLineInstancedMesh.count = 0;
+                console.warn("onPointerDown (touch, double-tap): Invalid rawTarget coordinates. Drag initiation aborted.");
+                doubleTapDragActive = false; lastActionVoxelCoords = null; initialDragVoxelCoords = null; currentStrokeVoxels.clear(); updatePreviewVoxel(0, 0, 0, false); previewLineInstancedMesh.count = 0;
                 return;
             }
 
             let initialActionVoxel = null;
             if (currentMode === Modes.ADD) {
-                if (rawTarget.faceNormal) { // Hat eine Fläche eines vorhandenen Voxels getroffen
-                    const proposedVoxel = {
-                        gx: rawTarget.gx + rawTarget.faceNormal.x,
-                        gy: rawTarget.gy + rawTarget.faceNormal.y,
-                        gz: rawTarget.gz + rawTarget.faceNormal.z
-                    };
-
-                    // Vorgeschlagene Voxel-Koordinaten auf Gittergrenzen klemmen
-                    proposedVoxel.gx = Math.max(0, Math.min(GRID - 1, proposedVoxel.gx));
-                    proposedVoxel.gy = Math.max(0, Math.min(GRID - 1, proposedVoxel.gy));
-                    proposedVoxel.gz = Math.max(0, Math.min(GRID - 1, proposedVoxel.gz));
-
-                    // Nur als initial setzen, wenn der vorgeschlagene Platz innerhalb des Gitters und leer ist
-                    if (!voxelsAtDragStart.has(key(proposedVoxel.gx, proposedVoxel.gy, proposedVoxel.gz))) {
-                        initialActionVoxel = proposedVoxel;
-                    } else { // Wenn der Platz belegt ist, kann im ADD-Modus kein Drag gestartet werden
-                        doubleTapDragActive = false; return;
-                    }
-                } else { // Hat leeren Raum oder Zeichenebene getroffen
-                    // Die rawTarget.gx/gy/gz repräsentieren bereits die Zielzelle für die Platzierung
-                    // Auf Gittergrenzen klemmen
-                    rawTarget.gx = Math.max(0, Math.min(GRID - 1, rawTarget.gx));
-                    rawTarget.gy = Math.max(0, Math.min(GRID - 1, rawTarget.gy));
-                    rawTarget.gz = Math.max(0, Math.min(GRID - 1, rawTarget.gz));
-
-                    // Nur handeln, wenn der Platz innerhalb des Gitters und leer ist
-                    if (!voxelsAtDragStart.has(key(rawTarget.gx, rawTarget.gy, rawTarget.gz))) {
-                        initialActionVoxel = { gx: rawTarget.gx, gy: rawTarget.gy, gz: rawTarget.gz };
-                    } else { // Wenn der Platz belegt ist, kann im ADD-Modus kein Drag gestartet werden
-                        doubleTapDragActive = false; return;
-                    }
+                if (rawTarget.faceNormal) {
+                    const proposedVoxel = { gx: rawTarget.gx + rawTarget.faceNormal.x, gy: rawTarget.gy + rawTarget.faceNormal.y, gz: rawTarget.gz + rawTarget.faceNormal.z };
+                    proposedVoxel.gx = Math.max(0, Math.min(GRID - 1, proposedVoxel.gx)); proposedVoxel.gy = Math.max(0, Math.min(GRID - 1, proposedVoxel.gy)); proposedVoxel.gz = Math.max(0, Math.min(GRID - 1, proposedVoxel.gz));
+                    if (!voxelsAtDragStart.has(key(proposedVoxel.gx, proposedVoxel.gy, proposedVoxel.gz))) { initialActionVoxel = proposedVoxel; } else { doubleTapDragActive = false; return; }
+                } else {
+                    rawTarget.gx = Math.max(0, Math.min(GRID - 1, rawTarget.gx)); rawTarget.gy = Math.max(0, Math.min(GRID - 1, rawTarget.gy)); rawTarget.gz = Math.max(0, Math.min(GRID - 1, rawTarget.gz));
+                    if (!voxelsAtDragStart.has(key(rawTarget.gx, rawTarget.gy, rawTarget.gz))) { initialActionVoxel = { gx: rawTarget.gx, gy: rawTarget.gy, gz: rawTarget.gz }; } else { doubleTapDragActive = false; return; }
                 }
-            } else { // DELETE oder DRAW Modus
-                // Für Löschen und Zeichnen gilt die Aktion immer für das geklickte Voxel selbst
+            } else {
                 initialActionVoxel = { gx: rawTarget.gx, gy: rawTarget.gy, gz: rawTarget.gz };
-                // Wenn im Ziel kein Voxel für DELETE/DRAW existiert, Drag verhindern
-                if (!voxelsAtDragStart.has(key(initialActionVoxel.gx, initialActionVoxel.gy, initialActionVoxel.gz))) {
-                    doubleTapDragActive = false;
-                    return;
-                }
+                if (!voxelsAtDragStart.has(key(initialActionVoxel.gx, initialActionVoxel.gy, initialActionVoxel.gz))) { doubleTapDragActive = false; return; }
             }
 
             if (initialActionVoxel) {
-                // Initiales Aktions-Voxel ist bereits geklemmt und in der obigen Logik auf Gültigkeit geprüft
                 initialDragVoxelCoords = initialActionVoxel;
-                lastActionVoxelCoords = { ...initialDragVoxelCoords }; // Für die erste Aktion im Drag setzen
+                lastActionVoxelCoords = { ...initialDragVoxelCoords };
                 
-                // Für Touch-Doppeltipp-Drag wird die Haupt-Voxel-Map nicht sofort geändert.
-                // Es wird nur die vorgeschlagene Änderung für das erste Voxel in currentStrokeVoxels aufgezeichnet.
                 const gKey = key(initialDragVoxelCoords.gx, initialDragVoxelCoords.gy, initialDragVoxelCoords.gz);
                 const initialColor = voxelsAtDragStart.has(gKey) ? voxelsAtDragStart.get(gKey).color : null;
-                let proposedNewColor = undefined; // undefined bedeutet keine Änderung vorgeschlagen
+                let proposedNewColor = undefined;
 
-                if (currentMode === Modes.ADD) {
-                    if (!voxelsAtDragStart.has(gKey)) proposedNewColor = currentColor;
-                } else if (currentMode === Modes.DELETE) {
-                    if (voxelsAtDragStart.has(gKey)) proposedNewColor = null; // null bedeutet Löschen
-                } else if (currentMode === Modes.DRAW) {
-                    if (voxelsAtDragStart.has(gKey)) proposedNewColor = currentColor;
-                }
+                if (currentMode === Modes.ADD) { if (!voxelsAtDragStart.has(gKey)) proposedNewColor = currentColor; }
+                else if (currentMode === Modes.DELETE) { if (voxelsAtDragStart.has(gKey)) proposedNewColor = null; }
+                else if (currentMode === Modes.DRAW) { if (voxelsAtDragStart.has(gKey)) proposedNewColor = currentColor; }
 
-                if (proposedNewColor !== undefined && proposedNewColor !== initialColor) {
+                if (proposedNewColor !== undefined) { // Always record, even if color is the same, for proper undo/redo state
                     currentStrokeVoxels.set(gKey, { newColor: proposedNewColor, initialColor: initialColor });
+                    performVoxelModification(initialDragVoxelCoords.gx, initialDragVoxelCoords.gy, initialDragVoxelCoords.gz, currentMode, proposedNewColor);
                 }
 
-                // Vorschau für das erste Voxel im Drag anzeigen
-                updatePreviewVoxel(initialDragVoxelCoords.gx, initialDragVoxelCoords.gy, initialDragVoxelCoords.gz, true);
-                previewLineInstancedMesh.count = 0; // Linienvorschau anfänglich ausblenden
+                updatePreviewVoxel(0, 0, 0, false); // Hide preview voxel during drag
+                previewLineInstancedMesh.count = 0;
             }
         } else {
-            // Einzelner Tap oder Beginn einer Multi-Touch-Geste
+            // Single tap or start of multi-touch gesture
             tapCandidate = { x: e.clientX, y: e.clientY, time: now };
             initialDragVoxelCoords = null; currentStrokeVoxels.clear();
             previewLineInstancedMesh.count = 0; previewLineInstancedMesh.instanceMatrix.needsUpdate = true; previewLineVoxels = [];
-            updatePreviewVoxel(0, 0, 0, false); // Vorschau-Voxel bei neuem Tap/Gestenstart ausblenden
+            updatePreviewVoxel(0, 0, 0, false);
         }
         gestureState.initialPointerCount = activePointers.size;
         if (activePointers.size === 1) { gestureState.type = 'rotate'; gestureState.lastMid = { x: e.clientX, y: e.clientY }; }
@@ -1804,98 +1690,53 @@ function onPointerDown(e) {
         initialClickPos = { x: e.clientX, y: e.clientY }; return;
     }
 
-    // Maus-Events behandeln (Linksklick)
+    // Handle mouse events (left click)
     if (e.pointerType === 'mouse' && e.button === 0) {
         pointerIsDown = true; lastX = e.clientX; lastY = e.clientY; initialClickPos = { x: e.clientX, y: e.clientY };
-        updatePreviewVoxel(0, 0, 0, false); // Vorschau bei Mausklick ausblenden, bis Bewegung oder spezifischer Modus
+        updatePreviewVoxel(0, 0, 0, false);
         previewLineInstancedMesh.count = 0; previewLineInstancedMesh.instanceMatrix.needsUpdate = true; previewLineVoxels = [];
 
         let rawTarget = calculateRayTargetVoxelCoords(e.clientX, e.clientY);
 
-        // Wichtig: rawTarget sofort validieren
         if (!rawTarget || !Number.isFinite(rawTarget.gx) || !Number.isFinite(rawTarget.gy) || !Number.isFinite(rawTarget.gz)) {
-            console.warn("onPointerDown (Maus): Ungültige rawTarget-Koordinaten. Aktion abgebrochen.");
-            pointerIsDown = false; initialClickPos = null;
-            // Alle relevanten Zustände zurücksetzen
-            lastActionVoxelCoords = null;
-            initialDragVoxelCoords = null;
-            currentStrokeVoxels.clear();
-            updatePreviewVoxel(0, 0, 0, false);
-            previewLineInstancedMesh.count = 0;
+            console.warn("onPointerDown (Mouse): Invalid rawTarget coordinates. Action aborted.");
+            pointerIsDown = false; initialClickPos = null; lastActionVoxelCoords = null; initialDragVoxelCoords = null; currentStrokeVoxels.clear(); updatePreviewVoxel(0, 0, 0, false); previewLineInstancedMesh.count = 0;
             return;
         }
 
         let initialActionVoxel = null;
         if (currentMode === Modes.ADD) {
-            if (rawTarget.faceNormal) { // Hat eine Fläche eines vorhandenen Voxels getroffen
-                const proposedVoxel = {
-                    gx: rawTarget.gx + rawTarget.faceNormal.x,
-                    gy: rawTarget.gy + rawTarget.faceNormal.y,
-                    gz: rawTarget.gz + rawTarget.faceNormal.z
-                };
-
-                // Vorgeschlagene Voxel-Koordinaten auf Gittergrenzen klemmen
-                proposedVoxel.gx = Math.max(0, Math.min(GRID - 1, proposedVoxel.gx));
-                proposedVoxel.gy = Math.max(0, Math.min(GRID - 1, proposedVoxel.gy));
-                proposedVoxel.gz = Math.max(0, Math.min(GRID - 1, proposedVoxel.gz));
-
-                // Nur als initial setzen, wenn der vorgeschlagene Platz innerhalb des Gitters und leer ist
-                if (!voxelsAtDragStart.has(key(proposedVoxel.gx, proposedVoxel.gy, proposedVoxel.gz))) {
-                    initialActionVoxel = proposedVoxel;
-                } else { // Wenn der Platz belegt ist, kann im ADD-Modus kein Drag gestartet werden
-                    pointerIsDown = false; initialClickPos = null;
-                    return;
-                }
-            } else { // Hat leeren Raum oder Zeichenebene getroffen
-                // Die rawTarget.gx/gy/gz repräsentieren bereits die Zielzelle für die Platzierung
-                // Auf Gittergrenzen klemmen
-                rawTarget.gx = Math.max(0, Math.min(GRID - 1, rawTarget.gx));
-                rawTarget.gy = Math.max(0, Math.min(GRID - 1, rawTarget.gy));
-                rawTarget.gz = Math.max(0, Math.min(GRID - 1, rawTarget.gz));
-
-                // Nur handeln, wenn der Platz innerhalb des Gitters und leer ist
-                if (!voxelsAtDragStart.has(key(rawTarget.gx, rawTarget.gy, rawTarget.gz))) {
-                    initialActionVoxel = { gx: rawTarget.gx, gy: rawTarget.gy, gz: rawTarget.gz };
-                } else { // Wenn der Platz belegt ist, kann im ADD-Modus kein Drag gestartet werden
-                    pointerIsDown = false; initialClickPos = null;
-                    return;
-                }
+            if (rawTarget.faceNormal) {
+                const proposedVoxel = { gx: rawTarget.gx + rawTarget.faceNormal.x, gy: rawTarget.gy + rawTarget.faceNormal.y, gz: rawTarget.gz + rawTarget.faceNormal.z };
+                proposedVoxel.gx = Math.max(0, Math.min(GRID - 1, proposedVoxel.gx)); proposedVoxel.gy = Math.max(0, Math.min(GRID - 1, proposedVoxel.gy)); proposedVoxel.gz = Math.max(0, Math.min(GRID - 1, proposedVoxel.gz));
+                if (!voxelsAtDragStart.has(key(proposedVoxel.gx, proposedVoxel.gy, proposedVoxel.gz))) { initialActionVoxel = proposedVoxel; } else { pointerIsDown = false; initialClickPos = null; return; }
+            } else {
+                rawTarget.gx = Math.max(0, Math.min(GRID - 1, rawTarget.gx)); rawTarget.gy = Math.max(0, Math.min(GRID - 1, rawTarget.gy)); rawTarget.gz = Math.max(0, Math.min(GRID - 1, rawTarget.gz));
+                if (!voxelsAtDragStart.has(key(rawTarget.gx, rawTarget.gy, rawTarget.gz))) { initialActionVoxel = { gx: rawTarget.gx, gy: rawTarget.gy, gz: rawTarget.gz }; } else { pointerIsDown = false; initialClickPos = null; return; }
             }
-        } else { // DELETE oder DRAW Modus
-            // Für Löschen und Zeichnen gilt die Aktion immer für das geklickte Voxel selbst
+        } else {
             initialActionVoxel = { gx: rawTarget.gx, gy: rawTarget.gy, gz: rawTarget.gz };
-            // Wenn im Ziel kein Voxel für DELETE/DRAW existiert, Drag verhindern
-            if (!voxelsAtDragStart.has(key(initialActionVoxel.gx, initialActionVoxel.gy, initialActionVoxel.gz))) {
-                pointerIsDown = false; initialClickPos = null;
-                return;
-            }
+            if (!voxelsAtDragStart.has(key(initialActionVoxel.gx, initialActionVoxel.gy, initialActionVoxel.gz))) { pointerIsDown = false; initialClickPos = null; return; }
         }
 
         if (initialActionVoxel) {
-            // Initiales Aktions-Voxel ist bereits geklemmt und in der obigen Logik auf Gültigkeit geprüft
             initialDragVoxelCoords = initialActionVoxel;
-            lastActionVoxelCoords = { ...initialDragVoxelCoords }; // Für die erste Aktion im Drag setzen
+            lastActionVoxelCoords = { ...initialDragVoxelCoords };
             
-            // Für Maus-Drag wird die Haupt-Voxel-Map nicht sofort geändert.
-            // Es wird nur die vorgeschlagene Änderung für das erste Voxel in currentStrokeVoxels aufgezeichnet.
             const gKey = key(initialDragVoxelCoords.gx, initialDragVoxelCoords.gy, initialDragVoxelCoords.gz);
             const initialColor = voxelsAtDragStart.has(gKey) ? voxelsAtDragStart.get(gKey).color : null;
-            let proposedNewColor = undefined; // undefined bedeutet keine Änderung vorgeschlagen
+            let proposedNewColor = undefined;
 
-            if (currentMode === Modes.ADD) {
-                if (!voxelsAtDragStart.has(gKey)) proposedNewColor = currentColor;
-            } else if (currentMode === Modes.DELETE) {
-                if (voxelsAtDragStart.has(gKey)) proposedNewColor = null; // null bedeutet Löschen
-            } else if (currentMode === Modes.DRAW) {
-                if (voxelsAtDragStart.has(gKey)) proposedNewColor = currentColor;
-            }
+            if (currentMode === Modes.ADD) { if (!voxelsAtDragStart.has(gKey)) proposedNewColor = currentColor; }
+            else if (currentMode === Modes.DELETE) { if (voxelsAtDragStart.has(gKey)) proposedNewColor = null; }
+            else if (currentMode === Modes.DRAW) { if (voxelsAtDragStart.has(gKey)) proposedNewColor = currentColor; }
 
-            if (proposedNewColor !== undefined && proposedNewColor !== initialColor) {
+            if (proposedNewColor !== undefined) { // Always record, even if color is the same, for proper undo/redo state
                 currentStrokeVoxels.set(gKey, { newColor: proposedNewColor, initialColor: initialColor });
+                performVoxelModification(initialDragVoxelCoords.gx, initialDragVoxelCoords.gy, initialDragVoxelCoords.gz, currentMode, proposedNewColor);
             }
-
-            updatePreviewVoxel(initialDragVoxelCoords.gx, initialDragVoxelCoords.gy, initialDragVoxelCoords.gz, true); // Vorschau für erstes Voxel anzeigen
-            previewLineInstancedMesh.count = 0; // Linienvorschau ausblenden
+            updatePreviewVoxel(0, 0, 0, false);
+            previewLineInstancedMesh.count = 0;
         }
         return;
     }
@@ -1922,7 +1763,7 @@ function onPointerMove(e) {
     }
 
     if (currentRayHit) {
-        currentTargetVoxelCoords = { gx: currentRayHit.gx, gy: currentRayHit.gy, gz: currentRayHit.gz };
+        currentTargetVoxelCoords = { gx: currentRayHit.gx, gy: currentRayHit.gy, gz: currentRayHit.z };
 
         if (currentMode === Modes.ADD) {
             if (currentRayHit.faceNormal) {
@@ -1940,7 +1781,7 @@ function onPointerMove(e) {
         if (currentTargetVoxelCoords) {
             let finalTargetVoxelCoords = { ...currentTargetVoxelCoords };
 
-            // Achsensperr-Logik
+            // Axis lock logic
             if (isShiftDragging) {
                 if (dragAxisLock === null) {
                     const dx = Math.abs(currentTargetVoxelCoords.gx - initialDragVoxelCoords.gx);
@@ -1971,85 +1812,82 @@ function onPointerMove(e) {
             finalTargetVoxelCoords.gy = Math.max(0, Math.min(GRID - 1, finalTargetVoxelCoords.gy));
             finalTargetVoxelCoords.gz = Math.max(0, Math.min(GRID - 1, finalTargetVoxelCoords.gz));
 
-            // Nur verarbeiten, wenn sich das Ziel-Voxel vom zuletzt verarbeiteten geändert hat
+            // Only process if the target voxel has changed from the last processed one
             if (!lastActionVoxelCoords ||
                 finalTargetVoxelCoords.gx !== lastActionVoxelCoords.gx ||
                 finalTargetVoxelCoords.gy !== lastActionVoxelCoords.gy ||
                 finalTargetVoxelCoords.gz !== lastActionVoxelCoords.gz) {
 
-                // Den Pfad vom *zuletzt verarbeiteten Voxel* zum *aktuellen Ziel-Voxel* berechnen
                 const pathVoxels = getVoxelsOnLine(lastActionVoxelCoords || initialDragVoxelCoords, finalTargetVoxelCoords);
 
                 for (let i = 0; i < pathVoxels.length; i++) {
                     const voxel = pathVoxels[i];
                     const gKey = key(voxel.gx, voxel.gy, voxel.gz);
-                    const hasVoxelInInitialState = voxelsAtDragStart.has(gKey);
-                    const initialColor = hasVoxelInInitialState ? voxelsAtDragStart.get(gKey).color : null;
+                    const initialColorOfStroke = voxelsAtDragStart.has(gKey) ? voxelsAtDragStart.get(gKey).color : null;
+                    const currentColorInScene = voxels.has(gKey) ? voxels.get(gKey).color : null;
+
                     let proposedNewColor = undefined;
 
                     if (currentMode === Modes.ADD) {
-                        if (!hasVoxelInInitialState) {
+                        if (!voxelsAtDragStart.has(gKey)) { // Only add if it wasn't there initially
                             proposedNewColor = currentColor;
                         }
                     } else if (currentMode === Modes.DELETE) {
-                        if (hasVoxelInInitialState) {
+                        if (voxelsAtDragStart.has(gKey)) { // Only delete if it was there initially
                             proposedNewColor = null;
                         }
                     } else if (currentMode === Modes.DRAW) {
-                        if (hasVoxelInInitialState) {
+                        if (voxelsAtDragStart.has(gKey)) { // Only draw if it was there initially
                             proposedNewColor = currentColor;
                         }
                     }
 
-                    // Speichern der vorgeschlagenen Änderung in currentStrokeVoxels
-                    if (proposedNewColor !== undefined && proposedNewColor !== initialColor) {
-                        currentStrokeVoxels.set(gKey, { newColor: proposedNewColor, initialColor: initialColor });
-                    } else if (currentStrokeVoxels.has(gKey)) {
-                        // Wenn es zuvor als Änderung markiert war, aber jetzt wieder im Initialzustand ist, aus dem Strich entfernen
-                        // Dies behandelt Fälle, in denen der Drag-Pfad sich selbst kreuzt
-                        currentStrokeVoxels.delete(gKey);
+                    // Apply the change immediately to the scene
+                    if (proposedNewColor !== undefined && proposedNewColor !== currentColorInScene) {
+                        performVoxelModification(voxel.gx, voxel.gy, voxel.gz, currentMode, proposedNewColor);
+                        // Record the change for the stroke history
+                        if (!currentStrokeVoxels.has(gKey)) { // Only record initial state once
+                             currentStrokeVoxels.set(gKey, { newColor: proposedNewColor, initialColor: initialColorOfStroke });
+                        } else { // Update newColor if already part of stroke
+                            currentStrokeVoxels.get(gKey).newColor = proposedNewColor;
+                        }
+                    } else if (currentStrokeVoxels.has(gKey) && proposedNewColor === currentColorInScene) {
+                        // If it was changed by this stroke but now the path moved back to its original state, revert it
+                        // This handles cases where the drag path crosses itself and "undoes" a previous part of the same stroke
+                        const originalChange = currentStrokeVoxels.get(gKey);
+                        if (originalChange.initialColor === null) { // If it was added, remove it
+                            _removeSingleVoxel(gx, gy, gz);
+                        } else { // If it was deleted or recolored, revert to initial color
+                            _recolorSingleVoxel(gx, gy, gz, originalChange.initialColor);
+                        }
+                        currentStrokeVoxels.delete(gKey); // Remove from current stroke
                     }
                 }
 
-                // Vorschau basierend auf dem *aktuell akkumulierten Strich* aktualisieren
-                previewLineInstancedMesh.count = 0;
-                let previewInstanceId = 0;
-                for (const [gKey, change] of currentStrokeVoxels.entries()) {
-                    const [gx, gy, gz] = parseKey(gKey);
-                    let previewColor = null;
-                    if (change.newColor === null) { // Lösch-Vorschau
-                        previewColor = 0xff0000; // Rot für Löschen
-                    } else { // Hinzufüge- oder Umfärbe-Vorschau
-                        previewColor = change.newColor;
-                    }
-
-                    if (previewInstanceId < maxPreviewInstances) {
-                        dummy.position.set(gx * VS + HALF, gy * VS + HALF, gz * VS + HALF);
-                        dummy.updateMatrix();
-                        previewLineInstancedMesh.setMatrixAt(previewInstanceId, dummy.matrix);
-                        const c = new THREE.Color(previewColor);
-                        previewLineInstancedMesh.instanceColor.setXYZ(previewInstanceId, c.r, c.g, c.b);
-                        previewInstanceId++;
-                    }
-                }
-                previewLineInstancedMesh.count = previewInstanceId;
-                previewLineInstancedMesh.instanceMatrix.needsUpdate = true;
-                previewLineInstancedMesh.instanceColor.needsUpdate = true;
-
+                updatePreviewVoxel(0, 0, 0, false); // Hide single preview voxel during drag
+                previewLineInstancedMesh.count = 0; // Line preview not needed for instant drawing
                 lastActionVoxelCoords = { ...finalTargetVoxelCoords };
-                updatePreviewVoxel(0, 0, 0, false); // Einzelnes Vorschau-Voxel ausblenden, wenn Linienvorschau aktiv ist
             }
         } else {
-            // Wenn der Ray während des Drags das Gitter verlässt, Vorschau löschen
-            previewLineInstancedMesh.count = 0;
-            previewLineInstancedMesh.instanceMatrix.needsUpdate = true;
-            previewLineVoxels = []; // Sicherstellen, dass dies gelöscht wird
+            // If the ray leaves the grid during drag, revert all changes of the current stroke
+            for (const [gKey, change] of currentStrokeVoxels.entries()) {
+                const [gx, gy, gz] = parseKey(gKey);
+                if (change.initialColor === null) {
+                    _removeSingleVoxel(gx, gy, gz);
+                } else {
+                    _recolorSingleVoxel(gx, gy, gz, change.initialColor);
+                }
+            }
+            currentStrokeVoxels.clear();
             updatePreviewVoxel(0, 0, 0, false);
+            previewLineInstancedMesh.count = 0;
+            previewLineVoxels = [];
+            lastActionVoxelCoords = null; // Reset last action when leaving grid during drag
         }
-    } else { // Hovering (kein Drag)
-        previewLineInstancedMesh.count = 0; // Sicherstellen, dass die Linienvorschau ausgeblendet ist, wenn nicht gezogen wird
+    } else { // Hovering (not dragging)
+        previewLineInstancedMesh.count = 0;
         previewLineInstancedMesh.instanceMatrix.needsUpdate = true;
-        previewLineVoxels = []; // Sicherstellen, dass dies gelöscht wird
+        previewLineVoxels = [];
 
         if (currentTargetVoxelCoords) {
             let showPreview = false;
@@ -2057,10 +1895,8 @@ function onPointerMove(e) {
             const hasVoxelAtPreview = voxels.has(gKeyAtPreview);
 
             if (currentMode === Modes.ADD) {
-                // Vorschau nur anzeigen, wenn der Platz leer ist
                 if (!hasVoxelAtPreview) { showPreview = true; }
             } else if (currentMode === Modes.DELETE || currentMode === Modes.DRAW) {
-                // Vorschau nur anzeigen, wenn ein Voxel vorhanden ist
                 if (hasVoxelAtPreview) { showPreview = true; }
             }
             updatePreviewVoxel(currentTargetVoxelCoords.gx, currentTargetVoxelCoords.gy, currentTargetVoxelCoords.gz, showPreview);
@@ -2100,7 +1936,7 @@ async function generateVoxelIdea() {
         const prompt = `Generate a detailed and recognizable voxel model as a JSON object based on the following theme.
         The model should effectively utilize the available 3D grid space, which ranges from (0,0,0) to (${GRID-1},${GRID-1},${GRID-1}).
         Aim for a reasonable number of voxels, typically between 50 and 500, to create a well-defined structure that fits within the ${GRID}x${GRID}x${GRID} grid.
-        Higher grid sizes allow for more intricate details and more voxels.
+        Ensure the model is visually distinct and uses multiple dimensions (X, Y, Z) to form a coherent shape, not just a flat plane or a simple column.
         All x, y, z coordinates must be integers within the grid boundaries (0 to ${GRID-1}).
         Colors should be valid hex color codes (e.g., "#FF0000").
         
@@ -2149,7 +1985,7 @@ async function generateVoxelIdea() {
         };
 
         const apiKey = "AIzaSyD3uQ6BnGsliYAtfRh9r0jdBUq03KEfFO0"; // Canvas stellt dies zur Laufzeit bereit, aber hier zur Klarheit eingefügt.
-        const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-lite-preview-06-17:generateContent?key=${apiKey}`;
+        const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${apiKey}`;
 
         const response = await fetch(apiUrl, {
             method: 'POST',
