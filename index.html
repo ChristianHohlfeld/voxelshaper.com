@@ -332,10 +332,19 @@ let currentColor = localStorage.getItem('voxelEditorColor') || '#ffffff'; // Akt
 let moveSpeed = parseFloat(localStorage.getItem('voxelEditorFlySpeed') || '0.1'); // Fluggeschwindigkeit der Kamera
 let GRID = parseInt(localStorage.getItem('voxelEditorGridSize') || '10'); // Größe des Voxel-Gitters
 
-// Lädt gespeicherte Zeichenebenen-Einstellungen
-activeDrawingLevel.x = parseInt(localStorage.getItem('voxelEditorActiveDrawingLevelX') || '0');
-activeDrawingLevel.y = parseInt(localStorage.getItem('voxelEditorActiveDrawingLevelY') || '0');
-activeDrawingLevel.z = parseInt(localStorage.getItem('voxelEditorActiveDrawingLevelZ') || '0');
+// Lädt gespeicherte Zeichenebenen-Einstellungen und stellt sicher, dass sie gültige Zahlen sind
+activeDrawingLevel.x = Number(localStorage.getItem('voxelEditorActiveDrawingLevelX') || '0');
+if (!Number.isFinite(activeDrawingLevel.x)) activeDrawingLevel.x = 0; // Explicitly handle NaN/null/undefined
+activeDrawingLevel.x = Math.floor(Math.max(0, Math.min(GRID - 1, activeDrawingLevel.x)));
+
+activeDrawingLevel.y = Number(localStorage.getItem('voxelEditorActiveDrawingLevelY') || '0');
+if (!Number.isFinite(activeDrawingLevel.y)) activeDrawingLevel.y = 0;
+activeDrawingLevel.y = Math.floor(Math.max(0, Math.min(GRID - 1, activeDrawingLevel.y)));
+
+activeDrawingLevel.z = Number(localStorage.getItem('voxelEditorActiveDrawingLevelZ') || '0');
+if (!Number.isFinite(activeDrawingLevel.z)) activeDrawingLevel.z = 0;
+activeDrawingLevel.z = Math.floor(Math.max(0, Math.min(GRID - 1, activeDrawingLevel.z)));
+
 currentDrawingAxis = localStorage.getItem('voxelEditorCurrentDrawingAxis') || 'y';
 
 const presetColors = [ // Voreingestellte Farben
@@ -707,6 +716,7 @@ function rebuildHelpers() {
 
 // Aktualisiert die Position des Gitter-Helfers und speichert sie
 function updateGridHelperPosition() {
+    console.log("Updating grid helper position. activeDrawingLevel:", activeDrawingLevel.x, activeDrawingLevel.y, activeDrawingLevel.z, "currentDrawingAxis:", currentDrawingAxis);
     rebuildHelpers();
     localStorage.setItem('voxelEditorActiveDrawingLevelX', activeDrawingLevel.x);
     localStorage.setItem('voxelEditorActiveDrawingLevelY', activeDrawingLevel.y);
@@ -917,13 +927,13 @@ function calculateRayTargetVoxelCoords(clientX, clientY) {
         const hitVoxelX = Math.floor(adjustedPoint.x / VS);
         const hitVoxelY = Math.floor(adjustedPoint.y / VS);
         const hitVoxelZ = Math.floor(adjustedPoint.z / VS);
-
-        return {
-            gx: hitVoxelX,
-            gy: hitVoxelY,
-            gz: hitVoxelZ,
-            faceNormal: hitNormal
-        };
+        
+        const result = { gx: Number(hitVoxelX), gy: Number(hitVoxelY), gz: Number(hitVoxelZ), faceNormal: hitNormal };
+        if (!Number.isFinite(result.gx) || !Number.isFinite(result.gy) || !Number.isFinite(result.gz)) {
+            console.error("calculateRayTargetVoxelCoords: Final result from object intersection has non-finite coordinates:", result);
+            return null;
+        }
+        return result;
     } else {
         // Keine Schnittmenge mit vorhandenen Voxeln, versuchen, mit der aktiven Zeichenebene zu schneiden
         let planeNormal = new THREE.Vector3();
@@ -959,7 +969,18 @@ function calculateRayTargetVoxelCoords(clientX, clientY) {
             else if (currentDrawingAxis === 'x') gx = activeDrawingLevel.x;
             else if (currentDrawingAxis === 'z') gz = activeDrawingLevel.z;
 
-            return { gx, gy, gz, faceNormal: null };
+            // Ensure all are numbers and finite before creating the result object
+            gx = Number(gx);
+            gy = Number(gy);
+            gz = Number(gz);
+
+            if (!Number.isFinite(gx) || !Number.isFinite(gy) || !Number.isFinite(gz)) {
+                console.error("calculateRayTargetVoxelCoords: Final calculated voxel coordinates from plane intersection are non-finite:", { gx, gy, gz });
+                return null;
+            }
+
+            const result = { gx, gy, gz, faceNormal: null };
+            return result;
         }
     }
     return null;
@@ -1059,7 +1080,10 @@ function resetToDefaultProject() {
     document.getElementById('grid-size-slider').value = GRID; document.getElementById('grid-size-display').textContent = `${GRID}×${GRID}×${GRID}`; localStorage.setItem('voxelEditorGridSize', GRID);
     currentColor = '#ffffff'; document.getElementById('color-picker').value = currentColor; localStorage.setItem('voxelEditorColor', currentColor);
     activeDrawingLevel = { x: 0, y: 0, z: 0 }; currentDrawingAxis = 'y';
-    localStorage.setItem('voxelEditorActiveDrawingLevelX', activeDrawingLevel.x); localStorage.setItem('voxelEditorActiveDrawingLevelY', activeDrawingLevel.y); localStorage.setItem('voxelEditorActiveDrawingLevelZ', activeDrawingLevel.z); localStorage.setItem('voxelEditorCurrentDrawingAxis', currentDrawingAxis);
+    localStorage.setItem('voxelEditorActiveDrawingLevelX', activeDrawingLevel.x);
+    localStorage.setItem('voxelEditorActiveDrawingLevelY', activeDrawingLevel.y);
+    localStorage.setItem('voxelEditorActiveDrawingLevelZ', activeDrawingLevel.z);
+    localStorage.setItem('voxelEditorCurrentDrawingAxis', currentDrawingAxis);
     moveSpeed = 0.1; document.getElementById('fly-speed-slider').value = moveSpeed; document.getElementById('fly-speed-display').textContent = moveSpeed.toFixed(2); localStorage.setItem('voxelEditorFlySpeed', moveSpeed);
     presetColors[0] = '#E4002B'; presetColors[1] = '#00A040'; presetColors[2] = '#0057B8';
     localStorage.setItem('voxelPresetColor1', presetColors[0]); localStorage.setItem('voxelPresetColor2', presetColors[1]); localStorage.setItem('voxelPresetColor3', presetColors[2]);
@@ -1095,7 +1119,24 @@ function loadProjectData(projectData) {
         if (loadedSettings) {
             if (loadedSettings.cameraPosition) cam.position.fromArray(loadedSettings.cameraPosition);
             if (loadedSettings.cameraQuaternion) { cam.quaternion.fromArray(loadedSettings.cameraQuaternion); euler.setFromQuaternion(cam.quaternion, 'YXZ'); }
-            if (loadedSettings.activeDrawingLevel) { activeDrawingLevel = { ...loadedSettings.activeDrawingLevel }; localStorage.setItem('voxelEditorActiveDrawingLevelX', activeDrawingLevel.x); localStorage.setItem('voxelEditorActiveDrawingLevelY', activeDrawingLevel.y); localStorage.setItem('voxelEditorActiveDrawingLevelZ', activeDrawingLevel.z); }
+            if (loadedSettings.activeDrawingLevel) {
+                activeDrawingLevel = {
+                    x: Number(loadedSettings.activeDrawingLevel.x || 0),
+                    y: Number(loadedSettings.activeDrawingLevel.y || 0),
+                    z: Number(loadedSettings.activeDrawingLevel.z || 0)
+                };
+                if (!Number.isFinite(activeDrawingLevel.x)) activeDrawingLevel.x = 0;
+                if (!Number.isFinite(activeDrawingLevel.y)) activeDrawingLevel.y = 0;
+                if (!Number.isFinite(activeDrawingLevel.z)) activeDrawingLevel.z = 0;
+
+                activeDrawingLevel.x = Math.floor(Math.max(0, Math.min(GRID - 1, activeDrawingLevel.x)));
+                activeDrawingLevel.y = Math.floor(Math.max(0, Math.min(GRID - 1, activeDrawingLevel.y)));
+                activeDrawingLevel.z = Math.floor(Math.max(0, Math.min(GRID - 1, activeDrawingLevel.z)));
+
+                localStorage.setItem('voxelEditorActiveDrawingLevelX', activeDrawingLevel.x);
+                localStorage.setItem('voxelEditorActiveDrawingLevelY', activeDrawingLevel.y);
+                localStorage.setItem('voxelEditorActiveDrawingLevelZ', activeDrawingLevel.z);
+            }
             if (loadedSettings.currentDrawingAxis) { currentDrawingAxis = loadedSettings.currentDrawingAxis; localStorage.setItem('voxelEditorCurrentDrawingAxis', currentDrawingAxis); }
             updateGridHelperPosition();
             currentColor = loadedSettings.currentColor || '#ffffff'; document.getElementById('color-picker').value = currentColor;
@@ -1774,34 +1815,43 @@ function onPointerMove(e) {
     let currentTargetVoxelCoords = null;
 
     if (currentRayHit) {
-        // Ensure coordinates are finite before proceeding
-        if (!Number.isFinite(currentRayHit.gx) || !Number.isFinite(currentRayHit.gy) || !Number.isFinite(currentRayHit.gz)) {
-            console.warn("calculateRayTargetVoxelCoords returned non-finite coordinates. Skipping this hit.");
-            currentRayHit = null;
-        }
-    }
+        let gx = currentRayHit.gx;
+        let gy = currentRayHit.gy;
+        let gz = currentRayHit.gz;
 
-    if (currentRayHit) {
-        currentTargetVoxelCoords = { gx: currentRayHit.gx, gy: currentRayHit.gy, gz: currentRayHit.z };
-
-        if (currentMode === Modes.ADD) {
-            if (currentRayHit.faceNormal) {
-                currentTargetVoxelCoords.gx = currentRayHit.gx + currentRayHit.faceNormal.x;
-                currentTargetVoxelCoords.gy = currentRayHit.gy + currentRayHit.faceNormal.y;
-                currentTargetVoxelCoords.gz = currentRayHit.gz + currentRayHit.faceNormal.z;
-            }
+        // If in ADD mode and we hit a face, adjust coordinates
+        // Ensure currentRayHit.faceNormal is not null before accessing its properties
+        if (currentMode === Modes.ADD && currentRayHit.faceNormal) {
+            gx += currentRayHit.faceNormal.x;
+            gy += currentRayHit.faceNormal.y;
+            gz += currentRayHit.faceNormal.z;
         }
-        currentTargetVoxelCoords.gx = Math.max(0, Math.min(GRID - 1, currentTargetVoxelCoords.gx));
-        currentTargetVoxelCoords.gy = Math.max(0, Math.min(GRID - 1, currentTargetVoxelCoords.gy));
-        currentTargetVoxelCoords.gz = Math.max(0, Math.min(GRID - 1, currentTargetVoxelCoords.gz));
+
+        // Clamp coordinates to grid boundaries
+        gx = Math.max(0, Math.min(GRID - 1, gx));
+        gy = Math.max(0, Math.min(GRID - 1, gy));
+        gz = Math.max(0, Math.min(GRID - 1, gz));
+
+        // Final check for finity after all operations
+        if (Number.isFinite(gx) && Number.isFinite(gy) && Number.isFinite(gz)) {
+            currentTargetVoxelCoords = { gx: gx, gy: gy, gz: gz };
+        } else {
+            console.error("Final currentTargetVoxelCoords has non-finite values after processing:", { gx, gy, gz });
+            currentTargetVoxelCoords = null;
+        }
+    } else {
+        currentTargetVoxelCoords = null;
     }
 
     if (isDraggingVoxelAction) {
-        // Defensive check for lastActionVoxelCoords and initialDragVoxelCoords
         const startPointForLine = lastActionVoxelCoords || initialDragVoxelCoords;
-        if (!startPointForLine || !Number.isFinite(startPointForLine.gx) || !Number.isFinite(startPointForLine.gy) || !Number.isFinite(startPointForLine.gz)) {
-            console.warn("Start point for line drawing is non-finite. Aborting current drag segment.");
-            // Resetting current stroke related states
+        let endPointForLine = currentTargetVoxelCoords;
+
+        // Explicitly ensure all coordinates are finite numbers before calling getVoxelsOnLine
+        if (!startPointForLine || !Number.isFinite(startPointForLine.gx) || !Number.isFinite(startPointForLine.gy) || !Number.isFinite(startPointForLine.gz) ||
+            !endPointForLine || !Number.isFinite(endPointForLine.gx) || !Number.isFinite(endPointForLine.gy) || !Number.isFinite(endPointForLine.gz)) {
+            console.error("Critical: Non-finite coordinates detected before calling getVoxelsOnLine.", { start: startPointForLine, end: endPointForLine });
+            // Revert changes in current stroke and reset state to prevent further errors
             for (const [gKey, change] of currentStrokeVoxels.entries()) {
                 const [gx, gy, gz] = parseKey(gKey);
                 if (change.initialColor === null) {
@@ -1814,116 +1864,62 @@ function onPointerMove(e) {
             updatePreviewVoxel(0, 0, 0, false);
             previewLineInstancedMesh.count = 0;
             previewLineVoxels = [];
-            lastActionVoxelCoords = null; // Ensure it's reset
-            return; // Skip the rest of the drag logic for this frame
+            lastActionVoxelCoords = null;
+            initialDragVoxelCoords = null;
+            pointerIsDown = false;
+            doubleTapDragActive = false;
+            return; // Abort this move event
         }
 
-        if (currentTargetVoxelCoords) {
-            let finalTargetVoxelCoords = { ...currentTargetVoxelCoords };
+        const pathVoxels = getVoxelsOnLine(startPointForLine, endPointForLine);
 
-            // Axis lock logic
-            if (isShiftDragging) {
-                if (dragAxisLock === null) {
-                    const dx = Math.abs(currentTargetVoxelCoords.gx - initialDragVoxelCoords.gx);
-                    const dy = Math.abs(currentTargetVoxelCoords.gy - initialDragVoxelCoords.gy);
-                    const dz = Math.abs(currentTargetVoxelCoords.gz - initialDragVoxelCoords.gz);
+        for (let i = 0; i < pathVoxels.length; i++) {
+            const voxel = pathVoxels[i];
+            const gKey = key(voxel.gx, voxel.gy, voxel.gz);
+            const initialColorOfStroke = voxelsAtDragStart.has(gKey) ? voxelsAtDragStart.get(gKey).color : null;
+            const currentColorInScene = voxels.has(gKey) ? voxels.get(gKey).color : null;
 
-                    const threshold = 0.5;
-                    if (dx > threshold || dy > threshold || dz > threshold) {
-                        if (dx >= dy && dx >= dz) { dragAxisLock = 'x'; }
-                        else if (dy >= dx && dy >= dz) { dragAxisLock = 'y'; }
-                        else { dragAxisLock = 'z'; }
-                    }
+            let proposedNewColor = undefined;
+
+            if (currentMode === Modes.ADD) {
+                if (!voxelsAtDragStart.has(gKey)) { // Only add if it wasn't there initially
+                    proposedNewColor = currentColor;
                 }
-                if (dragAxisLock !== null) {
-                    if (dragAxisLock === 'x') { finalTargetVoxelCoords.gy = initialDragVoxelCoords.gy; finalTargetVoxelCoords.gz = initialDragVoxelCoords.gz; }
-                    else if (dragAxisLock === 'y') { finalTargetVoxelCoords.gx = initialDragVoxelCoords.gx; finalTargetVoxelCoords.gz = initialDragVoxelCoords.gz; }
-                    else if (dragAxisLock === 'z') { finalTargetVoxelCoords.gx = initialDragVoxelCoords.gx; finalTargetVoxelCoords.gy = initialDragVoxelCoords.gy; }
+            } else if (currentMode === Modes.DELETE) {
+                if (voxelsAtDragStart.has(gKey)) { // Only delete if it was there initially
+                    proposedNewColor = null;
                 }
-            } else if (isControlDragging && currentMode === Modes.ADD) {
-                finalTargetVoxelCoords.gx = initialDragVoxelCoords.gx;
-                finalTargetVoxelCoords.gz = initialDragVoxelCoords.gz;
-                dragAxisLock = 'y';
-            } else {
-                dragAxisLock = null;
-            }
-
-            finalTargetVoxelCoords.gx = Math.max(0, Math.min(GRID - 1, finalTargetVoxelCoords.gx));
-            finalTargetVoxelCoords.gy = Math.max(0, Math.min(GRID - 1, finalTargetVoxelCoords.gy));
-            finalTargetVoxelCoords.gz = Math.max(0, Math.min(GRID - 1, finalTargetVoxelCoords.gz));
-
-            // Only process if the target voxel has changed from the last processed one
-            if (!lastActionVoxelCoords ||
-                finalTargetVoxelCoords.gx !== lastActionVoxelCoords.gx ||
-                finalTargetVoxelCoords.gy !== lastActionVoxelCoords.gy ||
-                finalTargetVoxelCoords.gz !== lastActionVoxelCoords.gz) {
-
-                const pathVoxels = getVoxelsOnLine(lastActionVoxelCoords || initialDragVoxelCoords, finalTargetVoxelCoords);
-
-                for (let i = 0; i < pathVoxels.length; i++) {
-                    const voxel = pathVoxels[i];
-                    const gKey = key(voxel.gx, voxel.gy, voxel.gz);
-                    const initialColorOfStroke = voxelsAtDragStart.has(gKey) ? voxelsAtDragStart.get(gKey).color : null;
-                    const currentColorInScene = voxels.has(gKey) ? voxels.get(gKey).color : null;
-
-                    let proposedNewColor = undefined;
-
-                    if (currentMode === Modes.ADD) {
-                        if (!voxelsAtDragStart.has(gKey)) { // Only add if it wasn't there initially
-                            proposedNewColor = currentColor;
-                        }
-                    } else if (currentMode === Modes.DELETE) {
-                        if (voxelsAtDragStart.has(gKey)) { // Only delete if it was there initially
-                            proposedNewColor = null;
-                        }
-                    } else if (currentMode === Modes.DRAW) {
-                        if (voxelsAtDragStart.has(gKey)) { // Only draw if it was there initially
-                            proposedNewColor = currentColor;
-                        }
-                    }
-
-                    // Apply the change immediately to the scene
-                    if (proposedNewColor !== undefined && proposedNewColor !== currentColorInScene) {
-                        performVoxelModification(voxel.gx, voxel.gy, voxel.gz, currentMode, proposedNewColor);
-                        // Record the change for the stroke history
-                        if (!currentStrokeVoxels.has(gKey)) { // Only record initial state once
-                             currentStrokeVoxels.set(gKey, { newColor: proposedNewColor, initialColor: initialColorOfStroke });
-                        } else { // Update newColor if already part of stroke
-                            currentStrokeVoxels.get(gKey).newColor = proposedNewColor;
-                        }
-                    } else if (currentStrokeVoxels.has(gKey) && proposedNewColor === currentColorInScene) {
-                        // If it was changed by this stroke but now the path moved back to its original state, revert it
-                        // This handles cases where the drag path crosses itself and "undoes" a previous part of the same stroke
-                        const originalChange = currentStrokeVoxels.get(gKey);
-                        if (originalChange.initialColor === null) { // If it was added, remove it
-                            _removeSingleVoxel(voxel.gx, voxel.gy, voxel.gz);
-                        } else { // If it was deleted or recolored, revert to initial color
-                            _recolorSingleVoxel(voxel.gx, voxel.gy, voxel.gz, originalChange.initialColor);
-                        }
-                        currentStrokeVoxels.delete(gKey); // Remove from current stroke
-                    }
-                }
-
-                updatePreviewVoxel(0, 0, 0, false); // Hide single preview voxel during drag
-                previewLineInstancedMesh.count = 0; // Line preview not needed for instant drawing
-                lastActionVoxelCoords = { ...finalTargetVoxelCoords };
-            }
-        } else {
-            // If the ray leaves the grid during drag, revert all changes of the current stroke
-            for (const [gKey, change] of currentStrokeVoxels.entries()) {
-                const [gx, gy, gz] = parseKey(gKey);
-                if (change.initialColor === null) {
-                    _removeSingleVoxel(gx, gy, gz);
-                } else {
-                    _recolorSingleVoxel(gx, gy, gz, change.initialColor);
+            } else if (currentMode === Modes.DRAW) {
+                if (voxelsAtDragStart.has(gKey)) { // Only draw if it was there initially
+                    proposedNewColor = currentColor;
                 }
             }
-            currentStrokeVoxels.clear();
-            updatePreviewVoxel(0, 0, 0, false);
-            previewLineInstancedMesh.count = 0;
-            previewLineVoxels = [];
-            lastActionVoxelCoords = null; // Reset last action when leaving grid during drag
+
+            // Apply the change immediately to the scene
+            if (proposedNewColor !== undefined && proposedNewColor !== currentColorInScene) {
+                performVoxelModification(voxel.gx, voxel.gy, voxel.gz, currentMode, proposedNewColor);
+                // Record the change for the stroke history
+                if (!currentStrokeVoxels.has(gKey)) { // Only record initial state once
+                     currentStrokeVoxels.set(gKey, { newColor: proposedNewColor, initialColor: initialColorOfStroke });
+                } else { // Update newColor if already part of stroke
+                    currentStrokeVoxels.get(gKey).newColor = proposedNewColor;
+                }
+            } else if (currentStrokeVoxels.has(gKey) && proposedNewColor === currentColorInScene) {
+                // If it was changed by this stroke but now the path moved back to its original state, revert it
+                // This handles cases where the drag path crosses itself and "undoes" a previous part of the same stroke
+                const originalChange = currentStrokeVoxels.get(gKey);
+                if (originalChange.initialColor === null) { // If it was added, remove it
+                    _removeSingleVoxel(voxel.gx, voxel.gy, voxel.gz);
+                } else { // If it was deleted or recolored, revert to initial color
+                    _recolorSingleVoxel(voxel.gx, voxel.gy, voxel.gz, originalChange.initialColor);
+                }
+                currentStrokeVoxels.delete(gKey); // Remove from current stroke
+            }
         }
+
+        updatePreviewVoxel(0, 0, 0, false); // Hide single preview voxel during drag
+        previewLineInstancedMesh.count = 0; // Line preview not needed for instant drawing
+        lastActionVoxelCoords = { ...endPointForLine }; // Use endPointForLine here
     } else { // Hovering (not dragging)
         previewLineInstancedMesh.count = 0;
         previewLineInstancedMesh.instanceMatrix.needsUpdate = true;
@@ -2116,9 +2112,19 @@ function moveDrawingLevel(direction) {
         return;
     }
     let level = activeDrawingLevel[currentDrawingAxis];
+    console.log("moveDrawingLevel: current axis", currentDrawingAxis, "old level", level);
+
+    // Ensure 'level' is a finite number before performing arithmetic and clamping
+    if (!Number.isFinite(level)) {
+        console.warn(`moveDrawingLevel: activeDrawingLevel[${currentDrawingAxis}] is non-finite (${level}). Resetting to 0.`);
+        level = 0; // Reset to a safe default
+        activeDrawingLevel[currentDrawingAxis] = level; // Update the actual stored value
+    }
+
     level += direction;
     level = Math.max(0, Math.min(GRID - 1, level)); // Clamp to grid boundaries
     activeDrawingLevel[currentDrawingAxis] = level;
+    console.log("moveDrawingLevel: new activeDrawingLevel", activeDrawingLevel.x, activeDrawingLevel.y, activeDrawingLevel.z);
     updateGridHelperPosition();
     showToast('Zeichenebene', `Ebene ${currentDrawingAxis.toUpperCase()}: ${level}`, 'info', 1500);
 }
