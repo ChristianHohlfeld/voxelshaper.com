@@ -512,17 +512,6 @@ const VoxelShaperIO = {
         let vertexCount = 0;
         const materials = new Map(); // Map: Farb-Hex -> Materialname
 
-        // Schnelle Lookup-Struktur für Voxel
-        const voxelLookup = new Set();
-        voxModel.voxels.forEach(v => {
-            voxelLookup.add(`${v.x}_${v.y}_${v.z}`);
-        });
-
-        // Hilfsfunktion zum Prüfen, ob ein Voxel an bestimmten Koordinaten existiert
-        function hasVoxel(x, y, z) {
-            return voxelLookup.has(`${x}_${y}_${z}`);
-        }
-
         // Sammelt eindeutige Farben und weist Materialnamen zu
         voxModel.voxels.forEach(v => {
             if (!materials.has(v.color)) {
@@ -582,45 +571,21 @@ const VoxelShaperIO = {
             obj += `usemtl ${matName}\n`;
 
             // Definieren der Flächen mit Vertex-Indizes (1-basiert relativ zum ersten Vertex dieses Blocks)
-            // Prüfen, ob Nachbar existiert, bevor die Fläche exportiert wird (Face Culling)
+            // Removed face culling here to ensure manifold correctness. All 6 faces are exported.
             const baseIdx = vertexCount; // Aktueller Startindex für die Vertices dieses Voxels
 
             // Front Face (+Z) - Normal Index 1
-            if (!hasVoxel(v.x, v.y, v.z + 1)) {
-                // Vertices (0-indexed local): 4, 5, 7, 6
-                // Correct winding (counter-clockwise when looking at the face from +Z): 4 -> 5 -> 7 -> 6
-                obj += `f ${baseIdx + 5}//1 ${baseIdx + 6}//1 ${baseIdx + 8}//1 ${baseIdx + 7}//1\n`;
-            }
+            obj += `f ${baseIdx + 5}//1 ${baseIdx + 6}//1 ${baseIdx + 8}//1 ${baseIdx + 7}//1\n`;
             // Back Face (-Z) - Normal Index 2
-            if (!hasVoxel(v.x, v.y, v.z - 1)) {
-                // Vertices (0-indexed local): 0, 1, 3, 2
-                // Correct winding (counter-clockwise when looking at the face from -Z): 0 -> 2 -> 3 -> 1
-                obj += `f ${baseIdx + 1}//2 ${baseIdx + 3}//2 ${baseIdx + 4}//2 ${baseIdx + 2}//2\n`;
-            }
+            obj += `f ${baseIdx + 1}//2 ${baseIdx + 3}//2 ${baseIdx + 4}//2 ${baseIdx + 2}//2\n`;
             // Right Face (+X) - Normal Index 3
-            if (!hasVoxel(v.x + 1, v.y, v.z)) {
-                // Vertices (0-indexed local): 1, 3, 7, 5
-                // Correct winding (counter-clockwise when looking at the face from +X): 1 -> 5 -> 7 -> 3
-                obj += `f ${baseIdx + 2}//3 ${baseIdx + 6}//3 ${baseIdx + 8}//3 ${baseIdx + 4}//3\n`;
-            }
+            obj += `f ${baseIdx + 2}//3 ${baseIdx + 6}//3 ${baseIdx + 8}//3 ${baseIdx + 4}//3\n`;
             // Left Face (-X) - Normal Index 4
-            if (!hasVoxel(v.x - 1, v.y, v.z)) {
-                // Vertices (0-indexed local): 0, 4, 6, 2
-                // Correct winding (counter-clockwise when looking at the face from -X): 0 -> 2 -> 6 -> 4
-                obj += `f ${baseIdx + 1}//4 ${baseIdx + 3}//4 ${baseIdx + 7}//4 ${baseIdx + 5}//4\n`;
-            }
+            obj += `f ${baseIdx + 1}//4 ${baseIdx + 3}//4 ${baseIdx + 7}//4 ${baseIdx + 5}//4\n`;
             // Top Face (+Y) - Normal Index 5
-            if (!hasVoxel(v.x, v.y + 1, v.z)) {
-                // Vertices (0-indexed local): 2, 6, 7, 3
-                // Correct winding (counter-clockwise when looking at the face from +Y): 2 -> 3 -> 7 -> 6
-                obj += `f ${baseIdx + 3}//5 ${baseIdx + 4}//5 ${baseIdx + 8}//5 ${baseIdx + 7}//5\n`;
-            }
+            obj += `f ${baseIdx + 3}//5 ${baseIdx + 4}//5 ${baseIdx + 8}//5 ${baseIdx + 7}//5\n`;
             // Bottom Face (-Y) - Normal Index 6
-            if (!hasVoxel(v.x, v.y - 1, v.z)) {
-                // Vertices (0-indexed local): 0, 1, 5, 4
-                // Correct winding (counter-clockwise when looking at the face from -Y): 0 -> 4 -> 5 -> 1
-                obj += `f ${baseIdx + 1}//6 ${baseIdx + 5}//6 ${baseIdx + 6}//6 ${baseIdx + 2}//6\n`;
-            }
+            obj += `f ${baseIdx + 1}//6 ${baseIdx + 5}//6 ${baseIdx + 6}//6 ${baseIdx + 2}//6\n`;
 
             vertexCount += 8;
         });
