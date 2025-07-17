@@ -29,16 +29,18 @@ body {
     padding-left: env(safe-area-inset-left);
     padding-right: env(safe-area-inset-right);
     box-sizing: border-box;
-    touch-action: pan-x pan-y;
+    /* Allow browser default scrolling for the body if content overflows, but not for touch interactions within the canvas */
+    touch-action: auto;
     -webkit-user-select: none;
     -moz-user-select: none;
     user-select: none;
 }
-canvas, body, #container{
+#container, #voxelCanvas {
     -webkit-user-select: none;
     -moz-user-select: none;
     user-select: none;
     -webkit-touch-callout: none;
+    touch-action: none; /* Crucial: Prevents default browser gestures (scrolling, zooming) on the canvas */
 }
 .touch-indicator { animation: pulse 0.5s; }
 @keyframes pulse {
@@ -1644,9 +1646,11 @@ function getVoxelsOnLine(start, end) {
 function onPointerUp(e) {
     if (e.button === 2) { rightMouseButtonDown = false; document.exitPointerLock(); return; }
     
-    // Check if it was a drag operation (moved significantly or double-tap drag active)
-    const movedDist = initialClickPos ? Math.hypot(e.clientX - initialClickPos.x, e.clientY - initialClickPos.y) : 0;
-    const wasDrag = (pointerIsDown && movedDist > TAP_DIST_TH) || doubleTapDragActive;
+    // Calculate total distance moved from initial click position
+    const totalMovedDist = initialClickPos ? Math.hypot(e.clientX - initialClickPos.x, e.clientY - initialClickPos.y) : 0;
+
+    // Determine if the action was a drag (moved past threshold or was a double-tap drag)
+    const wasDrag = (totalMovedDist > MOVE_PX) || doubleTapDragActive;
 
     if (wasDrag && currentStrokeVoxels.size > 0) {
         // This block handles the end of a drag (mouse or touch)
@@ -1685,7 +1689,7 @@ function onPointerUp(e) {
                     if (!voxels.has(key(proposedVoxel.gx, proposedVoxel.gy, proposedVoxel.gz))) { finalVoxelCoords = proposedVoxel; }
                 } else { // Hit empty space or drawing plane
                     clickedVoxel.gx = Math.max(0, Math.min(GRID - 1, clickedVoxel.gx)); clickedVoxel.gy = Math.max(0, Math.min(GRID - 1, clickedVoxel.gy)); clickedVoxel.gz = Math.max(0, Math.min(GRID - 1, clickedVoxel.gz));
-                    if (!voxels.has(key(clickedVoxel.gx, clickedVoxel.gy, clickedVoxel.gz))) { finalVoxelCoords = { gx: clickedVoxel.gx, gy: clickedVoxel.gy, gz: clickedCords.gz }; }
+                    if (!voxels.has(key(clickedVoxel.gx, clickedVoxel.gy, clickedVoxel.gz))) { finalVoxelCoords = { gx: clickedVoxel.gx, gy: clickedVoxel.gy, gz: clickedVoxel.gz }; }
                 }
             } else { // DELETE or DRAW Mode
                 finalVoxelCoords = { gx: clickedVoxel.gx, gy: clickedVoxel.gy, gz: clickedVoxel.gz };
@@ -1742,6 +1746,10 @@ function onPointerDown(e) {
     voxelsAtDragStart = new Map(voxels); // Snapshot of the entire voxel state
     currentStrokeVoxels.clear(); // Clear the stroke for a new drag
     dragAxisLock = null; // Reset axis lock at the start of the drag
+
+    // Store initial position for drag detection
+    initialClickPos = { x: e.clientX, y: e.clientY };
+    pointerIsDown = true; // For mouse, this is true immediately. For touch, it's true if it's a single touch.
 
     // Handle touch events
     if (e.pointerType === 'touch') {
@@ -1812,12 +1820,12 @@ function onPointerDown(e) {
             gestureState.type = 'none'; gestureState.startMid = gestureState.lastMid = { x: midX, y: midY };
             gestureState.startDist = gestureState.lastDist = dist;
         }
-        initialClickPos = { x: e.clientX, y: e.clientY }; return;
+        return;
     }
 
     // Handle mouse events (left click)
     if (e.pointerType === 'mouse' && e.button === 0) {
-        pointerIsDown = true; lastX = e.clientX; lastY = e.clientY; initialClickPos = { x: e.clientX, y: e.clientY };
+        lastX = e.clientX; lastY = e.clientY;
         updatePreviewVoxel(0, 0, 0, false);
         previewLineInstancedMesh.count = 0; previewLineInstancedMesh.instanceMatrix.needsUpdate = true; previewLineVoxels = [];
 
@@ -1876,7 +1884,13 @@ function onPointerMove(e) {
     lastX = e.clientX;
     lastY = e.clientY;
 
-    const isDraggingVoxelAction = (pointerIsDown || doubleTapDragActive) && initialDragVoxelCoords !== null;
+    // Calculate distance moved from initial click position
+    const currentMovedDist = initialClickPos ? Math.hypot(e.clientX - initialClickPos.x, e.clientY - initialClickPos.y) : 0;
+
+    // Determine if a drag operation is active.
+    // A drag starts if pointer is down AND (it's a mouse drag past threshold OR it's a double-tap drag).
+    const isDraggingVoxelAction = (pointerIsDown && e.pointerType === 'mouse' && currentMovedDist > MOVE_PX) || doubleTapDragActive;
+
 
     let currentRayHit = calculateRayTargetVoxelCoords(e.clientX, e.clientY);
     let currentTargetVoxelCoords = null;
@@ -2268,9 +2282,7 @@ window.onload = async function() {
                 previewVoxelMaterial.color.set(currentColor);
             }
         });
-        document.getElementById('color-picker').addEventListener('blur', (e) => {
-            currentColor = e.target.value; localStorage.setItem('voxelEditorColor', currentColor);
-        });
+        // Removed the 'blur' listener for color-picker as 'input' is sufficient and more immediate.
 
         presetBoxes = [document.getElementById('color-preset-1'), document.getElementById('color-preset-2'), document.getElementById('color-preset-3')];
         presetColors.forEach((color, i) => {
@@ -2324,6 +2336,11 @@ window.onload = async function() {
                 mobileControls.classList.add('flex'); // Flex-Anzeige sicherstellen
                 toastContainer.classList.remove('toast-end');
                 toastContainer.classList.add('toast-top-center'); // Apply new mobile toast position
+                currentDrawingAxis = 'y'; // Force Y-axis for mobile
+                // Hide axis-specific controls on mobile
+                document.getElementById('mobile-axis-toggle')?.classList.add('hidden');
+                document.getElementById('mobile-level-up')?.classList.add('hidden');
+                document.getElementById('mobile-level-down')?.classList.add('hidden');
             }
             else { // Desktop-Bildschirm
                 controlsPanel.classList.remove('hidden'); // Desktop-Steuerelemente anzeigen
@@ -2332,6 +2349,10 @@ window.onload = async function() {
                 mobileControls.classList.remove('flex'); // Flex-Anzeige entfernen
                 toastContainer.classList.remove('toast-top-center');
                 toastContainer.classList.add('toast-end'); // Apply desktop toast position
+                // Show axis-specific controls on desktop
+                document.getElementById('mobile-axis-toggle')?.classList.remove('hidden');
+                document.getElementById('mobile-level-up')?.classList.remove('hidden');
+                document.getElementById('mobile-level-down')?.classList.remove('hidden');
             }
             onResize();
             rebuildHelpers(); // Rebuild helpers to reflect potential axis change for mobile
