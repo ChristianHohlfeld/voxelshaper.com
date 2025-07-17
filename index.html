@@ -2095,13 +2095,59 @@ async function generateVoxelIdea() {
     ideaResultDisplay.innerHTML = ''; // Vorherigen Inhalt löschen
 
     try {
-        const prompt = `Generate a creative and detailed description for a voxel model based on the following theme. Include suggestions for main colors, common shapes, and overall structure. Keep it concise and focused on voxel art.
-        Theme: ${promptText}`;
+        // Prompt, um die KI zur Generierung von JSON für Voxel zu bewegen
+        const prompt = `Generate a very small, simple voxel model (max 20 voxels) as a JSON object. The model should represent a concept related to "${promptText}".
+        The JSON should have the following structure:
+        {
+          "model_name": "A concise name for the model",
+          "description": "A brief description of the model.",
+          "voxels": [
+            { "x": integer, "y": integer, "z": integer, "color": "hex_color_string" },
+            // ... up to 20 voxel objects
+          ]
+        }
+        All x, y, z coordinates must be integers between 0 and ${GRID - 1}. Colors should be valid hex color codes (e.g., "#FF0000").
+        Example for a single red voxel at (0,0,0):
+        {
+          "model_name": "Red Dot",
+          "description": "A single red voxel.",
+          "voxels": [
+            { "x": 0, "y": 0, "z": 0, "color": "#FF0000" }
+          ]
+        }
+        `;
 
         let chatHistory = [];
         chatHistory.push({ role: "user", parts: [{ text: prompt }] });
 
-        const payload = { contents: chatHistory };
+        const payload = {
+            contents: chatHistory,
+            generationConfig: {
+                responseMimeType: "application/json",
+                responseSchema: {
+                    type: "OBJECT",
+                    properties: {
+                        "model_name": { "type": "STRING" },
+                        "description": { "type": "STRING" },
+                        "voxels": {
+                            "type": "ARRAY",
+                            "items": {
+                                type: "OBJECT",
+                                properties: {
+                                    "x": { "type": "INTEGER" },
+                                    "y": { "type": "INTEGER" },
+                                    "z": { "type": "INTEGER" },
+                                    "color": { "type": "STRING" }
+                                },
+                                required: ["x", "y", "z", "color"]
+                            }
+                        }
+                    },
+                    required: ["model_name", "description", "voxels"]
+                }
+            }
+        };
+
         const apiKey = ""; // Canvas stellt dies zur Laufzeit bereit
         const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${apiKey}`;
 
@@ -2116,9 +2162,15 @@ async function generateVoxelIdea() {
         if (result.candidates && result.candidates.length > 0 &&
             result.candidates[0].content && result.candidates[0].content.parts &&
             result.candidates[0].content.parts.length > 0) {
-            const text = result.candidates[0].content.parts[0].text;
-            ideaResultDisplay.innerHTML = `<p class="whitespace-pre-wrap">${text}</p>`;
-            ideaResultDisplay.classList.remove('hidden');
+            const jsonResponseText = result.candidates[0].content.parts[0].text;
+            try {
+                const parsedJson = JSON.parse(jsonResponseText);
+                applyAIGeneratedVoxels(parsedJson); // Neue Funktion zum Anwenden der Voxel
+            } catch (parseError) {
+                console.error("Fehler beim Parsen der AI-Antwort als JSON:", parseError);
+                ideaResultDisplay.innerHTML = '<p class="text-error">Fehler: KI-Antwort konnte nicht als Voxel-Modell interpretiert werden. (Ungültiges JSON)</p>';
+                ideaResultDisplay.classList.remove('hidden');
+            }
         } else {
             ideaResultDisplay.innerHTML = '<p class="text-error">Konnte keine Idee generieren. Bitte versuchen Sie es erneut.</p>';
             ideaResultDisplay.classList.remove('hidden');
@@ -2132,6 +2184,44 @@ async function generateVoxelIdea() {
         ideaLoadingIndicator.classList.add('hidden'); // Ladeanzeige ausblenden
     }
 }
+
+// Neue Funktion: Wendet die von der KI generierten Voxel auf die Szene an
+function applyAIGeneratedVoxels(aiData) {
+    if (!aiData || !Array.isArray(aiData.voxels)) {
+        console.error("Ungültige AI generierte Voxeldaten:", aiData);
+        showToast('Fehler', 'Ungültige AI-Voxeldaten erhalten.', 'error');
+        return;
+    }
+
+    const oldState = [...voxels.entries()].map(([id, data]) => {
+        const p = parseKey(id);
+        return { gx: p[0], gy: p[1], gz: p[2], color: data.color };
+    });
+
+    clearAllInternal(true); // Aktuelle Szene leeren (Teil dieses Batches)
+
+    const newVoxels = [];
+    aiData.voxels.forEach(v => {
+        // Koordinaten auf Gittergrenzen klemmen und runden
+        const gx = Math.max(0, Math.min(GRID - 1, Math.round(v.x)));
+        const gy = Math.max(0, Math.min(GRID - 1, Math.round(v.y)));
+        const gz = Math.max(0, Math.min(GRID - 1, Math.round(v.z)));
+        const color = v.color || currentColor; // Fallback auf aktuelle Farbe, wenn KI keine angibt
+
+        _addSingleVoxel(gx, gy, gz, color);
+        newVoxels.push({ gx, gy, gz, color });
+    });
+
+    addCommand('batch', oldState, newVoxels); // Als Batch-Befehl zur Historie hinzufügen
+
+    // Projektmetadaten aus der KI-Ausgabe aktualisieren
+    projectTitle = aiData.model_name || 'KI Generiertes Modell';
+    projectDescription = aiData.description || 'Ein von der KI generiertes Modell.';
+
+    showToast('AI-Modell erstellt', `"${aiData.model_name || 'Unbenannt'}" wurde generiert.`, 'success', 4000);
+    document.getElementById('ideaGeneratorModal').close(); // Modal schließen
+}
+
 
 // Funktion zum Wechseln der Zeichenachse
 function cycleDrawingAxis() {
