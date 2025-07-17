@@ -2096,23 +2096,21 @@ async function generateVoxelIdea() {
 
     try {
         // Prompt, um die KI zur Generierung von JSON für Voxel zu bewegen
-        const prompt = `Generate a very small, simple voxel model (max 20 voxels) as a JSON object. The model should represent a concept related to "${promptText}".
+        const prompt = `Generate a voxel model as a JSON object based on the following theme.
+        The model should be simple to moderately complex, using up to ${GRID * GRID} voxels, depending on the theme and the grid size.
+        A higher grid size (${GRID}x${GRID}x${GRID}) allows for more voxels and finer details.
+        All x, y, z coordinates must be integers between 0 and ${GRID - 1}.
+        Colors should be valid hex color codes (e.g., "#FF0000").
+        
+        Theme: "${promptText}"
+        
         The JSON should have the following structure:
         {
           "model_name": "A concise name for the model",
           "description": "A brief description of the model.",
           "voxels": [
             { "x": integer, "y": integer, "z": integer, "color": "hex_color_string" },
-            // ... up to 20 voxel objects
-          ]
-        }
-        All x, y, z coordinates must be integers between 0 and ${GRID - 1}. Colors should be valid hex color codes (e.g., "#FF0000").
-        Example for a single red voxel at (0,0,0):
-        {
-          "model_name": "Red Dot",
-          "description": "A single red voxel.",
-          "voxels": [
-            { "x": 0, "y": 0, "z": 0, "color": "#FF0000" }
+            // ... up to ${GRID * GRID} voxel objects
           ]
         }
         `;
