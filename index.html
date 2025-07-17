@@ -1489,7 +1489,12 @@ let initialDragVoxelCoords = null; // Die Voxel-Koordinaten, an denen der Drag b
 
 // Diese Funktion berechnet jetzt nur den Pfad, keine modusspezifische Logik
 function getVoxelsOnLine(start, end) {
-    if (!Number.isFinite(start.gx) || !Number.isFinite(start.gy) || !Number.isFinite(start.gz) || !Number.isFinite(end.gx) || !Number.isFinite(end.gy) || !Number.isFinite(end.gz)) { console.error("getVoxelsOnLine: Ungültige (nicht-endliche) Start- oder Endkoordinaten.", start, end); return []; }
+    // Zusätzliche Prüfung auf endliche Koordinaten
+    if (!start || !Number.isFinite(start.gx) || !Number.isFinite(start.gy) || !Number.isFinite(start.gz) ||
+        !end || !Number.isFinite(end.gx) || !Number.isFinite(end.gy) || !Number.isFinite(end.gz)) {
+        console.error("getVoxelsOnLine: Ungültige (nicht-endliche) Start- oder Endkoordinaten.", start, end);
+        return [];
+    }
     const voxelsOnLine = [];
     let x1 = start.gx, y1 = start.gy, z1 = start.gz;
     let x2 = end.gx, y2 = end.gy, z2 = end.gz;
@@ -1544,8 +1549,9 @@ function onPointerUp(e) {
     } else if (!wasDrag) { // It was a single click/tap (not a drag)
         const clickedVoxel = calculateRayTargetVoxelCoords(e.clientX, e.clientY);
         if (clickedVoxel) {
+            // Ensure coordinates are finite before proceeding
             if (!Number.isFinite(clickedVoxel.gx) || !Number.isFinite(clickedVoxel.gy) || !Number.isFinite(clickedVoxel.gz)) {
-                console.warn("Geklickte Voxel-Koordinaten sind nicht-endlich. Einzelklick-Aktion abgebrochen.");
+                console.warn("Clicked voxel coordinates are non-finite. Single click action aborted.");
                 // Reset states to avoid issues with invalid coordinates
                 pointerIsDown = false; doubleTapDragActive = false; lastActionVoxelCoords = null; initialClickPos = null; initialDragVoxelCoords = null; voxelsAtDragStart = null; currentStrokeVoxels.clear(); updatePreviewVoxel(0, 0, 0, false); previewLineInstancedMesh.count = 0;
                 return;
@@ -1652,6 +1658,12 @@ function onPointerDown(e) {
             }
 
             if (initialActionVoxel) {
+                // Ensure coordinates are finite before assigning to initialDragVoxelCoords
+                if (!Number.isFinite(initialActionVoxel.gx) || !Number.isFinite(initialActionVoxel.gy) || !Number.isFinite(initialActionVoxel.gz)) {
+                    console.warn("Initial action voxel has non-finite coordinates. Aborting drag initiation.");
+                    doubleTapDragActive = false; lastActionVoxelCoords = null; initialDragVoxelCoords = null; currentStrokeVoxels.clear(); updatePreviewVoxel(0, 0, 0, false); previewLineInstancedMesh.count = 0;
+                    return;
+                }
                 initialDragVoxelCoords = initialActionVoxel;
                 lastActionVoxelCoords = { ...initialDragVoxelCoords };
                 
@@ -1720,6 +1732,12 @@ function onPointerDown(e) {
         }
 
         if (initialActionVoxel) {
+            // Ensure coordinates are finite before assigning to initialDragVoxelCoords
+            if (!Number.isFinite(initialActionVoxel.gx) || !Number.isFinite(initialActionVoxel.gy) || !Number.isFinite(initialActionVoxel.gz)) {
+                console.warn("Initial action voxel has non-finite coordinates. Aborting drag initiation.");
+                pointerIsDown = false; initialClickPos = null; lastActionVoxelCoords = null; initialDragVoxelCoords = null; currentStrokeVoxels.clear(); updatePreviewVoxel(0, 0, 0, false); previewLineInstancedMesh.count = 0;
+                return;
+            }
             initialDragVoxelCoords = initialActionVoxel;
             lastActionVoxelCoords = { ...initialDragVoxelCoords };
             
@@ -1756,6 +1774,7 @@ function onPointerMove(e) {
     let currentTargetVoxelCoords = null;
 
     if (currentRayHit) {
+        // Ensure coordinates are finite before proceeding
         if (!Number.isFinite(currentRayHit.gx) || !Number.isFinite(currentRayHit.gy) || !Number.isFinite(currentRayHit.gz)) {
             console.warn("calculateRayTargetVoxelCoords returned non-finite coordinates. Skipping this hit.");
             currentRayHit = null;
@@ -1778,6 +1797,27 @@ function onPointerMove(e) {
     }
 
     if (isDraggingVoxelAction) {
+        // Defensive check for lastActionVoxelCoords and initialDragVoxelCoords
+        const startPointForLine = lastActionVoxelCoords || initialDragVoxelCoords;
+        if (!startPointForLine || !Number.isFinite(startPointForLine.gx) || !Number.isFinite(startPointForLine.gy) || !Number.isFinite(startPointForLine.gz)) {
+            console.warn("Start point for line drawing is non-finite. Aborting current drag segment.");
+            // Resetting current stroke related states
+            for (const [gKey, change] of currentStrokeVoxels.entries()) {
+                const [gx, gy, gz] = parseKey(gKey);
+                if (change.initialColor === null) {
+                    _removeSingleVoxel(gx, gy, gz);
+                } else {
+                    _recolorSingleVoxel(gx, gy, gz, change.initialColor);
+                }
+            }
+            currentStrokeVoxels.clear();
+            updatePreviewVoxel(0, 0, 0, false);
+            previewLineInstancedMesh.count = 0;
+            previewLineVoxels = [];
+            lastActionVoxelCoords = null; // Ensure it's reset
+            return; // Skip the rest of the drag logic for this frame
+        }
+
         if (currentTargetVoxelCoords) {
             let finalTargetVoxelCoords = { ...currentTargetVoxelCoords };
 
@@ -1856,9 +1896,9 @@ function onPointerMove(e) {
                         // This handles cases where the drag path crosses itself and "undoes" a previous part of the same stroke
                         const originalChange = currentStrokeVoxels.get(gKey);
                         if (originalChange.initialColor === null) { // If it was added, remove it
-                            _removeSingleVoxel(gx, gy, gz);
+                            _removeSingleVoxel(voxel.gx, voxel.gy, voxel.gz);
                         } else { // If it was deleted or recolored, revert to initial color
-                            _recolorSingleVoxel(gx, gy, gz, originalChange.initialColor);
+                            _recolorSingleVoxel(voxel.gx, voxel.gy, voxel.gz, originalChange.initialColor);
                         }
                         currentStrokeVoxels.delete(gKey); // Remove from current stroke
                     }
