@@ -118,6 +118,33 @@ input[type="color"]::-moz-color-swatch { border: none; border-radius: 50%; }
         padding: 0.25rem;
     }
 }
+.mobile-btn {
+    width: 64px;
+    height: 64px;
+    font-size: 2rem;
+    border-radius: 50%;
+    background-color: var(--fallback-b3, oklch(var(--b3)/1));
+    color: var(--fallback-bc, oklch(var(--bc)/1));
+    border: 2px solid var(--fallback-bc, oklch(var(--bc)/1));
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    box-shadow: 0 4px 6px -1px rgb(0 0 0 / 0.1), 0 2px 4px -2px rgb(0 0 0 / 0.1);
+    transition: background-color 0.2s, transform 0.2s;
+}
+
+.mobile-btn:hover {
+    background-color: oklch(var(--bc)/0.2);
+}
+
+.mobile-btn:active {
+    transform: scale(0.95);
+}
+
+#mobile-controls {
+    gap: 1rem;
+}
 </style>
 </head>
 <body class="bg-base-100 min-h-screen text-base-content flex flex-col">
@@ -265,20 +292,26 @@ input[type="color"]::-moz-color-swatch { border: none; border-radius: 50%; }
 <div id="toast-container" class="toast toast-end z-50"></div>
 
 <div id="mobile-controls" class="hidden md:hidden flex-col gap-3 fixed bottom-4 right-4 z-[1000]">
-    <button class="mobile-btn w-16 h-16 text-3xl rounded-full bg-base-300 text-base-content border-2 border-base-content cursor-pointer flex items-center justify-center shadow-lg hover:bg-base-content/20" id="mobile-undo" aria-label="Rückgängig machen">↺</button>
-    <button class="mobile-btn w-16 h-16 text-3xl rounded-full bg-base-300 text-base-content border-2 border-base-content cursor-pointer flex items-center justify-center shadow-lg hover:bg-base-content/20" id="mobile-redo" aria-label="Wiederholen">↻</button>
-    <button class="mobile-btn w-16 h-16 text-3xl rounded-full bg-base-300 text-base-content border-2 border-base-content cursor-pointer flex items-center justify-center shadow-lg hover:bg-base-content/20" id="mobile-save" aria-label="Speichern">💾</button>
-    <button class="mobile-btn w-16 h-16 text-3xl rounded-full bg-base-300 text-base-content border-2 border-base-content cursor-pointer flex items-center justify-center shadow-lg hover:bg-base-content/20" id="mobile-camera" aria-label="Kamera wechseln">📷</button>
+    <button class="mobile-btn" id="mobile-undo" aria-label="Rückgängig machen">↺</button>
+    <button class="mobile-btn" id="mobile-redo" aria-label="Wiederholen">↻</button>
+    <button class="mobile-btn" id="mobile-save" aria-label="Speichern">💾</button>
+    <button class="mobile-btn" id="mobile-camera" aria-label="Kamera zurücksetzen">📷</button>
 
-    <button class="mobile-btn w-16 h-16 text-3xl rounded-full bg-base-300 text-base-content border-2 border-base-content cursor-pointer flex items-center justify-center shadow-lg hover:bg-base-content/20" id="mobile-mode-toggle" aria-label="Modus wechseln">
+    <button class="mobile-btn" id="mobile-mode-toggle" aria-label="Modus wechseln">
         <span id="mobile-mode-icon" class="fas fa-plus"></span>
     </button>
 
-    <button class="mobile-btn w-16 h-16 text-3xl rounded-full bg-base-300 text-base-content border-2 border-base-content cursor-pointer flex items-center justify-center shadow-lg hover:bg-base-content/20" id="mobile-color-picker-btn" aria-label="Farbe auswählen">🎨</button>
+    <button class="mobile-btn" id="mobile-color-picker-btn" aria-label="Farbe auswählen">🎨</button>
     <input type="color" id="mobile-color-input" value="#ffffff" class="hidden w-0 h-0 opacity-0 absolute pointer-events-none">
 
-    <button class="mobile-btn w-16 h-16 text-3xl rounded-full bg-base-300 text-base-content border-2 border-base-content cursor-pointer flex items-center justify-center shadow-lg hover:bg-base-content/20" id="mobile-generate-idea" aria-label="Voxel-Idee generieren">✨</button>
-    <button class="mobile-btn w-16 h-16 text-3xl rounded-full bg-base-300 text-base-content border-2 border-base-content cursor-pointer flex items-center justify-center shadow-lg hover:bg-base-content/20" id="mobile-login-logout" aria-label="Anmelden oder Abmelden">🔑</button>
+    <button class="mobile-btn" id="mobile-axis-toggle" aria-label="Zeichenachse wechseln">
+        <span id="mobile-axis-icon" class="fas fa-arrows-alt-v"></span>
+    </button>
+    <button class="mobile-btn" id="mobile-level-up" aria-label="Ebene erhöhen">⬆️</button>
+    <button class="mobile-btn" id="mobile-level-down" aria-label="Ebene verringern">⬇️</button>
+
+    <button class="mobile-btn" id="mobile-generate-idea" aria-label="Voxel-Idee generieren">✨</button>
+    <button class="mobile-btn" id="mobile-login-logout" aria-label="Anmelden oder Abmelden">🔑</button>
 </div>
 
 <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/build/three.min.js"></script>
@@ -744,7 +777,6 @@ function rebuildHelpers() {
     if (gridHelper) scene.remove(gridHelper); if (boxHelper) scene.remove(boxHelper);
     const size = GRID * VS;
     if (isMobile) {
-        currentDrawingAxis = 'y';
         gridHelper = new THREE.GridHelper(size, GRID, 0x444444, 0x444444 ); gridHelper.position.set(size / 2, activeDrawingLevel.y * VS, size / 2);
     } else {
         if (currentDrawingAxis === 'y') {
@@ -759,6 +791,11 @@ function rebuildHelpers() {
     const edges = new THREE.EdgesGeometry(new THREE.BoxGeometry(size, size, size));
     boxHelper = new THREE.LineSegments(edges, new THREE.LineBasicMaterial({ color: 0x00ffff }));
     boxHelper.position.set(size / 2, size / 2, size / 2); scene.add(boxHelper);
+
+    const mobileAxisIcon = document.getElementById('mobile-axis-icon');
+    if (mobileAxisIcon) {
+        mobileAxisIcon.className = AxisIcons[currentDrawingAxis];
+    }
 }
 
 function updateGridHelperPosition() {
@@ -1088,7 +1125,7 @@ function saveJSON() {
     a.click();
     document.body.removeChild(a);
     URL.revokeObjectURL(url);
-    showToast('Speichern erfolgreich', 'Projekt als JSON-Datei gespeichert.', 'success');
+    showToast('Speichern erfolgreich', 'Projekt als JSON-Datei gespeichert.', 'success', 5000);
 }
 
 function resetToDefaultProject() {
@@ -1110,7 +1147,7 @@ function resetToDefaultProject() {
     activePresetIndex = -1; removeImageTemplate(true); history.length = 0; historyPointer = -1;
     previewLineInstancedMesh.count = 0; previewLineInstancedMesh.instanceMatrix.needsUpdate = true; previewLineVoxels = [];
     projectTitle = ''; projectDescription = ''; projectCategory = 'Allgemein'; projectTags = []; projectRemixOf = ''; projectSourceJsonUrl = ''; projectVisibility = 'public';
-    rebuildHelpers(); resetCameraPosition(); showToast('Projekt zurückgesetzt', 'Das Projekt wurde auf den Standardzustand zurückgesetzt.', 'info');
+    rebuildHelpers(); resetCameraPosition(); showToast('Projekt zurückgesetzt', 'Das Projekt wurde auf den Standardzustand zurückgesetzt.', 'info', 5000);
 }
 
 function loadProjectData(projectData) {
@@ -1187,13 +1224,13 @@ function loadProjectData(projectData) {
         previewLineInstancedMesh.count = 0; previewLineInstancedMesh.instanceMatrix.needsUpdate = true; previewLineVoxels = [];
         resetCameraPosition();
     } catch (error) {
-        showToast('Fehler', 'Fehler beim Laden der Datei. Stellen Sie sicher, dass es sich um eine gültige JSON-Datei handelt. Fehler: ' + error.message, 'error');
+        showToast('Fehler', 'Fehler beim Laden der Datei. Stellen Sie sicher, dass es sich um eine gültige JSON-Datei handelt. Fehler: ' + error.message, 'error', 5000);
         resetToDefaultProject();
     }
 }
 
 async function loadProjectFromModelId(modelId) {
-    showToast('Lade Projekt', `Lade Projekt mit ID: ${modelId}...`, 'info');
+    showToast('Lade Projekt', `Lade Projekt mit ID: ${modelId}...`, 'info', 5000);
     try {
         const docSnap = await window.firebase.getDoc(window.firebase.doc(db, "models", modelId));
         if (docSnap.exists()) {
@@ -1204,13 +1241,13 @@ async function loadProjectFromModelId(modelId) {
                 if (pData && pData.projectData) {
                     projectRemixOf = modelId; projectSourceJsonUrl = window.location.href;
                     loadProjectData(pData);
-                    showToast('Projekt geladen', `Projekt "${docSnap.data().title}" erfolgreich geladen.`, 'success');
-                } else { showToast('Fehler', 'Projektdaten im Dokument nicht gefunden.', 'error'); resetToDefaultProject(); }
-            } else { showToast('Zugriff verweigert', 'Sie haben keine Berechtigung, dieses private Projekt zu laden.', 'error'); resetToDefaultProject(); }
-        } else { showToast('Projekt nicht gefunden', `Kein Projekt mit ID "${modelId}" gefunden.`, 'warning'); resetToDefaultProject(); }
+                    showToast('Projekt geladen', `Projekt "${docSnap.data().title}" erfolgreich geladen.`, 'success', 5000);
+                } else { showToast('Fehler', 'Projektdaten im Dokument nicht gefunden.', 'error', 5000); resetToDefaultProject(); }
+            } else { showToast('Zugriff verweigert', 'Sie haben keine Berechtigung, dieses private Projekt zu laden.', 'error', 5000); resetToDefaultProject(); }
+        } else { showToast('Projekt nicht gefunden', `Kein Projekt mit ID "${modelId}" gefunden.`, 'warning', 5000); resetToDefaultProject(); }
     } catch (error) {
-        if (error.code === 'permission-denied') showToast('Zugriff verweigert', `Berechtigungsfehler beim Laden des Projekts. Stellen Sie sicher, dass das Modell öffentlich ist oder Sie der Eigentümer sind.`, 'error');
-        else showToast('Fehler', `Fehler beim Laden des Projekts: ${error.message}`, 'error');
+        if (error.code === 'permission-denied') showToast('Zugriff verweigert', `Berechtigungsfehler beim Laden des Projekts. Stellen Sie sicher, dass das Modell öffentlich ist oder Sie der Eigentümer sind.`, 'error', 5000);
+        else showToast('Fehler', `Fehler beim Laden des Projekts: ${error.message}`, 'error', 5000);
         resetToDefaultProject();
     }
 }
@@ -1223,15 +1260,16 @@ function loadJSON(event) {
             const projectData = JSON.parse(e.target.result);
             projectRemixOf = ''; projectSourceJsonUrl = ''; loadProjectData(projectData);
         } catch (error) {
-            showToast('Fehler', 'Fehler beim Parsen der Datei. Stellen Sie sicher, dass es sich um eine gültige JSON-Datei handelt. Fehler: ' + error.message, 'error');
+            showToast('Fehler', 'Fehler beim Parsen der Datei. Stellen Sie sicher, dass es sich um eine gültige JSON-Datei handelt. Fehler: ' + error.message, 'error', 5000);
             resetToDefaultProject();
         }
     };
     reader.readAsText(file);
 }
 
-function exportSTL() {
-    if (voxels.size === 0) { showToast('Export fehlgeschlagen', 'Keine Voxel zum Exportieren vorhanden!', 'warning'); return; }
+async function exportSTL() {
+    if (voxels.size === 0) { showToast('Export fehlgeschlagen', 'Keine Voxel zum Exportieren vorhanden!', 'warning', 5000); return; }
+    showToast('Exportiere STL', 'Erzeuge STL-Modell...', 'info', 5000);
     const geometriesToMerge = []; const tempBoxGeometry = new THREE.BoxGeometry(VS, VS, VS);
     voxels.forEach((data, k) => {
         const [x, y, z] = parseKey(k);
@@ -1244,17 +1282,18 @@ function exportSTL() {
     });
     const mergedGeometry = geometriesToMerge.length > 0 ? THREE.BufferGeometryUtils.mergeBufferGeometries(geometriesToMerge, true) : new THREE.BufferGeometry();
     const tempMesh = new THREE.Mesh(mergedGeometry);
-    if (typeof THREE.STLExporter === 'undefined') { showToast('Export fehlgeschlagen', 'STLExporter-Bibliothek nicht geladen.', 'error'); return; }
+    if (typeof THREE.STLExporter === 'undefined') { showToast('Export fehlgeschlagen', 'STLExporter-Bibliothek nicht geladen.', 'error', 5000); return; }
     const exporter = new THREE.STLExporter(); const result = exporter.parse(tempMesh);
     const blob = new Blob([result], { type: 'application/octet-stream' });
     const url = URL.createObjectURL(blob); const a = document.createElement('a'); a.href = url; a.download = 'voxel_model.stl';
     document.body.appendChild(a); a.click(); document.body.removeChild(a); URL.revokeObjectURL(url);
     tempBoxGeometry.dispose(); if (mergedGeometry) mergedGeometry.dispose();
-    showToast('Export erfolgreich', 'STL-Modell erfolgreich exportiert!', 'success');
+    showToast('Export erfolgreich', 'STL-Modell erfolgreich exportiert!', 'success', 5000);
 }
 
-function exportOBJ() {
-    if (voxels.size === 0) { showToast('Export fehlgeschlagen', 'Keine Voxel zum Exportieren vorhanden!', 'warning'); return; }
+async function exportOBJ() {
+    if (voxels.size === 0) { showToast('Export fehlgeschlagen', 'Keine Voxel zum Exportieren vorhanden!', 'warning', 5000); return; }
+    showToast('Exportiere OBJ', 'Erzeuge OBJ-Modell...', 'info', 5000);
     const voxelsToExport = []; let maxX = 0, maxY = 0, maxZ = 0;
     voxels.forEach((data, k) => {
         const [x, y, z] = parseKey(k); voxelsToExport.push({ x, y, z, color: data.color });
@@ -1262,17 +1301,18 @@ function exportOBJ() {
     });
     const voxModel = new VoxelShaperIO.VoxModel(maxX + 1, maxY + 1, maxZ + 1, voxelsToExport);
     VoxelShaperIO.saveBlob(VoxelShaperIO.voxToOBJ(voxModel, VS), 'voxel_model.obj');
-    showToast('Export erfolgreich', 'OBJ-Modell erfolgreich mit Farben exportiert!', 'success');
+    showToast('Export erfolgreich', 'OBJ-Modell erfolgreich mit Farben exportiert!', 'success', 5000);
 }
 
-function exportGLB() {
+async function exportGLB() {
     if (voxels.size === 0) {
-        showToast('Export fehlgeschlagen', 'Keine Voxel zum Exportieren vorhanden!', 'warning');
+        showToast('Export fehlgeschlagen', 'Keine Voxel zum Exportieren vorhanden!', 'warning', 5000);
         return;
     }
+    showToast('Exportiere GLB', 'Erzeuge GLB-Modell...', 'info', 5000);
 
     if (typeof THREE.GLTFExporter === 'undefined') {
-        showToast('Export fehlgeschlagen', 'GLTFExporter-Bibliothek nicht geladen. Bitte versuchen Sie es erneut.', 'error');
+        showToast('Export fehlgeschlagen', 'GLTFExporter-Bibliothek nicht geladen. Bitte versuchen Sie es erneut.', 'error', 5000);
         return;
     }
 
@@ -1309,10 +1349,10 @@ function exportGLB() {
             a.click();
             document.body.removeChild(a);
             URL.revokeObjectURL(url);
-            showToast('Export erfolgreich', 'GLB-Modell erfolgreich exportiert!', 'success');
+            showToast('Export erfolgreich', 'GLB-Modell erfolgreich exportiert!', 'success', 5000);
         },
         function (error) {
-            showToast('Export fehlgeschlagen', `Fehler beim Exportieren des GLB-Modells: ${error.message}`, 'error');
+            showToast('Export fehlgeschlagen', `Fehler beim Exportieren des GLB-Modells: ${error.message}`, 'error', 5000);
         },
         { binary: true }
     );
@@ -1326,7 +1366,7 @@ function exportGLB() {
 }
 
 
-function showToast(title, message, type = 'info', duration = 3000) {
+function showToast(title, message, type = 'info', duration = 5000) {
     const toast = document.createElement('div');
     toast.className = `alert shadow-lg ${type === 'info' ? 'alert-info' : type === 'success' ? 'alert-success' : type === 'error' ? 'alert-error' : type === 'warning' ? 'alert-warning' : ''}`;
     toast.innerHTML = `
@@ -1388,10 +1428,10 @@ function handleImageFileSelect(event) {
                 scaledHeight: planeHeight
             };
             document.getElementById('removeImageTemplateBtn').classList.remove('hidden');
-            showToast('Bildvorlage geladen', 'Bild als Vorlage erfolgreich geladen.', 'success');
+            showToast('Bildvorlage geladen', 'Bild als Vorlage erfolgreich geladen.', 'success', 5000);
         };
         img.onerror = (err) => {
-            showToast('Fehler', 'Bild konnte nicht geladen werden. Ungültiges Bildformat?', 'error');
+            showToast('Fehler', 'Bild konnte nicht geladen werden. Ungültiges Bildformat?', 'error', 5000);
             templateImageMesh = null;
             templateImageData = null;
             document.getElementById('removeImageTemplateBtn').classList.add('hidden');
@@ -1399,7 +1439,7 @@ function handleImageFileSelect(event) {
         img.src = base64Image;
     };
     reader.onerror = (err) => {
-        showToast('Fehler', 'Fehler beim Lesen der Bilddatei.', 'error');
+        showToast('Fehler', 'Fehler beim Lesen der Bilddatei.', 'error', 5000);
     };
     reader.readAsDataURL(file);
 
@@ -1409,7 +1449,7 @@ function removeImageTemplate(fromLoad = false) {
     if (templateImageMesh) {
         scene.remove(templateImageMesh); templateImageMesh.geometry.dispose(); templateImageMesh.material.dispose();
         templateImageMesh = null; templateImageData = null; document.getElementById('removeImageTemplateBtn').classList.add('hidden');
-        if (!fromLoad) showToast('Bildvorlage entfernt', 'Bildvorlage erfolgreich entfernt.', 'info');
+        if (!fromLoad) showToast('Bildvorlage entfernt', 'Bildvorlage erfolgreich entfernt.', 'info', 5000);
     }
 }
 
@@ -1418,13 +1458,13 @@ function getCurrentBlockDimensions() {
 }
 
 async function loginLogout() {
-    if (auth.currentUser) { try { await window.firebase.signOut(auth); showToast('Abgemeldet', 'Sie wurden erfolgreich abgemeldet.', 'info'); } catch (e) { showToast('Fehler beim Abmelden', `Fehler: ${e.message}`, 'error'); } }
+    if (auth.currentUser) { try { await window.firebase.signOut(auth); showToast('Abgemeldet', 'Sie wurden erfolgreich abgemeldet.', 'info', 5000); } catch (e) { showToast('Fehler beim Abmelden', `Fehler: ${e.message}`, 'error', 5000); } }
     else openAuthModal();
 }
 
 function openUploadModal() {
     if (!currentUserId) { openAuthModal(); return; }
-    if (voxels.size === 0) { showToast('Upload fehlgeschuldert', 'Die Szene ist leer. Bitte erstellen Sie zuerst ein Modell.', 'warning'); return; }
+    if (voxels.size === 0) { showToast('Upload fehlgeschuldert', 'Die Szene ist leer. Bitte erstellen Sie zuerst ein Modell.', 'warning', 5000); return; }
     document.getElementById('uploadTitle').value = projectTitle; document.getElementById('uploadDescription').value = projectDescription;
     document.getElementById('uploadCategory').value = projectCategory; document.getElementById('uploadTags').value = projectTags.join(', ');
     document.querySelector(`input[name="uploadVisibility"][value="${projectVisibility}"]`).checked = true;
@@ -1436,15 +1476,15 @@ function openUploadModal() {
 }
 
 async function uploadProjectToHub() {
-    if (!currentUserId) { showToast('Fehler', 'Nicht angemeldet. Bitte melden Sie sich an, um hochzuladen.', 'error'); return; }
-    if (voxels.size === 0) { showToast('Upload fehlgeschuldert', 'Die Szene ist leer. Bitte erstellen Sie zuerst ein Modell.', 'warning'); return; }
+    if (!currentUserId) { showToast('Fehler', 'Nicht angemeldet. Bitte melden Sie sich an, um hochzuladen.', 'error', 5000); return; }
+    if (voxels.size === 0) { showToast('Upload fehlgeschuldert', 'Die Szene ist leer. Bitte erstellen Sie zuerst ein Modell.', 'warning', 5000); return; }
     const title = document.getElementById('uploadTitle').value.trim();
     const description = document.getElementById('uploadDescription').value.trim();
     const category = document.getElementById('uploadCategory').value;
     const tags = document.getElementById('uploadTags').value.split(',').map(tag => tag.trim()).filter(tag => tag !== '');
     const visibility = document.querySelector('input[name="uploadVisibility"]:checked').value;
-    if (!title) { showToast('Fehler', 'Bitte geben Sie einen Titel für Ihr Projekt ein.', 'warning'); return; }
-    if (!category) { showToast('Fehler', 'Bitte wählen Sie eine Kategorie für Ihr Projekt aus.', 'warning'); 'warning'; return; }
+    if (!title) { showToast('Fehler', 'Bitte geben Sie einen Titel für Ihr Projekt ein.', 'warning', 5000); return; }
+    if (!category) { showToast('Fehler', 'Bitte wählen Sie eine Kategorie für Ihr Projekt aus.', 'warning', 5000); 'warning'; return; }
     showToast('Lade hoch...', 'Ihr Projekt wird hochgeladen. Bitte warten Sie...', 'info', 5000);
     try {
         const voxelMap = {}; voxels.forEach((v, k) => { const [gx, gy, gz] = parseKey(k); voxelMap[`${gx},${gy},${gz}`] = v.color; });
@@ -1471,18 +1511,18 @@ async function uploadProjectToHub() {
         const docRef = await window.firebase.addDoc(window.firebase.collection(db, "models"), firestoreDocument);
         projectTitle = title; projectDescription = description; projectCategory = category; projectTags = tags; projectVisibility = visibility;
         if (!projectSourceJsonUrl) projectSourceJsonUrl = `https://hub.voxelshaper.com?modelId=${docRef.id}`;
-        showToast('Erfolgreich hochgeladen', `Ihr Projekt wurde erfolgreich hochgeladen! ID: ${docRef.id}`, 'success');
-    } catch (e) { showToast('Fehler beim Hochladen', `Fehler: ${e.message}`, 'error'); }
+        showToast('Erfolgreich hochgeladen', `Ihr Projekt wurde erfolgreich hochgeladen! ID: ${docRef.id}`, 'success', 5000);
+    } catch (e) { showToast('Fehler beim Hochladen', `Fehler: ${e.message}`, 'error', 5000); }
     finally { document.getElementById('uploadProjectModal').close(); }
 }
 
 function openAuthModal() { document.getElementById('authModal').showModal(); document.getElementById('emailLoginForm').classList.add('hidden'); }
 function closeAuthModal() { document.getElementById('authModal').close(); cvs.focus(); }
 
-window.signInWithGoogle = async function() { try { await window.firebase.signInWithPopup(auth, new window.firebase.GoogleAuthProvider()); showToast('Anmeldung erfolgreich', 'Mit Google angemeldet.', 'success'); closeAuthModal(); } catch (e) { showToast('Anmeldefehler', `Google: ${e.message}`, 'error'); } }
-window.signInWithGithub = async function() { try { await window.firebase.signInWithPopup(auth, new window.firebase.GithubAuthProvider()); showToast('Anmeldung erfolgreich', 'Mit GitHub angemeldet.', 'success'); closeAuthModal(); } catch (e) { showToast('Anmelmelfehler', `GitHub: ${e.message}`, 'error'); } }
-window.signInEmailPassword = async function() { const email = document.getElementById('emailInput').value; const password = document.getElementById('passwordInput').value; try { await window.firebase.signInWithEmailAndPassword(auth, email, password); showToast('Anmeldung erfolgreich', 'Mit E-Mail angemeldet.', 'success'); closeAuthModal(); } catch (e) { showToast('Anmeldefehler', `E-Mail: ${e.message}`, 'error'); } }
-window.signUpEmailPassword = async function() { const email = document.getElementById('emailInput').value; const password = document.getElementById('passwordInput').value; try { await window.firebase.createUserWithEmailAndPassword(auth, email, password); showToast('Registrierung erfolgreich', 'Konto erstellt und angemeldet.', 'success'); closeAuthModal(); } catch (e) { showToast('Registrierungsfehler', `E-Mail: ${e.message}`, 'error'); } }
+window.signInWithGoogle = async function() { try { await window.firebase.signInWithPopup(auth, new window.firebase.GoogleAuthProvider()); showToast('Anmeldung erfolgreich', 'Mit Google angemeldet.', 'success', 5000); closeAuthModal(); } catch (e) { showToast('Anmeldefehler', `Google: ${e.message}`, 'error', 5000); } }
+window.signInWithGithub = async function() { try { await window.firebase.signInWithPopup(auth, new window.firebase.GithubAuthProvider()); showToast('Anmeldung erfolgreich', 'Mit GitHub angemeldet.', 'success', 5000); closeAuthModal(); } catch (e) { showToast('Anmelmelfehler', `GitHub: ${e.message}`, 'error', 5000); } }
+window.signInEmailPassword = async function() { const email = document.getElementById('emailInput').value; const password = document.getElementById('passwordInput').value; try { await window.firebase.signInWithEmailAndPassword(auth, email, password); showToast('Anmeldung erfolgreich', 'Mit E-Mail angemeldet.', 'success', 5000); closeAuthModal(); } catch (e) { showToast('Anmeldefehler', `E-Mail: ${e.message}`, 'error', 5000); } }
+window.signUpEmailPassword = async function() { const email = document.getElementById('emailInput').value; const password = document.getElementById('passwordInput').value; try { await window.firebase.createUserWithEmailAndPassword(auth, email, password); showToast('Registrierung erfolgreich', 'Konto erstellt und angemeldet.', 'success', 5000); closeAuthModal(); } catch (e) { showToast('Registrierungsfehler', `E-Mail: ${e.message}`, 'error', 5000); } }
 
 function closeAllModals() {
     const modals = ['clearConfirmationModal', 'uploadProjectModal', 'authModal', 'ideaGeneratorModal'];
@@ -1603,7 +1643,7 @@ function onPointerUp(e) {
     
     const totalMovedDist = initialClickPos ? Math.hypot(e.clientX - initialClickPos.x, e.clientY - initialClickPos.y) : 0;
 
-    const wasDrag = (totalMovedDist > MOVE_PX) || doubleTapDragActive || isDragging;
+    const wasDrag = (totalMovedDist > MOVE_PX) || isDragging;
 
     if (wasDrag) {
         if (currentStrokeVoxels.size > 0) {
@@ -1622,7 +1662,7 @@ function onPointerUp(e) {
         if (initialTargetVoxelCoords) {
             const finalVoxelCoords = { ...initialTargetVoxelCoords };
 
-            const rawTargetAtDown = calculateRayTargetVoxelCoords(initialClickPos.x, initialClickPos.x);
+            const rawTargetAtDown = calculateRayTargetVoxelCoords(initialClickPos.x, initialClickPos.y);
             if (currentMode === Modes.ADD && rawTargetAtDown && rawTargetAtDown.faceNormal) {
                 finalVoxelCoords.gx = rawTargetAtDown.gx + rawTargetAtDown.faceNormal.x;
                 finalVoxelCoords.gy = rawTargetAtDown.gy + rawTargetAtDown.faceNormal.y;
@@ -1669,7 +1709,11 @@ function onPointerDown(e) {
         rightMouseButtonDown = true;
         cvs.focus();
         cvs.requestPointerLock();
-        
+        return;
+    }
+    if (isPointerLocked) return;
+
+    if (e.button === 0 && e.altKey) { 
         const hitResult = calculateRayTargetVoxelCoords(e.clientX, e.clientY);
         if (hitResult && hitResult.hitExistingVoxel) {
             const gKey = key(hitResult.gx, hitResult.gy, hitResult.gz);
@@ -1684,9 +1728,8 @@ function onPointerDown(e) {
                 showToast('Farbe aufgenommen', `Farbe: ${pickedColor}`, 'info', 2000);
             }
         }
-        return;
+        return; 
     }
-    if (isPointerLocked) return;
 
     voxelsAtDragStart = new Map(voxels);
     currentStrokeVoxels.clear();
@@ -1704,7 +1747,6 @@ function onPointerDown(e) {
     }
 
     if (e.pointerType === 'touch') {
-        if (suppressNextTap) { suppressNextTap = false; return; }
         activePointers.set(e.pointerId, { x: e.clientX, y: e.clientY, pointerType: e.pointerType });
         touchIndicator.style.display = 'block'; touchIndicator.style.left = `${e.clientX}px`; touchIndicator.style.top = `${e.clientY}px`;
         const now = performance.now();
@@ -1727,55 +1769,23 @@ function onPointerDown(e) {
             return;
         }
 
-        const TAP_DIST_TH = 10;
-        const DT_MS = 250;
-        if (tapCandidate && (now - tapCandidate.time < DT_MS) && (Math.hypot(e.clientX - tapCandidate.x, e.clientY - tapCandidate.y) < TAP_DIST_TH)) {
-            doubleTapDragActive = true; tapCandidate = null;
+        lastActionVoxelCoords = null; currentStrokeVoxels.clear();
+        previewLineInstancedMesh.count = 0; previewLineInstancedMesh.instanceMatrix.needsUpdate = true; previewLineVoxels = [];
+        updatePreviewVoxel(0, 0, 0, false);
+        gestureState.initialPointerCount = activePointers.size;
+        if (activePointers.size === 1) { gestureState.type = 'rotate'; gestureState.lastMid = { x: e.clientX, y: e.clientY }; }
+        
+        if (initialTargetVoxelCoords) {
             isDragging = true;
+            initialDragVoxelCoords = { ...initialTargetVoxelCoords };
+            lastActionVoxelCoords = { ...initialTargetVoxelCoords };
             
-            let initialActionVoxel = null;
-            if (initialTargetVoxelCoords) {
-                if (currentMode === Modes.ADD) {
-                    if (initialTargetVoxelCoords.faceNormal) {
-                        const proposedVoxel = { gx: initialTargetVoxelCoords.gx + initialTargetVoxelCoords.faceNormal.x, gy: initialTargetVoxelCoords.gy + initialTargetVoxelCoords.faceNormal.y, gz: initialTargetVoxelCoords.gz + initialTargetVoxelCoords.faceNormal.z };
-                        proposedVoxel.gx = Math.max(0, Math.min(GRID - 1, proposedVoxel.gx)); proposedVoxel.gy = Math.max(0, Math.min(GRID - 1, proposedVoxel.gy)); proposedVoxel.gz = Math.max(0, Math.min(GRID - 1, proposedVoxel.gz));
-                        if (!voxelsAtDragStart.has(key(proposedVoxel.gx, proposedVoxel.gy, proposedVoxel.gz))) { initialActionVoxel = proposedVoxel; } else { doubleTapDragActive = false; isDragging = false; return; }
-                    } else {
-                        initialTargetVoxelCoords.gx = Math.max(0, Math.min(GRID - 1, initialTargetVoxelCoords.gx)); initialTargetVoxelCoords.gy = Math.max(0, Math.min(GRID - 1, initialTargetVoxelCoords.gy)); initialTargetVoxelCoords.gz = Math.max(0, Math.min(GRID - 1, initialTargetVoxelCoords.gz));
-                        if (!voxelsAtDragStart.has(key(initialTargetVoxelCoords.gx, initialTargetVoxelCoords.gy, initialTargetVoxelCoords.gz))) { initialActionVoxel = { gx: initialTargetVoxelCoords.gx, gy: initialTargetVoxelCoords.gy, gz: initialTargetVoxelCoords.gz }; } else { doubleTapDragActive = false; isDragging = false; return; }
-                    }
-                } else {
-                    if (!initialTargetVoxelCoords.hitExistingVoxel) {
-                        doubleTapDragActive = false; isDragging = false;
-                        return;
-                    }
-                    initialActionVoxel = { gx: initialTargetVoxelCoords.gx, gy: initialTargetVoxelCoords.gy, gz: initialTargetVoxelCoords.gz };
-                }
-            } else {
-                doubleTapDragActive = false; isDragging = false;
-                return;
-            }
-
-            if (initialActionVoxel) {
-                initialDragVoxelCoords = { ...initialActionVoxel };
-                lastActionVoxelCoords = { ...initialActionVoxel };
-                const gKey = key(initialActionVoxel.gx, initialActionVoxel.gy, initialActionVoxel.gz);
-                const initialColor = voxelsAtDragStart.has(gKey) ? voxelsAtDragStart.get(gKey).color : null;
-                
-                performVoxelModification(initialActionVoxel.gx, initialActionVoxel.gy, initialActionVoxel.gz, currentMode, currentColor);
-                const finalColor = voxels.has(gKey) ? voxels.get(gKey).color : null;
-                currentStrokeVoxels.set(gKey, { originalColor: initialColor, finalColor: finalColor });
-
-                updatePreviewVoxel(0, 0, 0, false);
-                previewLineInstancedMesh.count = 0;
-            }
-        } else {
-            tapCandidate = { x: e.clientX, y: e.clientY, time: now };
-            lastActionVoxelCoords = null; currentStrokeVoxels.clear();
-            previewLineInstancedMesh.count = 0; previewLineInstancedMesh.instanceMatrix.needsUpdate = true; previewLineVoxels = [];
-            updatePreviewVoxel(0, 0, 0, false);
-            gestureState.initialPointerCount = activePointers.size;
-            if (activePointers.size === 1) { gestureState.type = 'rotate'; gestureState.lastMid = { x: e.clientX, y: e.clientY }; }
+            const gKey = key(initialTargetVoxelCoords.gx, initialTargetVoxelCoords.gy, initialTargetVoxelCoords.gz);
+            const initialColor = voxelsAtDragStart.has(gKey) ? voxelsAtDragStart.get(gKey).color : null;
+            
+            performVoxelModification(initialTargetVoxelCoords.gx, initialTargetVoxelCoords.gy, initialTargetVoxelCoords.gz, currentMode, currentColor);
+            const finalColor = voxels.has(gKey) ? voxels.get(gKey).color : null;
+            currentStrokeVoxels.set(gKey, { originalColor: initialColor, finalColor: finalColor });
         }
         return;
     }
@@ -1808,7 +1818,7 @@ function onPointerMove(e) {
 
     const currentMovedDist = initialClickPos ? Math.hypot(e.clientX - initialClickPos.x, e.clientY - initialClickPos.y) : 0;
     
-    const shouldStartDrag = pointerIsDown && (currentMovedDist > MOVE_PX || doubleTapDragActive);
+    const shouldStartDrag = pointerIsDown && (currentMovedDist > MOVE_PX);
 
     let currentRayHit = calculateRayTargetVoxelCoords(e.clientX, e.clientY);
     let currentTargetVoxelCoords = null;
@@ -1885,7 +1895,7 @@ function onPointerMove(e) {
                 }
             }
             lastActionVoxelCoords = { ...endPointForLine };
-            updatePreviewVoxel(0, 0, 0, false);
+            updatePreviewVoxel(currentTargetVoxelCoords.gx, currentTargetVoxelCoords.gy, currentTargetVoxelCoords.gz, true);
             previewLineInstancedMesh.count = 0;
 
         } else {
@@ -1955,7 +1965,7 @@ async function generateVoxelIdea() {
     const ideaLoadingIndicator = document.getElementById('ideaLoadingIndicator');
 
     if (!promptText) {
-        showToast('Eingabe erforderlich', 'Bitte geben Sie ein Thema oder Konzept ein.', 'warning');
+        showToast('Eingabe erforderlich', 'Bitte geben Sie ein Thema oder Konzept ein.', 'warning', 5000);
         return;
     }
 
@@ -2049,7 +2059,7 @@ async function generateVoxelIdea() {
 
 function applyAIGeneratedVoxels(aiData) {
     if (!aiData || !Array.isArray(aiData.voxels)) {
-        showToast('Fehler', 'Ungültige AI-Voxeldaten erhalten.', 'error');
+        showToast('Fehler', 'Ungültige AI-Voxeldaten erhalten.', 'error', 5000);
         return;
     }
 
@@ -2079,13 +2089,12 @@ function applyAIGeneratedVoxels(aiData) {
     projectTitle = aiData.model_name || 'KI Generiertes Modell';
     projectDescription = aiData.description || 'Ein von der KI generiertes Modell.';
 
-    showToast('AI-Modell erstellt', `"${aiData.model_name || 'Unbenannt'}" wurde generiert.`, 'success', 4000);
+    showToast('AI-Modell erstellt', `"${aiData.model_name || 'Unbenannt'}" wurde generiert.`, 'success', 5000);
     document.getElementById('ideaGeneratorModal').close();
 }
 
 
 function cycleDrawingAxis() {
-    if (isMobile) return;
     const axes = ['x', 'y', 'z'];
     const currentIndex = axes.indexOf(currentDrawingAxis);
     currentDrawingAxis = axes[(currentIndex + 1) % axes.length];
@@ -2094,7 +2103,6 @@ function cycleDrawingAxis() {
 }
 
 function moveDrawingLevel(direction) {
-    if (isMobile) return;
     if (currentMode !== Modes.ADD && currentMode !== Modes.DRAW) {
         showToast('Hinweis', 'Ebenensteuerung nur im Hinzufügen- oder Zeichenmodus verfügbar.', 'warning', 2000);
         return;
@@ -2255,16 +2263,20 @@ window.onload = async function() {
             isMobile = e.matches;
             const controlsPanel = document.getElementById('controls');
             const mobileControls = document.getElementById('mobile-controls');
+            const mobileAxisToggle = document.getElementById('mobile-axis-toggle');
+            const mobileLevelUp = document.getElementById('mobile-level-up');
+            const mobileLevelDown = document.getElementById('mobile-level-down');
+
             if (e.matches) {
                 controlsPanel.classList.add('hidden');
                 mobileControls.classList.remove('hidden');
                 mobileControls.classList.add('flex');
                 toastContainer.classList.remove('toast-end');
                 toastContainer.classList.add('toast-top-center');
-                currentDrawingAxis = 'y';
-                document.getElementById('mobile-axis-toggle')?.classList.add('hidden');
-                document.getElementById('mobile-level-up')?.classList.add('hidden');
-                document.getElementById('mobile-level-down')?.classList.add('hidden');
+                
+                mobileAxisToggle.classList.remove('hidden');
+                mobileLevelUp.classList.remove('hidden');
+                mobileLevelDown.classList.remove('hidden');
             }
             else {
                 controlsPanel.classList.remove('hidden');
@@ -2273,9 +2285,10 @@ window.onload = async function() {
                 mobileControls.classList.remove('flex');
                 toastContainer.classList.remove('toast-top-center');
                 toastContainer.classList.add('toast-end');
-                document.getElementById('mobile-axis-toggle')?.classList.remove('hidden');
-                document.getElementById('mobile-level-up')?.classList.remove('hidden');
-                document.getElementById('mobile-level-down')?.classList.remove('hidden');
+
+                mobileAxisToggle.classList.add('hidden');
+                mobileLevelUp.classList.add('hidden');
+                mobileLevelDown.classList.add('hidden');
             }
             onResize();
             rebuildHelpers();
@@ -2323,6 +2336,10 @@ window.onload = async function() {
 
         mobileColorInput.value = currentColor;
 
+        document.getElementById('mobile-axis-toggle').addEventListener('click', (e) => { e.stopPropagation(); cycleDrawingAxis(); });
+        document.getElementById('mobile-level-up').addEventListener('click', (e) => { e.stopPropagation(); moveDrawingLevel(1); });
+        document.getElementById('mobile-level-down').addEventListener('click', (e) => { e.stopPropagation(); moveDrawingLevel(-1); });
+
         document.getElementById('mobile-generate-idea').addEventListener('click', (e) => { e.stopPropagation(); openIdeaGeneratorModal(); });
         document.getElementById('mobile-login-logout').addEventListener('click', (e) => { e.stopPropagation(); loginLogout(); });
 
@@ -2331,6 +2348,7 @@ window.onload = async function() {
         document.getElementById('fly-speed-slider').value = moveSpeed; document.getElementById('fly-speed-display').textContent = moveSpeed.toFixed(2);
         
         document.getElementById('mobile-mode-icon').className = ModeIcons[currentMode];
+        document.getElementById('mobile-axis-icon').className = AxisIcons[currentDrawingAxis];
 
         const app = window.firebase.initializeApp(window.firebaseConfig);
         auth = window.firebase.getAuth(app); db = window.firebase.getFirestore(app);
@@ -2355,7 +2373,7 @@ window.onload = async function() {
                     loginLogoutBtn.textContent = user ? 'Abmelden' : 'Anmelden';
                     userIdDisplay.innerHTML = user ? `<img src="${user.photoURL || 'https://placehold.co/24x24/cccccc/000000?text=U'}" alt="User Avatar" class="w-6 h-6 rounded-full align-middle">` : '';
                     uploadToHubBtn.classList.toggle('hidden', !user);
-                    document.getElementById('mobile-login-logout').textContent = user ? '🚪' : '🔑';
+                    document.getElementById('mobile-login-logout').textContent = user ? '🚪' : '�';
                     if (user) document.getElementById('authModal').close();
 
                     if (!projectLoadedFromUrl) {
@@ -2366,9 +2384,9 @@ window.onload = async function() {
                             try {
                                 const decodedJson = decodeURIComponent(encodedJson);
                                 loadProjectData(JSON.parse(decodedJson));
-                                showToast('Projekt geladen', 'Projekt erfolgreich aus URL-Parameter geladen.', 'success');
+                                showToast('Projekt geladen', 'Projekt erfolgreich aus URL-Parameter geladen.', 'success', 5000);
                                 projectLoadedFromUrl = true;
-                            } catch (e) { showToast('Fehler', 'Fehler beim Laden des Projekts aus der URL. Ungültige oder beschädigte Projektdaten. Fehler: ' + e.message, 'error'); resetToDefaultProject(); }
+                            } catch (e) { showToast('Fehler', 'Fehler beim Laden des Projekts aus der URL. Ungültige oder beschädigte Projektdaten. Fehler: ' + e.message, 'error', 5000); resetToDefaultProject(); }
                         } else { projectRemixOf = ''; projectSourceJsonUrl = ''; }
                     }
                 });
@@ -2429,3 +2447,4 @@ function animate() {
 </script>
 </body>
 </html>
+�
