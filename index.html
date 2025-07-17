@@ -1900,7 +1900,7 @@ function onPointerMove(e) {
         let gy = currentRayHit.gy;
         let gz = currentRayHit.gz;
 
-        // If in ADD mode and we hit a face, adjust coordinates
+        // If in ADD mode and we hit a face, adjust coordinates for adding
         // Ensure currentRayHit.faceNormal is not null before accessing its properties
         if (currentMode === Modes.ADD && currentRayHit.faceNormal) {
             gx += currentRayHit.faceNormal.x;
@@ -1924,35 +1924,16 @@ function onPointerMove(e) {
         currentTargetVoxelCoords = null;
     }
 
-    if (isDraggingVoxelAction) {
+    if (isDraggingVoxelAction && currentTargetVoxelCoords) { // ONLY draw if a valid target is found
         const startPointForLine = lastActionVoxelCoords || initialDragVoxelCoords;
-        let endPointForLine = currentTargetVoxelCoords;
+        const endPointForLine = currentTargetVoxelCoords; // Now guaranteed to be valid if we enter this block
 
-        // If ray missed, use the last known valid voxel position for drawing continuity
-        // This helps prevent "non-finite coordinates" errors and makes drawing smoother
-        if (!endPointForLine) {
-            endPointForLine = lastActionVoxelCoords; // Stick to the last drawn voxel
-            if (!endPointForLine) { // If even lastActionVoxelCoords is null (shouldn't happen if initialDragVoxelCoords was set)
-                return; // Cannot draw a line without a start or end point
-            }
-        }
-
-        // Explicitly ensure all coordinates are finite numbers before calling getVoxelsOnLine
-        if (!startPointForLine || !Number.isFinite(startPointForLine.gx) || !Number.isFinite(startPointForLine.gy) || !Number.isFinite(startPointForLine.gz) ||
-            !endPointForLine || !Number.isFinite(endPointForLine.gx) || !Number.isFinite(endPointForLine.gy) || !Number.isFinite(endPointForLine.gz)) {
-            console.error("Critical: Non-finite coordinates detected before calling getVoxelsOnLine. Aborting line drawing.", { start: startPointForLine, end: endPointForLine });
-            // Revert changes in current stroke and reset state to prevent further errors
-            // This part is handled by the batch command onPointerUp, so no need to revert here immediately
-            // Just clear the current stroke and reset state to prevent further errors during this move.
-            currentStrokeVoxels.clear();
-            updatePreviewVoxel(0, 0, 0, false);
-            previewLineInstancedMesh.count = 0;
-            previewLineVoxels = [];
-            lastActionVoxelCoords = null;
-            initialDragVoxelCoords = null;
-            pointerIsDown = false;
-            doubleTapDragActive = false;
-            return; // Abort this move event
+        // Ensure startPointForLine is also valid (it should be from onPointerDown)
+        if (!startPointForLine || !Number.isFinite(startPointForLine.gx) || !Number.isFinite(startPointForLine.gy) || !Number.isFinite(startPointForLine.gz)) {
+            console.error("Critical: startPointForLine is invalid during drag. Aborting line drawing.");
+            // This indicates a deeper issue, but we prevent further errors.
+            // The current stroke should be cleared on pointerUp anyway.
+            return;
         }
 
         const pathVoxels = getVoxelsOnLine(startPointForLine, endPointForLine);
@@ -1974,16 +1955,16 @@ function onPointerMove(e) {
                 currentStrokeVoxels.get(gKey).finalColor = finalColorAfterModification;
             }
         }
-
+        lastActionVoxelCoords = { ...endPointForLine }; // Update lastActionVoxelCoords only if drawing occurred
         updatePreviewVoxel(0, 0, 0, false); // Hide single preview voxel during drag
         previewLineInstancedMesh.count = 0; // Line preview not needed for instant drawing
-        lastActionVoxelCoords = { ...endPointForLine }; // Use endPointForLine here
-    } else { // Hovering (not dragging)
+
+    } else { // Hovering or not dragging, or currentTargetVoxelCoords is null
         previewLineInstancedMesh.count = 0;
         previewLineInstancedMesh.instanceMatrix.needsUpdate = true;
         previewLineVoxels = [];
 
-        if (currentTargetVoxelCoords) {
+        if (currentTargetVoxelCoords) { // Only show preview if a valid target is found
             let showPreview = false;
             const gKeyAtPreview = key(currentTargetVoxelCoords.gx, currentTargetVoxelCoords.gy, currentTargetVoxelCoords.gz);
             const hasVoxelAtPreview = voxels.has(gKeyAtPreview);
@@ -1995,8 +1976,14 @@ function onPointerMove(e) {
             }
             updatePreviewVoxel(currentTargetVoxelCoords.gx, currentTargetVoxelCoords.gy, currentTargetVoxelCoords.gz, showPreview);
         } else {
-            updatePreviewVoxel(0, 0, 0, false);
+            updatePreviewVoxel(0, 0, 0, false); // Hide preview if no target
         }
+    }
+    
+    // Handle camera rotation/pan for touch events
+    if (e.pointerType === 'touch' && activePointers.has(e.pointerId)) {
+        activePointers.set(e.pointerId, { x: e.clientX, y: e.clientY, pointerType: e.pointerType });
+        handleGesture();
     }
 }
 
@@ -2471,10 +2458,16 @@ const frustum = new THREE.Frustum(); const tempCameraMatrix = new THREE.Matrix4(
 function animate() {
     requestAnimationFrame(animate);
     if (isPointerLocked) {
-        if (firstMoveAfterLock) { firstMoveAfterLock = false; mouseMovementX = mouseMovementY = 0; return; }
-        euler.y -= (mouseMovementX || 0) * rotSpeed; euler.x -= (mouseMovementY || 0) * rotSpeed;
-        euler.x = Math.max(-Math.PI / 2, Math.min(Math.PI / 2, euler.x)); cam.quaternion.setFromEuler(euler);
-        mouseMovementX = mouseMovementY = 0;
+        if (firstMoveAfterLock) {
+            firstMoveAfterLock = false;
+            mouseMovementX = mouseMovementY = 0;
+            return;
+        }
+        euler.y -= (mouseMovementX || 0) * rotSpeed;
+        euler.x -= (mouseMovementY || 0) * rotSpeed;
+        euler.x = Math.max(-Math.PI / 2, Math.min(Math.PI / 2, euler.x));
+        cam.quaternion.setFromEuler(euler);
+        mouseMovementX = mouseMovementY = 0; // Reset after use
         const camDir = new THREE.Vector3(); cam.getWorldDirection(camDir);
         const rightDir = new THREE.Vector3().crossVectors(camDir, cam.up).normalize();
         const upVec = new THREE.Vector3(0, 1, 0); const currMoveSpeed = moveSpeed * 0.5;
