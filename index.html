@@ -388,32 +388,18 @@ let auth, db, currentUserId, currentUser;
 const VoxelShaperIO = {
     voxToOBJ: function(voxModel, voxelSize) {
         let obj = '# VoxelShaper OBJ Export\n';
-        let mtls = '# VoxelShaper MTL Export\n';
         let vertexCount = 0;
-        const materials = new Map(); // Map color hex to material name
-
-        // Collect unique colors and assign material names
-        voxModel.voxels.forEach(v => {
-            if (!materials.has(v.color)) {
-                const matName = `material_${materials.size + 1}`;
-                materials.set(v.color, matName);
-                const c = new THREE.Color(v.color);
-                mtls += `newmtl ${matName}\n`;
-                mtls += `Kd ${c.r.toFixed(4)} ${c.g.toFixed(4)} ${c.b.toFixed(4)}\n`; // Diffuse color
-                mtls += `Ka ${c.r.toFixed(4)} ${c.g.toFixed(4)} ${c.b.toFixed(4)}\n`; // Ambient color
-                mtls += `Ks 0.0 0.0 0.0\n`; // Specular color (no shininess)
-                mtls += `Ns 0.0\n`; // Shininess
-                mtls += `d 1.0\n`; // Dissolve (alpha)
-                mtls += `illum 1\n\n`; // Illumination model
-            }
-        });
-
-        obj += `mtllib voxel_model.mtl\n`;
 
         voxModel.voxels.forEach(v => {
             const x = v.x * voxelSize;
             const y = v.y * voxelSize;
             const z = v.z * voxelSize;
+
+            // Convert hex color to RGB (0-1 range)
+            const color = new THREE.Color(v.color);
+            const r = color.r.toFixed(4);
+            const g = color.g.toFixed(4);
+            const b = color.b.toFixed(4);
 
             // Vertices for a unit cube
             const verts = [
@@ -422,11 +408,9 @@ const VoxelShaperIO = {
             ];
 
             verts.forEach(vert => {
-                obj += `v ${vert[0].toFixed(4)} ${vert[1].toFixed(4)} ${vert[2].toFixed(4)}\n`;
+                // Add RGB color to vertex line
+                obj += `v ${vert[0].toFixed(4)} ${vert[1].toFixed(4)} ${vert[2].toFixed(4)} ${r} ${g} ${b}\n`;
             });
-
-            const matName = materials.get(v.color);
-            obj += `usemtl ${matName}\n`;
 
             // Faces (assuming standard cube faces)
             const faces = [
@@ -448,14 +432,12 @@ const VoxelShaperIO = {
             vertexCount += 8;
         });
 
-        return { obj: obj, mtl: mtls };
+        return { obj: obj }; // Only return obj, no mtl
     },
     saveBlob: function(data, filename) {
         const objBlob = new Blob([data.obj], { type: 'text/plain' });
-        const mtlBlob = new Blob([data.mtl], { type: 'text/plain' });
 
         const objUrl = URL.createObjectURL(objBlob);
-        const mtlUrl = URL.createObjectURL(mtlBlob);
 
         const aObj = document.createElement('a');
         aObj.href = objUrl;
@@ -465,13 +447,7 @@ const VoxelShaperIO = {
         document.body.removeChild(aObj);
         URL.revokeObjectURL(objUrl);
 
-        const aMtl = document.createElement('a');
-        aMtl.href = mtlUrl;
-        aMtl.download = filename.replace('.obj', '.mtl');
-        document.body.appendChild(aMtl);
-        aMtl.click();
-        document.body.removeChild(aMtl);
-        URL.revokeObjectURL(mtlUrl);
+        // No MTL file to save
     },
     VoxModel: function(width, height, depth, voxels) {
         this.width = width;
@@ -812,9 +788,14 @@ function calculateRayTargetVoxelCoords(clientX, clientY) {
             return null;
         }
 
-        const hitVoxelX = Math.floor(intersectionPoint.x / VS);
-        const hitVoxelY = Math.floor(intersectionPoint.y / VS);
-        const hitVoxelZ = Math.floor(intersectionPoint.z / VS);
+        // Adjust the intersection point slightly inwards along the inverse normal
+        // This ensures we get the coordinates of the voxel that was actually hit.
+        const epsilon = 0.001; // Small offset
+        const adjustedPoint = intersectionPoint.clone().addScaledVector(hitNormal, -epsilon);
+
+        const hitVoxelX = Math.floor(adjustedPoint.x / VS);
+        const hitVoxelY = Math.floor(adjustedPoint.y / VS);
+        const hitVoxelZ = Math.floor(adjustedPoint.z / VS);
 
         return {
             gx: hitVoxelX,
@@ -1096,7 +1077,7 @@ function exportOBJ() {
     });
     const voxModel = new VoxelShaperIO.VoxModel(maxX + 1, maxY + 1, maxZ + 1, voxelsToExport);
     VoxelShaperIO.saveBlob(VoxelShaperIO.voxToOBJ(voxModel, VS), 'voxel_model.obj');
-    showToast('Export erfolgreich', 'OBJ-Modell erfolgreich exportiert!', 'success');
+    showToast('Export erfolgreich', 'OBJ-Modell erfolgreich mit Farben exportiert!', 'success');
 }
 
 function showToast(title, message, type = 'info', duration = 3000) {
@@ -2144,6 +2125,7 @@ function animate() {
     for (const chunk of chunks.values()) chunk.instancedMesh.visible = frustum.intersectsBox(chunk.boundingBox);
     ren.render(scene, cam);
 }
+
 </script>
 </body>
 </html>
