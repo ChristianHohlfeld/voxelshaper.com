@@ -2004,10 +2004,12 @@ function onPointerMove(e) {
                 // Den Pfad vom initialen Drag-Punkt zum aktuellen Ziel berechnen
                 const pathVoxels = getVoxelsOnLine(initialDragVoxelCoords, finalTargetVoxelCoords);
 
-                // Vorherige Vorschau-Voxel und akkumulierten Strich für dieses neue Liniensegment löschen
+                // Temporäre Map für die neuen vorgeschlagenen Änderungen im aktuellen Strich
+                let newProposedStrokeVoxels = new Map();
+
+                // Clear previous preview voxels and reset count
                 previewLineInstancedMesh.count = 0;
-                previewLineVoxels = [];
-                currentStrokeVoxels.clear(); // Dies ist korrekt für ein "Linienzeichenwerkzeug"
+                previewLineVoxels = []; // This array is used to populate the instanced mesh
 
                 for (let i = 0; i < pathVoxels.length; i++) {
                     const voxel = pathVoxels[i];
@@ -2015,7 +2017,7 @@ function onPointerMove(e) {
                     const hasVoxelInInitialState = voxelsAtDragStart.has(gKey);
                     const initialColor = hasVoxelInInitialState ? voxelsAtDragStart.get(gKey).color : null;
                     let previewColor = null;
-                    let proposedNewColor = undefined; // undefined bedeutet keine Änderung vorgeschlagen
+                    let proposedNewColor = undefined; // undefined means no change proposed
 
                     if (currentMode === Modes.ADD) {
                         if (!hasVoxelInInitialState) {
@@ -2041,33 +2043,33 @@ function onPointerMove(e) {
                         previewLineInstancedMesh.setMatrixAt(instanceId, dummy.matrix);
                         const c = new THREE.Color(previewColor);
                         previewLineInstancedMesh.instanceColor.setXYZ(instanceId, c.r, c.g, c.b);
-                        previewLineVoxels.push(voxel);
+                        previewLineVoxels.push(voxel); // Store for potential future use (though not strictly needed if rebuilding every time)
                     }
 
-                    // Nur zu currentStrokeVoxels hinzufügen, wenn eine Änderung vorgeschlagen wird UND sie sich vom Initialzustand unterscheidet
+                    // Add proposed change to the temporary map
                     if (proposedNewColor !== undefined && proposedNewColor !== initialColor) {
-                        currentStrokeVoxels.set(gKey, { newColor: proposedNewColor, initialColor: initialColor });
-                    } else if (currentStrokeVoxels.has(gKey)) {
-                        // Wenn es zuvor als Änderung markiert war, aber jetzt wieder im Initialzustand ist, aus dem Strich entfernen
-                        currentStrokeVoxels.delete(gKey);
+                        newProposedStrokeVoxels.set(gKey, { newColor: proposedNewColor, initialColor: initialColor });
                     }
                 }
+
+                // Replace the main currentStrokeVoxels with the new proposed set
+                currentStrokeVoxels = newProposedStrokeVoxels;
 
                 previewLineInstancedMesh.instanceMatrix.needsUpdate = true;
                 previewLineInstancedMesh.instanceColor.needsUpdate = true;
 
                 lastActionVoxelCoords = { ...finalTargetVoxelCoords };
-                updatePreviewVoxel(0, 0, 0, false); // Einzelnes Vorschau-Voxel ausblenden, wenn Linienvorschau aktiv ist
+                updatePreviewVoxel(0, 0, 0, false); // Hide single preview voxel when line preview is active
             }
         } else {
-            // Wenn der Ray während des Drags das Gitter verlässt, Vorschau löschen
+            // If ray leaves the grid during drag, clear preview
             previewLineInstancedMesh.count = 0;
             previewLineInstancedMesh.instanceMatrix.needsUpdate = true;
             previewLineVoxels = [];
             updatePreviewVoxel(0, 0, 0, false);
         }
-    } else { // Hovering (kein Drag)
-        previewLineInstancedMesh.count = 0; // Sicherstellen, dass die Linienvorschau ausgeblendet ist, wenn nicht gezogen wird
+    } else { // Hovering (not dragging)
+        previewLineInstancedMesh.count = 0; // Ensure line preview is hidden when not dragging
         previewLineInstancedMesh.instanceMatrix.needsUpdate = true;
         previewLineVoxels = [];
 
@@ -2077,10 +2079,10 @@ function onPointerMove(e) {
             const hasVoxelAtPreview = voxels.has(gKeyAtPreview);
 
             if (currentMode === Modes.ADD) {
-                // Vorschau nur anzeigen, wenn der Platz leer ist
+                // Show preview only if the spot is empty
                 if (!hasVoxelAtPreview) { showPreview = true; }
             } else if (currentMode === Modes.DELETE || currentMode === Modes.DRAW) {
-                // Vorschau nur anzeigen, wenn ein Voxel vorhanden ist
+                // Show preview only if a voxel exists
                 if (hasVoxelAtPreview) { showPreview = true; }
             }
             updatePreviewVoxel(currentTargetVoxelCoords.gx, currentTargetVoxelCoords.gy, currentTargetVoxelCoords.gz, showPreview);
