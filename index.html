@@ -84,6 +84,7 @@ input[type="color"]::-moz-color-swatch { border: none; border-radius: 50%; }
     <span id="fly-speed-display" class="font-bold text-primary">0.10</span>
 
     <button id="resetCameraBtn" aria-label="Kamera zurücksetzen" class="btn btn-sm btn-neutral">Zur Szene zurückkehen</button>
+    <button id="generateVoxelIdeaBtn" aria-label="Voxel-Idee generieren" class="btn btn-sm btn-primary">✨ Voxel-Idee generieren ✨</button>
 
     <button id="loadImageTemplateBtn" aria-label="Bild als Vorlage laden" class="btn btn-sm btn-neutral">Bild als Vorlage laden</button>
     <button id="removeImageTemplateBtn" class="btn btn-sm btn-neutral hidden" aria-label="Bildvorlage entfernen">Bildvorlage entfernen</button>
@@ -179,6 +180,24 @@ input[type="color"]::-moz-color-swatch { border: none; border-radius: 50%; }
     </div>
 </dialog>
 
+<!-- New Modal for LLM Idea Generation -->
+<dialog id="ideaGeneratorModal" class="modal">
+    <div class="modal-box bg-base-200 text-base-content p-8 shadow-xl max-w-md">
+        <h3 class="font-bold text-lg text-primary mb-4">✨ Voxel-Idee generieren ✨</h3>
+        <p class="py-2">Geben Sie ein Thema oder Konzept ein, um eine Voxel-Modell-Idee zu generieren:</p>
+        <textarea id="ideaPromptInput" placeholder="Z.B. 'Ein gemütliches Baumhaus', 'Ein futuristisches Raumschiff'" class="textarea textarea-bordered w-full bg-base-300 border-base-content/20 h-24 mb-4 resize-y"></textarea>
+        <div id="ideaResultDisplay" class="bg-base-300 p-4 rounded-md mb-4 hidden overflow-auto max-h-40"></div>
+        <div id="ideaLoadingIndicator" class="text-center py-4 hidden">
+            <span class="loading loading-spinner loading-lg text-primary"></span>
+            <p>Generiere Idee...</p>
+        </div>
+        <div class="modal-buttons flex justify-around gap-4 mt-6">
+            <button id="generateIdeaConfirmBtn" class="btn btn-primary flex-1">Generieren</button>
+            <button id="ideaGeneratorCloseBtn" class="btn btn-ghost flex-1">Schließen</button>
+        </div>
+    </div>
+</dialog>
+
 <div id="toast-container" class="toast toast-end z-50"></div>
 
 <div id="mobile-controls" class="hidden md:hidden flex-col gap-3 fixed bottom-4 right-4 z-[1000]">
@@ -188,6 +207,7 @@ input[type="color"]::-moz-color-swatch { border: none; border-radius: 50%; }
     <button class="mobile-btn w-16 h-16 text-3xl rounded-full bg-base-300 text-base-content border-2 border-base-content cursor-pointer flex items-center justify-center shadow-lg hover:bg-base-content/20" id="mobile-camera" aria-label="Kamera wechseln">📷</button>
     <button class="mobile-btn w-16 h-16 text-3xl rounded-full bg-base-300 text-base-content border-2 border-base-content cursor-pointer flex items-center justify-center shadow-lg hover:bg-base-content/20" id="mobile-mode-toggle" aria-label="Modus wechseln">🔄</button>
     <button class="mobile-btn w-16 h-16 text-3xl rounded-full bg-base-300 text-base-content border-2 border-base-content cursor-pointer flex items-center justify-center shadow-lg hover:bg-base-content/20" id="mobile-color-picker-btn" aria-label="Farbe auswählen">🎨</button>
+    <button class="mobile-btn w-16 h-16 text-3xl rounded-full bg-base-300 text-base-content border-2 border-base-content cursor-pointer flex items-center justify-center shadow-lg hover:bg-base-content/20" id="mobile-generate-idea" aria-label="Voxel-Idee generieren">✨</button>
     <button class="mobile-btn w-16 h-16 text-3xl rounded-full bg-base-300 text-base-content border-2 border-base-content cursor-pointer flex items-center justify-center shadow-lg hover:bg-base-content/20" id="mobile-login-logout" aria-label="Anmelden oder Abmelden">🔑</button>
 </div>
 
@@ -197,16 +217,47 @@ input[type="color"]::-moz-color-swatch { border: none; border-radius: 50%; }
 
 <script type="module">
     import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
-    import { getAuth,setPersistence,   browserLocalPersistence,  signInWithCustomToken, onAuthStateChanged, signOut,
-             GoogleAuthProvider, GithubAuthProvider, signInWithPopup,
-             createUserWithEmailAndPassword, signInWithEmailAndPassword } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
-    import { getFirestore, doc, getDoc, collection, addDoc, serverTimestamp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+    import {
+        getAuth,
+        setPersistence,
+        browserLocalPersistence,
+        signInWithCustomToken,
+        onAuthStateChanged,
+        signOut,
+        GoogleAuthProvider,
+        GithubAuthProvider,
+        signInWithPopup,
+        createUserWithEmailAndPassword,
+        signInWithEmailAndPassword
+    } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
+    import {
+        getFirestore,
+        doc,
+        getDoc,
+        collection,
+        addDoc,
+        serverTimestamp
+    } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
 
     window.firebase = {
-        initializeApp, getAuth, signInWithCustomToken, onAuthStateChanged, setPersistence,
-        browserLocalPersistence, signOut, GoogleAuthProvider, GithubAuthProvider, signInWithPopup,
-        createUserWithEmailAndPassword, signInWithEmailAndPassword, getFirestore, doc, getDoc, collection,
-        addDoc, serverTimestamp
+        initializeApp,
+        getAuth,
+        signInWithCustomToken,
+        onAuthStateChanged,
+        setPersistence,
+        browserLocalPersistence,
+        signOut,
+        GoogleAuthProvider,
+        GithubAuthProvider,
+        signInWithPopup,
+        createUserWithEmailAndPassword,
+        signInWithEmailAndPassword,
+        getFirestore,
+        doc,
+        getDoc,
+        collection,
+        addDoc,
+        serverTimestamp
     };
 
     const firebaseConfig = typeof __firebase_config !== 'undefined' ? JSON.parse(__firebase_config) : {
@@ -222,6 +273,7 @@ input[type="color"]::-moz-color-swatch { border: none; border-radius: 50%; }
 </script>
 
 <script>
+console.log('Script started parsing'); // Added for debugging
 const VS = 1, HALF = VS * 0.5;
 const CHUNK_SIZE = 16;
 const VOX_BITS = 10;
@@ -1172,7 +1224,7 @@ window.signInEmailPassword = async function() { const email = document.getElemen
 window.signUpEmailPassword = async function() { const email = document.getElementById('emailInput').value; const password = document.getElementById('passwordInput').value; try { await window.firebase.createUserWithEmailAndPassword(auth, email, password); showToast('Registrierung erfolgreich', 'Konto erstellt und angemeldet.', 'success'); closeAuthModal(); } catch (e) { console.error("Error signing up with Email/Password:", e); showToast('Registrierungsfehler', `E-Mail: ${e.message}`, 'error'); } }
 
 function closeAllModals() {
-    const modals = ['clearConfirmationModal', 'uploadProjectModal', 'authModal'];
+    const modals = ['clearConfirmationModal', 'uploadProjectModal', 'authModal', 'ideaGeneratorModal']; // Added ideaGeneratorModal
     modals.forEach(id => { const modal = document.getElementById(id); if (modal && modal.open) modal.close(); });
 }
 window.closeAllModals = closeAllModals;
@@ -1204,7 +1256,7 @@ function onMouseWheel(e) {
 
 const keyboard = {};
 function onKeyDown(e) {
-    const activeModals = ['authModal', 'uploadProjectModal', 'clearConfirmationModal'].some(id => document.getElementById(id).open);
+    const activeModals = ['authModal', 'uploadProjectModal', 'clearConfirmationModal', 'ideaGeneratorModal'].some(id => document.getElementById(id).open); // Added ideaGeneratorModal
     if (activeModals) { if (e.key === 'Escape') { closeAllModals(); e.preventDefault(); } return; }
     keyboard[e.key.toLowerCase()] = true;
     if (e.key === 'Shift') isShiftDragging = true; // Keep for camera controls or future features
@@ -1323,29 +1375,36 @@ function onPointerUp(e) {
             if (currentMode === Modes.ADD) {
                 if (clickedVoxel.faceNormal) { // Hit an existing voxel's face
                     const proposedVoxel = {
-                        gx: clickedVoxel.gx,
-                        gy: clickedVoxel.gy,
-                        gz: clickedVoxel.gz
+                        gx: clickedVoxel.gx + clickedVoxel.faceNormal.x,
+                        gy: clickedVoxel.gy + clickedVoxel.faceNormal.y,
+                        gz: clickedVoxel.gz + clickedVoxel.faceNormal.z
                     };
-                    // Adjust proposed voxel based on face normal for ADD mode
-                    if (clickedVoxel.faceNormal.x < 0) proposedVoxel.gx--;
-                    if (clickedVoxel.faceNormal.y < 0) proposedVoxel.gy--;
-                    if (clickedVoxel.faceNormal.z < 0) proposedVoxel.gz--;
+                    console.log(`ADD (single click) - Hit Voxel: (${clickedVoxel.gx},${clickedVoxel.gy},${clickedVoxel.gz}), Normal: (${clickedVoxel.faceNormal.x},${clickedVoxel.faceNormal.y},${clickedVoxel.faceNormal.z}), Proposed: (${proposedVoxel.gx},${proposedVoxel.gy},${proposedVoxel.gz})`);
+
+                    // Clamp the proposed voxel coordinates to the grid boundaries
+                    proposedVoxel.gx = Math.max(0, Math.min(GRID - 1, proposedVoxel.gx));
+                    proposedVoxel.gy = Math.max(0, Math.min(GRID - 1, proposedVoxel.gy));
+                    proposedVoxel.gz = Math.max(0, Math.min(GRID - 1, proposedVoxel.gz));
 
                     // Only set as final if the proposed spot is within grid and empty
-                    if (proposedVoxel.gx >= 0 && proposedVoxel.gx < GRID &&
-                        proposedVoxel.gy >= 0 && proposedVoxel.gy < GRID &&
-                        proposedVoxel.gz >= 0 && proposedVoxel.gz < GRID &&
-                        !voxels.has(key(proposedVoxel.gx, proposedVoxel.gy, proposedVoxel.gz))) {
+                    if (!voxels.has(key(proposedVoxel.gx, proposedVoxel.gy, proposedVoxel.gz))) {
                         finalVoxelCoords = proposedVoxel;
+                    } else {
+                        console.log(`ADD (single click) - Proposed voxel at (${proposedVoxel.gx},${proposedVoxel.gy},${proposedVoxel.gz}) is occupied.`);
                     }
                 } else { // Hit empty space or drawing plane
+                    // The clickedVoxel.gx/gy/gz already represent the target cell for placement
+                    // Clamp to grid boundaries
+                    clickedVoxel.gx = Math.max(0, Math.min(GRID - 1, clickedVoxel.gx));
+                    clickedVoxel.gy = Math.max(0, Math.min(GRID - 1, clickedVoxel.gy));
+                    clickedVoxel.gz = Math.max(0, Math.min(GRID - 1, clickedVoxel.gz));
+
                     // Only act if the spot is within grid and empty
-                    if (clickedVoxel.gx >= 0 && clickedVoxel.gx < GRID &&
-                        clickedVoxel.gy >= 0 && clickedVoxel.gy < GRID &&
-                        clickedVoxel.gz >= 0 && clickedVoxel.gz < GRID &&
-                        !voxels.has(key(clickedVoxel.gx, clickedVoxel.gy, clickedVoxel.gz))) {
+                    if (!voxels.has(key(clickedVoxel.gx, clickedVoxel.gy, clickedVoxel.gz))) {
                         finalVoxelCoords = { gx: clickedVoxel.gx, gy: clickedVoxel.gy, gz: clickedVoxel.gz };
+                        console.log(`ADD (single click) - Hit empty space/plane. Target: (${finalVoxelCoords.gx},${finalVoxelCoords.gy},${finalVoxelCoords.gz})`);
+                    } else {
+                        console.log(`ADD (single click) - Target voxel at (${clickedVoxel.gx},${clickedVoxel.gy},${clickedVoxel.gz}) is occupied.`);
                     }
                 }
             } else { // DELETE or DRAW mode
@@ -1354,6 +1413,9 @@ function onPointerUp(e) {
                 // If no voxel exists at the target for DELETE/DRAW, prevent action
                 if (!voxels.has(key(finalVoxelCoords.gx, finalVoxelCoords.gy, finalVoxelCoords.gz))) {
                     finalVoxelCoords = null; // Prevent action if no voxel to delete/draw on
+                    console.log(`DELETE/DRAW (single click) - No voxel at target (${clickedVoxel.gx},${clickedVoxel.gy},${clickedVoxel.gz}).`);
+                } else {
+                    console.log(`DELETE/DRAW (single click) - Target: (${finalVoxelCoords.gx},${finalVoxelCoords.gy},${finalVoxelCoords.gz}).`);
                 }
             }
 
@@ -1373,6 +1435,9 @@ function onPointerUp(e) {
                 }
                 if (oldState.length > 0) {
                     addCommand('batch', oldState, newState);
+                    console.log(`Single click action committed. Mode: ${currentMode}, Voxel: (${finalVoxelCoords.gx},${finalVoxelCoords.gy},${finalVoxelCoords.gz})`);
+                } else {
+                    console.log(`Single click action resulted in no change.`);
                 }
             }
         }
@@ -1394,6 +1459,9 @@ function onPointerUp(e) {
         }
         if (oldState.length > 0) {
             addCommand('batch', oldState, newState);
+            console.log(`Drag action committed. Total changes: ${oldState.length}`);
+        } else {
+            console.log(`Drag action resulted in no change.`);
         }
     }
 
@@ -1432,6 +1500,7 @@ function onPointerDown(e) {
             // Double tap for continuous drag (freehand drawing)
             doubleTapDragActive = true; tapCandidate = null;
             let rawTarget = calculateRayTargetVoxelCoords(e.clientX, e.clientY);
+            console.log(`Touch Double Tap - Raw Target:`, rawTarget);
 
             // Crucial: Validate rawTarget immediately
             if (!rawTarget || !Number.isFinite(rawTarget.gx) || !Number.isFinite(rawTarget.gy) || !Number.isFinite(rawTarget.gz)) {
@@ -1450,32 +1519,37 @@ function onPointerDown(e) {
             if (currentMode === Modes.ADD) {
                 if (rawTarget.faceNormal) { // Hit an existing voxel's face
                     const proposedVoxel = {
-                        gx: rawTarget.gx,
-                        gy: rawTarget.gy,
-                        gz: rawTarget.gz
+                        gx: rawTarget.gx + rawTarget.faceNormal.x,
+                        gy: rawTarget.gy + rawTarget.faceNormal.y,
+                        gz: rawTarget.gz + rawTarget.faceNormal.z
                     };
-                    if (rawTarget.faceNormal.x < 0) proposedVoxel.gx--;
-                    if (rawTarget.faceNormal.y < 0) proposedVoxel.gy--;
-                    if (rawTarget.faceNormal.z < 0) proposedVoxel.gz--;
+                    console.log(`ADD (double tap) - Hit Voxel: (${rawTarget.gx},${rawTarget.gy},${rawTarget.gz}), Normal: (${rawTarget.faceNormal.x},${rawTarget.faceNormal.y},${rawTarget.faceNormal.z}), Proposed: (${proposedVoxel.gx},${proposedVoxel.gy},${proposedVoxel.gz})`);
+
+                    // Clamp the proposed voxel coordinates to the grid boundaries
+                    proposedVoxel.gx = Math.max(0, Math.min(GRID - 1, proposedVoxel.gx));
+                    proposedVoxel.gy = Math.max(0, Math.min(GRID - 1, proposedVoxel.gy));
+                    proposedVoxel.gz = Math.max(0, Math.min(GRID - 1, proposedVoxel.gz));
+
                     // Only set as initial if the proposed spot is within grid and empty
-                    if (proposedVoxel.gx >= 0 && proposedVoxel.gx < GRID &&
-                        proposedVoxel.gy >= 0 && proposedVoxel.gy < GRID &&
-                        proposedVoxel.gz >= 0 && proposedVoxel.gz < GRID &&
-                        !voxels.has(key(proposedVoxel.gx, proposedVoxel.gy, proposedVoxel.gz))) {
+                    if (!voxels.has(key(proposedVoxel.gx, proposedVoxel.gy, proposedVoxel.gz))) {
                         initialActionVoxel = proposedVoxel;
                     } else {
-                        // Cannot place here (either out of bounds or occupied)
+                        console.log(`ADD (double tap) - Proposed voxel at (${proposedVoxel.gx},${proposedVoxel.gy},${proposedVoxel.gz}) is occupied. Aborting.`);
                         doubleTapDragActive = false; return;
                     }
                 } else { // Hit empty space or drawing plane
+                    // The rawTarget.gx/gy/gz already represent the target cell for placement
+                    // Clamp to grid boundaries
+                    rawTarget.gx = Math.max(0, Math.min(GRID - 1, rawTarget.gx));
+                    rawTarget.gy = Math.max(0, Math.min(GRID - 1, rawTarget.gy));
+                    rawTarget.gz = Math.max(0, Math.min(GRID - 1, rawTarget.gz));
+
                     // Only act if the spot is within grid and empty
-                    if (rawTarget.gx >= 0 && rawTarget.gx < GRID &&
-                        rawTarget.gy >= 0 && rawTarget.gy < GRID &&
-                        rawTarget.gz >= 0 && rawTarget.gz < GRID &&
-                        !voxels.has(key(rawTarget.gx, rawTarget.gy, rawTarget.gz))) {
+                    if (!voxels.has(key(rawTarget.gx, rawTarget.gy, rawTarget.gz))) {
                         initialActionVoxel = { gx: rawTarget.gx, gy: rawTarget.gy, gz: rawTarget.gz };
+                        console.log(`ADD (double tap) - Hit empty space/plane. Target: (${initialActionVoxel.gx},${initialActionVoxel.gy},${initialActionVoxel.gz})`);
                     } else {
-                        // Cannot place here (either out of bounds or occupied)
+                        console.log(`ADD (double tap) - Target voxel at (${rawTarget.gx},${rawTarget.gy},${rawTarget.gz}) is occupied. Aborting.`);
                         doubleTapDragActive = false; return;
                     }
                 }
@@ -1485,7 +1559,10 @@ function onPointerDown(e) {
                 // If no voxel exists at the target for DELETE/DRAW, prevent drag
                 if (!voxels.has(key(initialActionVoxel.gx, initialActionVoxel.gy, initialActionVoxel.gz))) {
                     doubleTapDragActive = false;
+                    console.log(`DELETE/DRAW (double tap) - No voxel at target (${rawTarget.gx},${rawTarget.gy},${rawTarget.gz}). Aborting.`);
                     return;
+                } else {
+                    console.log(`DELETE/DRAW (double tap) - Target: (${initialActionVoxel.gx},${initialActionVoxel.gy},${initialActionVoxel.gz}).`);
                 }
             }
 
@@ -1501,6 +1578,7 @@ function onPointerDown(e) {
                 performVoxelModification(initialDragVoxelCoords.gx, initialDragVoxelCoords.gy, initialDragVoxelCoords.gz, currentMode, currentColor);
                 const newColor = voxels.has(gKey) ? voxels.get(gKey).color : null;
                 currentStrokeVoxels.set(gKey, { newColor: newColor, initialColor: initialColor });
+                console.log(`Initial action for double tap drag committed. Mode: ${currentMode}, Voxel: (${initialDragVoxelCoords.gx},${initialDragVoxelCoords.gy},${initialDragVoxelCoords.gz})`);
 
                 updatePreviewVoxel(initialDragVoxelCoords.gx, initialDragVoxelCoords.gy, initialDragVoxelCoords.gz, true); // Show 1x1x1 preview
                 previewLineInstancedMesh.count = 0; // Hide line preview
@@ -1531,6 +1609,8 @@ function onPointerDown(e) {
         previewLineInstancedMesh.count = 0; previewLineInstancedMesh.instanceMatrix.needsUpdate = true; previewLineVoxels = [];
 
         let rawTarget = calculateRayTargetVoxelCoords(e.clientX, e.clientY);
+        console.log(`Mouse Down - Raw Target:`, rawTarget);
+
         // Crucial: Validate rawTarget immediately
         if (!rawTarget || !Number.isFinite(rawTarget.gx) || !Number.isFinite(rawTarget.gy) || !Number.isFinite(rawTarget.gz)) {
             console.warn("onPointerDown (mouse): Invalid rawTarget coordinates. Aborting action.");
@@ -1548,33 +1628,38 @@ function onPointerDown(e) {
         if (currentMode === Modes.ADD) {
             if (rawTarget.faceNormal) { // Hit an existing voxel's face
                 const proposedVoxel = {
-                    gx: rawTarget.gx,
-                    gy: rawTarget.gy,
-                    gz: rawTarget.gz
+                    gx: rawTarget.gx + rawTarget.faceNormal.x,
+                    gy: rawTarget.gy + rawTarget.faceNormal.y,
+                    gz: rawTarget.gz + rawTarget.faceNormal.z
                 };
-                if (rawTarget.faceNormal.x < 0) proposedVoxel.gx--;
-                if (rawTarget.faceNormal.y < 0) proposedVoxel.gy--;
-                if (rawTarget.faceNormal.z < 0) proposedVoxel.gz--;
+                console.log(`ADD (mouse down) - Hit Voxel: (${rawTarget.gx},${rawTarget.gy},${rawTarget.gz}), Normal: (${rawTarget.faceNormal.x},${rawTarget.faceNormal.y},${rawTarget.faceNormal.z}), Proposed: (${proposedVoxel.gx},${proposedVoxel.gy},${proposedVoxel.gz})`);
+
+                // Clamp the proposed voxel coordinates to the grid boundaries
+                proposedVoxel.gx = Math.max(0, Math.min(GRID - 1, proposedVoxel.gx));
+                proposedVoxel.gy = Math.max(0, Math.min(GRID - 1, proposedVoxel.gy));
+                proposedVoxel.gz = Math.max(0, Math.min(GRID - 1, proposedVoxel.gz));
+
                 // Only set as initial if the proposed spot is within grid and empty
-                if (proposedVoxel.gx >= 0 && proposedVoxel.gx < GRID &&
-                    proposedVoxel.gy >= 0 && proposedVoxel.gy < GRID &&
-                    proposedVoxel.gz >= 0 && proposedVoxel.gz < GRID &&
-                    !voxels.has(key(proposedVoxel.gx, proposedVoxel.gy, proposedPoxel.gz))) {
+                if (!voxels.has(key(proposedVoxel.gx, proposedVoxel.gy, proposedVoxel.gz))) {
                     initialActionVoxel = proposedVoxel;
                 } else {
-                    // Cannot place here (either out of bounds or occupied)
+                    console.log(`ADD (mouse down) - Proposed voxel at (${proposedVoxel.gx},${proposedVoxel.gy},${proposedVoxel.gz}) is occupied. Aborting.`);
                     pointerIsDown = false; initialClickPos = null;
                     return;
                 }
             } else { // Hit empty space or drawing plane
+                // The rawTarget.gx/gy/gz already represent the target cell for placement
+                // Clamp to grid boundaries
+                rawTarget.gx = Math.max(0, Math.min(GRID - 1, rawTarget.gx));
+                rawTarget.gy = Math.max(0, Math.min(GRID - 1, rawTarget.gy));
+                rawTarget.gz = Math.max(0, Math.min(GRID - 1, rawTarget.gz));
+
                 // Only act if the spot is within grid and empty
-                if (rawTarget.gx >= 0 && rawTarget.gx < GRID &&
-                    rawTarget.gy >= 0 && rawTarget.gy < GRID &&
-                    rawTarget.gz >= 0 && rawTarget.gz < GRID &&
-                    !voxels.has(key(rawTarget.gx, rawTarget.gy, rawTarget.gz))) {
+                if (!voxels.has(key(rawTarget.gx, rawTarget.gy, rawTarget.gz))) {
                     initialActionVoxel = { gx: rawTarget.gx, gy: rawTarget.gy, gz: rawTarget.gz };
+                    console.log(`ADD (mouse down) - Hit empty space/plane. Target: (${initialActionVoxel.gx},${initialActionVoxel.gy},${initialActionVoxel.gz})`);
                 } else {
-                    // Cannot place here (either out of bounds or occupied)
+                    console.log(`ADD (mouse down) - Target voxel at (${rawTarget.gx},${rawTarget.gy},${rawTarget.gz}) is occupied. Aborting.`);
                     pointerIsDown = false; initialClickPos = null;
                     return;
                 }
@@ -1585,7 +1670,10 @@ function onPointerDown(e) {
             // If no voxel exists at the target for DELETE/DRAW, prevent drag
             if (!voxels.has(key(initialActionVoxel.gx, initialActionVoxel.gy, initialActionVoxel.gz))) {
                 pointerIsDown = false; initialClickPos = null;
+                console.log(`DELETE/DRAW (mouse down) - No voxel at target (${rawTarget.gx},${rawTarget.gy},${rawTarget.gz}). Aborting.`);
                 return;
+            } else {
+                console.log(`DELETE/DRAW (mouse down) - Target: (${initialActionVoxel.gx},${initialActionVoxel.gy},${initialActionVoxel.gz}).`);
             }
         }
 
@@ -1601,6 +1689,7 @@ function onPointerDown(e) {
             performVoxelModification(initialDragVoxelCoords.gx, initialDragVoxelCoords.gy, initialDragVoxelCoords.gz, currentMode, currentColor);
             const newColor = voxels.has(gKey) ? voxels.get(gKey).color : null;
             currentStrokeVoxels.set(gKey, { newColor: newColor, initialColor: initialColor });
+            console.log(`Initial action for mouse drag committed. Mode: ${currentMode}, Voxel: (${initialDragVoxelCoords.gx},${initialDragVoxelCoords.gy},${initialDragVoxelCoords.gz})`);
 
             updatePreviewVoxel(initialDragVoxelCoords.gx, initialDragVoxelCoords.gy, initialDragVoxelCoords.gz, true); // Show preview for first voxel
             previewLineInstancedMesh.count = 0; // Hide line preview
@@ -1638,9 +1727,10 @@ function onPointerMove(e) {
                     // When hitting a face, currentRayHit.gx/gy/gz is the voxel *after* a positive normal face
                     // or the voxel *containing* a negative normal face.
                     // We need to adjust for negative normals to get the target voxel for ADD mode.
-                    if (currentRayHit.faceNormal.x < 0) currentTargetVoxelCoords.gx--;
-                    if (currentRayHit.faceNormal.y < 0) currentTargetVoxelCoords.gy--;
-                    if (currentRayHit.faceNormal.z < 0) currentTargetVoxelCoords.gz--;
+                    currentTargetVoxelCoords.gx = currentRayHit.gx + currentRayHit.faceNormal.x;
+                    currentTargetVoxelCoords.gy = currentRayHit.gy + currentRayHit.faceNormal.y;
+                    currentTargetVoxelCoords.gz = currentRayHit.gz + currentRayHit.faceNormal.z;
+                    // console.log(`ADD (move) - Hit Voxel: (${currentRayHit.gx},${currentRayHit.gy},${currentRayHit.gz}), Normal: (${currentRayHit.faceNormal.x},${currentRayHit.faceNormal.y},${currentRayHit.faceNormal.z}), Proposed: (${currentTargetVoxelCoords.gx},${currentTargetVoxelCoords.gy},${currentTargetVoxelCoords.gz})`);
                 }
             }
             // Clamp currentTargetVoxelCoords to grid boundaries
@@ -1674,6 +1764,15 @@ function onPointerMove(e) {
                     for (const voxelCoord of pathVoxels) {
                         const gKey = key(voxelCoord.gx, voxelCoord.gy, voxelCoord.gz);
                         const initialColor = voxelsAtDragStart.has(gKey) ? voxelsAtDragStart.get(gKey).color : null;
+
+                        // Check if the voxel is already present and if we are in ADD mode, skip if occupied
+                        if (currentMode === Modes.ADD && voxels.has(gKey)) {
+                            continue; // Skip adding if already occupied
+                        }
+                        // Check if the voxel is NOT present and we are in DELETE/DRAW mode, skip if empty
+                        if ((currentMode === Modes.DELETE || currentMode === Modes.DRAW) && !voxels.has(gKey)) {
+                            continue; // Skip deleting/drawing if empty
+                        }
 
                         performVoxelModification(voxelCoord.gx, voxelCoord.gy, voxelCoord.gz, currentMode, currentColor);
                         
@@ -1725,6 +1824,70 @@ function onPointerMove(e) {
         }
     }
 }
+
+// Function to open the LLM idea generator modal
+function openIdeaGeneratorModal() {
+    document.getElementById('ideaPromptInput').value = ''; // Clear previous input
+    document.getElementById('ideaResultDisplay').innerHTML = ''; // Clear previous result
+    document.getElementById('ideaResultDisplay').classList.add('hidden'); // Hide result area
+    document.getElementById('ideaLoadingIndicator').classList.add('hidden'); // Hide loading indicator
+    document.getElementById('ideaGeneratorModal').showModal();
+}
+
+// Function to generate a voxel idea using Gemini API
+async function generateVoxelIdea() {
+    const promptText = document.getElementById('ideaPromptInput').value.trim();
+    const ideaResultDisplay = document.getElementById('ideaResultDisplay');
+    const ideaLoadingIndicator = document.getElementById('ideaLoadingIndicator');
+
+    if (!promptText) {
+        showToast('Eingabe erforderlich', 'Bitte geben Sie ein Thema oder Konzept ein.', 'warning');
+        return;
+    }
+
+    ideaResultDisplay.classList.add('hidden'); // Hide previous result
+    ideaLoadingIndicator.classList.remove('hidden'); // Show loading indicator
+    ideaResultDisplay.innerHTML = ''; // Clear previous content
+
+    try {
+        const prompt = `Generate a creative and detailed description for a voxel model based on the following theme. Include suggestions for main colors, common shapes, and overall structure. Keep it concise and focused on voxel art.
+        Theme: ${promptText}`;
+
+        let chatHistory = [];
+        chatHistory.push({ role: "user", parts: [{ text: prompt }] });
+
+        const payload = { contents: chatHistory };
+        const apiKey = ""; // Canvas will provide this at runtime
+        const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${apiKey}`;
+
+        const response = await fetch(apiUrl, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(payload)
+        });
+
+        const result = await response.json();
+
+        if (result.candidates && result.candidates.length > 0 &&
+            result.candidates[0].content && result.candidates[0].content.parts &&
+            result.candidates[0].content.parts.length > 0) {
+            const text = result.candidates[0].content.parts[0].text;
+            ideaResultDisplay.innerHTML = `<p class="whitespace-pre-wrap">${text}</p>`;
+            ideaResultDisplay.classList.remove('hidden');
+        } else {
+            ideaResultDisplay.innerHTML = '<p class="text-error">Konnte keine Idee generieren. Bitte versuchen Sie es erneut.</p>';
+            ideaResultDisplay.classList.remove('hidden');
+            console.error("Gemini API returned an unexpected structure or no content:", result);
+        }
+    } catch (error) {
+        ideaResultDisplay.innerHTML = `<p class="text-error">Fehler beim Generieren der Idee: ${error.message}</p>`;
+        ideaResultDisplay.classList.remove('hidden');
+        console.error("Error calling Gemini API:", error);
+    } finally {
+        ideaLoadingIndicator.classList.add('hidden'); // Hide loading indicator
+    }
+}
+
 
 window.onload = async function() {
     closeAllModals();
@@ -1843,6 +2006,7 @@ window.onload = async function() {
         });
 
         document.getElementById('resetCameraBtn').addEventListener('click', resetCameraPosition);
+        document.getElementById('generateVoxelIdeaBtn').addEventListener('click', openIdeaGeneratorModal); // New button event listener
         document.getElementById('loadImageTemplateBtn').addEventListener('click', loadImageTemplate);
         document.getElementById('imageFileInput').addEventListener('change', handleImageFileSelect);
         document.getElementById('removeImageTemplateBtn').addEventListener('click', removeImageTemplate);
@@ -1859,19 +2023,30 @@ window.onload = async function() {
             isMobile = e.matches;
             const controlsPanel = document.getElementById('controls');
             const mobileControls = document.getElementById('mobile-controls');
-            if (e.matches) { controlsPanel.classList.add('hidden'); mobileControls.classList.remove('hidden'); }
-            else { controlsPanel.classList.remove('hidden'); controlsPanel.classList.add('flex'); mobileControls.classList.add('hidden'); }
+            if (e.matches) { // This means it's a mobile screen (max-width: 768px)
+                controlsPanel.classList.add('hidden'); // Hide desktop controls
+                mobileControls.classList.remove('hidden'); // Show mobile controls
+                mobileControls.classList.add('flex'); // Ensure flex display
+            }
+            else { // Desktop screen
+                controlsPanel.classList.remove('hidden'); // Show desktop controls
+                controlsPanel.classList.add('flex'); // Ensure flex display
+                mobileControls.classList.add('hidden'); // Hide mobile controls
+                mobileControls.classList.remove('flex'); // Remove flex display
+            }
             onResize();
         }
         mediaQuery.addListener(handleMediaQueryChange); handleMediaQueryChange(mediaQuery);
 
-        document.getElementById('mobile-undo').addEventListener('click', undo);
-        document.getElementById('mobile-redo').addEventListener('click', redo);
-        document.getElementById('mobile-save').addEventListener('click', saveJSON);
-        document.getElementById('mobile-camera').addEventListener('click', resetCameraPosition);
-        document.getElementById('mobile-mode-toggle').addEventListener('click', cycleMode);
-        document.getElementById('mobile-color-picker-btn').addEventListener('click', () => document.getElementById('color-picker').click()); // Trigger desktop color picker
-        document.getElementById('mobile-login-logout').addEventListener('click', loginLogout);
+        // Added e.stopPropagation() to mobile button click handlers
+        document.getElementById('mobile-undo').addEventListener('click', (e) => { e.stopPropagation(); undo(); });
+        document.getElementById('mobile-redo').addEventListener('click', (e) => { e.stopPropagation(); redo(); });
+        document.getElementById('mobile-save').addEventListener('click', (e) => { e.stopPropagation(); saveJSON(); });
+        document.getElementById('mobile-camera').addEventListener('click', (e) => { e.stopPropagation(); resetCameraPosition(); });
+        document.getElementById('mobile-mode-toggle').addEventListener('click', (e) => { e.stopPropagation(); cycleMode(); });
+        document.getElementById('mobile-color-picker-btn').addEventListener('click', (e) => { e.stopPropagation(); document.getElementById('color-picker').click(); }); // Trigger desktop color picker
+        document.getElementById('mobile-generate-idea').addEventListener('click', (e) => { e.stopPropagation(); openIdeaGeneratorModal(); }); // New mobile button event listener
+        document.getElementById('mobile-login-logout').addEventListener('click', (e) => { e.stopPropagation(); loginLogout(); });
 
         document.getElementById('grid-size-slider').value = GRID; document.getElementById('grid-size-display').textContent = `${GRID}×${GRID}×${GRID}`;
         document.getElementById('color-picker').value = currentColor;
@@ -1937,6 +2112,12 @@ window.onload = async function() {
         document.getElementById('uploadProjectModal').addEventListener('click', (e) => { if (e.target === document.getElementById('uploadProjectModal')) { document.getElementById('uploadProjectModal').close(); cvs.focus(); } });
         document.getElementById('uploadConfirmBtn').addEventListener('click', uploadProjectToHub);
         document.getElementById('uploadCancelBtn').addEventListener('click', () => { document.getElementById('uploadProjectModal').close(); cvs.focus(); });
+
+        // New LLM idea generator event listeners
+        document.getElementById('generateIdeaConfirmBtn').addEventListener('click', generateVoxelIdea);
+        document.getElementById('ideaGeneratorCloseBtn').addEventListener('click', () => { document.getElementById('ideaGeneratorModal').close(); cvs.focus(); });
+        document.getElementById('ideaGeneratorModal').addEventListener('click', (e) => { if (e.target === document.getElementById('ideaGeneratorModal')) { document.getElementById('ideaGeneratorModal').close(); cvs.focus(); } });
+
     } catch (e) { console.error("VoxelShaper Initialization Error:", e); showToast('Schwerer Fehler', `Ein unerwarteter Fehler ist aufgetreten: ${e.message}.`, 'error', 10000); }
 };
 
