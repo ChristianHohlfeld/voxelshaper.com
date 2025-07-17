@@ -1306,7 +1306,7 @@ async function loginLogout() {
 // Öffnet das Upload-Modal
 function openUploadModal() {
     if (!currentUserId) { openAuthModal(); return; }
-    if (voxels.size === 0) { showToast('Upload fehlgeschlagen', 'Die Szene ist leer. Bitte erstellen Sie zuerst ein Modell.', 'warning'); return; }
+    if (voxels.size === 0) { showToast('Upload fehlgeschuldert', 'Die Szene ist leer. Bitte erstellen Sie zuerst ein Modell.', 'warning'); return; }
     document.getElementById('uploadTitle').value = projectTitle; document.getElementById('uploadDescription').value = projectDescription;
     document.getElementById('uploadCategory').value = projectCategory; document.getElementById('uploadTags').value = projectTags.join(', ');
     document.querySelector(`input[name="uploadVisibility"][value="${projectVisibility}"]`).checked = true; // Korrigiert, um den Wert direkt zu verwenden
@@ -1320,7 +1320,7 @@ function openUploadModal() {
 // Lädt das Projekt auf den Hub hoch
 async function uploadProjectToHub() {
     if (!currentUserId) { showToast('Fehler', 'Nicht angemeldet. Bitte melden Sie sich an, um hochzuladen.', 'error'); return; }
-    if (voxels.size === 0) { showToast('Upload fehlgeschlagen', 'Die Szene ist leer. Bitte erstellen Sie zuerst ein Modell.', 'warning'); return; }
+    if (voxels.size === 0) { showToast('Upload fehlgeschuldert', 'Die Szene ist leer. Bitte erstellen Sie zuerst ein Modell.', 'warning'); return; }
     const title = document.getElementById('uploadTitle').value.trim();
     const description = document.getElementById('uploadDescription').value.trim();
     const category = document.getElementById('uploadCategory').value;
@@ -1709,7 +1709,7 @@ function onPointerDown(e) {
 
                     // Nur handeln, wenn der Platz innerhalb des Gitters und leer ist
                     if (!voxels.has(key(rawTarget.gx, rawTarget.gy, rawTarget.gz))) {
-                        initialActionVoxel = { gx: rawTarget.gx, gy: rawTarget.gy, gz: rawTarget.gz };
+                        finalActionVoxel = { gx: rawTarget.gx, gy: rawTarget.gy, gz: rawTarget.gz };
                     } else {
                         doubleTapDragActive = false; return;
                     }
@@ -1870,7 +1870,8 @@ function onPointerMove(e) {
     }
 
     if (currentRayHit) {
-        currentTargetVoxelCoords = { gx: currentRayHit.gx, gy: currentRayHit.gy, gz: currentRayHit.z };
+        // FIX: Changed currentRayHit.z to currentRayHit.gz
+        currentTargetVoxelCoords = { gx: currentRayHit.gx, gy: currentRayHit.gy, gz: currentRayHit.gz };
 
         if (currentMode === Modes.ADD) {
             if (currentRayHit.faceNormal) {
@@ -2328,3 +2329,7 @@ function animate() {
     for (const chunk of chunks.values()) chunk.instancedMesh.visible = frustum.intersectsBox(chunk.boundingBox);
     ren.render(scene, cam);
 }
+
+</script>
+</body>
+</html>
