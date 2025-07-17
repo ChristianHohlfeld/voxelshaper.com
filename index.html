@@ -2023,7 +2023,6 @@ function onPointerMove(e) {
         gy = Math.max(0, Math.min(GRID - 1, gy));
         gz = Math.max(0, Math.min(GRID - 1, gz));
 
-        // Final check for finity after all operations
         if (Number.isFinite(gx) && Number.isFinite(gy) && Number.isFinite(gz)) {
             currentTargetVoxelCoords = { gx: gx, gy: gy, gz: gz };
         } else {
@@ -2032,21 +2031,19 @@ function onPointerMove(e) {
         }
     }
 
-    // --- NEW LOGIC FOR PLANE LOCKING DURING DRAG CYCLE ---
-    // If pointer is down and we have an initial target from pointerdown,
-    // enforce the plane constraint on the current target for both drawing and preview.
+    // --- CRITICAL CHANGE: Enforce Y-plane for drag-drawing ---
     if (pointerIsDown && currentTargetVoxelCoords) {
-        // Set initialDragVoxelCoords if this is the very beginning of a drag
+        // If a drag is starting, set the initial drag Y-level
         if (!initialDragVoxelCoords && shouldStartDrag) {
-            initialDragVoxelCoords = { ...currentTargetVoxelCoords };
+            initialDragVoxelCoords = { ...currentTargetVoxelCoords }; // Capture the Y-level at the start of the drag
         }
 
-        // If a drag is active and initialDragVoxelCoords is set, constrain the Y-axis
+        // If a drag is active, force the Y-coordinate to the initial drag Y-level
         if (isDragging && initialDragVoxelCoords) {
             currentTargetVoxelCoords.gy = initialDragVoxelCoords.gy;
         }
     }
-    // --- END NEW LOGIC ---
+    // --- END CRITICAL CHANGE ---
 
     // Logic for actual voxel modification during drag
     if (pointerIsDown && currentTargetVoxelCoords) {
