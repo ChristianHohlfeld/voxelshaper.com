@@ -375,10 +375,17 @@ const PINCH_ZOOM_MULT = 40; // Multiplikator für Pinch-Zoom
 const TAP_DIST_TH = 10; // Schwellenwert für Tap-Distanz
 const MOVE_PX = 10; // Schwellenwert für Mausbewegung (Drag-Erkennung)
 const DT_MS = 250; // Zeitfenster für Doppeltipp
-const PAN_PIX_TH = 10; // Schwellenwert für Pan-Bewegung
-const PINCH_REL_TH = 0.08; // Relativer Schwellenwert für Pinch-Geste
-const ROTATE_SPEED_TOUCH = 0.004; // Rotationsgeschwindigkeit bei Touch
-const PAN_SPEED_TOUCH = 0.1; // Pan-Geschwindigkeit bei Touch
+
+// Mobile-spezifische Geschwindigkeiten
+const ROTATE_SPEED_TOUCH_MOBILE = 0.008; // Erhöht für schnellere Rotation
+const PAN_SPEED_TOUCH_MOBILE = 0.2;     // Erhöht für schnelleres Schwenken
+const PINCH_ZOOM_MULT_MOBILE = 80;      // Erhöht für schnelleren Zoom
+
+// Desktop-spezifische Geschwindigkeiten (können auch angepasst werden, falls nötig)
+const ROTATE_SPEED_TOUCH_DESKTOP = 0.004;
+const PAN_SPEED_TOUCH_DESKTOP = 0.1;
+const PINCH_ZOOM_MULT_DESKTOP = 40;
+
 
 let activePointers = new Map(); // Speichert aktive Pointer (für Multi-Touch)
 let gestureState = { type: 'none', startDist: 0, startMid: { x: 0, y: 0 }, lastMid: { x: 0, y: 0 }, lastDist: 0, startTime: 0, initialPointerCount: 0 };
@@ -532,6 +539,22 @@ const VoxelShaperIO = {
 
         obj += `mtllib voxel_model.mtl\n`; // Verweis auf die MTL-Datei im OBJ
 
+        // Define normals once at the beginning of the OBJ file
+        obj += '# Vertex Normals\n';
+        const normals = [
+            new THREE.Vector3(0, 0, 1),  // 1: +Z (Front)
+            new THREE.Vector3(0, 0, -1), // 2: -Z (Back)
+            new THREE.Vector3(1, 0, 0),  // 3: +X (Right)
+            new THREE.Vector3(-1, 0, 0), // 4: -X (Left)
+            new THREE.Vector3(0, 1, 0),  // 5: +Y (Top)
+            new THREE.Vector3(0, -1, 0)   // 6: -Y (Bottom)
+        ];
+        normals.forEach(n => {
+            obj += `vn ${n.x.toFixed(4)} ${n.y.toFixed(4)} ${n.z.toFixed(4)}\n`;
+        });
+        obj += '\n';
+
+
         voxModel.voxels.forEach(v => {
             const x = v.x * voxelSize;
             const y = v.y * voxelSize;
@@ -539,14 +562,14 @@ const VoxelShaperIO = {
 
             // Vertices für einen Einheitswürfel (relativ zum Ursprung des aktuellen Voxels für einfachere Indizierung)
             const verts = [
-                [x, y, z],           // 0: ---
-                [x + voxelSize, y, z],       // 1: +--
-                [x, y + voxelSize, z],       // 2: -+-
-                [x + voxelSize, y + voxelSize, z],   // 3: ++-
-                [x, y, z + voxelSize],       // 4: --+
-                [x + voxelSize, y, z + voxelSize],   // 5: +-+
-                [x, y + voxelSize, z + voxelSize],   // 6: -++
-                [x + voxelSize, y + voxelSize, z + voxelSize]    // 7: +++
+                [x, y, z],           // 0: --- (0,0,0)
+                [x + voxelSize, y, z],       // 1: +-- (1,0,0)
+                [x, y + voxelSize, z],       // 2: -+- (0,1,0)
+                [x + voxelSize, y + voxelSize, z],   // 3: ++- (1,1,0)
+                [x, y, z + voxelSize],       // 4: --+ (0,0,1)
+                [x + voxelSize, y, z + voxelSize],   // 5: +-+ (1,0,1)
+                [x, y + voxelSize, z + voxelSize],   // 6: -++ (0,1,1)
+                [x + voxelSize, y + voxelSize, z + voxelSize]    // 7: +++ (1,1,1)
             ];
 
             verts.forEach(vert => {
@@ -560,29 +583,41 @@ const VoxelShaperIO = {
             // Prüfen, ob Nachbar existiert, bevor die Fläche exportiert wird (Face Culling)
             const baseIdx = vertexCount; // Aktueller Startindex für die Vertices dieses Voxels
 
-            // Front Face (+Z)
+            // Front Face (+Z) - Normal Index 1
             if (!hasVoxel(v.x, v.y, v.z + 1)) {
-                obj += `f ${baseIdx + 5} ${baseIdx + 6} ${baseIdx + 8} ${baseIdx + 7}\n`;
+                // Vertices (0-indexed local): 4, 5, 7, 6
+                // Correct winding (counter-clockwise when looking at the face from +Z): 4 -> 5 -> 7 -> 6
+                obj += `f ${baseIdx + 5}//1 ${baseIdx + 6}//1 ${baseIdx + 8}//1 ${baseIdx + 7}//1\n`;
             }
-            // Back Face (-Z)
+            // Back Face (-Z) - Normal Index 2
             if (!hasVoxel(v.x, v.y, v.z - 1)) {
-                obj += `f ${baseIdx + 1} ${baseIdx + 2} ${baseIdx + 4} ${baseIdx + 3}\n`; // Korrigierte Reihenfolge für korrekte Normalen
+                // Vertices (0-indexed local): 0, 1, 3, 2
+                // Correct winding (counter-clockwise when looking at the face from -Z): 0 -> 2 -> 3 -> 1
+                obj += `f ${baseIdx + 1}//2 ${baseIdx + 3}//2 ${baseIdx + 4}//2 ${baseIdx + 2}//2\n`;
             }
-            // Right Face (+X)
+            // Right Face (+X) - Normal Index 3
             if (!hasVoxel(v.x + 1, v.y, v.z)) {
-                obj += `f ${baseIdx + 2} ${baseIdx + 6} ${baseIdx + 8} ${baseIdx + 4}\n`; // Korrigierte Reihenfolge für korrekte Normalen
+                // Vertices (0-indexed local): 1, 3, 7, 5
+                // Correct winding (counter-clockwise when looking at the face from +X): 1 -> 5 -> 7 -> 3
+                obj += `f ${baseIdx + 2}//3 ${baseIdx + 6}//3 ${baseIdx + 8}//3 ${baseIdx + 4}//3\n`;
             }
-            // Left Face (-X)
+            // Left Face (-X) - Normal Index 4
             if (!hasVoxel(v.x - 1, v.y, v.z)) {
-                obj += `f ${baseIdx + 1} ${baseIdx + 5} ${baseIdx + 7} ${baseIdx + 3}\n`; // Korrigierte Reihenfolge für korrekte Normalen
+                // Vertices (0-indexed local): 0, 4, 6, 2
+                // Correct winding (counter-clockwise when looking at the face from -X): 0 -> 2 -> 6 -> 4
+                obj += `f ${baseIdx + 1}//4 ${baseIdx + 3}//4 ${baseIdx + 7}//4 ${baseIdx + 5}//4\n`;
             }
-            // Top Face (+Y)
+            // Top Face (+Y) - Normal Index 5
             if (!hasVoxel(v.x, v.y + 1, v.z)) {
-                obj += `f ${baseIdx + 3} ${baseIdx + 7} ${baseIdx + 8} ${baseIdx + 4}\n`; // Korrigierte Reihenfolge für korrekte Normalen
+                // Vertices (0-indexed local): 2, 6, 7, 3
+                // Correct winding (counter-clockwise when looking at the face from +Y): 2 -> 3 -> 7 -> 6
+                obj += `f ${baseIdx + 3}//5 ${baseIdx + 4}//5 ${baseIdx + 8}//5 ${baseIdx + 7}//5\n`;
             }
-            // Bottom Face (-Y)
+            // Bottom Face (-Y) - Normal Index 6
             if (!hasVoxel(v.x, v.y - 1, v.z)) {
-                obj += `f ${baseIdx + 1} ${baseIdx + 5} ${baseIdx + 6} ${baseIdx + 2}\n`; // Korrigierte Reihenfolge für korrekte Normalen
+                // Vertices (0-indexed local): 0, 1, 5, 4
+                // Correct winding (counter-clockwise when looking at the face from -Y): 0 -> 4 -> 5 -> 1
+                obj += `f ${baseIdx + 1}//6 ${baseIdx + 5}//6 ${baseIdx + 6}//6 ${baseIdx + 2}//6\n`;
             }
 
             vertexCount += 8;
@@ -717,36 +752,54 @@ function onResize() {
 
 // Behandelt Touch-Gesten für Kamera-Steuerung
 function handleGesture() {
-    const pointers = [...activePointers.values()]; if (pointers.length === 0) return;
-    if (pointers.length === 1 && gestureState.type === 'rotate') {
+    const pointers = [...activePointers.values()];
+    if (pointers.length === 0) return;
+
+    if (pointers.length === 1) {
+        // One-finger drag for camera rotation
         const p = pointers[0];
-        euler.y -= (p.x - gestureState.lastMid.x) * ROTATE_SPEED_TOUCH;
-        euler.x += (p.y - gestureState.lastMid.y) * ROTATE_SPEED_TOUCH;
+        const rotateSpeed = isMobile ? ROTATE_SPEED_TOUCH_MOBILE : ROTATE_SPEED_TOUCH_DESKTOP;
+        
+        // Shapr3D-like rotation: Drag right -> rotate right (increase Y euler), Drag up -> rotate up (decrease X euler)
+        euler.y += (p.x - gestureState.lastMid.x) * rotateSpeed;
+        euler.x -= (p.y - gestureState.lastMid.y) * rotateSpeed; // Invert Y for intuitive up/down rotation
+        
         euler.x = Math.max(-Math.PI / 2, Math.min(Math.PI / 2, euler.x));
         cam.quaternion.setFromEuler(euler);
-        gestureState.lastMid = { x: p.x, y: p.y }; return;
+        gestureState.lastMid = { x: p.x, y: p.y };
+        return;
     }
+
     if (pointers.length >= 2) {
         const [p0, p1] = pointers;
-        const midX = (p0.x + p1.x) * 0.5; const midY = (p0.y + p1.y) * 0.5;
+        const midX = (p0.x + p1.x) * 0.5;
+        const midY = (p0.y + p1.y) * 0.5;
         const dist = Math.hypot(p1.x - p0.x, p1.y - p0.y);
+
         if (gestureState.type === 'none') {
             const dMid = Math.hypot(midX - gestureState.startMid.x, midY - gestureState.startMid.y);
             const relDelta = Math.abs(dist - gestureState.startDist) / gestureState.startDist;
-            if (relDelta > PINCH_REL_TH) gestureState.type = 'pinch';
-            else if (dMid > PAN_PIX_TH) gestureState.type = 'pan';
+            if (relDelta > PINCH_REL_TH) {
+                gestureState.type = 'pinch';
+            } else if (dMid > MOVE_PX) { // Use MOVE_PX for pan threshold
+                gestureState.type = 'pan';
+            }
             return;
         } else if (gestureState.type === 'pinch') {
-            const zoomDelta = (dist / gestureState.lastDist - 1) * PINCH_ZOOM_MULT * moveSpeed;
+            const pinchZoomMult = isMobile ? PINCH_ZOOM_MULT_MOBILE : PINCH_ZOOM_MULT_DESKTOP;
+            const zoomDelta = (dist / gestureState.lastDist - 1) * pinchZoomMult * moveSpeed;
             cam.position.addScaledVector(cam.getWorldDirection(new THREE.Vector3()), zoomDelta);
             gestureState.lastDist = dist;
         } else if (gestureState.type === 'pan') {
-            const panFactor = PAN_SPEED_TOUCH * moveSpeed;
-            const dx = (midX - gestureState.lastMid.x) * panFactor;
-            const dy = (midY - gestureState.lastMid.y) * panFactor;
+            const panSpeed = isMobile ? PAN_SPEED_TOUCH_MOBILE : PAN_SPEED_TOUCH_DESKTOP;
+            const dx = (midX - gestureState.lastMid.x) * panSpeed;
+            const dy = (midY - gestureState.lastMid.y) * panSpeed;
+            
             const right = new THREE.Vector3().crossVectors(cam.getWorldDirection(new THREE.Vector3()), cam.up).normalize();
-            cam.position.addScaledVector(right, -dx);
-            cam.position.addScaledVector(new THREE.Vector3(0, 1, 0), dy);
+            // Shapr3D-like pan: Drag right -> pan right, Drag up -> pan up
+            cam.position.addScaledVector(right, dx); // Corrected direction
+            cam.position.addScaledVector(new THREE.Vector3(0, 1, 0), dy); // Corrected direction (Y-axis for vertical pan)
+            
             gestureState.lastMid = { x: midX, y: midY };
         }
     }
@@ -811,7 +864,14 @@ function cycleMode() {
         case Modes.DRAW: currentMode = Modes.ADD; break;
     }
     document.getElementById('current-mode').textContent = `Modus: ${currentMode}`;
-    document.getElementById('mobile-mode-icon').className = ModeIcons[currentMode]; // Update mobile icon
+    // Update mobile icon for mode toggle
+    const mobileModeIcon = document.getElementById('mobile-mode-icon');
+    if (mobileModeIcon) {
+        mobileModeIcon.className = ModeIcons[currentMode];
+        console.log(`Setting mobile mode icon to: ${ModeIcons[currentMode]}`); // Debugging
+    } else {
+        console.warn("mobileModeIcon element not found!"); // Debugging
+    }
     lastActionVoxelCoords = null; updatePreviewVoxel(0, 0, 0, false);
     previewLineInstancedMesh.count = 0; previewLineInstancedMesh.instanceMatrix.needsUpdate = true; previewLineVoxels = [];
 }
@@ -1482,7 +1542,7 @@ async function uploadProjectToHub() {
     const tags = document.getElementById('uploadTags').value.split(',').map(tag => tag.trim()).filter(tag => tag !== '');
     const visibility = document.querySelector('input[name="uploadVisibility"]:checked').value;
     if (!title) { showToast('Fehler', 'Bitte geben Sie einen Titel für Ihr Projekt ein.', 'warning'); return; }
-    if (!category) { showToast('Fehler', 'Bitte wählen Sie eine Kategorie für Ihr Projekt aus.', 'warning'); return; }
+    if (!category) { showToast('Fehler', 'Bitte wählen Sie eine Kategorie für Ihr Projekt aus.', 'warning'); 'warning'; return; }
     showToast('Lade hoch...', 'Ihr Projekt wird hochgeladen. Bitte warten Sie...', 'info', 5000);
     try {
         const voxelMap = {}; voxels.forEach((v, k) => { const [gx, gy, gz] = parseKey(k); voxelMap[`${gx},${gy},${gz}`] = v.color; });
@@ -1758,11 +1818,45 @@ function onPointerDown(e) {
         touchIndicator.style.display = 'block'; touchIndicator.style.left = `${e.clientX}px`; touchIndicator.style.top = `${e.clientY}px`;
         const now = performance.now();
 
+        // If multiple pointers are active, this is a camera gesture.
+        if (activePointers.size > 1) {
+            // Clear any potential drawing state from previous single-finger interactions
+            initialDragVoxelCoords = null;
+            currentStrokeVoxels.clear();
+            previewLineInstancedMesh.count = 0; previewLineInstancedMesh.instanceMatrix.needsUpdate = true; previewLineVoxels = [];
+            updatePreviewVoxel(0, 0, 0, false);
+            doubleTapDragActive = false; // Ensure double-tap drag is off for multi-touch
+            
+            // Initialize gesture state for multi-touch
+            const pointersArr = [...activePointers.values()];
+            const [p0, p1] = pointersArr;
+            const midX = (p0.x + p1.x) * 0.5; const midY = (p0.y + p1.y) * 0.5; const dist = Math.hypot(p1.x - p0.x, p1.y - p0.y);
+            gestureState.type = 'none'; gestureState.startMid = gestureState.lastMid = { x: midX, y: midY };
+            gestureState.startDist = gestureState.lastDist = dist;
+            gestureState.initialPointerCount = activePointers.size;
+            return; // EXIT EARLY: Multi-touch camera gesture, no voxel action
+        }
+
+        // If only one pointer is active (single touch)
         if (tapCandidate && (now - tapCandidate.time < DT_MS) && (Math.hypot(e.clientX - tapCandidate.x, e.clientY - tapCandidate.y) < TAP_DIST_TH)) {
             // Double tap for continuous drag (freehand drawing)
             doubleTapDragActive = true; tapCandidate = null;
-            let rawTarget = calculateRayTargetVoxelCoords(e.clientX, e.clientY);
+            // ... (rest of existing double-tap logic for voxel modification)
+        } else {
+            // Single tap or start of multi-touch gesture (which was handled above if activePointers.size > 1)
+            tapCandidate = { x: e.clientX, y: e.clientY, time: now };
+            initialDragVoxelCoords = null; currentStrokeVoxels.clear();
+            previewLineInstancedMesh.count = 0; previewLineInstancedMesh.instanceMatrix.needsUpdate = true; previewLineVoxels = [];
+            updatePreviewVoxel(0, 0, 0, false);
+            gestureState.initialPointerCount = activePointers.size;
+            if (activePointers.size === 1) { gestureState.type = 'rotate'; gestureState.lastMid = { x: e.clientX, y: e.clientY }; }
+        }
+        // If doubleTapDragActive is true, the initial voxel modification happens here.
+        // If not, it's a single tap, and voxel modification will happen on pointerUp if it's not a drag.
 
+        // If it's a single touch that initiated a double-tap drag, perform the initial voxel modification
+        if (doubleTapDragActive) {
+            let rawTarget = calculateRayTargetVoxelCoords(e.clientX, e.clientY);
             if (!rawTarget || !Number.isFinite(rawTarget.gx) || !Number.isFinite(rawTarget.gy) || !Number.isFinite(rawTarget.gz)) {
                 console.warn("onPointerDown (touch, double-tap): Invalid rawTarget coordinates. Drag initiation aborted.");
                 doubleTapDragActive = false; lastActionVoxelCoords = null; initialDragVoxelCoords = null; currentStrokeVoxels.clear(); updatePreviewVoxel(0, 0, 0, false); previewLineInstancedMesh.count = 0;
@@ -1785,7 +1879,6 @@ function onPointerDown(e) {
             }
 
             if (initialActionVoxel) {
-                // Ensure coordinates are finite before assigning to initialDragVoxelCoords
                 if (!Number.isFinite(initialActionVoxel.gx) || !Number.isFinite(initialActionVoxel.gy) || !Number.isFinite(initialActionVoxel.gz)) {
                     console.warn("Initial action voxel has non-finite coordinates. Aborting drag initiation.");
                     doubleTapDragActive = false; lastActionVoxelCoords = null; initialDragVoxelCoords = null; currentStrokeVoxels.clear(); updatePreviewVoxel(0, 0, 0, false); previewLineInstancedMesh.count = 0;
@@ -1804,26 +1897,11 @@ function onPointerDown(e) {
                 updatePreviewVoxel(0, 0, 0, false); // Hide preview voxel during drag
                 previewLineInstancedMesh.count = 0;
             }
-        } else {
-            // Single tap or start of multi-touch gesture
-            tapCandidate = { x: e.clientX, y: e.clientY, time: now };
-            initialDragVoxelCoords = null; currentStrokeVoxels.clear();
-            previewLineInstancedMesh.count = 0; previewLineInstancedMesh.instanceMatrix.needsUpdate = true; previewLineVoxels = [];
-            updatePreviewVoxel(0, 0, 0, false);
         }
-        gestureState.initialPointerCount = activePointers.size;
-        if (activePointers.size === 1) { gestureState.type = 'rotate'; gestureState.lastMid = { x: e.clientX, y: e.clientY }; }
-        else if (activePointers.size >= 2) {
-            const pointersArr = [...activePointers.values()];
-            const [p0, p1] = pointersArr;
-            const midX = (p0.x + p1.x) * 0.5; const midY = (p0.y + p1.y) * 0.5; const dist = Math.hypot(p1.x - p0.x, p1.y - p0.y);
-            gestureState.type = 'none'; gestureState.startMid = gestureState.lastMid = { x: midX, y: midY };
-            gestureState.startDist = gestureState.lastDist = dist;
-        }
-        return;
+        return; // Exit after touch handling
     }
 
-    // Handle mouse events (left click)
+    // Handle mouse events (left click) - only if not a touch event
     if (e.pointerType === 'mouse' && e.button === 0) {
         lastX = e.clientX; lastY = e.clientY;
         updatePreviewVoxel(0, 0, 0, false);
@@ -1853,7 +1931,6 @@ function onPointerDown(e) {
         }
 
         if (initialActionVoxel) {
-            // Ensure coordinates are finite before assigning to initialDragVoxelCoords
             if (!Number.isFinite(initialActionVoxel.gx) || !Number.isFinite(initialActionVoxel.gy) || !Number.isFinite(initialActionVoxel.gz)) {
                 console.warn("Initial action voxel has non-finite coordinates. Aborting drag initiation.");
                 pointerIsDown = false; initialClickPos = null; lastActionVoxelCoords = null; initialDragVoxelCoords = null; currentStrokeVoxels.clear(); updatePreviewVoxel(0, 0, 0, false); previewLineInstancedMesh.count = 0;
@@ -1881,16 +1958,28 @@ function onPointerMove(e) {
     e.preventDefault();
     if (isPointerLocked) return;
 
+    // Update pointer position for multi-touch tracking
+    if (e.pointerType === 'touch' && activePointers.has(e.pointerId)) {
+        activePointers.set(e.pointerId, { x: e.clientX, y: e.clientY, pointerType: e.pointerType });
+        // If multiple pointers are active, prioritize camera gestures and skip voxel modification.
+        if (activePointers.size > 1) {
+            handleGesture(); // Handle camera pan/zoom
+            updatePreviewVoxel(0, 0, 0, false); // Hide preview during multi-touch camera control
+            previewLineInstancedMesh.count = 0; // Hide line preview during multi-touch camera control
+            previewLineInstancedMesh.instanceMatrix.needsUpdate = true;
+            previewLineVoxels = [];
+            return; // EXIT EARLY: No voxel modification during multi-touch camera gestures
+        }
+    }
+
+    // If we reach here, it's either a single pointer (mouse or touch) or no pointers active.
+    // Proceed with single-pointer logic for hover/drag-drawing.
+
     lastX = e.clientX;
     lastY = e.clientY;
 
-    // Calculate distance moved from initial click position
     const currentMovedDist = initialClickPos ? Math.hypot(e.clientX - initialClickPos.x, e.clientY - initialClickPos.y) : 0;
-
-    // Determine if a drag operation is active.
-    // A drag starts if pointer is down AND (it's a mouse drag past threshold OR it's a double-tap drag).
     const isDraggingVoxelAction = (pointerIsDown && e.pointerType === 'mouse' && currentMovedDist > MOVE_PX) || doubleTapDragActive;
-
 
     let currentRayHit = calculateRayTargetVoxelCoords(e.clientX, e.clientY);
     let currentTargetVoxelCoords = null;
@@ -1920,11 +2009,10 @@ function onPointerMove(e) {
             console.error("Final currentTargetVoxelCoords has non-finite values after processing:", { gx, gy, gz });
             currentTargetVoxelCoords = null;
         }
-    } else {
-        currentTargetVoxelCoords = null;
     }
 
-    if (isDraggingVoxelAction && currentTargetVoxelCoords) { // ONLY draw if a valid target is found
+    // Only proceed with drawing if a drag action is active AND we have a valid target voxel
+    if (isDraggingVoxelAction && currentTargetVoxelCoords) {
         const startPointForLine = lastActionVoxelCoords || initialDragVoxelCoords;
         const endPointForLine = currentTargetVoxelCoords; // Now guaranteed to be valid if we enter this block
 
@@ -1960,11 +2048,12 @@ function onPointerMove(e) {
         previewLineInstancedMesh.count = 0; // Line preview not needed for instant drawing
 
     } else { // Hovering or not dragging, or currentTargetVoxelCoords is null
+        // Clear any existing line preview
         previewLineInstancedMesh.count = 0;
         previewLineInstancedMesh.instanceMatrix.needsUpdate = true;
         previewLineVoxels = [];
 
-        if (currentTargetVoxelCoords) { // Only show preview if a valid target is found
+        if (currentTargetVoxelCoords) { // Only show single voxel preview if a valid target is found
             let showPreview = false;
             const gKeyAtPreview = key(currentTargetVoxelCoords.gx, currentTargetVoxelCoords.gy, currentTargetVoxelCoords.gz);
             const hasVoxelAtPreview = voxels.has(gKeyAtPreview);
@@ -1980,10 +2069,9 @@ function onPointerMove(e) {
         }
     }
     
-    // Handle camera rotation/pan for touch events
-    if (e.pointerType === 'touch' && activePointers.has(e.pointerId)) {
-        activePointers.set(e.pointerId, { x: e.clientX, y: e.clientY, pointerType: e.pointerType });
-        handleGesture();
+    // Handle camera rotation/pan for touch events (only if it's a single touch and not a drag-drawing action)
+    if (e.pointerType === 'touch' && activePointers.size === 1 && !isDraggingVoxelAction) {
+        handleGesture(); // Handle camera pan/zoom
     }
 }
 
@@ -2220,7 +2308,8 @@ window.onload = async function() {
         containerDiv.addEventListener('pointercancel', onPointerUp);
         containerDiv.addEventListener('pointerleave', onPointerLeave);
         containerDiv.addEventListener('wheel', onMouseWheel, { passive: false });
-        containerDiv.addEventListener('touchmove', (e) => { if (activePointers.size > 0) e.preventDefault(); }, { passive: false });
+        // Removed the touchmove preventDefault on containerDiv, as it's now handled specifically within onPointerMove for multi-touch.
+        // It's crucial to still have touch-action: none on the canvas itself.
         document.addEventListener('keydown', onKeyDown); document.addEventListener('keyup', onKeyUp);
         document.addEventListener('pointerlockchange', onPointerLockChange, false);
         document.addEventListener('mousemove', (e) => { if (isPointerLocked) { mouseMovementX = e.movementX; mouseMovementY = e.movementY; } });
@@ -2343,6 +2432,12 @@ window.onload = async function() {
             }
             onResize();
             rebuildHelpers(); // Rebuild helpers to reflect potential axis change for mobile
+            // Ensure mobile mode icon is set correctly on media query change
+            const mobileModeIcon = document.getElementById('mobile-mode-icon');
+            if (mobileModeIcon) {
+                mobileModeIcon.className = ModeIcons[currentMode];
+                console.log(`Setting mobile mode icon on media query change: ${ModeIcons[currentMode]}`); // Debugging
+            }
         }
         mediaQuery.addListener(handleMediaQueryChange); handleMediaQueryChange(mediaQuery);
 
@@ -2359,10 +2454,12 @@ window.onload = async function() {
         
         mobileColorPickerBtn.addEventListener('click', (e) => {
             e.stopPropagation();
+            console.log("Mobile color picker button clicked."); // Debugging
             mobileColorInput.click(); // Trigger the native color picker
         });
 
         mobileColorInput.addEventListener('input', (e) => {
+            console.log("Mobile color input 'input' event fired. New color:", e.target.value); // Debugging
             currentColor = e.target.value;
             localStorage.setItem('voxelEditorColor', currentColor);
             document.getElementById('color-picker').value = currentColor; // Sync with desktop picker
@@ -2372,6 +2469,19 @@ window.onload = async function() {
                 previewVoxelMaterial.color.set(currentColor);
             }
         });
+        // Also listen to 'change' event for broader compatibility, especially on mobile
+        mobileColorInput.addEventListener('change', (e) => {
+            console.log("Mobile color input 'change' event fired. New color:", e.target.value); // Debugging
+            currentColor = e.target.value;
+            localStorage.setItem('voxelEditorColor', currentColor);
+            document.getElementById('color-picker').value = currentColor; // Sync with desktop picker
+            presetBoxes.forEach(box => box.classList.remove('active', 'border-primary', 'shadow-lg', 'shadow-primary/50'));
+            activePresetIndex = -1;
+            if (previewVoxelMesh.visible) {
+                previewVoxelMaterial.color.set(currentColor);
+            }
+        });
+
         // Sync initial color for the mobile color input
         mobileColorInput.value = currentColor;
 
