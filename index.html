@@ -493,6 +493,7 @@ let isMobile = window.matchMedia('(max-width: 768px)').matches; // Prüft, ob es
 
 let initialDragVoxelWorldPos = null; // Weltposition des initialen Drag-Voxels
 let dragAxisLock = null; // Gesperrte Achse während des Drags
+let initialDragVoxelCoords = null; // Stores the coordinates of the first voxel affected during a drag cycle
 
 let projectTitle = ''; // Titel des Projekts
 let projectDescription = ''; // Beschreibung des Projekts
@@ -503,9 +504,6 @@ let projectSourceJsonUrl = ''; // URL der ursprünglichen JSON-Datei
 let projectVisibility = 'public'; // Sichtbarkeit des Projekts (öffentlich/privat)
 
 const predefinedCategories = ["Spielzeug", "Dekoration", "Funktional", "Kunst", "Allgemein", "Charaktere", "Fahrzeuge", "Natur", "Architektur", "Abstrakt"]; // Vordefinierte Kategorien
-
-let auth, db, currentUserId, currentUser; // Firebase-Authentifizierungs- und Firestore-Objekte
-let toastContainer; // Global deklariert, um von handleMediaQueryChange zugänglich zu sein
 
 // VoxelShaperIO für OBJ-Export
 const VoxelShaperIO = {
@@ -785,7 +783,7 @@ function releasePointer(id, eventType) {
     }
     if (activePointers.size === 0) {
         doubleTapDragActive = false; lastActionVoxelCoords = null; touchIndicator.style.display = 'none';
-        initialDragVoxelWorldPos = null; dragAxisLock = null;
+        initialDragVoxelWorldPos = null; dragAxisLock = null; initialDragVoxelCoords = null; // Reset initialDragVoxelCoords
         previewLineInstancedMesh.count = 0; previewLineInstancedMesh.instanceMatrix.needsUpdate = true; previewLineVoxels = [];
     }
 }
@@ -1716,6 +1714,7 @@ function onPointerLeave(e) {
     previewLineInstancedMesh.instanceMatrix.needsUpdate = true;
     previewLineVoxels = [];
     dragAxisLock = null;
+    initialDragVoxelCoords = null; // Reset initialDragVoxelCoords
 }
 
 let pointerIsDown = false; // Flag, ob der Pointer gedrückt ist
@@ -1823,7 +1822,8 @@ function onPointerUp(e) {
     currentStrokeVoxels.clear(); // Clear the stroke after it's committed
     updatePreviewVoxel(0, 0, 0, false); // Hide single preview voxel
     previewLineInstancedMesh.count = 0; previewLineInstancedMesh.instanceMatrix.needsUpdate = true; previewLineVoxels = [];
-    dragAxisLock = null; // Reset axis lock
+    dragAxisLock = null;
+    initialDragVoxelCoords = null; // Reset initialDragVoxelCoords here
     
     if (e.pointerType === 'touch') {
         releasePointer(e.pointerId, e);
@@ -1864,6 +1864,7 @@ function onPointerDown(e) {
     currentStrokeVoxels.clear(); // Clear the stroke for a new drag
     dragAxisLock = null; // Reset axis lock at the start of the drag
     isDragging = false; // Reset drag flag at the start of a new interaction
+    initialDragVoxelCoords = null; // Reset initialDragVoxelCoords for a new interaction
 
     // Store initial position for drag detection
     initialClickPos = { x: e.clientX, y: e.clientY };
@@ -1893,6 +1894,7 @@ function onPointerDown(e) {
             updatePreviewVoxel(0, 0, 0, false);
             doubleTapDragActive = false; // Ensure double-tap drag is off for multi-touch
             isDragging = false; // Ensure drag flag is off for multi-touch
+            initialDragVoxelCoords = null; // Reset for multi-touch
             
             // Initialize gesture state for multi-touch
             const pointersArr = [...activePointers.values()];
@@ -1937,6 +1939,7 @@ function onPointerDown(e) {
             }
 
             if (initialActionVoxel) {
+                initialDragVoxelCoords = { ...initialActionVoxel }; // Set initialDragVoxelCoords on double tap start
                 lastActionVoxelCoords = { ...initialActionVoxel };
                 const gKey = key(initialActionVoxel.gx, initialActionVoxel.gy, initialActionVoxel.gz);
                 const initialColor = voxelsAtDragStart.has(gKey) ? voxelsAtDragStart.get(gKey).color : null;
@@ -2032,27 +2035,15 @@ function onPointerMove(e) {
     // --- NEW LOGIC FOR PLANE LOCKING DURING DRAG CYCLE ---
     // If pointer is down and we have an initial target from pointerdown,
     // enforce the plane constraint on the current target for both drawing and preview.
-    if (pointerIsDown && initialTargetVoxelCoords && currentTargetVoxelCoords) {
-        // Determine dragAxisLock if not already set and threshold is crossed
-        if (dragAxisLock === null && shouldStartDrag) { // Only set lock once drag starts
-            const dx = Math.abs(currentTargetVoxelCoords.gx - initialTargetVoxelCoords.gx);
-            const dy = Math.abs(currentTargetVoxelCoords.gy - initialTargetVoxelCoords.gy);
-            const dz = Math.abs(currentTargetVoxelCoords.gz - initialTargetVoxelCoords.gz);
-            const maxDelta = Math.max(dx, dy, dz);
-
-            if (maxDelta > MOVE_PX) { // Only lock axis if a significant drag has occurred
-                if (maxDelta === dx) { dragAxisLock = 'x'; }
-                else if (maxDelta === dy) { dragAxisLock = 'y'; }
-                else if (maxDelta === dz) { dragAxisLock = 'z'; }
-            }
+    if (pointerIsDown && currentTargetVoxelCoords) {
+        // Set initialDragVoxelCoords if this is the very beginning of a drag
+        if (!initialDragVoxelCoords && shouldStartDrag) {
+            initialDragVoxelCoords = { ...currentTargetVoxelCoords };
         }
 
-        // If an axis is locked, force the current target to that initial plane
-        if (dragAxisLock !== null) {
-            currentTargetVoxelCoords[dragAxisLock] = initialTargetVoxelCoords[initialTargetVoxelCoords.hitExistingVoxel ? dragAxisLock : currentDrawingAxis];
-            // If adding and not hitting an existing voxel, the plane is the current drawing plane.
-            // If hitting an existing voxel, the plane is the voxel's coordinate on the locked axis.
-            // This ensures the plane is consistent with the initial click's intent.
+        // If a drag is active and initialDragVoxelCoords is set, constrain the Y-axis
+        if (isDragging && initialDragVoxelCoords) {
+            currentTargetVoxelCoords.gy = initialDragVoxelCoords.gy;
         }
     }
     // --- END NEW LOGIC ---
