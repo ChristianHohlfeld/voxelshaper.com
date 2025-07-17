@@ -54,6 +54,74 @@ input[type="color"]::-moz-color-swatch { border: none; border-radius: 50%; }
 .color-preset-box::-webkit-color-swatch { border: none; border-radius: 0.375rem; }
 .color-preset-box::-moz-color-swatch-wrapper { padding: 0; }
 .color-preset-box::-moz-color-swatch { border: none; border-radius: 0.375rem; }
+
+/* Custom styles for toast messages */
+#toast-container {
+    position: fixed;
+    z-index: 50;
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+    padding: 1rem;
+    pointer-events: none; /* Allows clicks to pass through when no toast is active */
+}
+
+/* Desktop positioning (bottom-end) */
+#toast-container.toast-end {
+    bottom: 1rem;
+    right: 1rem;
+    align-items: flex-end;
+}
+
+/* Mobile positioning (top-center) */
+@media (max-width: 768px) {
+    #toast-container {
+        top: 1rem;
+        left: 50%;
+        transform: translateX(-50%);
+        width: calc(100% - 2rem); /* Full width minus padding */
+        max-width: 300px; /* Max width for better readability */
+        align-items: center;
+    }
+    #toast-container.toast-end { /* Override desktop position on mobile */
+        bottom: auto;
+        right: auto;
+    }
+}
+
+.toast .alert {
+    pointer-events: auto; /* Re-enable clicks for the toast itself */
+    opacity: 0;
+    transition: opacity 0.3s ease-in-out, transform 0.3s ease-in-out;
+    transform: translateY(20px); /* Start slightly off-screen for animation */
+}
+
+.toast .alert.show {
+    opacity: 1;
+    transform: translateY(0);
+}
+
+/* Smaller padding for mobile toasts */
+@media (max-width: 768px) {
+    .toast .alert {
+        padding: 0.5rem 0.75rem; /* Smaller padding */
+        font-size: 0.875rem; /* Slightly smaller font */
+    }
+    .toast .alert svg {
+        width: 1.25rem; /* Smaller icons */
+        height: 1.25rem;
+    }
+    .toast .alert strong {
+        font-size: 0.9rem;
+    }
+    .toast .alert span {
+        font-size: 0.8rem;
+    }
+    .toast .alert .close-btn {
+        font-size: 1rem;
+        padding: 0.25rem;
+    }
+}
 </style>
 </head>
 <body class="bg-base-100 min-h-screen text-base-content flex flex-col">
@@ -425,6 +493,7 @@ let projectVisibility = 'public'; // Sichtbarkeit des Projekts (öffentlich/priv
 const predefinedCategories = ["Spielzeug", "Dekoration", "Funktional", "Kunst", "Allgemein", "Charaktere", "Fahrzeuge", "Natur", "Architektur", "Abstrakt"]; // Vordefinierte Kategorien
 
 let auth, db, currentUserId, currentUser; // Firebase-Authentifizierungs- und Firestore-Objekte
+let toastContainer; // Global deklariert, um von handleMediaQueryChange zugänglich zu sein
 
 // VoxelShaperIO für OBJ-Export
 const VoxelShaperIO = {
@@ -1254,7 +1323,7 @@ function exportOBJ() {
 
 // Zeigt eine Toast-Benachrichtigung an
 function showToast(title, message, type = 'info', duration = 3000) {
-    const toastContainer = document.getElementById('toast-container');
+    // const toastContainer = document.getElementById('toast-container'); // This line is now redundant
     const toast = document.createElement('div');
     toast.className = `alert shadow-lg ${type === 'info' ? 'alert-info' : type === 'success' ? 'alert-success' : type === 'error' ? 'alert-error' : type === 'warning' ? 'alert-warning' : ''}`;
     toast.innerHTML = `
@@ -2136,6 +2205,7 @@ window.onload = async function() {
     try {
         cvs = document.getElementById('voxelCanvas'); containerDiv = document.getElementById('container');
         touchIndicator = document.getElementById('touch-indicator');
+        toastContainer = document.getElementById('toast-container'); // Initialisiere toastContainer hier
         scene = new THREE.Scene(); scene.background = new THREE.Color(0x282c34);
         cam = new THREE.PerspectiveCamera(75, containerDiv.clientWidth / containerDiv.clientHeight, 0.1, 1000);
         resetCameraPosition(); euler = new THREE.Euler(0, 0, 0, 'YXZ');
@@ -2273,12 +2343,16 @@ window.onload = async function() {
                 controlsPanel.classList.add('hidden'); // Desktop-Steuerelemente ausblenden
                 mobileControls.classList.remove('hidden'); // Mobile Steuerelemente anzeigen
                 mobileControls.classList.add('flex'); // Flex-Anzeige sicherstellen
+                toastContainer.classList.remove('toast-end');
+                toastContainer.classList.add('toast-top-center'); // Apply new mobile toast position
             }
             else { // Desktop-Bildschirm
                 controlsPanel.classList.remove('hidden'); // Desktop-Steuerelemente anzeigen
                 controlsPanel.classList.add('flex'); // Flex-Anzeige sicherstellen
                 mobileControls.classList.add('hidden'); // Mobile Steuerelemente ausblenden
                 mobileControls.classList.remove('flex'); // Flex-Anzeige entfernen
+                toastContainer.classList.remove('toast-top-center');
+                toastContainer.classList.add('toast-end'); // Apply desktop toast position
             }
             onResize();
         }
