@@ -1,0 +1,146 @@
+name: Deploy static content to Pages (prod + SEO)
+
+on:
+  push:
+    branches: ["main"]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: "pages"
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Pages
+        uses: actions/configure-pages@v5
+
+      - name: Prepare output folder
+        run: |
+          mkdir -p out
+          cp index.html out/index.html || true
+          # Falls weitere HTMLs existieren, hier aufnehmen:
+          # cp -r assets out/assets || true
+          touch out/.nojekyll
+
+      - name: 🔧 SEO inject (Title, Canonical, OG/Twitter, JSON-LD, robots.txt, sitemap.xml)
+        run: |
+          set -euo pipefail
+          cd out
+
+          DOMAIN="$(cat ../CNAME 2>/dev/null || echo "${GITHUB_REPOSITORY_OWNER}.github.io")"
+          CANONICAL="https://${DOMAIN}/"
+
+          # --- Texte je nach Domain (DE/EN gemischt, suchoptimiert) ---
+          if [[ "$DOMAIN" == "hub.voxelshaper.com" ]]; then
+            TITLE="VoxelShaper Hub – 3D-Modelle & Community für Maker"
+            DESC="Teile, stöbere und lade 3D-druckbare Voxel-Modelle. Bambu-Studio-freundliche 3MF/STL-Assets. Minecraft-Style Block-CAD."
+            KEYWORDS="voxel models, 3mf, stl, bambu studio, makerworld, voxel cad, block cad, minecraft style, community, download"
+          else
+            TITLE="VoxelShaper – Voxel-CAD für 3D-Druck (Bambu Lab Ready)"
+            DESC="Schnelles, einfaches voxel-basiertes CAD für Maker. Baue Minecraft-Style Modelle und exportiere 3MF/STL für Bambu Studio & AMS Multicolor."
+            KEYWORDS="voxel cad, voxel editor, block based cad, 3d printing cad, bambu lab, 3mf export, stl export, ams multicolor, maker cad, minecraft style 3d editor"
+          fi
+
+          # Assets (bitte in beiden Repos bereitstellen)
+          OG_IMAGE="https://${DOMAIN}/og.png"          # Empfohlen ~1200×630
+          LOGO="https://${DOMAIN}/logo-512.png"        # ≥112×112 PNG (Google-Logo-Richtlinie)
+          
+          # --- Vorhandene Tags aufräumen ---
+          perl -0777 -i -pe '
+            s~<meta[^>]+property="og:[^"]+"[^>]*>~~gi;
+            s~<meta[^>]+name="twitter:[^"]+"[^>]*>~~gi;
+            s~<meta[^>]+name="description"[^>]*>~~gi;
+            s~<meta[^>]+name="keywords"[^>]*>~~gi;
+            s~<link[^>]+rel=["\x27]canonical["\x27][^>]*>~~gi;
+            s~<script[^>]+application/ld\+json[^>]*>.*?</script>~~gsi;
+          ' index.html || true
+
+          # --- SEO-Block bauen ---
+          SEO_BLOCK=$(cat <<EOF
+<meta name="description" content="${DESC}">
+<!-- Google ignoriert meta keywords fürs Ranking; andere Crawler evtl. nicht -->
+<meta name="keywords" content="${KEYWORDS}">
+<link rel="canonical" href="${CANONICAL}">
+<!-- Open Graph -->
+<meta property="og:title" content="${TITLE}">
+<meta property="og:description" content="${DESC}">
+<meta property="og:type" content="website">
+<meta property="og:url" content="${CANONICAL}">
+<meta property="og:image" content="${OG_IMAGE}">
+<meta property="og:site_name" content="VoxelShaper">
+<meta property="og:locale" content="de_DE">
+<meta property="og:locale:alternate" content="en_US">
+<!-- Twitter Cards -->
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:title" content="${TITLE}">
+<meta name="twitter:description" content="${DESC}">
+<meta name="twitter:image" content="${OG_IMAGE}">
+<!-- Structured Data (JSON-LD) -->
+<script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@graph": [
+    {
+      "@type": "Organization",
+      "@id": "https://voxelshaper.com/#org",
+      "name": "VoxelShaper",
+      "url": "https://voxelshaper.com/",
+      "logo": "${LOGO}",
+      "sameAs": []
+    },
+    {
+      "@type": "WebApplication",
+      "@id": "${CANONICAL}#app",
+      "name": "VoxelShaper",
+      "url": "${CANONICAL}",
+      "applicationCategory": "DesignApplication",
+      "operatingSystem": "Web",
+      "isAccessibleForFree": true
+    },
+    {
+      "@type": "WebSite",
+      "@id": "${CANONICAL}#website",
+      "name": "VoxelShaper",
+      "url": "${CANONICAL}"
+    }
+  ]
+}
+</script>
+EOF
+)
+
+          # --- Vor </head> injizieren ---
+          perl -0777 -i -pe "s~</head>~${SEO_BLOCK//~/\\~}\n</head>~i" index.html
+
+          # --- robots.txt & sitemap.xml ---
+          printf "User-agent: *\nDisallow:\nSitemap: https://%s/sitemap.xml\n" "$DOMAIN" > robots.txt
+
+          NOW=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
+          cat > sitemap.xml <<XML
+<?xml version="1.0" encoding="UTF-8"?>
+<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
+  <url><loc>${CANONICAL}</loc><lastmod>${NOW}</lastmod><changefreq>weekly</changefreq><priority>0.8</priority></url>
+</urlset>
+XML
+
+      - name: Upload artifact
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: 'out'
+
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4
