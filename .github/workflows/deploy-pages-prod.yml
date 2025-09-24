@@ -19,7 +19,7 @@ jobs:
         run: |
           set -e
           rm -rf dist && mkdir -p dist
-          cp index.html dist/index.html
+          cp index.html dist/index.html || true
           # cp -R assets dist/assets || true
           touch dist/.nojekyll
 
@@ -49,7 +49,7 @@ jobs:
             KEYS="voxel cad, voxel editor, block based cad, 3d printing cad, bambu lab, 3mf export, stl export, ams multicolor, maker cad, minecraft style 3d editor"
           fi
 
-          # Alte Head-Tags entfernen
+          # Bestehende Head-Tags entfernen
           perl -0777 -i -pe '
             s~<meta[^>]+property="og:[^"]+"[^>]*>~~gi;
             s~<meta[^>]+name="twitter:[^"]+"[^>]*>~~gi;
@@ -59,9 +59,9 @@ jobs:
             s~<script[^>]+application/ld\+json[^>]*>.*?</script>~~gsi;
           ' index.html
 
-          # JSON-LD + SEO-Block (eine Zeile)
+          # JSON-LD + SEO (eine Zeile)
           JSONLD='{"@context":"https://schema.org","@graph":[{"@type":"Organization","@id":"https://voxelshaper.com/#org","name":"VoxelShaper","url":"https://voxelshaper.com/","logo":"'"$LOGO"'","sameAs":[]},{"@type":"WebApplication","@id":"'"$CANON"'#app","name":"VoxelShaper","url":"'"$CANON"'","applicationCategory":"DesignApplication","operatingSystem":"Web","isAccessibleForFree":true},{"@type":"WebSite","@id":"'"$CANON"'#website","name":"VoxelShaper","url":"'"$CANON"'"}]}'
-          SEO="<meta name=\"description\" content=\"${DESC}\"><meta name=\"keywords\" content=\"${KEYS}\"><link rel=\"canonical\" href=\"${CANON}\"><meta property=\"og:title\" content=\"${TITLE}\"><meta property=\"og:description\" content=\"${DESC}\"><meta property=\"og:type\" content=\"website\"><meta property=\"og:url\" content=\"${CANON}\"><meta property=\"og:image\" content=\"${OG}\"><meta property=\"og:site_name\" content=\"VoxelShaper\"><meta property=\"og:locale\" content=\"de_DE\"><meta property=\"og:locale:alternate\" content=\"en_US\"><meta name=\"twitter:card\" content=\"summary_large_image\"><meta name=\"twitter:title\" content=\"${TITLE}\"><meta name=\"twitter:description\" content=\"${DESC}\"><meta name=\"twitter:image\" content=\"${OG}\"><script type=\"application/ld+json\">${JSONLD}</script>"
+          SEO="<meta name=\"description\" content=\"${DESC}\"><meta name=\"keywords\" content=\"${KEYS}\"><link rel=\"canonical\" href=\"${CANON}\"><meta property=\"og:title\" content=\"${TITLE}\"><meta property=\"og:description\" content=\"${DESC}\"><meta property=\"og:type\" content=\"website\"><meta property=\"og:url\" content=\"${CANON}\"><meta property=\"og:image\" content=\"${OG}\"><meta property=\"og:site_name\" content=\"VoxelShaper\"><meta name=\"twitter:card\" content=\"summary_large_image\"><meta name=\"twitter:title\" content=\"${TITLE}\"><meta name=\"twitter:description\" content=\"${DESC}\"><meta name=\"twitter:image\" content=\"${OG}\"><script type=\"application/ld+json\">${JSONLD}</script>"
 
           # Vor </head> injizieren
           perl -0777 -i -pe 'BEGIN{undef $/} s~</head>~'"$SEO"'</head>~i' index.html
@@ -80,9 +80,11 @@ jobs:
           cd dist
           tr '\n' ' ' < index.html > __1l && mv __1l index.html
 
-      - name: Deploy to gh-pages
+      - name: Deploy to branch "pages"
         uses: peaceiris/actions-gh-pages@v4
         with:
           github_token: ${{ secrets.GITHUB_TOKEN }}
           publish_dir: ./dist
-          # force_orphan: true
+          publish_branch: pages
+          # cname: hub.voxelshaper.com     # optional, wenn du es über die Action setzen willst
+          # force_orphan: true             # optional
