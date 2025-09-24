@@ -1,34 +1,7 @@
-
-name: Build & publish (deploy-from-branch + SEO)
-
-on:
-  push:
-    branches: ["main"]
-  workflow_dispatch:
-
-permissions:
-  contents: write
-
-jobs:
-  build-and-publish:
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-
-      - name: Prepare dist
-        run: |
-          set -e
-          rm -rf dist && mkdir -p dist
-          cp index.html dist/index.html
-          # cp -R assets dist/assets || true
-          touch dist/.nojekyll
-
-      - name: SEO inject (canonical, OG/Twitter, JSON-LD, etc.)
+- name: SEO inject (canonical, OG/Twitter, JSON-LD, etc.)
         run: |
           set -euo pipefail
           cd dist
-
           DOMAIN="$(cat ../CNAME 2>/dev/null || true)"
           if [ -z "${DOMAIN:-}" ]; then
             echo "::warning::No CNAME in repo root. Falling back to owner.github.io"
@@ -38,7 +11,6 @@ jobs:
           CANON="https://${DOMAIN}/"
           OG="${CANON}og.png"
           LOGO="${CANON}logo-512.png"
-
           if [[ "$DOMAIN" == "hub.voxelshaper.com" ]]; then
             TITLE="VoxelShaper Hub – 3D-Modelle & Community für Maker"
             DESC="Teile, stöbere und lade 3D-druckbare Voxel-Modelle. Bambu-Studio-freundliche 3MF/STL-Assets. Minecraft-Style Block-CAD."
@@ -48,23 +20,13 @@ jobs:
             DESC="Einfaches voxel-basiertes CAD für Maker. Minecraft-Style Modelle, Export als 3MF/STL für Bambu Studio & AMS Multicolor."
             KEYS="voxel cad, voxel editor, block based cad, 3d printing cad, bambu lab, 3mf export, stl export, ams multicolor, maker cad, minecraft style 3d editor"
           fi
-
           # Alte Head-Tags entfernen
-          perl -0777 -i -pe '
-            s~<meta[^>]+property="og:[^"]+"[^>]*>~~gi;
-            s~<meta[^>]+name="twitter:[^"]+"[^>]*>~~gi;
-            s~<meta[^>]+name="description"[^>]*>~~gi;
-            s~<meta[^>]+name="keywords"[^>]*>~~gi;
-            s~<link[^>]+rel=["\x27]canonical["\x27][^>]*>~~gi;
-            s~<script[^>]+application/ld\+json[^>]*>.*?</script>~~gsi;
-          ' index.html
-
+          perl -0777 -i -pe 's~<meta[^>]+property="og:[^"]+"[^>]*>~~gi;s~<meta[^>]+name="twitter:[^"]+"[^>]*>~~gi;s~<meta[^>]+name="description"[^>]*>~~gi;s~<meta[^>]+name="keywords"[^>]*>~~gi;s~<link[^>]+rel=["\x27]canonical["\x27][^>]*>~~gi;s~<script[^>]+application/ld\+json[^>]*>.*?</script>~~gsi;' index.html
           # SEO-Block (einzeilig) bauen
           JSONLD='{"@context":"https://schema.org","@graph":[{"@type":"Organization","@id":"https://voxelshaper.com/#org","name":"VoxelShaper","url":"https://voxelshaper.com/","logo":"'"$LOGO"'","sameAs":[]},{"@type":"WebApplication","@id":"'"$CANON"'#app","name":"VoxelShaper","url":"'"$CANON"'","applicationCategory":"DesignApplication","operatingSystem":"Web","isAccessibleForFree":true},{"@type":"WebSite","@id":"'"$CANON"'#website","name":"VoxelShaper","url":"'"$CANON"'"}]}'
-
           cat > __seo.html <<EOF
 <meta name="description" content="${DESC}"><meta name="keywords" content="${KEYS}"><link rel="canonical" href="${CANON}"><meta property="og:title" content="${TITLE}"><meta property="og:description" content="${DESC}"><meta property="og:type" content="website"><meta property="og:url" content="${CANON}"><meta property="og:image" content="${OG}"><meta property="og:site_name" content="VoxelShaper"><meta property="og:locale" content="de_DE"><meta property="og:locale:alternate" content="en_US"><meta name="twitter:card" content="summary_large_image"><meta name="twitter:title" content="${TITLE}"><meta name="twitter:description" content="${DESC}"><meta name="twitter:image" content="${OG}"><script type="application/ld+json">${JSONLD}</script>
 EOF
-
           # Vor </head> injizieren
-          perl -0777 -i -pe 'BEGIN{undef $/} s~</head>~@{[do {open my $$f,"<]()
+          perl -0777 -i -pe 'BEGIN{undef $/} s~</head>~@{[do {open my $f,"<","__seo.html"; local $/; <$f>} ]}\n</head>~i' index.html
+          rm -f __seo.html
