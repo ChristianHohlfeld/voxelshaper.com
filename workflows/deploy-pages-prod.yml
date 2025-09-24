@@ -29,13 +29,16 @@ jobs:
 
       - name: Prepare output folder
         run: |
+          set -e
+          rm -rf out
           mkdir -p out
-          cp index.html out/index.html || true
-          # Falls weitere HTMLs existieren, hier aufnehmen:
-          # cp -r assets out/assets || true
+          # Kopiere deine statischen Dateien ins Deploy-Verzeichnis
+          shopt -s dotglob
+          cp -R ./* out/
+          # Pages braucht keine Jekyll-Verarbeitung
           touch out/.nojekyll
 
-      - name: 🔧 SEO inject (Title, Canonical, OG/Twitter, JSON-LD, robots.txt, sitemap.xml)
+      - name: 🔧 SEO inject (canonical, OG/Twitter, JSON-LD, robots.txt, sitemap.xml)
         run: |
           set -euo pipefail
           cd out
@@ -43,7 +46,7 @@ jobs:
           DOMAIN="$(cat ../CNAME 2>/dev/null || echo "${GITHUB_REPOSITORY_OWNER}.github.io")"
           CANONICAL="https://${DOMAIN}/"
 
-          # --- Texte je nach Domain (DE/EN gemischt, suchoptimiert) ---
+          # --- projektspezifische Texte (App vs Hub) ---
           if [[ "$DOMAIN" == "hub.voxelshaper.com" ]]; then
             TITLE="VoxelShaper Hub – 3D-Modelle & Community für Maker"
             DESC="Teile, stöbere und lade 3D-druckbare Voxel-Modelle. Bambu-Studio-freundliche 3MF/STL-Assets. Minecraft-Style Block-CAD."
@@ -54,11 +57,14 @@ jobs:
             KEYWORDS="voxel cad, voxel editor, block based cad, 3d printing cad, bambu lab, 3mf export, stl export, ams multicolor, maker cad, minecraft style 3d editor"
           fi
 
-          # Assets (bitte in beiden Repos bereitstellen)
-          OG_IMAGE="https://${DOMAIN}/og.png"          # Empfohlen ~1200×630
-          LOGO="https://${DOMAIN}/logo-512.png"        # ≥112×112 PNG (Google-Logo-Richtlinie)
-          
-          # --- Vorhandene Tags aufräumen ---
+          # OG/Logo Bilder (leg die Dateien ins Repo-Root)
+          OG_IMAGE="${CANONICAL}og.png"
+          LOGO="${CANONICAL}logo-512.png"
+
+          # Stelle sicher, dass index.html existiert
+          test -f index.html || { echo "::error::index.html not found in out/"; exit 1; }
+
+          # Alte Tags entfernen (auch deine alten test.* OGs)
           perl -0777 -i -pe '
             s~<meta[^>]+property="og:[^"]+"[^>]*>~~gi;
             s~<meta[^>]+name="twitter:[^"]+"[^>]*>~~gi;
@@ -66,29 +72,30 @@ jobs:
             s~<meta[^>]+name="keywords"[^>]*>~~gi;
             s~<link[^>]+rel=["\x27]canonical["\x27][^>]*>~~gi;
             s~<script[^>]+application/ld\+json[^>]*>.*?</script>~~gsi;
-          ' index.html || true
+          ' index.html
 
-          # --- SEO-Block bauen ---
-          SEO_BLOCK=$(cat <<EOF
-<meta name="description" content="${DESC}">
-<!-- Google ignoriert meta keywords fürs Ranking; andere Crawler evtl. nicht -->
-<meta name="keywords" content="${KEYWORDS}">
-<link rel="canonical" href="${CANONICAL}">
-<!-- Open Graph -->
-<meta property="og:title" content="${TITLE}">
-<meta property="og:description" content="${DESC}">
+          # SEO-Block zusammenbauen (absolute canonical-URL, wie von Google empfohlen)
+          # https://developers.google.com/search/docs/crawling-indexing/consolidate-duplicate-urls
+          read -r -d '' SEO_BLOCK <<'EOF'
+<meta name="description" content="__DESC__">
+<!-- (Meta keywords werden von Google ignoriert, schaden aber nicht) -->
+<meta name="keywords" content="__KEYS__">
+<link rel="canonical" href="__CANON__">
+<!-- Open Graph (https://ogp.me/) -->
+<meta property="og:title" content="__TITLE__">
+<meta property="og:description" content="__DESC__">
 <meta property="og:type" content="website">
-<meta property="og:url" content="${CANONICAL}">
-<meta property="og:image" content="${OG_IMAGE}">
+<meta property="og:url" content="__CANON__">
+<meta property="og:image" content="__OG__">
 <meta property="og:site_name" content="VoxelShaper">
 <meta property="og:locale" content="de_DE">
 <meta property="og:locale:alternate" content="en_US">
-<!-- Twitter Cards -->
+<!-- Twitter Cards (Summary Large Image) -->
 <meta name="twitter:card" content="summary_large_image">
-<meta name="twitter:title" content="${TITLE}">
-<meta name="twitter:description" content="${DESC}">
-<meta name="twitter:image" content="${OG_IMAGE}">
-<!-- Structured Data (JSON-LD) -->
+<meta name="twitter:title" content="__TITLE__">
+<meta name="twitter:description" content="__DESC__">
+<meta name="twitter:image" content="__OG__">
+<!-- Structured Data: Organization + WebApplication + WebSite (JSON-LD) -->
 <script type="application/ld+json">
 {
   "@context": "https://schema.org",
@@ -98,35 +105,39 @@ jobs:
       "@id": "https://voxelshaper.com/#org",
       "name": "VoxelShaper",
       "url": "https://voxelshaper.com/",
-      "logo": "${LOGO}",
+      "logo": "__LOGO__",
       "sameAs": []
     },
     {
       "@type": "WebApplication",
-      "@id": "${CANONICAL}#app",
+      "@id": "__CANON__#app",
       "name": "VoxelShaper",
-      "url": "${CANONICAL}",
+      "url": "__CANON__",
       "applicationCategory": "DesignApplication",
       "operatingSystem": "Web",
       "isAccessibleForFree": true
     },
     {
       "@type": "WebSite",
-      "@id": "${CANONICAL}#website",
+      "@id": "__CANON__#website",
       "name": "VoxelShaper",
-      "url": "${CANONICAL}"
+      "url": "__CANON__"
     }
   ]
 }
 </script>
 EOF
-)
+          SEO_BLOCK="${SEO_BLOCK//__TITLE__/$TITLE}"
+          SEO_BLOCK="${SEO_BLOCK//__DESC__/$DESC}"
+          SEO_BLOCK="${SEO_BLOCK//__KEYS__/$KEYWORDS}"
+          SEO_BLOCK="${SEO_BLOCK//__CANON__/$CANONICAL}"
+          SEO_BLOCK="${SEO_BLOCK//__OG__/$OG_IMAGE}"
+          SEO_BLOCK="${SEO_BLOCK//__LOGO__/$LOGO}"
 
-          # --- Vor </head> injizieren ---
           perl -0777 -i -pe "s~</head>~${SEO_BLOCK//~/\\~}\n</head>~i" index.html
 
-          # --- robots.txt & sitemap.xml ---
-          printf "User-agent: *\nDisallow:\nSitemap: https://%s/sitemap.xml\n" "$DOMAIN" > robots.txt
+          # robots.txt (Allow + Sitemap) und sitemap.xml
+          printf "User-agent: *\nDisallow:\nSitemap: %ssitemap.xml\n" "$CANONICAL" > robots.txt
 
           NOW=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
           cat > sitemap.xml <<XML
@@ -139,8 +150,7 @@ XML
       - name: Upload artifact
         uses: actions/upload-pages-artifact@v3
         with:
-          path: 'out'
-
+          path: 'out'  # GitHub Pages erwartet hier deine fertigen Files
       - name: Deploy to GitHub Pages
         id: deployment
         uses: actions/deploy-pages@v4
