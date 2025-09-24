@@ -1,4 +1,4 @@
-name: Deploy static content to Pages (prod + SEO)
+name: Build & publish (deploy-from-branch + SEO)
 
 on:
   push:
@@ -6,65 +6,52 @@ on:
   workflow_dispatch:
 
 permissions:
-  contents: read
-  pages: write
-  id-token: write
-
-concurrency:
-  group: "pages"
-  cancel-in-progress: false
+  contents: write  # wir pushen in gh-pages
 
 jobs:
-  deploy:
-    environment:
-      name: github-pages
-      url: ${{ steps.deployment.outputs.page_url }}
+  build-and-publish:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Setup Pages
-        uses: actions/configure-pages@v5
-
-      - name: Prepare output folder
+      - name: Prepare dist
         run: |
           set -e
-          rm -rf out
-          mkdir -p out
-          # Kopiere deine statischen Dateien ins Deploy-Verzeichnis
-          shopt -s dotglob
-          cp -R ./* out/
-          # Pages braucht keine Jekyll-Verarbeitung
-          touch out/.nojekyll
+          rm -rf dist && mkdir -p dist
+          # Deine statischen Files übernehmen (falls nur index.html vorhanden):
+          cp index.html dist/index.html
+          # Falls du Assets hast: cp -R assets dist/assets || true
+          touch dist/.nojekyll  # Jekyll deaktivieren (bei Deploy-from-branch sinnvoll)
 
-      - name: 🔧 SEO inject (canonical, OG/Twitter, JSON-LD, robots.txt, sitemap.xml)
+      - name: SEO inject (canonical, OG/Twitter, JSON-LD, robots.txt, sitemap.xml)
         run: |
           set -euo pipefail
-          cd out
+          cd dist
 
-          DOMAIN="$(cat ../CNAME 2>/dev/null || echo "${GITHUB_REPOSITORY_OWNER}.github.io")"
-          CANONICAL="https://${DOMAIN}/"
+          # Domain aus CNAME im Repo-Root lesen (empfohlen: leg in beiden Repos eine CNAME an)
+          DOMAIN="$(cat ../CNAME 2>/dev/null || true)"
+          if [ -z "${DOMAIN:-}" ]; then
+            echo "::warning::No CNAME in repo root. Falling back to owner.github.io"
+            DOMAIN="${GITHUB_REPOSITORY_OWNER}.github.io"
+          fi
+          echo "$DOMAIN" > CNAME
+          CANON="https://${DOMAIN}/"
+          OG="${CANON}og.png"
+          LOGO="${CANON}logo-512.png"
 
-          # --- projektspezifische Texte (App vs Hub) ---
+          # Seiten-Texte je Domain
           if [[ "$DOMAIN" == "hub.voxelshaper.com" ]]; then
             TITLE="VoxelShaper Hub – 3D-Modelle & Community für Maker"
             DESC="Teile, stöbere und lade 3D-druckbare Voxel-Modelle. Bambu-Studio-freundliche 3MF/STL-Assets. Minecraft-Style Block-CAD."
-            KEYWORDS="voxel models, 3mf, stl, bambu studio, makerworld, voxel cad, block cad, minecraft style, community, download"
+            KEYS="voxel models, 3mf, stl, bambu studio, makerworld, voxel cad, block cad, minecraft style, community, download"
           else
             TITLE="VoxelShaper – Voxel-CAD für 3D-Druck (Bambu Lab Ready)"
-            DESC="Schnelles, einfaches voxel-basiertes CAD für Maker. Baue Minecraft-Style Modelle und exportiere 3MF/STL für Bambu Studio & AMS Multicolor."
-            KEYWORDS="voxel cad, voxel editor, block based cad, 3d printing cad, bambu lab, 3mf export, stl export, ams multicolor, maker cad, minecraft style 3d editor"
+            DESC="Einfaches voxel-basiertes CAD für Maker. Minecraft-Style Modelle, Export als 3MF/STL für Bambu Studio & AMS Multicolor."
+            KEYS="voxel cad, voxel editor, block based cad, 3d printing cad, bambu lab, 3mf export, stl export, ams multicolor, maker cad, minecraft style 3d editor"
           fi
 
-          # OG/Logo Bilder (leg die Dateien ins Repo-Root)
-          OG_IMAGE="${CANONICAL}og.png"
-          LOGO="${CANONICAL}logo-512.png"
-
-          # Stelle sicher, dass index.html existiert
-          test -f index.html || { echo "::error::index.html not found in out/"; exit 1; }
-
-          # Alte Tags entfernen (auch deine alten test.* OGs)
+          # bestehende Head-Tags aufräumen
           perl -0777 -i -pe '
             s~<meta[^>]+property="og:[^"]+"[^>]*>~~gi;
             s~<meta[^>]+name="twitter:[^"]+"[^>]*>~~gi;
@@ -74,83 +61,44 @@ jobs:
             s~<script[^>]+application/ld\+json[^>]*>.*?</script>~~gsi;
           ' index.html
 
-          # SEO-Block zusammenbauen (absolute canonical-URL, wie von Google empfohlen)
-          # https://developers.google.com/search/docs/crawling-indexing/consolidate-duplicate-urls
-          read -r -d '' SEO_BLOCK <<'EOF'
-<meta name="description" content="__DESC__">
-<!-- (Meta keywords werden von Google ignoriert, schaden aber nicht) -->
-<meta name="keywords" content="__KEYS__">
-<link rel="canonical" href="__CANON__">
-<!-- Open Graph (https://ogp.me/) -->
-<meta property="og:title" content="__TITLE__">
-<meta property="og:description" content="__DESC__">
+          # SEO-Block bauen und vor </head> injizieren
+          cat > __seo.html <<EOF
+<meta name="description" content="${DESC}">
+<meta name="keywords" content="${KEYS}">
+<link rel="canonical" href="${CANON}">
+<meta property="og:title" content="${TITLE}">
+<meta property="og:description" content="${DESC}">
 <meta property="og:type" content="website">
-<meta property="og:url" content="__CANON__">
-<meta property="og:image" content="__OG__">
+<meta property="og:url" content="${CANON}">
+<meta property="og:image" content="${OG}">
 <meta property="og:site_name" content="VoxelShaper">
 <meta property="og:locale" content="de_DE">
 <meta property="og:locale:alternate" content="en_US">
-<!-- Twitter Cards (Summary Large Image) -->
 <meta name="twitter:card" content="summary_large_image">
-<meta name="twitter:title" content="__TITLE__">
-<meta name="twitter:description" content="__DESC__">
-<meta name="twitter:image" content="__OG__">
-<!-- Structured Data: Organization + WebApplication + WebSite (JSON-LD) -->
+<meta name="twitter:title" content="${TITLE}">
+<meta name="twitter:description" content="${DESC}">
+<meta name="twitter:image" content="${OG}">
 <script type="application/ld+json">
 {
   "@context": "https://schema.org",
   "@graph": [
-    {
-      "@type": "Organization",
-      "@id": "https://voxelshaper.com/#org",
-      "name": "VoxelShaper",
-      "url": "https://voxelshaper.com/",
-      "logo": "__LOGO__",
-      "sameAs": []
-    },
-    {
-      "@type": "WebApplication",
-      "@id": "__CANON__#app",
-      "name": "VoxelShaper",
-      "url": "__CANON__",
-      "applicationCategory": "DesignApplication",
-      "operatingSystem": "Web",
-      "isAccessibleForFree": true
-    },
-    {
-      "@type": "WebSite",
-      "@id": "__CANON__#website",
-      "name": "VoxelShaper",
-      "url": "__CANON__"
-    }
+    {"@type":"Organization","@id":"https://voxelshaper.com/#org",
+     "name":"VoxelShaper","url":"https://voxelshaper.com/","logo":"${LOGO}","sameAs":[]},
+    {"@type":"WebApplication","@id":"${CANON}#app","name":"VoxelShaper",
+     "url":"${CANON}","applicationCategory":"DesignApplication",
+     "operatingSystem":"Web","isAccessibleForFree":true},
+    {"@type":"WebSite","@id":"${CANON}#website","name":"VoxelShaper","url":"${CANON}"}
   ]
 }
 </script>
 EOF
-          SEO_BLOCK="${SEO_BLOCK//__TITLE__/$TITLE}"
-          SEO_BLOCK="${SEO_BLOCK//__DESC__/$DESC}"
-          SEO_BLOCK="${SEO_BLOCK//__KEYS__/$KEYWORDS}"
-          SEO_BLOCK="${SEO_BLOCK//__CANON__/$CANONICAL}"
-          SEO_BLOCK="${SEO_BLOCK//__OG__/$OG_IMAGE}"
-          SEO_BLOCK="${SEO_BLOCK//__LOGO__/$LOGO}"
+          perl -0777 -i -pe 'BEGIN{undef $/} s~</head>~@{[do {open my $f,"<","__seo.html"; local $/; <$f>} ]}\n</head>~i' index.html
+          rm -f __seo.html
 
-          perl -0777 -i -pe "s~</head>~${SEO_BLOCK//~/\\~}\n</head>~i" index.html
-
-          # robots.txt (Allow + Sitemap) und sitemap.xml
-          printf "User-agent: *\nDisallow:\nSitemap: %ssitemap.xml\n" "$CANONICAL" > robots.txt
-
+          # robots.txt + sitemap.xml
+          printf "User-agent: *\nDisallow:\nSitemap: %ssitemap.xml\n" "$CANON" > robots.txt
           NOW=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
           cat > sitemap.xml <<XML
 <?xml version="1.0" encoding="UTF-8"?>
 <urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
-  <url><loc>${CANONICAL}</loc><lastmod>${NOW}</lastmod><changefreq>weekly</changefreq><priority>0.8</priority></url>
-</urlset>
-XML
-
-      - name: Upload artifact
-        uses: actions/upload-pages-artifact@v3
-        with:
-          path: 'out'  # GitHub Pages erwartet hier deine fertigen Files
-      - name: Deploy to GitHub Pages
-        id: deployment
-        uses: actions/deploy-pages@v4
+  <url><loc>${CANON}</loc><lastmod>${NOW}</lastmod><changefreq>weekly</changefreq><priorit
