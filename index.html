@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="de" data-theme="dark">
+<html lang="en" data-theme="dark">
 <head>
     <!-- Google tag (gtag.js) -->
 <script async src="https://www.googletagmanager.com/gtag/js?id=G-DMNJKVCNBM"></script>
@@ -17,24 +17,23 @@
     <meta property="og:type" content="website">
     <meta name="viewport" content="width=device-width,initial-scale=1.0,maximum-scale=1.0,user-scalable=no,viewport-fit=cover">
     <meta name="format-detection" content="telephone=no, email=no, address=no">
-    <title>Web Voxel Editor for 3D Printing (3MF/STL) | VoxelShaper</title>
+    <title>VoxelShaper by Christian Heinrich Hohlfeld – Simplified Voxel Editor</title>
     <link rel="canonical" href="https://voxelshaper.com/">
     <meta name="keywords" content="voxel cad, voxel editor, block based cad, 3d printing cad, bambu lab, 3mf export, stl export, ams multicolor, maker cad, minecraft style 3d editor">
 
 <!-- Open Graph -->
 <meta property="og:type" content="website">
 <meta property="og:url" content="https://voxelshaper.com/">
-<meta property="og:title" content="VoxelShaper – Voxel-CAD für 3D-Druck (Bambu Lab Ready)">
-<meta property="og:description" content="Einfaches voxel-basiertes CAD für Maker. Minecraft-Style Modelle, Export als 3MF/STL für Bambu Studio & AMS Multicolor.">
+<meta property="og:title" content="VoxelShaper – Voxel CAD for 3D Printing (Bambu Lab Ready)">
+<meta property="og:description" content="Simple voxel-based CAD for makers. Minecraft-style models, export as 3MF/STL for Bambu Studio & AMS Multicolor.">
 <meta property="og:image" content="https://voxelshaper.com/og.png">
 <meta property="og:site_name" content="VoxelShaper">
-<meta property="og:locale" content="de_DE">
-<meta property="og:locale:alternate" content="en_US">
+<meta property="og:locale" content="en_US">
 
 <!-- Twitter Card -->
 <meta name="twitter:card" content="summary_large_image">
-<meta name="twitter:title" content="VoxelShaper – Voxel-CAD für 3D-Druck (Bambu Lab Ready)">
-<meta name="twitter:description" content="Einfaches voxel-basiertes CAD für Maker. Minecraft-Style Modelle, Export als 3MF/STL für Bambu Studio & AMS Multicolor.">
+<meta name="twitter:title" content="VoxelShaper – Voxel CAD for 3D Printing (Bambu Lab Ready)">
+<meta name="twitter:description" content="Simple voxel-based CAD for makers. Minecraft-style models, export as 3MF/STL for Bambu Studio & AMS Multicolor.">
 <meta name="twitter:image" content="https://voxelshaper.com/og.png">
 
 <!-- JSON-LD -->
@@ -383,11 +382,11 @@
                 <input type="email" id="magicLinkEmail" placeholder="Enter your email" class="input input-bordered w-full">
                 <label class="label cursor-pointer justify-start gap-2">
                     <input type="checkbox" id="agbCheckbox" class="checkbox">
-                    <span class="label-text">Hiermit stimme ich den AGBs und Datenschutzbestimmungen zu.</span>
+                    <span class="label-text">I agree to the Terms of Service and Privacy Policy.</span>
                 </label>
                 <label class="label cursor-pointer justify-start gap-2">
                     <input type="checkbox" id="newsletterCheckbox" class="checkbox">
-                    <span class="label-text">Ich möchte Neuigkeiten und Angebote per E-Mail erhalten.</span>
+                    <span class="label-text">I would like to receive news and offers by email.</span>
                 </label>
                 <button type="submit" class="btn btn-primary">Send Magic Link</button>
             </form>
@@ -414,7 +413,7 @@
 </dialog>
 
 <div id="toast-container" class="toast toast-top toast-center z-50"></div>
-<div id="rotateOverlay" class="orientation-overlay">Bitte ins Hochformat drehen</div>
+<div id="rotateOverlay" class="orientation-overlay">Please rotate to portrait mode</div>
 
 <!-- Core Libraries -->
 <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/build/three.min.js"></script>
@@ -434,7 +433,7 @@
  * model from the VoxelShaper application into a native Bambu Studio project file.
  * * Author: Christian Heinrich Hohlfeld & Gemini
  * * Based on unique idea by: Christian Heinrich Hohlfeld
- * * Date: 24. September 2025
+ * * Date: 29. September 2025
  * * Location: Konstanz, Germany
  * * This implementation rigorously follows the verified Bambu Studio file structure,
  * creating a full project with auto-assigned filament slots.
@@ -614,7 +613,7 @@ const VoxelApp3MFExporter = {
     },
     
     buildProjectSettingsJSON: function(palette){
-  const cols = palette.map(c=>c.slice(0,7));          // "#RRGGBB"
+  const cols = palette.map(c=>c.slice(0,7));         // "#RRGGBB"
   const n = Math.min(cols.length, 16);
   const arr = v => Array.from({length:n}, ()=>v);
 
@@ -697,27 +696,27 @@ const VoxelApp3MFExporter = {
 </Relationships>`,
     
     dataURLtoUint8Array: function(dataURL) {
-      const base64 = dataURL.split(',')[1];
-      const binary = atob(base64);
-      const len = binary.length;
-      const bytes = new Uint8Array(len);
-      for (let i = 0; i < len; i++) bytes[i] = binary.charCodeAt(i);
-      return bytes;
+        const base64 = dataURL.split(',')[1];
+        const binary = atob(base64);
+        const len = binary.length;
+        const bytes = new Uint8Array(len);
+        for (let i = 0; i < len; i++) bytes[i] = binary.charCodeAt(i);
+        return bytes;
     },
 
     makeThumb: function(label="plate_1", w=600, h=600) {
-      const c = document.createElement('canvas');
-      c.width = w; c.height = h;
-      const ctx = c.getContext('2d');
-      const g = ctx.createLinearGradient(0,0,w,h);
-      g.addColorStop(0,'#191a1f'); g.addColorStop(0.5,'#3b3f46'); g.addColorStop(1,'#0e0f12');
-      ctx.fillStyle = g; ctx.fillRect(0,0,w,h);
-      ctx.fillStyle = '#ffffff';
-      ctx.globalAlpha = 0.9;
-      ctx.font = `${Math.floor(w*0.08)}px system-ui,Arial,sans-serif`;
-      ctx.textAlign='center'; ctx.textBaseline='middle';
-      ctx.fillText(label, w/2, h/2);
-      return c.toDataURL('image/png');
+        const c = document.createElement('canvas');
+        c.width = w; c.height = h;
+        const ctx = c.getContext('2d');
+        const g = ctx.createLinearGradient(0,0,w,h);
+        g.addColorStop(0,'#191a1f'); g.addColorStop(0.5,'#3b3f46'); g.addColorStop(1,'#0e0f12');
+        ctx.fillStyle = g; ctx.fillRect(0,0,w,h);
+        ctx.fillStyle = '#ffffff';
+        ctx.globalAlpha = 0.9;
+        ctx.font = `${Math.floor(w*0.08)}px system-ui,Arial,sans-serif`;
+        ctx.textAlign='center'; ctx.textBaseline='middle';
+        ctx.fillText(label, w/2, h/2);
+        return c.toDataURL('image/png');
     }
 };
 // --- END: 3MF EXPORTER INTEGRATION ---
@@ -782,35 +781,35 @@ const VoxelApp = {
     },
 
     computeMobileMode: function () {
-      return window.matchMedia('(pointer: coarse)').matches || navigator.maxTouchPoints > 0;
+        return window.matchMedia('(pointer: coarse)').matches || navigator.maxTouchPoints > 0;
     },
     applyUIMode: function () {
-      const mobile = this.computeMobileMode();
-      this.isMobile = mobile;
-      const desktopBar = document.getElementById('controls');
-      const mobileWrap = document.getElementById('mobile-ui-container');
-      if (mobile) {
-        if (desktopBar) desktopBar.style.display = 'none';
-        if (mobileWrap)  mobileWrap.style.display  = 'block';
-      } else {
-        if (desktopBar) desktopBar.style.display = 'flex';
-        if (mobileWrap)  mobileWrap.style.display  = 'none';
-      }
-      document.body.classList.toggle('has-mobile-bar', this.isMobile);
+        const mobile = this.computeMobileMode();
+        this.isMobile = mobile;
+        const desktopBar = document.getElementById('controls');
+        const mobileWrap = document.getElementById('mobile-ui-container');
+        if (mobile) {
+            if (desktopBar) desktopBar.style.display = 'none';
+            if (mobileWrap)  mobileWrap.style.display  = 'block';
+        } else {
+            if (desktopBar) desktopBar.style.display = 'flex';
+            if (mobileWrap)  mobileWrap.style.display  = 'none';
+        }
+        document.body.classList.toggle('has-mobile-bar', this.isMobile);
     },
     tryLockOrientation: async function () {
-      if ('orientation' in screen && screen.orientation && screen.orientation.lock) {
-        try { await screen.orientation.lock('portrait'); } catch (e) { /* Not allowed by browser */ }
-      }
+        if ('orientation' in screen && screen.orientation && screen.orientation.lock) {
+            try { await screen.orientation.lock('portrait'); } catch (e) { /* Not allowed by browser */ }
+        }
     },
     updateOrientationOverlay: function () {
-      const isPortrait = window.matchMedia('(orientation: portrait)').matches;
-      const isTouch = this.computeMobileMode();
-      const overlay = document.getElementById('rotateOverlay');
-      const show = isTouch && !isPortrait;
-      overlay.classList.toggle('show', show);
-      this.cvs.style.pointerEvents = show ? 'none' : 'auto';
-      document.body.style.overflow = show ? 'hidden' : '';
+        const isPortrait = window.matchMedia('(orientation: portrait)').matches;
+        const isTouch = this.computeMobileMode();
+        const overlay = document.getElementById('rotateOverlay');
+        const show = isTouch && !isPortrait;
+        overlay.classList.toggle('show', show);
+        this.cvs.style.pointerEvents = show ? 'none' : 'auto';
+        document.body.style.overflow = show ? 'hidden' : '';
     },
 
     init: function() {
@@ -1123,7 +1122,7 @@ const VoxelApp = {
         }, { passive: false });
         this.containerDiv.addEventListener('dblclick', (e) => e.preventDefault(), { passive: false });
         document.addEventListener('selectstart', (e) => {
-          if (!e.target.closest('input, textarea, select, [contenteditable]')) e.preventDefault();
+            if (!e.target.closest('input, textarea, select, [contenteditable]')) e.preventDefault();
         }, { passive: false });
         window.addEventListener('gesturestart', (e) => e.preventDefault(), { passive: false });
     },
@@ -1691,27 +1690,27 @@ const VoxelApp = {
     },
     
     showToast: function(title, message, type = 'info', duration = 1500) {
-      const container = document.getElementById('toast-container');
-      const alertClass = { success: 'alert-success', info: 'alert-info',
-                           warning: 'alert-warning', error: 'alert-error' }[type] || 'alert-info';
+        const container = document.getElementById('toast-container');
+        const alertClass = { success: 'alert-success', info: 'alert-info',
+                             warning: 'alert-warning', error: 'alert-error' }[type] || 'alert-info';
 
-      const toast = document.createElement('div');
-      toast.className = `alert ${alertClass} shadow-lg`;
+        const toast = document.createElement('div');
+        toast.className = `alert ${alertClass} shadow-lg`;
 
-      const wrap = document.createElement('div');
-      const strong = document.createElement('strong');
-      strong.textContent = title;
-      const br = document.createElement('br');
-      const span = document.createElement('span');
-      span.textContent = message;
+        const wrap = document.createElement('div');
+        const strong = document.createElement('strong');
+        strong.textContent = title;
+        const br = document.createElement('br');
+        const span = document.createElement('span');
+        span.textContent = message;
 
-      wrap.appendChild(strong);
-      wrap.appendChild(br);
-      wrap.appendChild(span);
-      toast.appendChild(wrap);
+        wrap.appendChild(strong);
+        wrap.appendChild(br);
+        wrap.appendChild(span);
+        toast.appendChild(wrap);
 
-      container.appendChild(toast);
-      setTimeout(() => toast.remove(), duration);
+        container.appendChild(toast);
+        setTimeout(() => toast.remove(), duration);
     },
 
     loginLogout: async function() {
@@ -1768,7 +1767,7 @@ const VoxelApp = {
             return;
         }
         if (!acceptsAgb) {
-            this.showToast('Error', 'Bitte AGBs akzeptieren.', 'error');
+            this.showToast('Error', 'Please accept the Terms of Service.', 'error');
             return;
         }
         try {
