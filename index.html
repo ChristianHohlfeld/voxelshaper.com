@@ -1007,128 +1007,33 @@ const VoxelApp = {
         document.getElementById('newsletterCheckbox').checked = newsletterChecked ? (newsletterChecked === 'true') && !this.computeMobileMode() : false;
         this.updateAllControlInputs();
     },
-    setupThree: function () {
-  // Scene & fog (depth separation)
-  this.scene = new THREE.Scene();
-  const bg = 0x0e0f12;
-  this.scene.background = new THREE.Color(bg);
-  this.scene.fog = new THREE.FogExp2(bg, 0.0016);
 
-  // Camera
-  this.cam = new THREE.PerspectiveCamera(
-    65,
-    this.containerDiv.clientWidth / this.containerDiv.clientHeight,
-    0.1,
-    4000
-  );
-  this.euler = new THREE.Euler(0, 0, 0, 'YXZ');
-  this.resetCamera();
-
-  // Renderer (slightly darker)
-  this.ren = new THREE.WebGLRenderer({
-    canvas: this.cvs,
-    antialias: true,
-    logarithmicDepthBuffer: true
-  });
-  this.ren.setSize(this.containerDiv.clientWidth, this.containerDiv.clientHeight);
-  this.ren.setPixelRatio(this.isMobile ? 1.5 : (window.devicePixelRatio || 1));
-  this.ren.outputEncoding = THREE.sRGBEncoding;
-  this.ren.toneMapping = THREE.ACESFilmicToneMapping;
-  this.ren.toneMappingExposure = 0.72; // down from ~0.9
-  this.ren.physicallyCorrectLights = true;
-  this.ren.shadowMap.enabled = true;
-  this.ren.shadowMap.type = THREE.PCFSoftShadowMap;
-  this.ren.setClearColor(bg, 1);
-
-  // Lights (key/fill/rim + soft hemi)
-  const hemi = new THREE.HemisphereLight(0xffffff, 0x202020, 0.28);
-  this.scene.add(hemi);
-
-  const key = new THREE.DirectionalLight(0xffffff, 0.66);
-  key.position.set(16, 26, 18);
-  key.castShadow = true;
-  key.shadow.mapSize.set(2048, 2048);
-  key.shadow.camera.near = 1;
-  key.shadow.camera.far = 2000;
-  key.shadow.camera.left = -400; key.shadow.camera.right = 400;
-  key.shadow.camera.top = 400;   key.shadow.camera.bottom = -400;
-  key.shadow.bias = -0.00015;
-  key.shadow.normalBias = 0.02;
-  this.scene.add(key);
-  this.dirLight = key;
-
-  const fill = new THREE.DirectionalLight(0xffffff, 0.22);
-  fill.position.set(-12, 10, -14);
-  this.scene.add(fill);
-
-  const rim = new THREE.DirectionalLight(0xffffff, 0.18);
-  rim.position.set(0, 10, 28);
-  this.scene.add(rim);
-
-  // Preview voxel
-  this.previewVoxel = new THREE.Mesh(
-    new THREE.BoxGeometry(this.VS, this.VS, this.VS),
-    new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.45, depthTest: false })
-  );
-  this.previewVoxel.visible = false;
-  this.previewVoxel.scale.setScalar(this.VOXEL_SCALE ?? 0.98);
-  this.scene.add(this.previewVoxel);
-
-  // Preview brush group
-  this.previewBrush = new THREE.Group();
-  this.scene.add(this.previewBrush);
-
-  // Helpers
-  this.rebuildHelpers();
-},
-makeVoxelMesh: function (color, x, y, z) {
-  // subtle gap avoids z-fighting between stacked voxels
-  const scale = this.VOXEL_SCALE ?? 0.98;
-
-  const geo = new THREE.BoxGeometry(this.VS, this.VS, this.VS);
-
-  const mat = new THREE.MeshStandardMaterial({
-    color,
-    roughness: 0.95,
-    metalness: 0.0,
-    flatShading: true,
-    dithering: true
-  });
-
-  // Cheap face differentiation: top a touch brighter, bottom a touch darker,
-  // plus a mild fresnel rim for stacks. Works without postFX.
-  mat.onBeforeCompile = (shader) => {
-    shader.fragmentShader = shader.fragmentShader.replace(
-      '#include <output_fragment>',
-      `
-      // BEGIN voxel face tint
-      float up   = clamp(normal.y * 0.5 + 0.5, 0.0, 1.0);   // 0..1 (bottom..top)
-      float fres = pow(1.0 - abs(dot(normalize(vViewPosition), normal)), 2.0);
-
-      // top brighten (1.06), bottom darken (0.92), sides ~1.0
-      float topFactor    = mix(0.98, 1.06, up);
-      float bottomFactor = mix(1.00, 0.92, 1.0 - up);
-      float rimFactor    = mix(1.0, 1.08, fres * 0.25);
-
-      outgoingLight *= topFactor;
-      outgoingLight *= bottomFactor;
-      outgoingLight *= rimFactor;
-      // END voxel face tint
-
-      #include <output_fragment>
-      `
-    );
-  };
-
-  const mesh = new THREE.Mesh(geo, mat);
-  mesh.position.set(x * this.VS + 0.5, y * this.VS + 0.5, z * this.VS + 0.5);
-  mesh.scale.setScalar(scale);
-  mesh.castShadow = true;
-  mesh.receiveShadow = true;
-  return mesh;
-},
-
-
+    setupThree: function() {
+        this.scene = new THREE.Scene();
+        this.scene.background = new THREE.Color(0x282c34);
+        this.cam = new THREE.PerspectiveCamera(75, this.containerDiv.clientWidth / this.containerDiv.clientHeight, 0.1, 1000);
+        this.euler = new THREE.Euler(0, 0, 0, 'YXZ');
+        this.resetCamera();
+        this.ren = new THREE.WebGLRenderer({ canvas: this.cvs, antialias: true, logarithmicDepthBuffer: true });
+        this.ren.shadowMap.enabled = true;
+        this.ren.shadowMap.type = THREE.PCFSoftShadowMap;
+        this.scene.add(new THREE.AmbientLight(0x606060));
+        const dirLight = new THREE.DirectionalLight(0xffffff, 0.65);
+        dirLight.position.set(10, 20, 15);
+        dirLight.castShadow = true;
+        this.scene.add(dirLight);
+        this.scene.add(new THREE.HemisphereLight(0xffffff, 0x444444, 0.3));
+        this.previewVoxel = new THREE.Mesh(
+            new THREE.BoxGeometry(this.VS, this.VS, this.VS),
+            new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.5, depthTest: false })
+        );
+        this.previewVoxel.visible = false;
+        this.scene.add(this.previewVoxel);
+        this.previewBrush = new THREE.Group();
+        this.scene.add(this.previewBrush);
+        this.rebuildHelpers();
+    },
+    
     setupEventListeners: function() {
         window.addEventListener('resize', () => this.handleResize());
         window.addEventListener('resize', () => this.updateOrientationOverlay());
@@ -1733,60 +1638,59 @@ makeVoxelMesh: function (color, x, y, z) {
         }
     },
 
-_modifySingleVoxel: function(x, y, z, modeOverride = null) {
-  x = Math.max(0, Math.min(this.GRID - 1, x));
-  y = Math.max(0, Math.min(this.GRID - 1, y));
-  z = Math.max(0, Math.min(this.GRID - 1, z));
-  const k = this.key(x, y, z);
+    _modifySingleVoxel: function(x, y, z, modeOverride = null) {
+        x = Math.max(0, Math.min(this.GRID - 1, x));
+        y = Math.max(0, Math.min(this.GRID - 1, y));
+        z = Math.max(0, Math.min(this.GRID - 1, z));
+        const k = this.key(x, y, z);
 
-  if (this.currentStroke && !this.currentStroke.has(k)) {
-    const originalVoxel = this.voxels.get(k);
-    this.currentStroke.set(k, {
-      before: originalVoxel ? { color: originalVoxel.color } : null
-    });
-  }
+        if (this.currentStroke && !this.currentStroke.has(k)) {
+            const originalVoxel = this.voxels.get(k);
+            this.currentStroke.set(k, { 
+                before: originalVoxel ? { color: originalVoxel.color } : null 
+            });
+        }
 
-  const existingVoxel = this.voxels.get(k);
-  let modified = false;
-  const mode = modeOverride || this.currentMode;
+        const existingVoxel = this.voxels.get(k);
+        let modified = false;
+        const mode = modeOverride || this.currentMode;
 
-  switch (mode) {
-    case 'ADD': {
-      if (!existingVoxel) {
-        const voxelMesh = this.makeVoxelMesh(this.currentColor, x, y, z);
-        this.scene.add(voxelMesh);
-        this.voxels.set(k, { color: this.currentColor, mesh: voxelMesh });
-        modified = true;
-      }
-      break;
-    }
-    case 'DELETE': {
-      if (existingVoxel) {
-        this.scene.remove(existingVoxel.mesh);
-        existingVoxel.mesh.geometry.dispose();
-        existingVoxel.mesh.material.dispose();
-        this.voxels.delete(k);
-        modified = true;
-      }
-      break;
-    }
-    case 'DRAW': {
-      if (existingVoxel && existingVoxel.color !== this.currentColor) {
-        existingVoxel.mesh.material.color.set(this.currentColor);
-        this.voxels.get(k).color = this.currentColor;
-        modified = true;
-      }
-      break;
-    }
-  }
+        switch (mode) {
+            case 'ADD':
+                if (!existingVoxel) {
+                    const voxelMesh = new THREE.Mesh(new THREE.BoxGeometry(this.VS, this.VS, this.VS), new THREE.MeshLambertMaterial({ color: this.currentColor }));
+                    voxelMesh.position.set(x * this.VS + 0.5, y * this.VS + 0.5, z * this.VS + 0.5);
+                    voxelMesh.castShadow = true;
+                    voxelMesh.receiveShadow = true;
+                    this.scene.add(voxelMesh);
+                    this.voxels.set(k, { color: this.currentColor, mesh: voxelMesh });
+                    modified = true;
+                }
+                break;
+            case 'DELETE':
+                if (existingVoxel) {
+                    this.scene.remove(existingVoxel.mesh);
+                    existingVoxel.mesh.geometry.dispose();
+                    existingVoxel.mesh.material.dispose();
+                    this.voxels.delete(k);
+                    modified = true;
+                }
+                break;
+            case 'DRAW':
+                 if (existingVoxel && existingVoxel.color !== this.currentColor) {
+                    existingVoxel.mesh.material.color.set(this.currentColor);
+                    this.voxels.get(k).color = this.currentColor;
+                    modified = true;
+                }
+                break;
+        }
 
-  if (this.currentStroke && modified) {
-    const finalVoxel = this.voxels.get(k);
-    const historyEntry = this.currentStroke.get(k);
-    historyEntry.after = finalVoxel ? { color: finalVoxel.color } : null;
-  }
-},
-
+        if (this.currentStroke && modified) {
+            const finalVoxel = this.voxels.get(k);
+            const historyEntry = this.currentStroke.get(k);
+            historyEntry.after = finalVoxel ? { color: finalVoxel.color } : null;
+        }
+    },
     
     drawVoxelLine: function(start, end, normal) {
         let x0 = start.x, y0 = start.y, z0 = start.z;
@@ -2175,9 +2079,7 @@ _modifySingleVoxel: function(x, y, z, modeOverride = null) {
             iter1 = 'x'; iter2 = 'y';
         }
         
-        const previewColor = (this.currentMode === 'DELETE') ? 0xff4444 : 0xffffff;
-        this.previewVoxel.material.opacity = 0.55;
-        this.previewVoxel.material.color.set(previewColor);
+        const previewColor = this.currentMode === 'DELETE' ? 0xff0000 : this.currentColor;
         const opacity = this.currentMode === 'DELETE' ? 0.4 : 0.5;
 
         for (let i = 0; i < size; i++) {
@@ -2230,40 +2132,29 @@ _modifySingleVoxel: function(x, y, z, modeOverride = null) {
         localStorage.removeItem('voxelshaper_autosave');
         this.showToast('Project Cleared', '', 'info');
     },
-rebuildHelpers: function () {
-  if (this.gridHelper) this.scene.remove(this.gridHelper);
-  if (this.boxHelper)  this.scene.remove(this.boxHelper);
 
-  const size = this.GRID * this.VS;
-
-  // Grid sits on the active drawing plane; keep it subtle
-  const gh = new THREE.GridHelper(size, this.GRID, 0x2a2e36, 0x1c1f26);
-  gh.material.opacity = 0.6;
-  gh.material.transparent = true;
-
-  if (this.currentDrawingAxis === 'y') {
-    gh.position.set(size / 2, this.activeDrawingLevel.y * this.VS, size / 2);
-    gh.rotation.set(0, 0, 0);
-  } else if (this.currentDrawingAxis === 'x') {
-    gh.position.set(this.activeDrawingLevel.x * this.VS, size / 2, size / 2);
-    gh.rotation.set(0, 0, Math.PI / 2);
-  } else { // 'z'
-    gh.position.set(size / 2, size / 2, this.activeDrawingLevel.z * this.VS);
-    gh.rotation.set(Math.PI / 2, 0, 0);
-  }
-  this.gridHelper = gh;
-  this.scene.add(gh);
-
-  // Bounding box edges (very faint)
-  const boxGeom = new THREE.BoxGeometry(size, size, size);
-  const edges   = new THREE.EdgesGeometry(boxGeom);
-  const boxMat  = new THREE.LineBasicMaterial({ color: 0x3a3f48, transparent: true, opacity: 0.5 });
-  const box     = new THREE.LineSegments(edges, boxMat);
-  box.position.set(size / 2, size / 2, size / 2);
-  this.boxHelper = box;
-  this.scene.add(box);
-},
-
+    rebuildHelpers: function() {
+        if (this.gridHelper) this.scene.remove(this.gridHelper);
+        if (this.boxHelper) this.scene.remove(this.boxHelper);
+        const size = this.GRID * this.VS;
+        this.gridHelper = new THREE.GridHelper(size, this.GRID);
+        if (this.currentDrawingAxis === 'y') {
+            this.gridHelper.position.set(size / 2, this.activeDrawingLevel.y * this.VS, size / 2);
+            this.gridHelper.rotation.set(0, 0, 0);
+        } else if (this.currentDrawingAxis === 'x') {
+            this.gridHelper.position.set(this.activeDrawingLevel.x * this.VS, size / 2, size / 2);
+            this.gridHelper.rotation.set(0, 0, Math.PI / 2);
+        } else { // 'z'
+            this.gridHelper.position.set(size / 2, size / 2, this.activeDrawingLevel.z * this.VS);
+            this.gridHelper.rotation.set(Math.PI / 2, 0, 0);
+        }
+        this.scene.add(this.gridHelper);
+        const boxGeom = new THREE.BoxGeometry(size, size, size);
+        const edges = new THREE.EdgesGeometry(boxGeom);
+        this.boxHelper = new THREE.LineSegments(edges, new THREE.LineBasicMaterial({ color: 0x4a5568 })); 
+        this.boxHelper.position.set(size / 2, size / 2, size / 2);
+        this.scene.add(this.boxHelper);
+    },
 
     resetCamera: function() {
         this.currentDrawingAxis = 'y';
@@ -2530,57 +2421,49 @@ rebuildHelpers: function () {
         this.showToast('Export Complete', 'Downloaded voxel-model.stl', 'info');
     },
 
-animate: function () {
-  requestAnimationFrame(() => this.animate());
+    animate: function() {
+        requestAnimationFrame(() => this.animate());
+        if (document.pointerLockElement === this.cvs) {
+            const rotX = this.controls.invertLookX ? this.mouseState.mouseMovementX : -this.mouseState.mouseMovementX;
+            const rotY = this.controls.invertLookY ? this.mouseState.mouseMovementY : -this.mouseState.mouseMovementY;
+            this.euler.y += rotX * this.ROTATE_SPEED;
+            this.euler.x += rotY * this.ROTATE_SPEED;
+            this.euler.x = Math.max(-Math.PI / 2, Math.min(Math.PI / 2, this.euler.x));
+            this.cam.quaternion.setFromEuler(this.euler);
+            this.mouseState.mouseMovementX = 0;
+            this.mouseState.mouseMovementY = 0;
+            const forward = new THREE.Vector3();
+            this.cam.getWorldDirection(forward);
+            const right = new THREE.Vector3().crossVectors(forward, this.cam.up).normalize();
+            const strafeXSpeed = this.controls.invertStrafeX ? -this.flySpeed : this.flySpeed;
+            const strafeYSpeed = this.controls.invertStrafeY ? -this.flySpeed : this.flySpeed;
+            if (this.keyboard['w']) this.cam.position.addScaledVector(forward, this.flySpeed);
+            if (this.keyboard['s']) this.cam.position.addScaledVector(forward, -this.flySpeed);
+            if (this.keyboard['a']) this.cam.position.addScaledVector(right, -strafeXSpeed);
+            if (this.keyboard['d']) this.cam.position.addScaledVector(right, strafeXSpeed);
+            if (this.keyboard['e']) this.cam.position.y += strafeYSpeed;
+            if (this.keyboard['q']) this.cam.position.y -= strafeYSpeed;
+        }
+        this.ren.render(this.scene, this.cam);
+    },
 
-  if (document.pointerLockElement === this.cvs) {
-    const rotX = this.controls.invertLookX ? this.mouseState.mouseMovementX : -this.mouseState.mouseMovementX;
-    const rotY = this.controls.invertLookY ? this.mouseState.mouseMovementY : -this.mouseState.mouseMovementY;
-    this.euler.y += rotX * this.ROTATE_SPEED;
-    this.euler.x += rotY * this.ROTATE_SPEED;
-    this.euler.x = Math.max(-Math.PI / 2, Math.min(Math.PI / 2, this.euler.x));
-    this.cam.quaternion.setFromEuler(this.euler);
-    this.mouseState.mouseMovementX = 0;
-    this.mouseState.mouseMovementY = 0;
-
-    const forward = new THREE.Vector3();
-    this.cam.getWorldDirection(forward);
-    const right = new THREE.Vector3().crossVectors(forward, this.cam.up).normalize();
-
-    const strafeXSpeed = this.controls.invertStrafeX ? -this.flySpeed : this.flySpeed;
-    const strafeYSpeed = this.controls.invertStrafeY ? -this.flySpeed : this.flySpeed;
-
-    if (this.keyboard['w']) this.cam.position.addScaledVector(forward, this.flySpeed);
-    if (this.keyboard['s']) this.cam.position.addScaledVector(forward, -this.flySpeed);
-    if (this.keyboard['a']) this.cam.position.addScaledVector(right, -strafeXSpeed);
-    if (this.keyboard['d']) this.cam.position.addScaledVector(right,  strafeXSpeed);
-    if (this.keyboard['e']) this.cam.position.y += strafeYSpeed;
-    if (this.keyboard['q']) this.cam.position.y -= strafeYSpeed;
-  }
-
-  // render
-  this.ren.render(this.scene, this.cam);
-},
-
-rebuildSceneFromVoxels: function() {
-  // Remove all voxel meshes except previews/template image
-  this.scene.children
-    .filter(c => c.isMesh && c !== this.previewVoxel && c !== this.templateImageMesh)
-    .forEach(c => {
-      this.scene.remove(c);
-      if (c.geometry) c.geometry.dispose();
-      if (c.material) c.material.dispose();
-    });
-
-  // Recreate from map
-  this.voxels.forEach((voxelData, key) => {
-    const [x, y, z] = this.parseKey(key);
-    const voxelMesh = this.makeVoxelMesh(voxelData.color, x, y, z);
-    this.scene.add(voxelMesh);
-    voxelData.mesh = voxelMesh;
-  });
-},
-
+    rebuildSceneFromVoxels: function() {
+        this.scene.children.filter(c => c.isMesh && c !== this.previewVoxel && c !== this.templateImageMesh ).forEach(c => {
+            this.scene.remove(c);
+            if(c.geometry) c.geometry.dispose();
+            if(c.material) c.material.dispose();
+        });
+        
+        this.voxels.forEach((voxelData, key) => {
+            const [x, y, z] = this.parseKey(key);
+            const voxelMesh = new THREE.Mesh(new THREE.BoxGeometry(this.VS, this.VS, this.VS), new THREE.MeshLambertMaterial({ color: voxelData.color }));
+            voxelMesh.position.set(x * this.VS + 0.5, y * this.VS + 0.5, z * this.VS + 0.5);
+            voxelMesh.castShadow = true;
+            voxelMesh.receiveShadow = true;
+            this.scene.add(voxelMesh);
+            voxelData.mesh = voxelMesh;
+        });
+    },
 
     addHistoryStep: function(changes) {
         if (this.historyPointer < this.history.length - 1) {
@@ -2852,4 +2735,3 @@ document.addEventListener('DOMContentLoaded', () => VoxelApp.init());
 
 </body>
 </html>
-
