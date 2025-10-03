@@ -1,4 +1,3 @@
-
 <!DOCTYPE html>
 <html lang="en" data-theme="dark">
 <head>
@@ -267,6 +266,12 @@
         </label>
         <button id="modeToggle" class="btn btn-sm btn-neutral">Mode</button>
         <span id="current-mode" class="font-bold text-success text-center text-sm whitespace-nowrap">Mode: Add</span>
+        <div id="brush-controls" class="controls-group hidden">
+            <div class="divider divider-horizontal"></div>
+            <label for="brush-size-slider" class="text-sm whitespace-nowrap">Brush:</label>
+            <input type="range" id="brush-size-slider" min="1" max="10" value="1" class="range range-xs w-24">
+            <span id="brush-size-display" class="font-bold text-primary text-sm">1x1</span>
+        </div>
     </div>
 
     <div class="flex-grow"></div>
@@ -761,6 +766,7 @@ const VoxelApp = {
     GRID: 10,
     flySpeed: 0.1, 
     currentMode: 'ADD',
+    brushSize: 1,
     isMobile: false,
     history: [],
     historyPointer: -1,
@@ -768,9 +774,12 @@ const VoxelApp = {
     templateImageMesh: null,
     templateImageData: null,
     templateImagePinnedY: null,
-    selectedVoxels: new Set(),
-    selectionMeshes: new Map(),
-    extrudeGizmoMesh: null,
+    // --- Extrude/Select State ---
+    selectedFaces: new Set(),
+    selectionFaceMeshes: new Map(),
+    ghostVoxels: new Map(),
+    previewBrush: null,
+    // --- End Extrude/Select State ---
     currentDrawingAxis: 'y',
     activeDrawingLevel: { x: 0, y: 0, z: 0 },
     activePointers: new Map(),
@@ -778,8 +787,11 @@ const VoxelApp = {
     mouseState: {
         isRotating: false, isPanning: false, isModifying: false, isDragging: false, isExtruding: false,
         lastX: 0, lastY: 0, downX: 0, downY: 0,
-        lastActionCoords: null, mouseMovementX: 0, mouseMovementY: 0,
+        lastActionCoords: null,
+        lastActionNormal: null,
+        mouseMovementX: 0, mouseMovementY: 0,
         drawingPlane: new THREE.Plane(),
+        dragStartPoint: new THREE.Vector3(),
         extrudeNormal: null,
         dragFixedLayerCoord: null,
         isMarqueeSelecting: false,
@@ -797,7 +809,8 @@ const VoxelApp = {
     Modes: {
         ADD: { name: 'Add', icon: 'fas fa-plus' },
         DELETE: { name: 'Delete', icon: 'fas fa-trash' },
-        DRAW: { name: 'Draw', icon: 'fas fa-paint-brush' }
+        DRAW: { name: 'Draw', icon: 'fas fa-paint-brush' },
+        SELECT: { name: 'Select', icon: 'fas fa-mouse-pointer' },
     },
 
     computeMobileMode: function () {
@@ -845,6 +858,7 @@ const VoxelApp = {
             this.loadAutosavedScene(); 
         }
 
+        this.updateModeUI(); // Set initial UI state for controls
         const oneTimeLock = () => {
             this.tryLockOrientation();
             window.removeEventListener('pointerdown', oneTimeLock);
@@ -977,6 +991,7 @@ const VoxelApp = {
         this.GRID = parseInt(localStorage.getItem('voxelEditorGridSize') || this.GRID_DEFAULT);
         this.currentColor = localStorage.getItem('voxelEditorColor') || '#ffffff';
         this.flySpeed = parseFloat(localStorage.getItem('voxelEditorFlySpeed') || 0.1);
+        this.brushSize = parseInt(localStorage.getItem('voxelEditorBrushSize') || 1);
         this.controls.invertLookX = localStorage.getItem('invertLookX') === 'true';
         this.controls.invertLookY = localStorage.getItem('invertLookY') === 'true';
         this.controls.invertZoom = localStorage.getItem('invertZoom') === 'true';
@@ -1003,22 +1018,19 @@ const VoxelApp = {
         this.ren.shadowMap.enabled = true;
         this.ren.shadowMap.type = THREE.PCFSoftShadowMap;
         this.scene.add(new THREE.AmbientLight(0x606060));
-        const dirLight = new THREE.DirectionalLight(0xffffff, 1.0);
+        const dirLight = new THREE.DirectionalLight(0xffffff, 0.5);
         dirLight.position.set(10, 20, 15);
         dirLight.castShadow = true;
         this.scene.add(dirLight);
-        this.scene.add(new THREE.HemisphereLight(0xffffff, 0x444444, 0.6));
+        this.scene.add(new THREE.HemisphereLight(0xffffff, 0x444444, 0.2));
         this.previewVoxel = new THREE.Mesh(
             new THREE.BoxGeometry(this.VS, this.VS, this.VS),
             new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.5, depthTest: false })
         );
         this.previewVoxel.visible = false;
         this.scene.add(this.previewVoxel);
-        const extrudeGizmoGeometry = new THREE.PlaneGeometry(this.VS, this.VS);
-        const extrudeGizmoMaterial = new THREE.MeshBasicMaterial({ color: 0x00ff00, transparent: true, opacity: 0.5, side: THREE.DoubleSide });
-        this.extrudeGizmoMesh = new THREE.Mesh(extrudeGizmoGeometry, extrudeGizmoMaterial);
-        this.extrudeGizmoMesh.visible = false;
-        this.scene.add(this.extrudeGizmoMesh);
+        this.previewBrush = new THREE.Group();
+        this.scene.add(this.previewBrush);
         this.rebuildHelpers();
     },
     
@@ -1028,7 +1040,7 @@ const VoxelApp = {
         window.addEventListener('orientationchange', () => this.updateOrientationOverlay());
         this.containerDiv.addEventListener('pointerdown', (e) => this.onPointerDown(e));
         this.containerDiv.addEventListener('pointermove', (e) => this.onPointerMove(e));
-        this.containerDiv.addEventListener('pointerup', (e) => this.onPointerUp(e));
+        window.addEventListener('pointerup', (e) => this.onPointerUp(e)); // Listen on window for reliable release
         this.containerDiv.addEventListener('pointerleave', (e) => this.onPointerUp(e));
         this.containerDiv.addEventListener('pointercancel', (e) => this.onPointerUp(e));
         this.containerDiv.addEventListener('wheel', (e) => this.onMouseWheel(e), { passive: false });
@@ -1037,6 +1049,7 @@ const VoxelApp = {
         this.cvs.addEventListener('contextmenu', (e) => e.preventDefault());
         document.addEventListener('pointerlockchange', this.onPointerLockChange.bind(this), false);
         document.getElementById('grid-size-slider').addEventListener('input', (e) => this.setGridSize(parseInt(e.target.value)));
+        document.getElementById('brush-size-slider').addEventListener('input', (e) => this.setBrushSize(parseInt(e.target.value)));
         document.getElementById('fly-speed-slider').addEventListener('input', (e) => this.setFlySpeed(parseFloat(e.target.value)));
         document.getElementById('color-picker-input').addEventListener('input', (e) => this.setColor(e.target.value));
         document.getElementById('modeToggle').addEventListener('click', () => this.cycleMode());
@@ -1073,7 +1086,6 @@ const VoxelApp = {
         document.getElementById('mobileInvertLookX').addEventListener('change', (e) => this.setControl('invertLookX', e.target.checked));
         document.getElementById('mobileInvertLookY').addEventListener('change', (e) => this.setControl('invertLookY', e.target.checked));
         document.getElementById('mobileInvertZoom').addEventListener('change', (e) => this.setControl('invertZoom', e.target.checked));
-        document.getElementById('mobile-login-logout').addEventListener('click', this.loginLogout.bind(this));
         const mobileLogoutBtn = document.getElementById('mobile-logout');
         if (mobileLogoutBtn) mobileLogoutBtn.addEventListener('click', this.loginLogout.bind(this));
         document.getElementById('saveBtnMobile').addEventListener('click', () => this.saveJSON());
@@ -1088,6 +1100,7 @@ const VoxelApp = {
         document.getElementById('clearBtnMobile').addEventListener('click', () => document.getElementById('clearConfirmationModal').showModal());
         
         document.getElementById('loginLogoutBtn').addEventListener('click', this.loginLogout.bind(this));
+        document.getElementById('mobile-login-logout').addEventListener('click', this.loginLogout.bind(this));
         document.getElementById('goToHubBtn').addEventListener('click', () => {
             const w = window.open(this.HUB_URL, '_blank', 'noopener,noreferrer');
             if (w) w.opener = null;
@@ -1111,7 +1124,6 @@ const VoxelApp = {
             document.getElementById('clearConfirmationModal').close();
         });
         
-        // --- START: NEW/MODIFIED EXPORT EVENT LISTENERS ---
         document.getElementById('exportBambuStudioBtn').addEventListener('click', () => {
             const scaleUnit = document.querySelector('input[name="exportScaleUnit"]:checked').value;
             VoxelApp3MFExporter.exportBambuStudio3MF(
@@ -1130,7 +1142,6 @@ const VoxelApp = {
             this.exportSTL(scaleUnit, upAxis);
             document.getElementById('exportOptionsModal').close();
         });
-        // --- END: NEW/MODIFIED EXPORT EVENT LISTENERS ---
         
         let lastTouchEnd = 0;
         this.containerDiv.addEventListener('touchend', (e) => {
@@ -1233,8 +1244,11 @@ const VoxelApp = {
 
     onPointerDown: function(e) {
         e.preventDefault();
+        if (e.target !== this.cvs) return; 
+        
         document.querySelectorAll('#controls .dropdown > label').forEach(label => label.blur());
         this.currentStroke = new Map();
+        
         if (this.isMobile) {
             this.isPointerDown = true;
             this.activePointers.set(e.pointerId, { x: e.clientX, y: e.clientY });
@@ -1245,24 +1259,43 @@ const VoxelApp = {
             } else {
                 this.touchState.isTapCandidate = false;
             }
-        } else {
+        } else { // Desktop
             this.mouseState.downX = e.clientX;
             this.mouseState.downY = e.clientY;
-            if (e.button === 0) {
-                if (this.currentMode !== 'SELECT') {
-                    this.mouseState.isModifying = true;
-                    const coords = this.calculateRayTarget(e.clientX, e.clientY);
-                    if (coords) {
-                        if (this.currentMode === 'ADD') {
-                            this.mouseState.dragFixedLayerCoord = coords[this.currentDrawingAxis];
+
+            if (e.button === 0) { // Left click
+                 if (this.currentMode === 'SELECT') {
+                    const hit = this.getFaceAt(e.clientX, e.clientY);
+                    if (hit) {
+                        const voxelKey = this.findVoxelKeyByMesh(hit.object);
+                        if (voxelKey === null) return;
+                        const normalIndex = this.getNormalIndex(hit.face.normal);
+                        const faceKey = `${voxelKey}:${normalIndex}`;
+                        if (this.selectedFaces.has(faceKey)) {
+                            this.mouseState.isExtruding = true;
+                            this.mouseState.extrudeNormal = hit.face.normal.clone();
+                            this.mouseState.drawingPlane.setFromNormalAndCoplanarPoint(this.cam.getWorldDirection(this.mouseState.drawingPlane.normal).negate(), hit.point);
+                            this.mouseState.dragStartPoint.copy(hit.point);
+                            return;
                         }
-                        this.modifyVoxel(coords.x, coords.y, coords.z);
-                        this.mouseState.lastActionCoords = coords;
+                    }
+                    this.mouseState.isModifying = true; // For drag-selection
+                    this.handleFaceSelection(e);
+                } else {
+                    this.mouseState.isModifying = true;
+                    const targetInfo = this.getRayTargetInfo(e.clientX, e.clientY);
+                    if (targetInfo) {
+                        if (this.currentMode === 'ADD') {
+                            this.mouseState.dragFixedLayerCoord = targetInfo[this.currentDrawingAxis];
+                        }
+                        this.modifyVoxel(targetInfo.x, targetInfo.y, targetInfo.z, targetInfo.normal);
+                        this.mouseState.lastActionCoords = { x: targetInfo.x, y: targetInfo.y, z: targetInfo.z };
+                        this.mouseState.lastActionNormal = targetInfo.normal;
                     }
                 }
-            } else if (e.button === 1) {
+            } else if (e.button === 1) { // Middle mouse
                 this.mouseState.isPanning = true;
-            } else if (e.button === 2) {
+            } else if (e.button === 2) { // Right mouse
                 this.cvs.focus();
                 this.cvs.requestPointerLock();
             }
@@ -1272,12 +1305,28 @@ const VoxelApp = {
     },
     
     onPointerMove: function(e) {
-        e.preventDefault();
         if (document.pointerLockElement === this.cvs) {
             this.mouseState.mouseMovementX += e.movementX;
             this.mouseState.mouseMovementY += e.movementY;
             return;
         }
+
+        if (this.mouseState.isExtruding) {
+            e.preventDefault();
+            const raycaster = new THREE.Raycaster();
+            const mouse = new THREE.Vector2(((e.clientX - this.cvs.getBoundingClientRect().left) / this.cvs.clientWidth) * 2 - 1, -((e.clientY - this.cvs.getBoundingClientRect().top) / this.cvs.clientHeight) * 2 + 1);
+            raycaster.setFromCamera(mouse, this.cam);
+            
+            const intersection = new THREE.Vector3();
+            if (raycaster.ray.intersectPlane(this.mouseState.drawingPlane, intersection)) {
+                const dragVector = intersection.clone().sub(this.mouseState.dragStartPoint);
+                const extrusionDistance = dragVector.dot(this.mouseState.extrudeNormal);
+                const voxelDistance = Math.round(extrusionDistance / this.VS);
+                this.updateExtrudePreview(voxelDistance);
+            }
+            return;
+        }
+        
         if (this.isMobile) {
             if (!this.isPointerDown) return;
             const dist = Math.hypot(e.clientX - this.mouseState.downX, e.clientY - this.mouseState.downY);
@@ -1299,52 +1348,97 @@ const VoxelApp = {
                 this.touchState.lastPinchDist = newDist;
             }
             this.activePointers.set(e.pointerId, { x: e.clientX, y: e.clientY });
-        } else {
+        } else { // Desktop
             const deltaX = e.clientX - this.mouseState.lastX;
             const deltaY = e.clientY - this.mouseState.lastY;
+
             if (this.mouseState.isPanning) {
+                e.preventDefault();
                 const pan = new THREE.Vector3(-deltaX * this.PAN_SPEED, deltaY * this.PAN_SPEED, 0);
                 pan.applyQuaternion(this.cam.quaternion);
                 this.cam.position.add(pan);
             }
+
             if (this.mouseState.isModifying) {
+                e.preventDefault();
                 const dist = Math.hypot(e.clientX - this.mouseState.downX, e.clientY - this.mouseState.downY);
                 if (dist > this.DRAG_THRESHOLD) {
                     this.mouseState.isDragging = true;
-                    let coords = this.calculateRayTarget(e.clientX, e.clientY);
-                    if (coords) {
-                        if (this.mouseState.dragFixedLayerCoord !== null) {
-                            coords[this.currentDrawingAxis] = this.mouseState.dragFixedLayerCoord;
-                        }
-                        if (this.mouseState.lastActionCoords && (coords.x !== this.mouseState.lastActionCoords.x || coords.y !== this.mouseState.lastActionCoords.y || coords.z !== this.mouseState.lastActionCoords.z)) {
-                            this.drawVoxelLine(this.mouseState.lastActionCoords, coords);
-                            this.mouseState.lastActionCoords = coords;
-                        }
+                    
+                    if (this.currentMode === 'SELECT') {
+                         const hit = this.getFaceAt(e.clientX, e.clientY);
+                         if (hit) {
+                             const voxelKey = this.findVoxelKeyByMesh(hit.object);
+                             if (voxelKey === null) return;
+                             const normalIndex = this.getNormalIndex(hit.face.normal);
+                             const faceKey = `${voxelKey}:${normalIndex}`;
+                 
+                             if (this.selectedFaces.size > 0) {
+                                 const firstKey = this.selectedFaces.keys().next().value;
+                                 const currentNormalIndex = parseInt(firstKey.split(':')[1]);
+                                 if (normalIndex !== currentNormalIndex) return; // Only select faces with same orientation
+                             }
+                             
+                             if (!this.selectedFaces.has(faceKey)) {
+                                 this.selectedFaces.add(faceKey);
+                                 this.updateSelectionVisuals();
+                             }
+                         }
+                    } else { // ADD, DELETE, DRAW modes
+                         let targetInfo = this.getRayTargetInfo(e.clientX, e.clientY);
+                         if (targetInfo) {
+                             const coords = {x: targetInfo.x, y: targetInfo.y, z: targetInfo.z};
+                             
+                             if (this.mouseState.dragFixedLayerCoord !== null && this.currentMode === 'ADD') {
+                                 coords[this.currentDrawingAxis] = this.mouseState.dragFixedLayerCoord;
+                             }
+
+                             if (this.mouseState.lastActionCoords && (coords.x !== this.mouseState.lastActionCoords.x || coords.y !== this.mouseState.lastActionCoords.y || coords.z !== this.mouseState.lastActionCoords.z)) {
+                                // Use the normal from the start of the drag for the whole line.
+                                this.drawVoxelLine(this.mouseState.lastActionCoords, coords, this.mouseState.lastActionNormal);
+                                this.mouseState.lastActionCoords = coords;
+                                // Do NOT update lastActionNormal during a drag.
+                            }
+                         }
                     }
                 }
             }
             this.mouseState.lastX = e.clientX;
             this.mouseState.lastY = e.clientY;
         }
-        if (!this.mouseState.isModifying && !this.mouseState.isPanning && !this.isPointerDown && document.pointerLockElement !== this.cvs) {
-             const coords = this.calculateRayTarget(e.clientX, e.clientY);
-             this.updatePreviewVoxel(coords);
+
+        if (!this.mouseState.isModifying && !this.mouseState.isPanning && !this.isMobile && document.pointerLockElement !== this.cvs) {
+             const targetInfo = this.getRayTargetInfo(e.clientX, e.clientY);
+             this.updateToolPreview(targetInfo);
         } else {
             this.previewVoxel.visible = false;
+            this.previewBrush.visible = false;
         }
+
         this.euler.x = Math.max(-Math.PI / 2, Math.min(Math.PI / 2, this.euler.x));
         this.cam.quaternion.setFromEuler(this.euler);
     },
     
     onPointerUp: function(e) {
-        e.preventDefault();
+        if (this.mouseState.isExtruding || this.mouseState.isModifying || this.mouseState.isPanning || this.mouseState.isRotating) {
+            e.preventDefault();
+        }
+
+        if (this.mouseState.isExtruding) {
+            const distance = this.ghostVoxels.size > 0 ? (this.ghostVoxels.get(this.ghostVoxels.keys().next().value).distance || 0) : 0;
+            this.updateExtrudePreview(0); // Clear preview
+            if (distance !== 0) {
+                 this.extrudeSelectedFaces(distance);
+            }
+        }
+
         if (this.mouseState.isModifying && this.currentStroke && this.currentStroke.size > 0) {
             const actualChanges = new Map();
             for (const [key, value] of this.currentStroke.entries()) {
                 const beforeColor = value.before ? value.before.color : null;
                 const afterColor = value.after ? value.after.color : null;
                 if (beforeColor !== afterColor) {
-                     actualChanges.set(key, value);
+                    actualChanges.set(key, value);
                 }
             }
             if (actualChanges.size > 0) {
@@ -1352,10 +1446,15 @@ const VoxelApp = {
             }
         }
         this.currentStroke = null;
+
         if (this.isMobile) {
-            if (this.isPointerDown && this.touchState.isTapCandidate) {
-                const coords = this.calculateRayTarget(this.mouseState.downX, this.mouseState.downY);
-                if (coords && this.currentMode !== 'SELECT') this.modifyVoxel(coords.x, coords.y, coords.z);
+             if (this.isPointerDown && this.touchState.isTapCandidate) {
+                if (this.currentMode === 'SELECT') {
+                    this.handleFaceSelection(e);
+                } else {
+                    const targetInfo = this.getRayTargetInfo(this.mouseState.downX, this.mouseState.downY);
+                    if (targetInfo) this.modifyVoxel(targetInfo.x, targetInfo.y, targetInfo.z, targetInfo.normal);
+                }
             }
             this.activePointers.delete(e.pointerId);
             if (this.activePointers.size === 0) {
@@ -1363,15 +1462,17 @@ const VoxelApp = {
                 this.touchState.isTapCandidate = false;
                 this.touchState.lastPinchDist = null;
             }
-        } else {
+        } else { // Desktop
             if (e.button === 2 && document.pointerLockElement === this.cvs) {
-                document.exitPointerLock();
+                 document.exitPointerLock();
             }
             this.mouseState.isModifying = false;
             this.mouseState.isPanning = false;
             this.mouseState.isRotating = false;
             this.mouseState.isDragging = false;
+            this.mouseState.isExtruding = false;
             this.mouseState.lastActionCoords = null;
+            this.mouseState.lastActionNormal = null;
             this.mouseState.dragFixedLayerCoord = null;
         }
     },
@@ -1380,6 +1481,7 @@ const VoxelApp = {
         if (document.pointerLockElement === this.cvs) {
             this.mouseState.isRotating = true;
             this.previewVoxel.visible = false;
+            this.previewBrush.visible = false;
         } else {
             this.mouseState.isRotating = false;
         }
@@ -1415,7 +1517,7 @@ const VoxelApp = {
             e.preventDefault();
             this.undo();
             return;
-        }          
+        }         
         if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'y') {
             e.preventDefault();
             this.redo();
@@ -1495,26 +1597,65 @@ const VoxelApp = {
     },
 
     cycleMode: function() {
+        const oldMode = this.currentMode;
+        if (oldMode === 'SELECT') {
+            this.clearSelection();
+        }
         const modeKeys = Object.keys(this.Modes);
         const currentIndex = modeKeys.indexOf(this.currentMode);
         this.currentMode = modeKeys[(currentIndex + 1) % modeKeys.length];
         this.updateModeUI();
     },
 
-    modifyVoxel: function(x, y, z) {
+    modifyVoxel: function(x, y, z, normal) {
+        if (this.currentMode === 'SELECT') return;
+
+        const size = this.brushSize;
+        if (size <= 1 || !normal) {
+            this._modifySingleVoxel(x, y, z);
+            return;
+        }
+        
+        const halfSize = Math.floor(size / 2);
+
+        let iter1, iter2;
+        if (Math.abs(normal.x) > 0.5) { 
+            iter1 = 'y'; iter2 = 'z';
+        } else if (Math.abs(normal.y) > 0.5) {
+            iter1 = 'x'; iter2 = 'z';
+        } else {
+            iter1 = 'x'; iter2 = 'y';
+        }
+
+        for (let i = 0; i < size; i++) {
+            for (let j = 0; j < size; j++) {
+                const coords = { x: x, y: y, z: z };
+                coords[iter1] += i - halfSize;
+                coords[iter2] += j - halfSize;
+                
+                this._modifySingleVoxel(coords.x, coords.y, coords.z);
+            }
+        }
+    },
+
+    _modifySingleVoxel: function(x, y, z, modeOverride = null) {
         x = Math.max(0, Math.min(this.GRID - 1, x));
         y = Math.max(0, Math.min(this.GRID - 1, y));
         z = Math.max(0, Math.min(this.GRID - 1, z));
         const k = this.key(x, y, z);
+
         if (this.currentStroke && !this.currentStroke.has(k)) {
             const originalVoxel = this.voxels.get(k);
             this.currentStroke.set(k, { 
                 before: originalVoxel ? { color: originalVoxel.color } : null 
             });
         }
+
         const existingVoxel = this.voxels.get(k);
         let modified = false;
-        switch (this.currentMode) {
+        const mode = modeOverride || this.currentMode;
+
+        switch (mode) {
             case 'ADD':
                 if (!existingVoxel) {
                     const voxelMesh = new THREE.Mesh(new THREE.BoxGeometry(this.VS, this.VS, this.VS), new THREE.MeshLambertMaterial({ color: this.currentColor }));
@@ -1543,6 +1684,7 @@ const VoxelApp = {
                 }
                 break;
         }
+
         if (this.currentStroke && modified) {
             const finalVoxel = this.voxels.get(k);
             const historyEntry = this.currentStroke.get(k);
@@ -1550,7 +1692,7 @@ const VoxelApp = {
         }
     },
     
-    drawVoxelLine: function(start, end) {
+    drawVoxelLine: function(start, end, normal) {
         let x0 = start.x, y0 = start.y, z0 = start.z;
         let x1 = end.x, y1 = end.y, z1 = end.z;
         const dx = Math.abs(x1 - x0), sx = x0 < x1 ? 1 : -1;
@@ -1559,43 +1701,331 @@ const VoxelApp = {
         let dm = Math.max(dx, dy, dz), i = dm;
         x1 = y1 = z1 = dm / 2;
         while(i-- >= 0) {
-            this.modifyVoxel(x0, y0, z0);
+            this.modifyVoxel(x0, y0, z0, normal);
             x1 -= dx; if (x1 < 0) { x1 += dm; x0 += sx; }
             y1 -= dy; if (y1 < 0) { y1 += dm; y0 += sy; }
             z1 -= dz; if (z1 < 0) { z1 += dm; z0 += sz; }
         }
     },
 
-    calculateRayTarget: function(clientX, clientY) {
+    // --- START: Extrude & Select Functions ---
+    getNormalIndex: function(normal) {
+        if (Math.abs(normal.x) > 0.5) return normal.x > 0 ? 0 : 1; // +X, -X
+        if (Math.abs(normal.y) > 0.5) return normal.y > 0 ? 2 : 3; // +Y, -Y
+        if (Math.abs(normal.z) > 0.5) return normal.z > 0 ? 4 : 5; // +Z, -Z
+        return -1;
+    },
+
+    getNormalFromIndex: function(index) {
+        const normals = [
+            new THREE.Vector3(1, 0, 0), new THREE.Vector3(-1, 0, 0),
+            new THREE.Vector3(0, 1, 0), new THREE.Vector3(0, -1, 0),
+            new THREE.Vector3(0, 0, 1), new THREE.Vector3(0, 0, -1),
+        ];
+        return normals[index];
+    },
+
+    findVoxelKeyByMesh: function(mesh) {
+        for (const [key, voxelData] of this.voxels.entries()) {
+            if (voxelData.mesh === mesh) {
+                return key;
+            }
+        }
+        return null;
+    },
+
+    getFaceAt: function(clientX, clientY) {
+        const rect = this.cvs.getBoundingClientRect();
+        const mouse = new THREE.Vector2(((clientX - rect.left) / rect.width) * 2 - 1, -((clientY - rect.top) / rect.height) * 2 + 1);
+        const raycaster = new THREE.Raycaster();
+        raycaster.setFromCamera(mouse, this.cam);
+        const meshes = Array.from(this.voxels.values()).map(v => v.mesh);
+        if (meshes.length === 0) return null;
+        const intersects = raycaster.intersectObjects(meshes);
+        return intersects.length > 0 ? intersects[0] : null;
+    },
+    
+    clearSelection: function() {
+        this.selectedFaces.clear();
+        this.updateSelectionVisuals();
+    },
+
+    updateSelectionVisuals: function() {
+        // Remove old selection meshes
+        this.selectionFaceMeshes.forEach((mesh, key) => {
+            if (!this.selectedFaces.has(key)) {
+                this.scene.remove(mesh);
+                mesh.geometry.dispose();
+                mesh.material.dispose();
+                this.selectionFaceMeshes.delete(key);
+            }
+        });
+
+        // Add new selection meshes
+        this.selectedFaces.forEach(faceKey => {
+            if (!this.selectionFaceMeshes.has(faceKey)) {
+                const [voxelKey, normalIndexStr] = faceKey.split(':');
+                const [x, y, z] = this.parseKey(voxelKey);
+                const normal = this.getNormalFromIndex(parseInt(normalIndexStr));
+                
+                const mesh = new THREE.Mesh(
+                    new THREE.PlaneGeometry(this.VS, this.VS),
+                    new THREE.MeshBasicMaterial({ color: 0xffff00, transparent: true, opacity: 0.6, side: THREE.DoubleSide })
+                );
+                
+                mesh.position.set(
+                    x * this.VS + 0.5 + normal.x * 0.501,
+                    y * this.VS + 0.5 + normal.y * 0.501,
+                    z * this.VS + 0.5 + normal.z * 0.501
+                );
+                mesh.lookAt(mesh.position.clone().add(normal));
+                this.scene.add(mesh);
+                this.selectionFaceMeshes.set(faceKey, mesh);
+            }
+        });
+    },
+
+    handleFaceSelection: function(event) {
+        const hit = this.getFaceAt(event.clientX, event.clientY);
+        if (!hit) {
+            if (!event.ctrlKey && !event.shiftKey) this.clearSelection();
+            return;
+        }
+
+        const voxelKey = this.findVoxelKeyByMesh(hit.object);
+        if (voxelKey === null) return;
+
+        const normalIndex = this.getNormalIndex(hit.face.normal);
+        const faceKey = `${voxelKey}:${normalIndex}`;
+        
+        let currentNormalIndex = -1;
+        if (this.selectedFaces.size > 0) {
+            const firstKey = this.selectedFaces.keys().next().value;
+            currentNormalIndex = parseInt(firstKey.split(':')[1]);
+        }
+        
+        if (!event.ctrlKey && !event.shiftKey) {
+            if (!this.selectedFaces.has(faceKey) || this.selectedFaces.size > 1) {
+                this.clearSelection();
+                this.selectedFaces.add(faceKey);
+            }
+        } else {
+            if (this.selectedFaces.has(faceKey)) {
+                this.selectedFaces.delete(faceKey);
+            } else {
+                if (this.selectedFaces.size === 0 || normalIndex === currentNormalIndex) {
+                    this.selectedFaces.add(faceKey);
+                } else {
+                    this.showToast('Selection Error', 'All selected faces must have the same orientation.', 'warning');
+                }
+            }
+        }
+        this.updateSelectionVisuals();
+    },
+
+    updateExtrudePreview: function(distance) {
+        this.ghostVoxels.forEach(ghost => {
+            this.scene.remove(ghost.mesh);
+            ghost.mesh.geometry.dispose();
+            ghost.mesh.material.dispose();
+        });
+        this.ghostVoxels.clear();
+
+        if (distance === 0 || this.selectedFaces.size === 0) return;
+
+        const firstFaceKey = this.selectedFaces.keys().next().value;
+        const [, normalIndexStr] = firstFaceKey.split(':');
+        const normal = this.getNormalFromIndex(parseInt(normalIndexStr));
+
+        this.selectedFaces.forEach(faceKey => {
+            const [voxelKey] = faceKey.split(':');
+            const originalVoxel = this.voxels.get(parseInt(voxelKey));
+            if (!originalVoxel) return;
+
+            const [x, y, z] = this.parseKey(voxelKey);
+
+            if (distance > 0) { // Preview ADDING
+                for (let i = 1; i <= distance; i++) {
+                    const newX = x + normal.x * i;
+                    const newY = y + normal.y * i;
+                    const newZ = z + normal.z * i;
+                    const newKey = this.key(newX, newY, newZ);
+
+                    if (!this.voxels.has(newKey) && !this.ghostVoxels.has(newKey)) {
+                         const ghostMesh = new THREE.Mesh(
+                            new THREE.BoxGeometry(this.VS, this.VS, this.VS),
+                            new THREE.MeshLambertMaterial({ color: originalVoxel.color, transparent: true, opacity: 0.5 })
+                        );
+                        ghostMesh.position.set(newX * this.VS + 0.5, newY * this.VS + 0.5, newZ * this.VS + 0.5);
+                        this.scene.add(ghostMesh);
+                        this.ghostVoxels.set(newKey, { mesh: ghostMesh, distance: distance });
+                    }
+                }
+            } else { // Preview DELETING (cutting)
+                const distanceAbs = Math.abs(distance);
+                for (let i = 0; i < distanceAbs; i++) {
+                    const delX = x - normal.x * i;
+                    const delY = y - normal.y * i;
+                    const delZ = z - normal.z * i;
+                    const delKey = this.key(delX, delY, delZ);
+
+                    if (this.voxels.has(delKey) && !this.ghostVoxels.has(delKey)) {
+                         const ghostMesh = new THREE.Mesh(
+                            new THREE.BoxGeometry(this.VS, this.VS, this.VS),
+                            new THREE.MeshLambertMaterial({ color: 0xff0000, transparent: true, opacity: 0.4 })
+                        );
+                        ghostMesh.position.set(delX * this.VS + 0.5, delY * this.VS + 0.5, delZ * this.VS + 0.5);
+                        this.scene.add(ghostMesh);
+                        this.ghostVoxels.set(delKey, { mesh: ghostMesh, distance: distance });
+                    }
+                }
+            }
+        });
+    },
+
+    extrudeSelectedFaces: function(distance) {
+        if (distance === 0 || this.selectedFaces.size === 0) {
+            return;
+        }
+        
+        const changes = new Map();
+        const newFacesToSelect = new Set();
+        
+        if (distance > 0) { // Positive extrude (add voxels)
+            for (const faceKey of this.selectedFaces) {
+                const [voxelKey, normalIndexStr] = faceKey.split(':');
+                const normalIndex = parseInt(normalIndexStr);
+                const originalVoxel = this.voxels.get(parseInt(voxelKey));
+                
+                if (!originalVoxel) continue;
+                
+                const [x, y, z] = this.parseKey(voxelKey);
+                const normal = this.getNormalFromIndex(normalIndex);
+                
+                for (let i = 1; i <= distance; i++) {
+                    const newX = x + normal.x * i;
+                    const newY = y + normal.y * i;
+                    const newZ = z + normal.z * i;
+
+                    if (newX < 0 || newX >= this.GRID || newY < 0 || newY >= this.GRID || newZ < 0 || newZ >= this.GRID) break;
+                    
+                    const newKey = this.key(newX, newY, newZ);
+                    if (this.voxels.has(newKey)) continue;
+                    
+                    if (!changes.has(newKey)) {
+                         changes.set(newKey, { before: null });
+                    }
+
+                    const newMesh = new THREE.Mesh(new THREE.BoxGeometry(this.VS, this.VS, this.VS), new THREE.MeshLambertMaterial({ color: originalVoxel.color }));
+                    newMesh.position.set(newX * this.VS + 0.5, newY * this.VS + 0.5, newZ * this.VS + 0.5);
+                    newMesh.castShadow = true;
+                    newMesh.receiveShadow = true;
+                    this.scene.add(newMesh);
+                    const newVoxelData = { color: originalVoxel.color, mesh: newMesh };
+                    this.voxels.set(newKey, newVoxelData);
+                    changes.get(newKey).after = { color: newVoxelData.color };
+
+                    if (i === distance) {
+                        newFacesToSelect.add(`${newKey}:${normalIndex}`);
+                    }
+                }
+            }
+        } else { // Negative extrude (delete voxels / cut)
+            const voxelsToDeleteKeys = new Set();
+            const distanceAbs = Math.abs(distance);
+            
+            // Determine which voxels to delete
+            for (const faceKey of this.selectedFaces) {
+                const [voxelKey] = faceKey.split(':');
+                const [x, y, z] = this.parseKey(voxelKey);
+                const normal = this.getNormalFromIndex(parseInt(faceKey.split(':')[1]));
+
+                for (let i = 0; i < distanceAbs; i++) {
+                    const delX = x - normal.x * i;
+                    const delY = y - normal.y * i;
+                    const delZ = z - normal.z * i;
+                    voxelsToDeleteKeys.add(this.key(delX, delY, delZ));
+                }
+            }
+            
+            // Delete the voxels
+            for (const key of voxelsToDeleteKeys) {
+                 const voxelData = this.voxels.get(key);
+                 if (voxelData) {
+                     if (!changes.has(key)) changes.set(key, { before: { color: voxelData.color }, after: null });
+                     this.scene.remove(voxelData.mesh);
+                     voxelData.mesh.geometry.dispose();
+                     voxelData.mesh.material.dispose();
+                     this.voxels.delete(key);
+                 }
+            }
+
+            // Determine new selection at the bottom of the cut
+            for (const faceKey of this.selectedFaces) {
+                const [voxelKey, normalIndexStr] = faceKey.split(':');
+                const normalIndex = parseInt(normalIndexStr);
+                const [x, y, z] = this.parseKey(voxelKey);
+                const normal = this.getNormalFromIndex(normalIndex);
+
+                // The voxel adjacent to the back of the hole
+                const adjacentVoxelX = x + normal.x * distance;
+                const adjacentVoxelY = y + normal.y * distance;
+                const adjacentVoxelZ = z + normal.z * distance;
+                const adjacentKey = this.key(adjacentVoxelX, adjacentVoxelY, adjacentVoxelZ);
+
+                // The new face should be on this adjacent voxel, with the same normal direction
+                if (this.voxels.has(adjacentKey)) {
+                    newFacesToSelect.add(`${adjacentKey}:${normalIndex}`);
+                }
+            }
+        }
+        
+        if (changes.size > 0) {
+            this.addHistoryStep(changes);
+            this.clearSelection();
+            this.selectedFaces = newFacesToSelect;
+            this.updateSelectionVisuals();
+        }
+    },
+    // --- END: Extrude & Select Functions ---
+
+    getRayTargetInfo: function(clientX, clientY) {
         const rect = this.cvs.getBoundingClientRect();
         const mouse = new THREE.Vector2(((clientX - rect.left) / rect.width) * 2 - 1, -((clientY - rect.top) / rect.height) * 2 + 1);
         const raycaster = new THREE.Raycaster();
         raycaster.setFromCamera(mouse, this.cam);
         const meshes = Array.from(this.voxels.values()).map(v => v.mesh);
         const intersects = raycaster.intersectObjects(meshes);
+
         if (intersects.length > 0) {
             const hit = intersects[0];
             const pos = hit.point.clone();
+            const normal = hit.face.normal.clone();
             if (this.currentMode === 'ADD') { 
-                pos.add(hit.face.normal.multiplyScalar(0.5)); 
+                pos.add(normal.clone().multiplyScalar(0.5)); 
             } else { 
-                pos.sub(hit.face.normal.multiplyScalar(0.5)); 
+                pos.sub(normal.clone().multiplyScalar(0.5)); 
             }
-            return { x: Math.floor(pos.x / this.VS), y: Math.floor(pos.y / this.VS), z: Math.floor(pos.z / this.VS) };
+            return { 
+                x: Math.floor(pos.x / this.VS), 
+                y: Math.floor(pos.y / this.VS), 
+                z: Math.floor(pos.z / this.VS),
+                normal: normal 
+            };
         } else if (this.currentMode === 'ADD') {
-            let planeNormal = new THREE.Vector3();
+            let planeNormalVec = new THREE.Vector3();
             let planeConstant = 0;
             if (this.currentDrawingAxis === 'y') {
-                planeNormal.set(0, 1, 0);
+                planeNormalVec.set(0, 1, 0);
                 planeConstant = -(this.activeDrawingLevel.y * this.VS);
             } else if (this.currentDrawingAxis === 'x') {
-                planeNormal.set(1, 0, 0);
+                planeNormalVec.set(1, 0, 0);
                 planeConstant = -(this.activeDrawingLevel.x * this.VS);
             } else { // 'z'
-                planeNormal.set(0, 0, 1);
+                planeNormalVec.set(0, 0, 1);
                 planeConstant = -(this.activeDrawingLevel.z * this.VS);
             }
-            const drawingPlane = new THREE.Plane(planeNormal, planeConstant);
+            const drawingPlane = new THREE.Plane(planeNormalVec, planeConstant);
             const intersectionPoint = new THREE.Vector3();
             if (raycaster.ray.intersectPlane(drawingPlane, intersectionPoint)) {
                 let x = Math.floor(intersectionPoint.x / this.VS);
@@ -1604,20 +2034,78 @@ const VoxelApp = {
                 if (this.currentDrawingAxis === 'y') y = this.activeDrawingLevel.y;
                 else if (this.currentDrawingAxis === 'x') x = this.activeDrawingLevel.x;
                 else if (this.currentDrawingAxis === 'z') z = this.activeDrawingLevel.z;
-                return { x, y, z };
+                
+                return { x, y, z, normal: planeNormalVec.clone() };
             }
         }
         return null;
     },
     
-    updatePreviewVoxel: function(coords) {
-        if (this.currentMode === 'SELECT') {
-            this.previewVoxel.visible = false;
+    updateToolPreview: function(targetInfo) {
+        this.previewVoxel.visible = false;
+        this.previewBrush.visible = false;
+
+        if (this.currentMode === 'SELECT' || !targetInfo) {
             return;
         }
-        if (coords && coords.x >= 0 && coords.x < this.GRID && coords.y >= 0 && coords.y < this.GRID && coords.z >= 0 && coords.z < this.GRID) {
+
+        const {x, y, z, normal} = targetInfo;
+        const coords = {x, y, z};
+
+        if (this.brushSize <= 1) {
+            this.updateSingleVoxelPreview(coords);
+        } else {
+            this.updateBrushPreview(coords, normal);
+        }
+    },
+
+    updateBrushPreview: function(coords, normal) {
+        while(this.previewBrush.children.length > 0){ 
+            const child = this.previewBrush.children[0];
+            this.previewBrush.remove(child);
+            child.geometry.dispose();
+            child.material.dispose();
+        }
+
+        const size = this.brushSize;
+        const halfSize = Math.floor(size / 2);
+
+        let iter1, iter2;
+        if (Math.abs(normal.x) > 0.5) { 
+            iter1 = 'y'; iter2 = 'z';
+        } else if (Math.abs(normal.y) > 0.5) {
+            iter1 = 'x'; iter2 = 'z';
+        } else {
+            iter1 = 'x'; iter2 = 'y';
+        }
+        
+        const previewColor = this.currentMode === 'DELETE' ? 0xff0000 : this.currentColor;
+        const opacity = this.currentMode === 'DELETE' ? 0.4 : 0.5;
+
+        for (let i = 0; i < size; i++) {
+            for (let j = 0; j < size; j++) {
+                const brushCoords = { x: coords.x, y: coords.y, z: coords.z };
+                brushCoords[iter1] += i - halfSize;
+                brushCoords[iter2] += j - halfSize;
+                
+                if (brushCoords.x >= 0 && brushCoords.x < this.GRID && brushCoords.y >= 0 && brushCoords.y < this.GRID && brushCoords.z >= 0 && brushCoords.z < this.GRID) {
+                    const previewGeom = new THREE.BoxGeometry(this.VS, this.VS, this.VS);
+                    const previewMat = new THREE.MeshBasicMaterial({ color: previewColor, transparent: true, opacity: opacity, depthTest: false });
+                    const previewMesh = new THREE.Mesh(previewGeom, previewMat);
+                    previewMesh.position.set(brushCoords.x * this.VS + 0.5, brushCoords.y * this.VS + 0.5, brushCoords.z * this.VS + 0.5);
+                    this.previewBrush.add(previewMesh);
+                }
+            }
+        }
+        this.previewBrush.visible = true;
+    },
+    
+    updateSingleVoxelPreview: function(coords) {
+        if (coords.x >= 0 && coords.x < this.GRID && coords.y >= 0 && coords.y < this.GRID && coords.z >= 0 && coords.z < this.GRID) {
             this.previewVoxel.position.set(coords.x * this.VS + 0.5, coords.y * this.VS + 0.5, coords.z * this.VS + 0.5);
-            this.previewVoxel.material.opacity = this.currentMode === 'DELETE' ? 0.2 : 0.5;
+            this.previewVoxel.material.opacity = this.currentMode === 'DELETE' ? 0.4 : 0.5;
+            const previewColor = this.currentMode === 'DELETE' ? 0xff0000 : this.currentColor;
+            this.previewVoxel.material.color.set(previewColor);
             this.previewVoxel.visible = true;
         } else {
             this.previewVoxel.visible = false;
@@ -1625,6 +2113,7 @@ const VoxelApp = {
     },
 
     clearAllConfirmed: function() {
+        this.clearSelection();
         this.removeImageTemplate();
         const oldVoxels = new Map(this.voxels);
         if (oldVoxels.size > 0) {
@@ -1683,6 +2172,15 @@ const VoxelApp = {
         const modeInfo = this.Modes[this.currentMode];
         document.getElementById('current-mode').textContent = `Mode: ${modeInfo.name}`;
         if(this.isMobile) document.getElementById('mobile-mode-icon').className = modeInfo.icon;
+
+        const brushControls = document.getElementById('brush-controls');
+        if ((this.currentMode === 'ADD' || this.currentMode === 'DELETE' || this.currentMode === 'DRAW') && !this.isMobile) {
+            brushControls.classList.remove('hidden');
+            brushControls.classList.add('flex');
+        } else {
+            brushControls.classList.add('hidden');
+            brushControls.classList.remove('flex');
+        }
     },
 
     updateLoginStateUI: function() {
@@ -1721,7 +2219,7 @@ const VoxelApp = {
     showToast: function(title, message, type = 'info', duration = 1500) {
         const container = document.getElementById('toast-container');
         const alertClass = { success: 'alert-success', info: 'alert-info',
-                             warning: 'alert-warning', error: 'alert-error' }[type] || 'alert-info';
+                               warning: 'alert-warning', error: 'alert-error' }[type] || 'alert-info';
 
         const toast = document.createElement('div');
         toast.className = `alert ${alertClass} shadow-lg`;
@@ -1817,6 +2315,12 @@ const VoxelApp = {
         }
     },
 
+    setBrushSize: function(newSize) {
+        this.brushSize = newSize;
+        localStorage.setItem('voxelEditorBrushSize', this.brushSize);
+        this.updateAllControlInputs();
+    },
+
     saveJSON: function() {
         const data = { 
             gridSize: this.GRID, 
@@ -1839,6 +2343,7 @@ const VoxelApp = {
 
     loadFromData: function(data) {
         try {
+            this.clearSelection();
             this.voxels.forEach(v => {
                 this.scene.remove(v.mesh);
                 v.mesh.geometry.dispose();
@@ -1943,11 +2448,12 @@ const VoxelApp = {
     },
 
     rebuildSceneFromVoxels: function() {
-        this.scene.children.filter(c => c.isMesh && c !== this.previewVoxel && c !== this.templateImageMesh && c !== this.extrudeGizmoMesh).forEach(c => {
+        this.scene.children.filter(c => c.isMesh && c !== this.previewVoxel && c !== this.templateImageMesh ).forEach(c => {
             this.scene.remove(c);
             if(c.geometry) c.geometry.dispose();
             if(c.material) c.material.dispose();
         });
+        
         this.voxels.forEach((voxelData, key) => {
             const [x, y, z] = this.parseKey(key);
             const voxelMesh = new THREE.Mesh(new THREE.BoxGeometry(this.VS, this.VS, this.VS), new THREE.MeshLambertMaterial({ color: voxelData.color }));
@@ -1974,6 +2480,7 @@ const VoxelApp = {
     undo: function() {
         if (this.historyPointer < 0) return;
         const changes = this.history[this.historyPointer];
+        this.clearSelection();
         changes.forEach((change, key) => {
             const [x, y, z] = this.parseKey(key);
             if (change.before === null) {
@@ -2007,6 +2514,7 @@ const VoxelApp = {
         if (this.historyPointer >= this.history.length - 1) return;
         this.historyPointer++;
         const changes = this.history[this.historyPointer];
+        this.clearSelection();
         changes.forEach((change, key) => {
              const [x, y, z] = this.parseKey(key);
             if (change.after === null) {
@@ -2088,6 +2596,8 @@ const VoxelApp = {
         document.getElementById('grid-size-slider').value = this.GRID;
         document.getElementById('grid-size-display').textContent = `${this.GRID}³`;
         document.getElementById('color-picker-input').value = this.currentColor;
+        document.getElementById('brush-size-slider').value = this.brushSize;
+        document.getElementById('brush-size-display').textContent = `${this.brushSize}x${this.brushSize}`;
         if (this.isMobile) document.getElementById('mobile-color-picker').value = this.currentColor;
         this.setFlySpeed(this.flySpeed);
         document.getElementById('invertLookX').checked = this.controls.invertLookX;
