@@ -1007,74 +1007,23 @@ const VoxelApp = {
         document.getElementById('newsletterCheckbox').checked = newsletterChecked ? (newsletterChecked === 'true') && !this.computeMobileMode() : false;
         this.updateAllControlInputs();
     },
-
-  setupThree: function () {
-  // Scene
-  this.scene = new THREE.Scene();
-  this.scene.background = new THREE.Color(0x282c34);
-
-  // Camera
-  this.cam = new THREE.PerspectiveCamera(
-    75,
-    this.containerDiv.clientWidth / this.containerDiv.clientHeight,
-    0.1,
-    1000
-  );
-  this.euler = new THREE.Euler(0, 0, 0, 'YXZ');
-  this.resetCamera();
-
-  // Renderer
-  this.ren = new THREE.WebGLRenderer({
-    canvas: this.cvs,
-    antialias: true,
-    logarithmicDepthBuffer: true
-  });
-  this.ren.setSize(this.containerDiv.clientWidth, this.containerDiv.clientHeight);
-  this.ren.setPixelRatio(this.isMobile ? 1.5 : (window.devicePixelRatio || 1));
-  this.ren.outputEncoding = THREE.sRGBEncoding;
-  this.ren.toneMapping = THREE.ACESFilmicToneMapping;
-  this.ren.toneMappingExposure = 1.05;
-  this.ren.setClearColor(0x0e0f12, 1);
-  this.ren.shadowMap.enabled = true;
-  this.ren.shadowMap.type = THREE.PCFSoftShadowMap;
-
-  // Lights
-  const ambient = new THREE.AmbientLight(0x606060);
-  this.scene.add(ambient);
-
-  const hemi = new THREE.HemisphereLight(0xffffff, 0x444444, 0.6);
-  this.scene.add(hemi);
-
-  const dirLight = new THREE.DirectionalLight(0xffffff, 1.6);
-  dirLight.position.set(10, 20, 15);
-  dirLight.castShadow = true;
-  dirLight.shadow.mapSize.set(2048, 2048);
-  dirLight.shadow.bias = -0.0005;
-  this.scene.add(dirLight);
-  this.dirLight = dirLight; // keep a handle if you want to tweak later
-
-  // Preview voxel (single box)
-  this.previewVoxel = new THREE.Mesh(
+makeVoxelMesh: function (color, x, y, z) {
+  const mesh = new THREE.Mesh(
     new THREE.BoxGeometry(this.VS, this.VS, this.VS),
-    new THREE.MeshBasicMaterial({
-      color: 0xffffff,
-      transparent: true,
-      opacity: 0.5,
-      depthTest: false
+    new THREE.MeshStandardMaterial({
+      color,
+      roughness: 0.95,
+      metalness: 0.0,
+      flatShading: true    // stronger face breaks
     })
   );
-  this.previewVoxel.visible = false;
-  this.scene.add(this.previewVoxel);
-
-  // Preview brush (multi-voxel ghost group)
-  this.previewBrush = new THREE.Group();
-  this.scene.add(this.previewBrush);
-
-  // Helpers (grid + bounds)
-  this.rebuildHelpers();
+  mesh.position.set(x * this.VS + 0.5, y * this.VS + 0.5, z * this.VS + 0.5);
+  mesh.scale.setScalar(this.VOXEL_SCALE || 1); // the micro-gap
+  mesh.castShadow = true;
+  mesh.receiveShadow = true;
+  return mesh;
 },
 
-    
     setupEventListeners: function() {
         window.addEventListener('resize', () => this.handleResize());
         window.addEventListener('resize', () => this.updateOrientationOverlay());
@@ -1678,60 +1627,75 @@ const VoxelApp = {
             }
         }
     },
+makeVoxelMesh: function (color, x, y, z) {
+  const geo = new THREE.BoxGeometry(this.VS, this.VS, this.VS);
+  const mat = new THREE.MeshStandardMaterial({
+    color,
+    roughness: 0.95,
+    metalness: 0.0,
+    flatShading: true
+  });
+  const mesh = new THREE.Mesh(geo, mat);
+  mesh.position.set(x * this.VS + 0.5, y * this.VS + 0.5, z * this.VS + 0.5);
+  mesh.scale.setScalar(this.VOXEL_SCALE ?? 0.98);
+  mesh.castShadow = true;
+  mesh.receiveShadow = true;
+  return mesh;
+},
+_modifySingleVoxel: function(x, y, z, modeOverride = null) {
+  x = Math.max(0, Math.min(this.GRID - 1, x));
+  y = Math.max(0, Math.min(this.GRID - 1, y));
+  z = Math.max(0, Math.min(this.GRID - 1, z));
+  const k = this.key(x, y, z);
 
-    _modifySingleVoxel: function(x, y, z, modeOverride = null) {
-        x = Math.max(0, Math.min(this.GRID - 1, x));
-        y = Math.max(0, Math.min(this.GRID - 1, y));
-        z = Math.max(0, Math.min(this.GRID - 1, z));
-        const k = this.key(x, y, z);
+  if (this.currentStroke && !this.currentStroke.has(k)) {
+    const originalVoxel = this.voxels.get(k);
+    this.currentStroke.set(k, {
+      before: originalVoxel ? { color: originalVoxel.color } : null
+    });
+  }
 
-        if (this.currentStroke && !this.currentStroke.has(k)) {
-            const originalVoxel = this.voxels.get(k);
-            this.currentStroke.set(k, { 
-                before: originalVoxel ? { color: originalVoxel.color } : null 
-            });
-        }
+  const existingVoxel = this.voxels.get(k);
+  let modified = false;
+  const mode = modeOverride || this.currentMode;
 
-        const existingVoxel = this.voxels.get(k);
-        let modified = false;
-        const mode = modeOverride || this.currentMode;
+  switch (mode) {
+    case 'ADD': {
+      if (!existingVoxel) {
+        const voxelMesh = this.makeVoxelMesh(this.currentColor, x, y, z);
+        this.scene.add(voxelMesh);
+        this.voxels.set(k, { color: this.currentColor, mesh: voxelMesh });
+        modified = true;
+      }
+      break;
+    }
+    case 'DELETE': {
+      if (existingVoxel) {
+        this.scene.remove(existingVoxel.mesh);
+        existingVoxel.mesh.geometry.dispose();
+        existingVoxel.mesh.material.dispose();
+        this.voxels.delete(k);
+        modified = true;
+      }
+      break;
+    }
+    case 'DRAW': {
+      if (existingVoxel && existingVoxel.color !== this.currentColor) {
+        existingVoxel.mesh.material.color.set(this.currentColor);
+        this.voxels.get(k).color = this.currentColor;
+        modified = true;
+      }
+      break;
+    }
+  }
 
-        switch (mode) {
-            case 'ADD':
-                if (!existingVoxel) {
-                    const voxelMesh = new THREE.Mesh(new THREE.BoxGeometry(this.VS, this.VS, this.VS), new THREE.MeshLambertMaterial({ color: this.currentColor }));
-                    voxelMesh.position.set(x * this.VS + 0.5, y * this.VS + 0.5, z * this.VS + 0.5);
-                    voxelMesh.castShadow = true;
-                    voxelMesh.receiveShadow = true;
-                    this.scene.add(voxelMesh);
-                    this.voxels.set(k, { color: this.currentColor, mesh: voxelMesh });
-                    modified = true;
-                }
-                break;
-            case 'DELETE':
-                if (existingVoxel) {
-                    this.scene.remove(existingVoxel.mesh);
-                    existingVoxel.mesh.geometry.dispose();
-                    existingVoxel.mesh.material.dispose();
-                    this.voxels.delete(k);
-                    modified = true;
-                }
-                break;
-            case 'DRAW':
-                 if (existingVoxel && existingVoxel.color !== this.currentColor) {
-                    existingVoxel.mesh.material.color.set(this.currentColor);
-                    this.voxels.get(k).color = this.currentColor;
-                    modified = true;
-                }
-                break;
-        }
+  if (this.currentStroke && modified) {
+    const finalVoxel = this.voxels.get(k);
+    const historyEntry = this.currentStroke.get(k);
+    historyEntry.after = finalVoxel ? { color: finalVoxel.color } : null;
+  }
+},
 
-        if (this.currentStroke && modified) {
-            const finalVoxel = this.voxels.get(k);
-            const historyEntry = this.currentStroke.get(k);
-            historyEntry.after = finalVoxel ? { color: finalVoxel.color } : null;
-        }
-    },
     
     drawVoxelLine: function(start, end, normal) {
         let x0 = start.x, y0 = start.y, z0 = start.z;
@@ -2487,24 +2451,25 @@ const VoxelApp = {
         }
         this.ren.render(this.scene, this.cam);
     },
+rebuildSceneFromVoxels: function() {
+  // Remove all voxel meshes except previews/template image
+  this.scene.children
+    .filter(c => c.isMesh && c !== this.previewVoxel && c !== this.templateImageMesh)
+    .forEach(c => {
+      this.scene.remove(c);
+      if (c.geometry) c.geometry.dispose();
+      if (c.material) c.material.dispose();
+    });
 
-    rebuildSceneFromVoxels: function() {
-        this.scene.children.filter(c => c.isMesh && c !== this.previewVoxel && c !== this.templateImageMesh ).forEach(c => {
-            this.scene.remove(c);
-            if(c.geometry) c.geometry.dispose();
-            if(c.material) c.material.dispose();
-        });
-        
-        this.voxels.forEach((voxelData, key) => {
-            const [x, y, z] = this.parseKey(key);
-            const voxelMesh = new THREE.Mesh(new THREE.BoxGeometry(this.VS, this.VS, this.VS), new THREE.MeshLambertMaterial({ color: voxelData.color }));
-            voxelMesh.position.set(x * this.VS + 0.5, y * this.VS + 0.5, z * this.VS + 0.5);
-            voxelMesh.castShadow = true;
-            voxelMesh.receiveShadow = true;
-            this.scene.add(voxelMesh);
-            voxelData.mesh = voxelMesh;
-        });
-    },
+  // Recreate from map
+  this.voxels.forEach((voxelData, key) => {
+    const [x, y, z] = this.parseKey(key);
+    const voxelMesh = this.makeVoxelMesh(voxelData.color, x, y, z);
+    this.scene.add(voxelMesh);
+    voxelData.mesh = voxelMesh;
+  });
+},
+
 
     addHistoryStep: function(changes) {
         if (this.historyPointer < this.history.length - 1) {
