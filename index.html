@@ -1303,7 +1303,26 @@ const VoxelApp = {
             this.mouseState.lastY = e.clientY;
         }
     },
-    
+    isTypingTarget: function(el) {
+  if (!el) return false;
+  // any real text entry widgets
+  if (el.matches?.('input, textarea, select, [contenteditable="true"]')) return true;
+  // also catch if the keydown originated inside such a widget
+  if (el.closest?.('input, textarea, select, [contenteditable="true"]')) return true;
+  return false;
+},
+// --- Make SPACE toggle mode reliably, even if UI elements steal the key ---
+window.addEventListener('keydown', (e) => {
+  const isSpace = e.code === 'Space' || e.key === ' ' || e.key === 'Spacebar';
+  if (!isSpace) return;
+  if (e.ctrlKey || e.metaKey || e.altKey) return;               // ignore combos
+  if (VoxelApp.isTypingTarget(e.target)) return;                 // don't break typing
+  e.preventDefault();                                            // stop page scroll / button activation
+  e.stopPropagation();
+  e.stopImmediatePropagation();
+  VoxelApp.cycleMode();
+}, { capture: true });
+
     onPointerMove: function(e) {
         if (document.pointerLockElement === this.cvs) {
             this.mouseState.mouseMovementX += e.movementX;
