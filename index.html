@@ -1008,40 +1008,72 @@ const VoxelApp = {
         this.updateAllControlInputs();
     },
 
-    setupThree: function() {
-        this.scene = new THREE.Scene();
-        this.scene.background = new THREE.Color(0x282c34);
-        this.cam = new THREE.PerspectiveCamera(75, this.containerDiv.clientWidth / this.containerDiv.clientHeight, 0.1, 1000);
-        this.euler = new THREE.Euler(0, 0, 0, 'YXZ');
-        this.resetCamera();
-        this.ren = new THREE.WebGLRenderer({ canvas: this.cvs, antialias: true, logarithmicDepthBuffer: true });
-        this.ren.outputEncoding = THREE.sRGBEncoding;                // correct color/gamma
-this.ren.toneMapping = THREE.ACESFilmicToneMapping;          // nicer rolloff
-this.ren.toneMappingExposure = 1.05;                         // tiny boost
-this.ren.setClearColor(0x0e0f12, 1);                         // match dark UI bg
-const dirLight = new THREE.DirectionalLight(0xffffff, 1.0);
-// after you create dirLight:
-dirLight.intensity = 1.6;                                    // a touch brighter
-dirLight.shadow.mapSize.set(2048, 2048);                     // sharper shadows
-dirLight.shadow.bias = -0.0005;                              // less acne
-        this.ren.shadowMap.enabled = true;
-        this.ren.shadowMap.type = THREE.PCFSoftShadowMap;
-        this.scene.add(new THREE.AmbientLight(0x606060));
-        const dirLight = new THREE.DirectionalLight(0xffffff, 1.0);
-        dirLight.position.set(10, 20, 15);
-        dirLight.castShadow = true;
-        this.scene.add(dirLight);
-        this.scene.add(new THREE.HemisphereLight(0xffffff, 0x444444, 0.6));
-        this.previewVoxel = new THREE.Mesh(
-            new THREE.BoxGeometry(this.VS, this.VS, this.VS),
-            new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.5, depthTest: false })
-        );
-        this.previewVoxel.visible = false;
-        this.scene.add(this.previewVoxel);
-        this.previewBrush = new THREE.Group();
-        this.scene.add(this.previewBrush);
-        this.rebuildHelpers();
-    },
+  setupThree: function () {
+  // Scene
+  this.scene = new THREE.Scene();
+  this.scene.background = new THREE.Color(0x282c34);
+
+  // Camera
+  this.cam = new THREE.PerspectiveCamera(
+    75,
+    this.containerDiv.clientWidth / this.containerDiv.clientHeight,
+    0.1,
+    1000
+  );
+  this.euler = new THREE.Euler(0, 0, 0, 'YXZ');
+  this.resetCamera();
+
+  // Renderer
+  this.ren = new THREE.WebGLRenderer({
+    canvas: this.cvs,
+    antialias: true,
+    logarithmicDepthBuffer: true
+  });
+  this.ren.setSize(this.containerDiv.clientWidth, this.containerDiv.clientHeight);
+  this.ren.setPixelRatio(this.isMobile ? 1.5 : (window.devicePixelRatio || 1));
+  this.ren.outputEncoding = THREE.sRGBEncoding;
+  this.ren.toneMapping = THREE.ACESFilmicToneMapping;
+  this.ren.toneMappingExposure = 1.05;
+  this.ren.setClearColor(0x0e0f12, 1);
+  this.ren.shadowMap.enabled = true;
+  this.ren.shadowMap.type = THREE.PCFSoftShadowMap;
+
+  // Lights
+  const ambient = new THREE.AmbientLight(0x606060);
+  this.scene.add(ambient);
+
+  const hemi = new THREE.HemisphereLight(0xffffff, 0x444444, 0.6);
+  this.scene.add(hemi);
+
+  const dirLight = new THREE.DirectionalLight(0xffffff, 1.6);
+  dirLight.position.set(10, 20, 15);
+  dirLight.castShadow = true;
+  dirLight.shadow.mapSize.set(2048, 2048);
+  dirLight.shadow.bias = -0.0005;
+  this.scene.add(dirLight);
+  this.dirLight = dirLight; // keep a handle if you want to tweak later
+
+  // Preview voxel (single box)
+  this.previewVoxel = new THREE.Mesh(
+    new THREE.BoxGeometry(this.VS, this.VS, this.VS),
+    new THREE.MeshBasicMaterial({
+      color: 0xffffff,
+      transparent: true,
+      opacity: 0.5,
+      depthTest: false
+    })
+  );
+  this.previewVoxel.visible = false;
+  this.scene.add(this.previewVoxel);
+
+  // Preview brush (multi-voxel ghost group)
+  this.previewBrush = new THREE.Group();
+  this.scene.add(this.previewBrush);
+
+  // Helpers (grid + bounds)
+  this.rebuildHelpers();
+},
+
     
     setupEventListeners: function() {
         window.addEventListener('resize', () => this.handleResize());
