@@ -1081,23 +1081,53 @@ const VoxelApp = {
   // Helpers
   this.rebuildHelpers();
 },
-
 makeVoxelMesh: function (color, x, y, z) {
-  const mesh = new THREE.Mesh(
-    new THREE.BoxGeometry(this.VS, this.VS, this.VS),
-    new THREE.MeshStandardMaterial({
-      color,
-      roughness: 0.95,
-      metalness: 0.0,
-      flatShading: true    // stronger face breaks
-    })
-  );
+  // subtle gap avoids z-fighting between stacked voxels
+  const scale = this.VOXEL_SCALE ?? 0.98;
+
+  const geo = new THREE.BoxGeometry(this.VS, this.VS, this.VS);
+
+  const mat = new THREE.MeshStandardMaterial({
+    color,
+    roughness: 0.95,
+    metalness: 0.0,
+    flatShading: true,
+    dithering: true
+  });
+
+  // Cheap face differentiation: top a touch brighter, bottom a touch darker,
+  // plus a mild fresnel rim for stacks. Works without postFX.
+  mat.onBeforeCompile = (shader) => {
+    shader.fragmentShader = shader.fragmentShader.replace(
+      '#include <output_fragment>',
+      `
+      // BEGIN voxel face tint
+      float up   = clamp(normal.y * 0.5 + 0.5, 0.0, 1.0);   // 0..1 (bottom..top)
+      float fres = pow(1.0 - abs(dot(normalize(vViewPosition), normal)), 2.0);
+
+      // top brighten (1.06), bottom darken (0.92), sides ~1.0
+      float topFactor    = mix(0.98, 1.06, up);
+      float bottomFactor = mix(1.00, 0.92, 1.0 - up);
+      float rimFactor    = mix(1.0, 1.08, fres * 0.25);
+
+      outgoingLight *= topFactor;
+      outgoingLight *= bottomFactor;
+      outgoingLight *= rimFactor;
+      // END voxel face tint
+
+      #include <output_fragment>
+      `
+    );
+  };
+
+  const mesh = new THREE.Mesh(geo, mat);
   mesh.position.set(x * this.VS + 0.5, y * this.VS + 0.5, z * this.VS + 0.5);
-  mesh.scale.setScalar(this.VOXEL_SCALE || 1); // the micro-gap
+  mesh.scale.setScalar(scale);
   mesh.castShadow = true;
   mesh.receiveShadow = true;
   return mesh;
 },
+
 
     setupEventListeners: function() {
         window.addEventListener('resize', () => this.handleResize());
@@ -2212,29 +2242,40 @@ _modifySingleVoxel: function(x, y, z, modeOverride = null) {
         localStorage.removeItem('voxelshaper_autosave');
         this.showToast('Project Cleared', '', 'info');
     },
+rebuildHelpers: function () {
+  if (this.gridHelper) this.scene.remove(this.gridHelper);
+  if (this.boxHelper)  this.scene.remove(this.boxHelper);
 
-    rebuildHelpers: function() {
-        if (this.gridHelper) this.scene.remove(this.gridHelper);
-        if (this.boxHelper) this.scene.remove(this.boxHelper);
-        const size = this.GRID * this.VS;
-        this.gridHelper = new THREE.GridHelper(size, this.GRID);
-        if (this.currentDrawingAxis === 'y') {
-            this.gridHelper.position.set(size / 2, this.activeDrawingLevel.y * this.VS, size / 2);
-            this.gridHelper.rotation.set(0, 0, 0);
-        } else if (this.currentDrawingAxis === 'x') {
-            this.gridHelper.position.set(this.activeDrawingLevel.x * this.VS, size / 2, size / 2);
-            this.gridHelper.rotation.set(0, 0, Math.PI / 2);
-        } else { // 'z'
-            this.gridHelper.position.set(size / 2, size / 2, this.activeDrawingLevel.z * this.VS);
-            this.gridHelper.rotation.set(Math.PI / 2, 0, 0);
-        }
-        this.scene.add(this.gridHelper);
-        const boxGeom = new THREE.BoxGeometry(size, size, size);
-        const edges = new THREE.EdgesGeometry(boxGeom);
-        this.boxHelper = new THREE.LineSegments(edges, new THREE.LineBasicMaterial({ color: 0x4a5568 })); 
-        this.boxHelper.position.set(size / 2, size / 2, size / 2);
-        this.scene.add(this.boxHelper);
-    },
+  const size = this.GRID * this.VS;
+
+  // Grid sits on the active drawing plane; keep it subtle
+  const gh = new THREE.GridHelper(size, this.GRID, 0x2a2e36, 0x1c1f26);
+  gh.material.opacity = 0.6;
+  gh.material.transparent = true;
+
+  if (this.currentDrawingAxis === 'y') {
+    gh.position.set(size / 2, this.activeDrawingLevel.y * this.VS, size / 2);
+    gh.rotation.set(0, 0, 0);
+  } else if (this.currentDrawingAxis === 'x') {
+    gh.position.set(this.activeDrawingLevel.x * this.VS, size / 2, size / 2);
+    gh.rotation.set(0, 0, Math.PI / 2);
+  } else { // 'z'
+    gh.position.set(size / 2, size / 2, this.activeDrawingLevel.z * this.VS);
+    gh.rotation.set(Math.PI / 2, 0, 0);
+  }
+  this.gridHelper = gh;
+  this.scene.add(gh);
+
+  // Bounding box edges (very faint)
+  const boxGeom = new THREE.BoxGeometry(size, size, size);
+  const edges   = new THREE.EdgesGeometry(boxGeom);
+  const boxMat  = new THREE.LineBasicMaterial({ color: 0x3a3f48, transparent: true, opacity: 0.5 });
+  const box     = new THREE.LineSegments(edges, boxMat);
+  box.position.set(size / 2, size / 2, size / 2);
+  this.boxHelper = box;
+  this.scene.add(box);
+},
+
 
     resetCamera: function() {
         this.currentDrawingAxis = 'y';
@@ -2501,31 +2542,38 @@ _modifySingleVoxel: function(x, y, z, modeOverride = null) {
         this.showToast('Export Complete', 'Downloaded voxel-model.stl', 'info');
     },
 
-    animate: function() {
-        requestAnimationFrame(() => this.animate());
-        if (document.pointerLockElement === this.cvs) {
-            const rotX = this.controls.invertLookX ? this.mouseState.mouseMovementX : -this.mouseState.mouseMovementX;
-            const rotY = this.controls.invertLookY ? this.mouseState.mouseMovementY : -this.mouseState.mouseMovementY;
-            this.euler.y += rotX * this.ROTATE_SPEED;
-            this.euler.x += rotY * this.ROTATE_SPEED;
-            this.euler.x = Math.max(-Math.PI / 2, Math.min(Math.PI / 2, this.euler.x));
-            this.cam.quaternion.setFromEuler(this.euler);
-            this.mouseState.mouseMovementX = 0;
-            this.mouseState.mouseMovementY = 0;
-            const forward = new THREE.Vector3();
-            this.cam.getWorldDirection(forward);
-            const right = new THREE.Vector3().crossVectors(forward, this.cam.up).normalize();
-            const strafeXSpeed = this.controls.invertStrafeX ? -this.flySpeed : this.flySpeed;
-            const strafeYSpeed = this.controls.invertStrafeY ? -this.flySpeed : this.flySpeed;
-            if (this.keyboard['w']) this.cam.position.addScaledVector(forward, this.flySpeed);
-            if (this.keyboard['s']) this.cam.position.addScaledVector(forward, -this.flySpeed);
-            if (this.keyboard['a']) this.cam.position.addScaledVector(right, -strafeXSpeed);
-            if (this.keyboard['d']) this.cam.position.addScaledVector(right, strafeXSpeed);
-            if (this.keyboard['e']) this.cam.position.y += strafeYSpeed;
-            if (this.keyboard['q']) this.cam.position.y -= strafeYSpeed;
-        }
-        this.ren.render(this.scene, this.cam);
-    },
+animate: function () {
+  requestAnimationFrame(() => this.animate());
+
+  if (document.pointerLockElement === this.cvs) {
+    const rotX = this.controls.invertLookX ? this.mouseState.mouseMovementX : -this.mouseState.mouseMovementX;
+    const rotY = this.controls.invertLookY ? this.mouseState.mouseMovementY : -this.mouseState.mouseMovementY;
+    this.euler.y += rotX * this.ROTATE_SPEED;
+    this.euler.x += rotY * this.ROTATE_SPEED;
+    this.euler.x = Math.max(-Math.PI / 2, Math.min(Math.PI / 2, this.euler.x));
+    this.cam.quaternion.setFromEuler(this.euler);
+    this.mouseState.mouseMovementX = 0;
+    this.mouseState.mouseMovementY = 0;
+
+    const forward = new THREE.Vector3();
+    this.cam.getWorldDirection(forward);
+    const right = new THREE.Vector3().crossVectors(forward, this.cam.up).normalize();
+
+    const strafeXSpeed = this.controls.invertStrafeX ? -this.flySpeed : this.flySpeed;
+    const strafeYSpeed = this.controls.invertStrafeY ? -this.flySpeed : this.flySpeed;
+
+    if (this.keyboard['w']) this.cam.position.addScaledVector(forward, this.flySpeed);
+    if (this.keyboard['s']) this.cam.position.addScaledVector(forward, -this.flySpeed);
+    if (this.keyboard['a']) this.cam.position.addScaledVector(right, -strafeXSpeed);
+    if (this.keyboard['d']) this.cam.position.addScaledVector(right,  strafeXSpeed);
+    if (this.keyboard['e']) this.cam.position.y += strafeYSpeed;
+    if (this.keyboard['q']) this.cam.position.y -= strafeYSpeed;
+  }
+
+  // render
+  this.ren.render(this.scene, this.cam);
+},
+
 rebuildSceneFromVoxels: function() {
   // Remove all voxel meshes except previews/template image
   this.scene.children
