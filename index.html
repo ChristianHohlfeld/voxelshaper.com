@@ -1007,6 +1007,81 @@ const VoxelApp = {
         document.getElementById('newsletterCheckbox').checked = newsletterChecked ? (newsletterChecked === 'true') && !this.computeMobileMode() : false;
         this.updateAllControlInputs();
     },
+    setupThree: function () {
+  // Scene & fog (depth separation)
+  this.scene = new THREE.Scene();
+  const bg = 0x0e0f12;
+  this.scene.background = new THREE.Color(bg);
+  this.scene.fog = new THREE.FogExp2(bg, 0.0016);
+
+  // Camera
+  this.cam = new THREE.PerspectiveCamera(
+    65,
+    this.containerDiv.clientWidth / this.containerDiv.clientHeight,
+    0.1,
+    4000
+  );
+  this.euler = new THREE.Euler(0, 0, 0, 'YXZ');
+  this.resetCamera();
+
+  // Renderer (slightly darker)
+  this.ren = new THREE.WebGLRenderer({
+    canvas: this.cvs,
+    antialias: true,
+    logarithmicDepthBuffer: true
+  });
+  this.ren.setSize(this.containerDiv.clientWidth, this.containerDiv.clientHeight);
+  this.ren.setPixelRatio(this.isMobile ? 1.5 : (window.devicePixelRatio || 1));
+  this.ren.outputEncoding = THREE.sRGBEncoding;
+  this.ren.toneMapping = THREE.ACESFilmicToneMapping;
+  this.ren.toneMappingExposure = 0.72; // down from ~0.9
+  this.ren.physicallyCorrectLights = true;
+  this.ren.shadowMap.enabled = true;
+  this.ren.shadowMap.type = THREE.PCFSoftShadowMap;
+  this.ren.setClearColor(bg, 1);
+
+  // Lights (key/fill/rim + soft hemi)
+  const hemi = new THREE.HemisphereLight(0xffffff, 0x202020, 0.28);
+  this.scene.add(hemi);
+
+  const key = new THREE.DirectionalLight(0xffffff, 0.66);
+  key.position.set(16, 26, 18);
+  key.castShadow = true;
+  key.shadow.mapSize.set(2048, 2048);
+  key.shadow.camera.near = 1;
+  key.shadow.camera.far = 2000;
+  key.shadow.camera.left = -400; key.shadow.camera.right = 400;
+  key.shadow.camera.top = 400;   key.shadow.camera.bottom = -400;
+  key.shadow.bias = -0.00015;
+  key.shadow.normalBias = 0.02;
+  this.scene.add(key);
+  this.dirLight = key;
+
+  const fill = new THREE.DirectionalLight(0xffffff, 0.22);
+  fill.position.set(-12, 10, -14);
+  this.scene.add(fill);
+
+  const rim = new THREE.DirectionalLight(0xffffff, 0.18);
+  rim.position.set(0, 10, 28);
+  this.scene.add(rim);
+
+  // Preview voxel
+  this.previewVoxel = new THREE.Mesh(
+    new THREE.BoxGeometry(this.VS, this.VS, this.VS),
+    new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.45, depthTest: false })
+  );
+  this.previewVoxel.visible = false;
+  this.previewVoxel.scale.setScalar(this.VOXEL_SCALE ?? 0.98);
+  this.scene.add(this.previewVoxel);
+
+  // Preview brush group
+  this.previewBrush = new THREE.Group();
+  this.scene.add(this.previewBrush);
+
+  // Helpers
+  this.rebuildHelpers();
+},
+
 makeVoxelMesh: function (color, x, y, z) {
   const mesh = new THREE.Mesh(
     new THREE.BoxGeometry(this.VS, this.VS, this.VS),
