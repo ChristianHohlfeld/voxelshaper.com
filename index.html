@@ -1015,6 +1015,15 @@ const VoxelApp = {
         this.euler = new THREE.Euler(0, 0, 0, 'YXZ');
         this.resetCamera();
         this.ren = new THREE.WebGLRenderer({ canvas: this.cvs, antialias: true, logarithmicDepthBuffer: true });
+        this.ren.outputEncoding = THREE.sRGBEncoding;                // correct color/gamma
+this.ren.toneMapping = THREE.ACESFilmicToneMapping;          // nicer rolloff
+this.ren.toneMappingExposure = 1.05;                         // tiny boost
+this.ren.setClearColor(0x0e0f12, 1);                         // match dark UI bg
+
+// after you create dirLight:
+dirLight.intensity = 1.6;                                    // a touch brighter
+dirLight.shadow.mapSize.set(2048, 2048);                     // sharper shadows
+dirLight.shadow.bias = -0.0005;                              // less acne
         this.ren.shadowMap.enabled = true;
         this.ren.shadowMap.type = THREE.PCFSoftShadowMap;
         this.scene.add(new THREE.AmbientLight(0x606060));
