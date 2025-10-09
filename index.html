@@ -506,6 +506,27 @@
     </div>
 </dialog>
 
+<dialog id="onboardingModal" class="modal modal-bottom sm:modal-middle">
+    <div class="modal-box space-y-4">
+        <button id="onboardingCloseBtn" class="btn btn-sm btn-circle btn-ghost absolute right-2 top-2" type="button" aria-label="Skip onboarding">
+            ✕
+        </button>
+        <h3 class="font-bold text-lg">Welcome to VoxelShaper</h3>
+        <p class="text-sm opacity-80">Get started quickly with these essential controls:</p>
+        <ul class="list-disc list-inside space-y-1 text-sm text-base-content/80">
+            <li><span class="font-semibold">Left click</span> to add voxels, <span class="font-semibold">Shift + click</span> or Delete mode to remove.</li>
+            <li><span class="font-semibold">Right click &amp; drag</span> to orbit, <span class="font-semibold">middle click</span> (or Space + drag) to pan.</li>
+            <li>Use the <span class="font-semibold">mouse wheel</span> or pinch gestures to zoom in and out.</li>
+            <li>Press <span class="font-semibold">Ctrl+Z / Ctrl+Y</span> (or three-finger tap on mobile) for undo/redo.</li>
+        </ul>
+        <div class="modal-action flex flex-col sm:flex-row gap-2">
+            <button id="onboardingLoadSampleBtn" class="btn btn-accent w-full sm:w-auto"><i class="fas fa-cubes mr-2"></i>Load Sample Project</button>
+            <button id="onboardingStartTutorialBtn" class="btn btn-primary w-full sm:w-auto"><i class="fas fa-graduation-cap mr-2"></i>Start Tutorial</button>
+            <button id="onboardingSkipBtn" class="btn btn-ghost w-full sm:w-auto" type="button">Start with Blank Canvas</button>
+        </div>
+    </div>
+</dialog>
+
 
 <div id="toast-container" class="toast toast-top toast-center z-50"></div>
 <div id="rotateOverlay" class="orientation-overlay">Please rotate to portrait mode</div>
@@ -786,6 +807,7 @@ const VoxelApp = {
     DOUBLE_TAP_THRESHOLD: 300, // ms
     BACKEND_URL: "https://api.voxelshaper.com",
     HUB_URL: "https://hub.voxelshaper.com",
+    ONBOARDING_STORAGE_KEY: 'voxelshaper_onboarding_complete',
     // --- State ---
     scene: null, cam: null, ren: null, gridHelper: null, boxHelper: null,
     sharedBoxGeometry: null,
@@ -841,6 +863,7 @@ const VoxelApp = {
         lastPinchDist: null,
         lastPinchCenter: null,
     },
+    tutorialTimeouts: [],
     controls: {
         invertLookX: false, invertLookY: false, invertZoom: true,
         invertStrafeX: false, invertStrafeY: false,
@@ -896,6 +919,117 @@ const VoxelApp = {
         document.body.style.overflow = show ? 'hidden' : '';
     },
 
+    isOnboardingComplete: function() {
+        return localStorage.getItem(this.ONBOARDING_STORAGE_KEY) === 'true';
+    },
+
+    markOnboardingComplete: function() {
+        localStorage.setItem(this.ONBOARDING_STORAGE_KEY, 'true');
+    },
+
+    startOnboardingFlow: function() {
+        this.clearTutorialTimeouts();
+        this.openOnboardingModal();
+    },
+
+    openOnboardingModal: function() {
+        const modal = document.getElementById('onboardingModal');
+        if (modal && !modal.open) {
+            modal.showModal();
+        }
+    },
+
+    closeOnboardingModal: function() {
+        const modal = document.getElementById('onboardingModal');
+        if (modal && modal.open) {
+            modal.close();
+        }
+    },
+
+    clearTutorialTimeouts: function() {
+        if (!Array.isArray(this.tutorialTimeouts)) {
+            this.tutorialTimeouts = [];
+            return;
+        }
+        this.tutorialTimeouts.forEach(timeoutId => clearTimeout(timeoutId));
+        this.tutorialTimeouts = [];
+    },
+
+    skipOnboarding: function() {
+        const hadAutosave = !!localStorage.getItem('voxelshaper_autosave');
+        this.markOnboardingComplete();
+        this.closeOnboardingModal();
+        this.clearTutorialTimeouts();
+        if (hadAutosave) {
+            this.loadAutosavedScene();
+        } else {
+            this.showToast('Welcome', 'You are ready to start building!', 'info', 2500);
+        }
+    },
+
+    loadSampleProject: function() {
+        this.markOnboardingComplete();
+        this.closeOnboardingModal();
+        this.clearTutorialTimeouts();
+
+        const voxels = [];
+        const addLayer = (y, xStart, xEnd, zStart, zEnd, color) => {
+            for (let x = xStart; x <= xEnd; x++) {
+                for (let z = zStart; z <= zEnd; z++) {
+                    voxels.push({ x, y, z, color });
+                }
+            }
+        };
+
+        addLayer(0, 7, 12, 7, 12, '#f97316');
+        addLayer(1, 8, 11, 8, 11, '#fde047');
+        addLayer(2, 9, 10, 9, 10, '#ef4444');
+
+        voxels.push({ x: 9, y: 1, z: 7, color: '#8b5cf6' });
+        voxels.push({ x: 10, y: 1, z: 7, color: '#8b5cf6' });
+        voxels.push({ x: 8, y: 1, z: 9, color: '#60a5fa' });
+        voxels.push({ x: 11, y: 1, z: 9, color: '#60a5fa' });
+        voxels.push({ x: 8, y: 1, z: 10, color: '#60a5fa' });
+        voxels.push({ x: 11, y: 1, z: 10, color: '#60a5fa' });
+
+        const sampleData = {
+            gridSize: 24,
+            currentDrawingAxis: 'y',
+            activeDrawingLevel: { x: 0, y: 0, z: 0 },
+            voxels,
+            templateImageData: null,
+            templateImagePinnedY: null,
+            templateImageAxis: 'z',
+        };
+
+        if (this.loadFromData(sampleData)) {
+            this.showToast('Sample Loaded', 'Explore the sample project and try the tools!', 'info', 3200);
+            this.autosaveScene();
+        } else {
+            this.showToast('Load Error', 'Could not load the sample project.', 'error', 3200);
+        }
+    },
+
+    startTutorial: function() {
+        this.markOnboardingComplete();
+        this.closeOnboardingModal();
+        this.clearTutorialTimeouts();
+
+        const steps = [
+            { title: 'Welcome to VoxelShaper', message: 'Left click to add voxels, Shift + click to remove them.', duration: 3500 },
+            { title: 'Navigation Tips', message: 'Hold right mouse to orbit, middle mouse (or space + drag) to pan, scroll to zoom.', duration: 3500 },
+            { title: 'Change Modes', message: 'Press 1/2/3 or use the toolbar to switch between Select, Paint, and Delete.', duration: 3500 },
+            { title: 'Stay Productive', message: 'Use Ctrl+Z / Ctrl+Y (or three-finger tap on mobile) to undo and redo.', duration: 3500 }
+        ];
+
+        steps.forEach((step, index) => {
+            const timeoutId = setTimeout(() => {
+                this.showToast(step.title, step.message, 'info', step.duration || 3200);
+            }, index * 3600);
+            this.tutorialTimeouts.push(timeoutId);
+        });
+    },
+
     init: function() {
         this.setupDOM();
         if (typeof this.keyboard === 'undefined' || this.keyboard === null) {
@@ -910,7 +1044,11 @@ const VoxelApp = {
         
         const urlParams = new URLSearchParams(window.location.search);
         if (!urlParams.has('modelId') && !window.location.hash.includes('#oauth_success')) {
-            this.loadAutosavedScene(); 
+            if (this.isOnboardingComplete()) {
+                this.loadAutosavedScene();
+            } else {
+                this.startOnboardingFlow();
+            }
         }
 
         this.updateModeUI();
@@ -1200,6 +1338,22 @@ const VoxelApp = {
             document.getElementById('shareModal').close();
             document.getElementById('uploadProjectModal').showModal();
         });
+
+        const onboardingLoadSampleBtn = document.getElementById('onboardingLoadSampleBtn');
+        if (onboardingLoadSampleBtn) onboardingLoadSampleBtn.addEventListener('click', () => this.loadSampleProject());
+        const onboardingStartTutorialBtn = document.getElementById('onboardingStartTutorialBtn');
+        if (onboardingStartTutorialBtn) onboardingStartTutorialBtn.addEventListener('click', () => this.startTutorial());
+        const onboardingSkipBtn = document.getElementById('onboardingSkipBtn');
+        if (onboardingSkipBtn) onboardingSkipBtn.addEventListener('click', () => this.skipOnboarding());
+        const onboardingCloseBtn = document.getElementById('onboardingCloseBtn');
+        if (onboardingCloseBtn) onboardingCloseBtn.addEventListener('click', () => this.skipOnboarding());
+        const onboardingModal = document.getElementById('onboardingModal');
+        if (onboardingModal) {
+            onboardingModal.addEventListener('cancel', (event) => {
+                event.preventDefault();
+                this.skipOnboarding();
+            });
+        }
 
         document.getElementById('uploadConfirmBtn').addEventListener('click', (e) => {
             e.preventDefault();
