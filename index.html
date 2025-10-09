@@ -30,7 +30,7 @@
     <meta property="og:type" content="website">
     <meta property="og:url" content="https://voxelshaper.com/">
     <meta property="og:title" content="VoxelShaper – Voxel CAD for 3D Printing (Bambu Lab Ready)">
-    <meta property="og:description" content="Simple voxel-based CAD for makers. Minecraft-style models, export as 3MF/STL for Bambu Studio &amp; AMS Multicolor.">
+    <meta property="og:description" content="Simple voxel-based CAD for makers. Minecraft-style models, export as 3MF/STL for Bambu Lab Studio &amp; AMS Multicolor.">
     <meta property="og:image" content="https://voxelshaper.com/og.png">
     <meta property="og:site_name" content="VoxelShaper">
     <meta property="og:locale" content="en_US">
@@ -170,15 +170,6 @@
             height: 3.5rem;
             font-size: 1.5rem;
         }
-        .orientation-overlay {
-            position: fixed; inset: 0;
-            display: none; align-items: center; justify-content: center;
-            background: rgba(0,0,0,.6);
-            color: #fff; font: 600 16px/1.4 system-ui, -apple-system, Segoe UI, Roboto, sans-serif;
-            z-index: 2147483646;
-            text-align: center; padding: 24px;
-        }
-        .orientation-overlay.show { display: flex; }
         :root { --safe-bottom: env(safe-area-inset-bottom); --safe-top: env(safe-area-inset-top); }
         #mobile-ui-container .mobile-bottom-bar {
             position: fixed; left: 0; right: 0; bottom: 0;
@@ -186,7 +177,7 @@
             z-index: 40;
         }
         body.has-mobile-bar {
-            padding-bottom: calc(64px + var(--safe-bottom));
+            padding-bottom: 0 !important; /* Let the bar float */
         }
         :where(html, body, #container, #voxelCanvas, #controls, #mobile-ui-container,
                 .mobile-bottom-bar, .btn, .dropdown, .menu, .modal, label, span, div) {
@@ -329,8 +320,7 @@
 </div>
 
 <div id="mobile-ui-container">
-    <!-- NEW: Mobile Undo/Redo Overlay -->
-    <div id="mobile-undo-redo-overlay" class="absolute top-4 left-4 z-50 flex flex-col gap-2" style="padding-top: var(--safe-top);">
+    <div id="mobile-undo-redo-overlay" class="absolute bottom-24 right-4 z-50 flex flex-row gap-2" style="bottom: calc(5.5rem + var(--safe-bottom));">
         <button id="mobile-overlay-undo" class="btn btn-circle btn-ghost bg-base-200/80 backdrop-blur-sm shadow-lg"><i class="fas fa-undo"></i></button>
         <button id="mobile-overlay-redo" class="btn btn-circle btn-ghost bg-base-200/80 backdrop-blur-sm shadow-lg"><i class="fas fa-redo"></i></button>
     </div>
@@ -535,7 +525,6 @@
 
 
 <div id="toast-container" class="toast toast-top toast-center z-50"></div>
-<div id="rotateOverlay" class="orientation-overlay">Please rotate to portrait mode</div>
 
 <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/build/three.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/exporters/STLExporter.js"></script>
@@ -937,14 +926,6 @@ const VoxelApp = {
             try { await screen.orientation.lock('portrait'); } catch (e) { /* Not allowed by browser */ }
         }
     },
-    updateOrientationOverlay: function () {
-        const isPortrait = window.matchMedia('(orientation: portrait)').matches;
-        const overlay = document.getElementById('rotateOverlay');
-        const show = this.isMobile && !isPortrait;
-        overlay.classList.toggle('show', show);
-        this.cvs.style.pointerEvents = show ? 'none' : 'auto';
-        document.body.style.overflow = show ? 'hidden' : '';
-    },
 
     init: function() {
         this.setupDOM();
@@ -952,8 +933,6 @@ const VoxelApp = {
             this.keyboard = {};
         }
         this.applyUIMode();
-        this.tryLockOrientation();
-        this.updateOrientationOverlay();
         this.setupThree();
         this.rebuildFoundation();
         this.setupEventListeners();
@@ -971,13 +950,6 @@ const VoxelApp = {
         this.updateModeUI();
         this.renderColorHistory();
         this.updateImageAxisUI();
-        const oneTimeLock = () => {
-            this.tryLockOrientation();
-            window.removeEventListener('pointerdown', oneTimeLock);
-            window.removeEventListener('click', oneTimeLock);
-        };
-        window.addEventListener('pointerdown', oneTimeLock, { once: true });
-        window.addEventListener('click', oneTimeLock, { once: true });
         this.authCheckAndInit();
         this.handleResize();
         this.animate();
@@ -1167,8 +1139,7 @@ const VoxelApp = {
     
     setupEventListeners: function() {
         window.addEventListener('resize', () => this.handleResize());
-        window.addEventListener('resize', () => this.updateOrientationOverlay());
-        window.addEventListener('orientationchange', () => this.updateOrientationOverlay());
+        window.addEventListener('orientationchange', () => this.handleResize());
         this.containerDiv.addEventListener('pointerdown', (e) => this.onPointerDown(e));
         this.containerDiv.addEventListener('pointermove', (e) => this.onPointerMove(e));
         window.addEventListener('pointerup', (e) => this.onPointerUp(e));
@@ -1424,6 +1395,8 @@ const VoxelApp = {
             }
 
             if (this.touchState.isInteracting) {
+                const targetInfo = this.getRayTargetInfo(e.clientX, e.clientY);
+                this.updateToolPreview(targetInfo);
                 // Same logic as desktop interaction drag
                 if (this.mouseState.isExtruding) {
                     const raycaster = new THREE.Raycaster();
@@ -1439,7 +1412,6 @@ const VoxelApp = {
                 } else if (this.currentMode === 'SELECT') {
                     this.handleDragSelection(e);
                 } else {
-                    let targetInfo = this.getRayTargetInfo(e.clientX, e.clientY);
                     if (targetInfo) {
                         const coords = {x: targetInfo.x, y: targetInfo.y, z: targetInfo.z};
                         if (!this.mouseState.lastActionCoords || coords.x !== this.mouseState.lastActionCoords.x || coords.y !== this.mouseState.lastActionCoords.y || coords.z !== this.mouseState.lastActionCoords.z) {
@@ -1479,6 +1451,8 @@ const VoxelApp = {
             this.activePointers.set(e.pointerId, { x: e.clientX, y: e.clientY });
 
         } else { // --- Desktop Logic ---
+             const targetInfo = this.getRayTargetInfo(e.clientX, e.clientY);
+             this.updateToolPreview(targetInfo);
             if (this.mouseState.isExtruding) {
                  const raycaster = new THREE.Raycaster();
                 const mouse = new THREE.Vector2(((e.clientX - this.cvs.getBoundingClientRect().left) / this.cvs.clientWidth) * 2 - 1, -((e.clientY - this.cvs.getBoundingClientRect().top) / this.cvs.clientHeight) * 2 + 1);
@@ -1494,7 +1468,6 @@ const VoxelApp = {
                 if (this.currentMode === 'SELECT') {
                     this.handleDragSelection(e);
                 } else {
-                    let targetInfo = this.getRayTargetInfo(e.clientX, e.clientY);
                     if (targetInfo) {
                         const coords = {x: targetInfo.x, y: targetInfo.y, z: targetInfo.z};
                         if (!this.mouseState.lastActionCoords || coords.x !== this.mouseState.lastActionCoords.x || coords.y !== this.mouseState.lastActionCoords.y || coords.z !== this.mouseState.lastActionCoords.z) {
@@ -2088,16 +2061,19 @@ const VoxelApp = {
         if (axis === 'x') {
             const inc = step(sx, ex);
             for (let x = sx; x !== ex + inc; x += inc) {
+                if (sy < 0 && startNormalIdx !== 2) continue;
                 if (inBounds(x, sy, sz)) base.add(`${this.key(x, sy, sz)}:${startNormalIdx}`);
             }
         } else if (axis === 'y') {
             const inc = step(sy, ey);
             for (let y = sy; y !== ey + inc; y += inc) {
+                if (y < 0 && startNormalIdx !== 2) continue;
                 if (inBounds(sx, y, sz)) base.add(`${this.key(sx, y, sz)}:${startNormalIdx}`);
             }
         } else { // 'z'
             const inc = step(sz, ez);
             for (let z = sz; z !== ez + inc; z += inc) {
+                if (sy < 0 && startNormalIdx !== 2) continue;
                 if (inBounds(sx, sy, z)) base.add(`${this.key(sx, sy, z)}:${startNormalIdx}`);
             }
         }
