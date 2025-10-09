@@ -37,7 +37,7 @@
 
     <meta name="twitter:card" content="summary_large_image">
     <meta name="twitter:title" content="VoxelShaper – Voxel CAD for 3D Printing (Bambu Lab Ready)">
-    <meta property="og:description" content="Simple voxel-based CAD for makers. Minecraft-style models, export as 3MF/STL for Bambu Studio &amp; AMS Multicolor.">
+    <meta property="og:description" content="Simple voxel-based CAD for makers. Minecraft-style models, export as 3MF/STL for Bambu Lab Studio &amp; AMS Multicolor.">
     <meta name="twitter:image" content="https://voxelshaper.com/og.png">
 
     <script type="application/ld+json">
@@ -89,7 +89,7 @@
             height: 100%;
             margin: 0;
             padding: 0;
-            touch-action: manipulation; /* Prevent double-tap zoom globally */
+            touch-action: none; /* More aggressive prevention of default touch actions */
         }
         #container, #voxelCanvas { 
             touch-action: none;
@@ -921,11 +921,6 @@ const VoxelApp = {
         }
         document.body.classList.toggle('has-mobile-bar', this.isMobile);
     },
-    tryLockOrientation: async function () {
-        if (this.isMobile && 'orientation' in screen && screen.orientation && screen.orientation.lock) {
-            try { await screen.orientation.lock('portrait'); } catch (e) { /* Not allowed by browser */ }
-        }
-    },
 
     init: function() {
         this.setupDOM();
@@ -1351,53 +1346,47 @@ const VoxelApp = {
         }
 
         if (!this.isPointerDown) {
-            if (!this.isMobile) {
-                const targetInfo = this.getRayTargetInfo(e.clientX, e.clientY);
-                this.updateToolPreview(targetInfo);
-            }
+            const targetInfo = this.getRayTargetInfo(e.clientX, e.clientY);
+            this.updateToolPreview(targetInfo);
             return;
         }
         
         const dist = Math.hypot(e.clientX - this.mouseState.downX, e.clientY - this.mouseState.downY);
-        if (!this.mouseState.isDragging && dist > this.DRAG_THRESHOLD) {
-            this.mouseState.isDragging = true;
-            this.touchState.isDoubleTapCandidate = false; // Dragging cancels a double tap action
-            this.touchState.isThreeFingerUndoCandidate = false; // Dragging cancels undo gesture
-        }
-
+        
         // --- Mobile Logic ---
         if (this.isMobile) {
-            if (this.mouseState.isDragging) {
-                // If this is the first move event that qualifies as a drag, decide the gesture type.
-                if (!this.touchState.isInteracting && !this.touchState.isLookAround) {
-                    if (this.touchState.isDoubleTapCandidate) {
-                        this.touchState.isInteracting = true;
-                        // Initialize interaction state (like desktop onPointerDown)
-                         if (this.currentMode === 'SELECT') {
-                            this.selectionChange.before = new Set(this.selectedFaces);
-                            const target = this.getFaceTarget(e.clientX, e.clientY);
-                            this.mouseState.selectionDragStartTarget = target;
-                            if (target && this.selectedFaces.has(target.faceKey)) {
-                                const startNormalIdx = parseInt(target.faceKey.split(':')[1], 10);
-                                if ([...this.selectedFaces].every(k => parseInt(k.split(':')[1], 10) === startNormalIdx)) {
-                                    this.mouseState.isExtruding = true;
-                                    this.mouseState.extrudeNormal = target.normal.clone();
-                                    const viewN = this.cam.getWorldDirection(new THREE.Vector3()).negate();
-                                    this.mouseState.drawingPlane.setFromNormalAndCoplanarPoint(viewN, target.intersectionPoint);
-                                    this.mouseState.dragStartPoint.copy(target.intersectionPoint);
-                                }
+             if (!this.mouseState.isDragging && dist > this.DRAG_THRESHOLD) { // First frame of drag
+                this.mouseState.isDragging = true;
+                this.touchState.isThreeFingerUndoCandidate = false;
+
+                if (this.touchState.isDoubleTapCandidate) {
+                    this.touchState.isInteracting = true;
+                    this.touchState.isLookAround = false;
+                    this.touchState.isDoubleTapCandidate = false; 
+                    if (this.currentMode === 'SELECT') {
+                        this.selectionChange.before = new Set(this.selectedFaces);
+                        const target = this.getFaceTarget(e.clientX, e.clientY);
+                        this.mouseState.selectionDragStartTarget = target;
+                        if (target && this.selectedFaces.has(target.faceKey)) {
+                            const startNormalIdx = parseInt(target.faceKey.split(':')[1], 10);
+                            if ([...this.selectedFaces].every(k => parseInt(k.split(':')[1], 10) === startNormalIdx)) {
+                                this.mouseState.isExtruding = true;
+                                this.mouseState.extrudeNormal = target.normal.clone();
+                                const viewN = this.cam.getWorldDirection(new THREE.Vector3()).negate();
+                                this.mouseState.drawingPlane.setFromNormalAndCoplanarPoint(viewN, target.intersectionPoint);
+                                this.mouseState.dragStartPoint.copy(target.intersectionPoint);
                             }
                         }
-                    } else if (this.activePointers.size === 1) {
-                        this.touchState.isLookAround = true;
                     }
+                } else if (this.activePointers.size === 1) {
+                    this.touchState.isLookAround = true;
+                    this.touchState.isInteracting = false;
                 }
             }
 
             if (this.touchState.isInteracting) {
                 const targetInfo = this.getRayTargetInfo(e.clientX, e.clientY);
                 this.updateToolPreview(targetInfo);
-                // Same logic as desktop interaction drag
                 if (this.mouseState.isExtruding) {
                     const raycaster = new THREE.Raycaster();
                     const mouse = new THREE.Vector2(((e.clientX - this.cvs.getBoundingClientRect().left) / this.cvs.clientWidth) * 2 - 1, -((e.clientY - this.cvs.getBoundingClientRect().top) / this.cvs.clientHeight) * 2 + 1);
@@ -1451,6 +1440,9 @@ const VoxelApp = {
             this.activePointers.set(e.pointerId, { x: e.clientX, y: e.clientY });
 
         } else { // --- Desktop Logic ---
+             if (!this.mouseState.isDragging && dist > this.DRAG_THRESHOLD) {
+                this.mouseState.isDragging = true;
+             }
              const targetInfo = this.getRayTargetInfo(e.clientX, e.clientY);
              this.updateToolPreview(targetInfo);
             if (this.mouseState.isExtruding) {
@@ -1711,8 +1703,8 @@ const VoxelApp = {
     
     onKeyDown: function(e) {
         if (e.code === 'Space') {
-            e.preventDefault();
             if (e.target.tagName !== 'INPUT' && e.target.tagName !== 'TEXTAREA' && e.target.tagName !== 'SELECT') {
+                e.preventDefault();
                 this.cycleMode();
             }
             return;
@@ -3279,6 +3271,7 @@ const VoxelApp = {
             }
         }
     },
+
 
     // --- NEW: Onboarding Methods ---
     startOnboarding: function() {
