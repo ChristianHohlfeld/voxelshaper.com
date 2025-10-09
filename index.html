@@ -37,7 +37,7 @@
 
     <meta name="twitter:card" content="summary_large_image">
     <meta name="twitter:title" content="VoxelShaper – Voxel CAD for 3D Printing (Bambu Lab Ready)">
-    <meta property="og:description" content="Simple voxel-based CAD for makers. Minecraft-style models, export as 3MF/STL for Bambu Studio &amp; AMS Multicolor.">
+    <meta property="og:description" content="Simple voxel-based CAD for makers. Minecraft-style models, export as 3MF/STL for Bambu Lab Studio &amp; AMS Multicolor.">
     <meta name="twitter:image" content="https://voxelshaper.com/og.png">
 
     <script type="application/ld+json">
@@ -799,7 +799,7 @@ const VoxelApp = {
     PINCH_ZOOM_MULT: 50,
     DRAG_THRESHOLD: 5,
     MAX_HISTORY_SIZE: 50,
-    DOUBLE_TAP_THRESHOLD: 300, // ms
+    LONG_PRESS_DURATION: 250, // ms
     BACKEND_URL: "https://api.voxelshaper.com",
     HUB_URL: "https://hub.voxelshaper.com",
     // --- State ---
@@ -849,9 +849,8 @@ const VoxelApp = {
         selectionAxisLock: null,
         selectionDragStartTarget: null,
     },
-    touchState: { // NEW: Mobile-specific state
-        lastTapTime: 0,
-        isDoubleTapCandidate: false,
+    touchState: {
+        longPressTimeout: null,
         isInteracting: false,
         isLookAround: false,
         isThreeFingerUndoCandidate: false,
@@ -1261,16 +1260,19 @@ const VoxelApp = {
         document.getElementById('startBlankBtn').addEventListener('click', () => this.markOnboardingComplete());
     },
 
-    // --- UPDATED: Mobile Tap Handler ---
+    triggerHapticFeedback: function() {
+        if (navigator.vibrate) {
+            navigator.vibrate(50); // A short, decisive vibration
+        }
+    },
+
     handleTapInteraction: function(event) {
         if (this.currentMode === 'SELECT') {
             const target = this.getFaceTarget(event.clientX, event.clientY);
-            // If the double tap hits an already-selected face, extrude by one unit.
             if (target && this.selectedFaces.has(target.faceKey)) {
-                trackEvent('extrude', { distance: 1, method: 'double_tap' });
+                trackEvent('extrude', { distance: 1, method: 'long_press_tap' });
                 this.extrudeSelectedFaces(1);
             } else {
-                // Otherwise, treat it as a regular selection tap.
                 this.handleFaceSelection(event);
             }
         } else {
@@ -1283,7 +1285,6 @@ const VoxelApp = {
         if (e.target !== this.cvs) return;
         e.preventDefault();
 
-        // Close any open dropdowns on canvas touch
         if (document.activeElement && document.activeElement.blur) {
             document.activeElement.blur();
         }
@@ -1298,13 +1299,31 @@ const VoxelApp = {
         this.mouseState.lastY = e.clientY;
         
         if (this.isMobile) {
-            const now = Date.now();
-            if (now - this.touchState.lastTapTime < this.DOUBLE_TAP_THRESHOLD) {
-                this.touchState.isDoubleTapCandidate = true;
-            }
-            this.touchState.lastTapTime = now;
-            
-            if (this.activePointers.size === 3) {
+            if (this.activePointers.size === 1) {
+                this.touchState.longPressTimeout = setTimeout(() => {
+                    this.triggerHapticFeedback();
+                    this.touchState.isInteracting = true;
+                    this.touchState.isLookAround = false;
+                    
+                    if (this.currentMode === 'SELECT') {
+                        this.selectionChange.before = new Set(this.selectedFaces);
+                        const target = this.getFaceTarget(this.mouseState.downX, this.mouseState.downY);
+                        this.mouseState.selectionDragStartTarget = target;
+
+                        if (target && this.selectedFaces.has(target.faceKey)) {
+                            const startNormalIdx = parseInt(target.faceKey.split(':')[1], 10);
+                            const sameOrientation = [...this.selectedFaces].every(k => parseInt(k.split(':')[1], 10) === startNormalIdx);
+                            if (sameOrientation) {
+                                this.mouseState.isExtruding = true;
+                                this.mouseState.extrudeNormal = target.normal.clone();
+                                const viewN = this.cam.getWorldDirection(new THREE.Vector3()).negate();
+                                this.mouseState.drawingPlane.setFromNormalAndCoplanarPoint(viewN, target.intersectionPoint);
+                                this.mouseState.dragStartPoint.copy(target.intersectionPoint);
+                            }
+                        }
+                    }
+                }, this.LONG_PRESS_DURATION);
+            } else if (this.activePointers.size === 3) {
                 this.touchState.isThreeFingerUndoCandidate = true;
             } else {
                 this.touchState.isThreeFingerUndoCandidate = false;
@@ -1336,7 +1355,6 @@ const VoxelApp = {
             this.cvs.requestPointerLock();
         }
     },
-
     
     onPointerMove: function(e) {
         if (document.pointerLockElement === this.cvs) {
@@ -1359,28 +1377,12 @@ const VoxelApp = {
                 this.mouseState.isDragging = true;
                 this.touchState.isThreeFingerUndoCandidate = false;
 
-                if (this.touchState.isDoubleTapCandidate) {
-                    this.touchState.isInteracting = true;
-                    this.touchState.isLookAround = false;
-                    this.touchState.isDoubleTapCandidate = false; 
-                    if (this.currentMode === 'SELECT') {
-                        this.selectionChange.before = new Set(this.selectedFaces);
-                        const target = this.getFaceTarget(e.clientX, e.clientY);
-                        this.mouseState.selectionDragStartTarget = target;
-                        if (target && this.selectedFaces.has(target.faceKey)) {
-                            const startNormalIdx = parseInt(target.faceKey.split(':')[1], 10);
-                            if ([...this.selectedFaces].every(k => parseInt(k.split(':')[1], 10) === startNormalIdx)) {
-                                this.mouseState.isExtruding = true;
-                                this.mouseState.extrudeNormal = target.normal.clone();
-                                const viewN = this.cam.getWorldDirection(new THREE.Vector3()).negate();
-                                this.mouseState.drawingPlane.setFromNormalAndCoplanarPoint(viewN, target.intersectionPoint);
-                                this.mouseState.dragStartPoint.copy(target.intersectionPoint);
-                            }
-                        }
-                    }
-                } else if (this.activePointers.size === 1) {
+                if (this.touchState.longPressTimeout) {
+                    clearTimeout(this.touchState.longPressTimeout);
+                    this.touchState.longPressTimeout = null;
+                }
+                if (this.activePointers.size === 1 && !this.touchState.isInteracting) {
                     this.touchState.isLookAround = true;
-                    this.touchState.isInteracting = false;
                 }
             }
 
@@ -1487,11 +1489,16 @@ const VoxelApp = {
     onPointerUp: function(e) {
         if (!this.isPointerDown) return;
 
+        if(this.touchState.longPressTimeout) {
+            clearTimeout(this.touchState.longPressTimeout);
+            this.touchState.longPressTimeout = null;
+        }
+
         if (this.isMobile) {
             if (this.touchState.isThreeFingerUndoCandidate) {
                 this.undo();
                 this.showToast('Action', 'Undo', 'info', 1000);
-            } else if (this.touchState.isDoubleTapCandidate) { // Is a double tap without drag
+            } else if (!this.mouseState.isDragging && this.touchState.isInteracting) { 
                 this.handleTapInteraction(e);
             }
         } else if (!this.mouseState.isDragging && this.mouseState.isModifying) { // Desktop tap
@@ -1530,8 +1537,13 @@ const VoxelApp = {
 
         // --- Universal Cleanup ---
         this.currentStroke = null;
-        Object.keys(this.touchState).forEach(key => this.touchState[key] = (typeof this.touchState[key] === 'number' ? 0 : null));
-        this.touchState.isDoubleTapCandidate = false; this.touchState.isInteracting = false; this.touchState.isLookAround = false; this.touchState.isThreeFingerUndoCandidate = false;
+        this.touchState.longPressTimeout = null;
+        this.touchState.isInteracting = false;
+        this.touchState.isLookAround = false;
+        this.touchState.isThreeFingerUndoCandidate = false;
+        this.touchState.lastPinchDist = null;
+        this.touchState.lastPinchCenter = null;
+        
         Object.keys(this.mouseState).forEach(key => { if(typeof this.mouseState[key] === 'boolean') this.mouseState[key] = false });
         this.mouseState.lastActionCoords = null; this.mouseState.lastActionNormal = null; this.mouseState.selectionAxisLock = null; this.mouseState.selectionDragStartTarget = null;
         this.marqueeElement.style.display = 'none';
@@ -1555,9 +1567,12 @@ const VoxelApp = {
     },
 
     updateUrlWithModelId: function() {
-        if (!this.currentModelId) return;
         const newUrl = new URL(window.location.href);
-        newUrl.searchParams.set('modelId', this.currentModelId);
+        if (this.currentModelId) {
+            newUrl.searchParams.set('modelId', this.currentModelId);
+        } else {
+            newUrl.searchParams.delete('modelId');
+        }
         window.history.replaceState({ path: newUrl.href }, '', newUrl.href);
     },
 
