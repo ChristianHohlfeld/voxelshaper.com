@@ -90,6 +90,9 @@
             margin: 0;
             padding: 0;
             touch-action: none; /* More aggressive prevention of default touch actions */
+            -webkit-touch-callout: none; /* Disable iOS callout sheet */
+            -webkit-user-select: none; /* Disable selection */
+            user-select: none;
         }
         #container, #voxelCanvas { 
             touch-action: none;
@@ -179,13 +182,12 @@
         body.has-mobile-bar {
             padding-bottom: 0 !important; /* Let the bar float */
         }
-        :where(html, body, #container, #voxelCanvas, #controls, #mobile-ui-container,
-                .mobile-bottom-bar, .btn, .dropdown, .menu, .modal, label, span, div) {
-            -webkit-user-select: none;
-            user-select: none;
-            -webkit-touch-callout: none;
-            -webkit-tap-highlight-color: transparent;
+        
+        .dropdown-content {
+            max-height: 60vh;
+            overflow-y: auto;
         }
+        
         input, textarea, select, [contenteditable] {
             -webkit-user-select: text;
             user-select: text;
@@ -1269,10 +1271,12 @@ const VoxelApp = {
     handleTapInteraction: function(event) {
         if (this.currentMode === 'SELECT') {
             const target = this.getFaceTarget(event.clientX, event.clientY);
+            // If the tap hits an already-selected face, extrude by one unit.
             if (target && this.selectedFaces.has(target.faceKey)) {
                 trackEvent('extrude', { distance: 1, method: 'long_press_tap' });
                 this.extrudeSelectedFaces(1);
             } else {
+                // Otherwise, treat it as a regular selection tap.
                 this.handleFaceSelection(event);
             }
         } else {
@@ -1489,7 +1493,7 @@ const VoxelApp = {
     onPointerUp: function(e) {
         if (!this.isPointerDown) return;
 
-        if(this.touchState.longPressTimeout) {
+        if (this.touchState.longPressTimeout) {
             clearTimeout(this.touchState.longPressTimeout);
             this.touchState.longPressTimeout = null;
         }
@@ -1498,7 +1502,7 @@ const VoxelApp = {
             if (this.touchState.isThreeFingerUndoCandidate) {
                 this.undo();
                 this.showToast('Action', 'Undo', 'info', 1000);
-            } else if (!this.mouseState.isDragging && this.touchState.isInteracting) { 
+            } else if (this.touchState.isInteracting && !this.mouseState.isDragging) {
                 this.handleTapInteraction(e);
             }
         } else if (!this.mouseState.isDragging && this.mouseState.isModifying) { // Desktop tap
@@ -1537,7 +1541,6 @@ const VoxelApp = {
 
         // --- Universal Cleanup ---
         this.currentStroke = null;
-        this.touchState.longPressTimeout = null;
         this.touchState.isInteracting = false;
         this.touchState.isLookAround = false;
         this.touchState.isThreeFingerUndoCandidate = false;
@@ -1874,7 +1877,16 @@ const VoxelApp = {
 
         switch (mode) {
             case 'PAINT':
-                if (existingVoxel && existingVoxel.color !== this.currentColor) {
+                if (!existingVoxel) {
+                     const mesh = new THREE.Mesh(this.sharedBoxGeometry, this.getMaterial(this.currentColor));
+                    mesh.position.set(x * this.VS + 0.5, y * this.VS + 0.5, z * this.VS + 0.5);
+                    mesh.castShadow = true;
+                    mesh.receiveShadow = true;
+                    this.scene.add(mesh);
+                    this.voxels.set(k, { color: this.currentColor, mesh: mesh });
+                    modified = true;
+                    this.addColorToHistory(this.currentColor);
+                } else if (existingVoxel.color !== this.currentColor) {
                     existingVoxel.mesh.material = this.getMaterial(this.currentColor);
                     this.voxels.get(k).color = this.currentColor;
                     modified = true;
@@ -2987,6 +2999,7 @@ const VoxelApp = {
         this.autosaveScene();
     },
 
+ 
     redo: function() {
         if (this.historyPointer >= this.history.length - 1) return;
         this.historyPointer++;
@@ -3315,4 +3328,5 @@ document.addEventListener('DOMContentLoaded', () => VoxelApp.init());
 
 </body>
 </html>
+
 
