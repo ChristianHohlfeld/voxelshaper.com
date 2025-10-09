@@ -342,63 +342,111 @@
     <input type="file" id="imageFileInput" accept="image/*" class="hidden">
 </div>
 
+<!-- MOBILE UI CONTAINER (fixed clipping on left/right dropdowns) -->
 <div id="mobile-ui-container">
-   <div id="mobile-undo-redo-overlay"
-     class="absolute bottom-24 right-4 z-30 flex flex-row gap-2"
-     style="bottom: calc(5.5rem + var(--safe-bottom));">
-        <button id="mobile-overlay-undo" class="btn btn-circle btn-ghost bg-base-200/80 backdrop-blur-sm shadow-lg"><i class="fas fa-undo"></i></button>
-        <button id="mobile-overlay-redo" class="btn btn-circle btn-ghost bg-base-200/80 backdrop-blur-sm shadow-lg"><i class="fas fa-redo"></i></button>
+  <!-- Undo/Redo overlay -->
+  <div id="mobile-undo-redo-overlay"
+       class="absolute bottom-24 right-4 z-50 flex flex-row gap-2"
+       style="bottom: calc(5.5rem + var(--safe-bottom));">
+    <button id="mobile-overlay-undo" class="btn btn-circle btn-ghost bg-base-200/80 backdrop-blur-sm shadow-lg">
+      <i class="fas fa-undo"></i>
+    </button>
+    <button id="mobile-overlay-redo" class="btn btn-circle btn-ghost bg-base-200/80 backdrop-blur-sm shadow-lg">
+      <i class="fas fa-redo"></i>
+    </button>
+  </div>
+
+  <!-- Bottom bar -->
+  <div class="mobile-bottom-bar flex items-center justify-around p-2 bg-base-200 border-t border-base-content/20">
+    <button id="goToHubBtnMobile" class="btn btn-ghost rounded-full" aria-label="Go to Hub">
+      <i class="fas fa-home"></i>
+    </button>
+
+    <!-- FILE (left) — opens to the right -->
+    <div class="dropdown dropdown-top">
+      <label tabindex="0" class="btn btn-ghost rounded-full" aria-label="File Menu">
+        <i class="fas fa-folder-open"></i>
+      </label>
+      <ul tabindex="0"
+          class="dropdown-content z-[60] menu p-2 shadow bg-base-300 rounded-box w-52 left-0 right-auto">
+        <li><a id="saveBtnMobile">Save</a></li>
+        <li><a id="loadBtnMobile">Load</a></li>
+        <li><a id="exportBtnMobile">Export</a></li>
+        <li><a id="mobile-share">Share Project</a></li>
+        <div class="divider my-1"></div>
+        <li><a id="loadImageBtnMobile">Load Reference Image</a></li>
+        <li><a id="removeImageBtnMobile" class="hidden">Remove Reference Image</a></li>
+        <div class="divider my-1"></div>
+        <li id="mobile-upload-li" class="hidden">
+          <a><button id="mobile-upload" class="w-full text-left">Upload to Hub</button></a>
+        </li>
+        <li id="mobile-login-li">
+          <a><button id="mobile-login-logout" class="w-full text-left">Login</button></a>
+        </li>
+        <li id="mobile-logout-li" class="hidden">
+          <a><button id="mobile-logout" class="w-full text-left text-error">Logout</button></a>
+        </li>
+      </ul>
     </div>
 
-    <div class="mobile-bottom-bar flex items-center justify-around p-2 bg-base-200 border-t border-base-content/20">
-        <div class="dropdown dropdown-end">
-            <label tabindex="0" class="btn btn-ghost rounded-full" aria-label="File Menu"><i class="fas fa-folder-open"></i></label>
-            <ul tabindex="0" class="dropdown-content z-[1] menu p-2 shadow bg-base-300 rounded-box w-52">
-                <li><a id="saveBtnMobile">Save</a></li>
-                <li><a id="loadBtnMobile">Load</a></li>
-                <li><a id="exportBtnMobile">Export</a></li>
-                <li><a id="mobile-share">Share Project</a></li>
-                <div class="divider my-1"></div>
-                <li><a id="loadImageBtnMobile">Load Reference Image</a></li>
-                <li><a id="removeImageBtnMobile" class="hidden">Remove Reference Image</a></li>
-                <div class="divider my-1"></div>
-                <li id="mobile-upload-li" class="hidden">
-                  <a id="mobile-upload" role="menuitem">Upload to Hub</a></li>
-                <li id="mobile-login-li"><a><button id="mobile-login-logout" class="w-full text-left">Login</button></a></li>
-                <li id="mobile-logout-li" class="hidden"><a><button id="mobile-logout" class="w-full text-left text-error">Logout</button></a></li>
-            </ul>
-        </div>
-        <div class="dropdown dropdown-top">
-            <label tabindex="0" class="btn btn-ghost rounded-full" aria-label="Edit Menu"><i class="fas fa-edit"></i></label>
-            <ul tabindex="0" class="dropdown-content z-[1] menu p-2 shadow bg-base-300 rounded-box w-52">
-                <li><a id="mobile-undo"><i class="fas fa-undo mr-2"></i>Undo</a></li>
-                <li><a id="mobile-redo"><i class="fas fa-redo mr-2"></i>Redo</a></li>
-                <div class="divider my-1"></div>
-                <li><a id="clearBtnMobile" class="text-error">Clear Scene</a></li>
-            </ul>
-        </div>
-        <div class="dropdown dropdown-top">
-            <label tabindex="0" class="btn btn-ghost rounded-full" aria-label="Tools Menu"><i class="fas fa-tools"></i></label>
-            <ul tabindex="0" class="dropdown-content z-[1] menu p-2 shadow bg-base-300 rounded-box w-60">
-                <li><a id="mobile-cycle-axis" class="flex justify-between"><span>Draw Axis</span> <span id="mobile-axis-display" class="badge badge-accent">Y</span></a></li>
-                <li><a id="mobile-level-up">Level Up</a></li>
-                <li><a id="mobile-level-down">Level Down</a></li>
-                 <div class="divider my-1"></div>
-                <li><a id="mobile-cycle-image-axis" class="flex justify-between"><span>Image Axis</span> <span id="mobile-image-axis-display" class="badge badge-accent">Z</span></a></li>
-                <div class="divider my-1"></div>
-                <li><a id="mobile-selection-lock-toggle" class="flex justify-between"><span>Select Lock</span> <span id="mobile-lock-status-icon"><i class="fas fa-lock"></i></span></a></li>
-                <li><a id="mobile-properties">Grid &amp; Brush Size</a></li>
-                <li><a id="mobile-reset-camera">Reset Camera</a></li>
-                <li><a id="mobile-settings">Control Settings</a></li>
-            </ul>
-        </div>
-        <input type="color" id="mobile-color-picker" value="#FFFFFF" class="rounded-full p-1 border-2 border-base-content/50 bg-clip-content">
-        <button class="btn btn-ghost rounded-full" id="mobile-mode-toggle" aria-label="Toggle Mode">
-            <i id="mobile-mode-icon" class="fas fa-mouse-pointer"></i>
-        </button>
+    <!-- EDIT (middle) — default alignment -->
+    <div class="dropdown dropdown-top">
+      <label tabindex="0" class="btn btn-ghost rounded-full" aria-label="Edit Menu">
+        <i class="fas fa-edit"></i>
+      </label>
+      <ul tabindex="0"
+          class="dropdown-content z-[60] menu p-2 shadow bg-base-300 rounded-box w-52">
+        <li><a id="mobile-undo"><i class="fas fa-undo mr-2"></i>Undo</a></li>
+        <li><a id="mobile-redo"><i class="fas fa-redo mr-2"></i>Redo</a></li>
+        <div class="divider my-1"></div>
+        <li><a id="clearBtnMobile" class="text-error">Clear Scene</a></li>
+      </ul>
     </div>
+
+    <!-- TOOLS (right) — opens to the left -->
+    <div class="dropdown dropdown-top dropdown-end">
+      <label tabindex="0" class="btn btn-ghost rounded-full" aria-label="Tools Menu">
+        <i class="fas fa-tools"></i>
+      </label>
+      <ul tabindex="0"
+          class="dropdown-content z-[60] menu p-2 shadow bg-base-300 rounded-box w-60">
+        <li>
+          <a id="mobile-cycle-axis" class="flex justify-between">
+            <span>Draw Axis</span>
+            <span id="mobile-axis-display" class="badge badge-accent">Y</span>
+          </a>
+        </li>
+        <li><a id="mobile-level-up">Level Up</a></li>
+        <li><a id="mobile-level-down">Level Down</a></li>
+        <div class="divider my-1"></div>
+        <li>
+          <a id="mobile-cycle-image-axis" class="flex justify-between">
+            <span>Image Axis</span>
+            <span id="mobile-image-axis-display" class="badge badge-accent">Z</span>
+          </a>
+        </li>
+        <div class="divider my-1"></div>
+        <li>
+          <a id="mobile-selection-lock-toggle" class="flex justify-between">
+            <span>Select Lock</span>
+            <span id="mobile-lock-status-icon"><i class="fas fa-lock"></i></span>
+          </a>
+        </li>
+        <li><a id="mobile-properties">Grid &amp; Brush Size</a></li>
+        <li><a id="mobile-reset-camera">Reset Camera</a></li>
+        <li><a id="mobile-settings">Control Settings</a></li>
+      </ul>
+    </div>
+
+    <input type="color" id="mobile-color-picker"
+           value="#FFFFFF"
+           class="rounded-full p-1 border-2 border-base-content/50 bg-clip-content">
+
+    <button class="btn btn-ghost rounded-full" id="mobile-mode-toggle" aria-label="Toggle Mode">
+      <i id="mobile-mode-icon" class="fas fa-mouse-pointer"></i>
+    </button>
+  </div>
 </div>
-
 
 <dialog id="exportOptionsModal" class="modal">
     <div class="modal-box">
