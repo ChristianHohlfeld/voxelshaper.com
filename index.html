@@ -1489,66 +1489,120 @@ const VoxelApp = {
     },
     
     onPointerUp: function(e) {
-        if (!this.isPointerDown) return;
+    if (!this.isPointerDown) return;
 
-        if (this.touchState.longPressTimeout) {
-            clearTimeout(this.touchState.longPressTimeout);
-            this.touchState.longPressTimeout = null;
+    // Stop pending long-press
+    if (this.touchState.longPressTimeout) {
+        clearTimeout(this.touchState.longPressTimeout);
+        this.touchState.longPressTimeout = null;
+    }
+
+    // Track pointer counts before/after
+    const beforeCount = this.activePointers.size;
+    this.activePointers.delete(e.pointerId);
+    const nowCount = this.activePointers.size;
+
+    // *** Fix der tatsächlichen Ursache ***
+    // Beim Wechsel von 2+ Fingern auf genau 1 Finger wurden die Basiskoordinaten
+    // (downX/downY/lastX/lastY) NICHT auf den verbliebenen Finger "rebased".
+    // Dadurch entstand beim ersten Move ein großes Delta -> Sprung im Look.
+    // Lösung: Rebase und KEIN Finalisieren des Gesten-Zyklus, solange noch 1 Finger unten ist.
+    if (this.isMobile && beforeCount >= 2 && nowCount === 1) {
+        const remaining = Array.from(this.activePointers.values())[0];
+        if (remaining) {
+            this.mouseState.downX = remaining.x;
+            this.mouseState.downY = remaining.y;
+            this.mouseState.lastX = remaining.x;
+            this.mouseState.lastY = remaining.y;
         }
-
-        if (this.isMobile) {
-            if (this.touchState.isThreeFingerUndoCandidate) {
-                this.undo();
-                this.showToast('Action', 'Undo', 'info', 1000);
-            } else if (this.touchState.isInteracting && !this.mouseState.isDragging) {
-                this.handleTapInteraction(e);
-            }
-        } else if (!this.mouseState.isDragging && this.mouseState.isModifying) { // Desktop tap
-            this.handleTapInteraction(e);
-        }
-
-        if (this.mouseState.isExtruding) {
-            const distance = this.ghostVoxels.size > 0 ? (this.ghostVoxels.get(this.ghostVoxels.keys().next().value).distance || 0) : 0;
-            if (distance !== 0) trackEvent('extrude', { distance: distance, method: 'drag' });
-            this.updateExtrudePreview(0);
-            if (distance !== 0) this.extrudeSelectedFaces(distance);
-        } else if (this.currentMode === 'SELECT' && this.selectionChange.before) {
-            const beforeSet = this.selectionChange.before;
-            const afterSet = this.selectedFaces;
-            if (this.mouseState.isDragging || beforeSet.size !== afterSet.size || ![...beforeSet].every(value => afterSet.has(value))) {
-                this.addHistoryStep({ type: 'SELECT', before: beforeSet, after: new Set(afterSet) });
-            }
-        }
-
-        if (this.mouseState.isModifying && this.currentStroke && this.currentStroke.size > 0) {
-            const actualChanges = new Map();
-            for (const [key, value] of this.currentStroke.entries()) {
-                const beforeColor = value.before ? value.before.color : null;
-                const afterColor = value.after ? value.after.color : null;
-                if (beforeColor !== afterColor) {
-                    actualChanges.set(key, value);
-                }
-            }
-            if (actualChanges.size > 0) this.addHistoryStep({ type: 'MODIFY', changes: actualChanges });
-        }
-
-        if (document.pointerLockElement === this.cvs) document.exitPointerLock();
-        
-        this.activePointers.delete(e.pointerId);
-        if (this.activePointers.size === 0) this.isPointerDown = false;
-
-        // --- Universal Cleanup ---
-        this.currentStroke = null;
-        this.touchState.isInteracting = false;
-        this.touchState.isLookAround = false;
-        this.touchState.isThreeFingerUndoCandidate = false;
+        // Nach Multi-Touch explizit Multi-Touch-Zustand beenden,
+        // Look erst wieder nach neuem Drag-Threshold starten
         this.touchState.lastPinchDist = null;
         this.touchState.lastPinchCenter = null;
-        
-        Object.keys(this.mouseState).forEach(key => { if(typeof this.mouseState[key] === 'boolean') this.mouseState[key] = false });
-        this.mouseState.lastActionCoords = null; this.mouseState.lastActionNormal = null; this.mouseState.selectionAxisLock = null; this.mouseState.selectionDragStartTarget = null;
-        this.marqueeElement.style.display = 'none';
-    },
+        this.touchState.isInteracting = false;
+        this.touchState.isLookAround = false;
+
+        this.mouseState.isDragging = false;
+        this.mouseState.isExtruding = false;
+        this.mouseState.selectionAxisLock = null;
+        // Mindestens ein Finger bleibt unten -> Gesture NICHT finalisieren
+        return;
+    }
+
+    // Solange noch Pointer unten sind, NICHT finalisieren (kein Tap/Extrude/History-Commit).
+    if (nowCount > 0) return;
+
+    // Ab hier: keine Pointer mehr unten -> Gestenende finalisieren
+    if (this.isMobile) {
+        if (this.touchState.isThreeFingerUndoCandidate) {
+            this.undo();
+            this.showToast('Action', 'Undo', 'info', 1000);
+        } else if (this.touchState.isInteracting && !this.mouseState.isDragging) {
+            this.handleTapInteraction(e);
+        }
+    } else if (!this.mouseState.isDragging && this.mouseState.isModifying) {
+        this.handleTapInteraction(e);
+    }
+
+    // Extrusion abschließen, falls aktiv
+    if (this.mouseState.isExtruding) {
+        const distance = this.ghostVoxels.size > 0
+            ? (this.ghostVoxels.get(this.ghostVoxels.keys().next().value).distance || 0)
+            : 0;
+        this.updateExtrudePreview(0);
+        if (distance !== 0) this.extrudeSelectedFaces(distance);
+    } else if (this.currentMode === 'SELECT' && this.selectionChange.before) {
+        const beforeSet = this.selectionChange.before;
+        const afterSet = this.selectedFaces;
+        if (
+            this.mouseState.isDragging ||
+            beforeSet.size !== afterSet.size ||
+            ![...beforeSet].every(v => afterSet.has(v))
+        ) {
+            this.addHistoryStep({ type: 'SELECT', before: beforeSet, after: new Set(afterSet) });
+        }
+    }
+
+    // Stroke-Änderungen committen
+    if (this.mouseState.isModifying && this.currentStroke && this.currentStroke.size > 0) {
+        const actualChanges = new Map();
+        for (const [key, value] of this.currentStroke.entries()) {
+            const beforeColor = value.before ? value.before.color : null;
+            const afterColor  = value.after  ? value.after.color  : null;
+            if (beforeColor !== afterColor) actualChanges.set(key, value);
+        }
+        if (actualChanges.size > 0) this.addHistoryStep({ type: 'MODIFY', changes: actualChanges });
+    }
+
+    // Pointer-Lock verlassen (Desktop)
+    if (document.pointerLockElement === this.cvs) {
+        document.exitPointerLock();
+    }
+
+    // Kein Finger mehr unten
+    this.isPointerDown = false;
+
+    // Cleanup
+    this.currentStroke = null;
+    this.touchState.isInteracting = false;
+    this.touchState.isLookAround = false;
+    this.touchState.isThreeFingerUndoCandidate = false;
+    this.touchState.lastPinchDist = null;
+    this.touchState.lastPinchCenter = null;
+
+    this.mouseState.isRotating = false;
+    this.mouseState.isPanning = false;
+    this.mouseState.isModifying = false;
+    this.mouseState.isDragging = false;
+    this.mouseState.isExtruding = false;
+    this.mouseState.lastActionCoords = null;
+    this.mouseState.lastActionNormal = null;
+    this.mouseState.selectionAxisLock = null;
+    this.mouseState.selectionDragStartTarget = null;
+
+    this.marqueeElement.style.display = 'none';
+},
+
 
     toggleSelectionLock: function() {
         this.isSelectionLocked = !this.isSelectionLocked;
