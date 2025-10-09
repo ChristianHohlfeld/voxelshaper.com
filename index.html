@@ -6,63 +6,15 @@
         function gtag() { dataLayer.push(arguments); }
         gtag('js', new Date());
         gtag('config', 'G-DMNJKVCNBM');
-    </script>
 
-    <script>
-        (function() {
-            const pendingEvents = [];
-
-            const normalizeKey = (key) => key
-                .replace(/([a-z\d])([A-Z])/g, '$1_$2')
-                .replace(/[^a-zA-Z0-9]+/g, '_')
-                .replace(/_{2,}/g, '_')
-                .replace(/^_|_$/g, '')
-                .toLowerCase();
-
-            const buildPayload = (params = {}) => {
-                const payload = { event_category: params.category || 'app_interaction' };
-
-                if (params.label) payload.event_label = params.label;
-                if (typeof params.value === 'number') payload.value = params.value;
-                if (params.nonInteraction != null) payload.non_interaction = !!params.nonInteraction;
-
-                if (params.metadata && typeof params.metadata === 'object') {
-                    Object.entries(params.metadata).forEach(([key, value]) => {
-                        if (value === undefined) return;
-                        payload[`meta_${normalizeKey(key)}`] = value;
-                    });
-                }
-
-                return payload;
-            };
-
-            const flushPending = () => {
-                if (typeof window.gtag !== 'function') return false;
-                while (pendingEvents.length) {
-                    const { name, payload } = pendingEvents.shift();
-                    window.gtag('event', name, payload);
-                }
-                return true;
-            };
-
-            window.trackEvent = (name, params = {}) => {
-                if (!name) return;
-                const payload = buildPayload(params);
-                if (typeof window.gtag === 'function') {
-                    window.gtag('event', name, payload);
-                } else {
-                    pendingEvents.push({ name, payload });
-                }
-            };
-
-            if (!flushPending()) {
-                const intervalId = window.setInterval(() => {
-                    if (flushPending()) window.clearInterval(intervalId);
-                }, 1000);
+        // Analytics Helper by Christian Heinrich Hohlfeld
+        function trackEvent(eventName, params = {}) {
+            if (typeof gtag === 'function') {
+                gtag('event', eventName, params);
+            } else {
+                console.log(`Analytics Event (gtag not found): ${eventName}`, params);
             }
-
-            // TODO: Emit onboarding/tutorial analytics via trackEvent once the new activation flow ships.
-        })();
+        }
     </script>
 
     <meta charset="UTF-8">
@@ -563,23 +515,20 @@
     </div>
 </dialog>
 
-<dialog id="onboardingModal" class="modal modal-bottom sm:modal-middle">
-    <div class="modal-box space-y-4">
-        <button id="onboardingCloseBtn" class="btn btn-sm btn-circle btn-ghost absolute right-2 top-2" type="button" aria-label="Skip onboarding">
-            ✕
-        </button>
-        <h3 class="font-bold text-lg">Welcome to VoxelShaper</h3>
-        <p class="text-sm opacity-80">Get started quickly with these essential controls:</p>
-        <ul class="list-disc list-inside space-y-1 text-sm text-base-content/80">
-            <li><span class="font-semibold">Left click</span> to add voxels, <span class="font-semibold">Shift + click</span> or Delete mode to remove.</li>
-            <li><span class="font-semibold">Right click &amp; drag</span> to orbit, <span class="font-semibold">middle click</span> (or Space + drag) to pan.</li>
-            <li>Use the <span class="font-semibold">mouse wheel</span> or pinch gestures to zoom in and out.</li>
-            <li>Press <span class="font-semibold">Ctrl+Z / Ctrl+Y</span> (or three-finger tap on mobile) for undo/redo.</li>
+<!-- NEW: Onboarding Modal -->
+<dialog id="onboardingModal" class="modal">
+    <div class="modal-box">
+        <h3 class="font-bold text-lg">Welcome to VoxelShaper!</h3>
+        <p class="py-4">Here are some quick tips to get you started:</p>
+        <ul class="list-disc list-inside space-y-2">
+            <li><b>Look Around:</b> Drag with one finger.</li>
+            <li><b>Zoom & Pan:</b> Pinch or drag with two fingers.</li>
+            <li><b>Paint / Select / Delete:</b> Double-tap and hold, then drag.</li>
+            <li><b>Undo:</b> Tap with three fingers.</li>
         </ul>
-        <div class="modal-action flex flex-col sm:flex-row gap-2">
-            <button id="onboardingLoadSampleBtn" class="btn btn-accent w-full sm:w-auto"><i class="fas fa-cubes mr-2"></i>Load Sample Project</button>
-            <button id="onboardingStartTutorialBtn" class="btn btn-primary w-full sm:w-auto"><i class="fas fa-graduation-cap mr-2"></i>Start Tutorial</button>
-            <button id="onboardingSkipBtn" class="btn btn-ghost w-full sm:w-auto" type="button">Start with Blank Canvas</button>
+        <div class="modal-action mt-6">
+            <button id="loadSampleProjectBtn" class="btn btn-primary">Load Sample Project</button>
+            <button id="startBlankBtn" class="btn">Start with Blank Canvas</button>
         </div>
     </div>
 </dialog>
@@ -606,7 +555,7 @@
 
 // --- START: 3MF EXPORTER INTEGRATION ---
 const VoxelApp3MFExporter = {
-    exportBambuStudio3MF: async function(voxels, voxelSize, showToast, parseKey, scaleUnit, analyticsContext = {}) {
+    exportBambuStudio3MF: async function(voxels, voxelSize, showToast, parseKey, scaleUnit) {
         if (!voxels || voxels.size === 0) {
             showToast('Export Error', 'Scene is empty.', 'warning');
             return;
@@ -659,24 +608,7 @@ const VoxelApp3MFExporter = {
 
             const blob = await zip.generateAsync({type:"blob", compression:"DEFLATE", compressionOptions:{level:6}});
             saveAs(blob, "VoxelShaper_Export.3mf");
-
-            if (typeof window.trackEvent === 'function') {
-                const metadata = {
-                    voxel_count: voxelArray.length,
-                    palette_count: palette.length,
-                    scale_unit: scaleUnit,
-                    voxel_size_mm: voxelMM,
-                };
-                if (analyticsContext.gridSize !== undefined) metadata.grid_size = analyticsContext.gridSize;
-                if (analyticsContext.voxelCount !== undefined) metadata.scene_voxel_count = analyticsContext.voxelCount;
-                if (analyticsContext.loginStatus) metadata.login_status = analyticsContext.loginStatus;
-                window.trackEvent('export_3mf', {
-                    category: 'export',
-                    label: 'bambu_3mf',
-                    metadata,
-                });
-            }
-
+            
             showToast('Export Complete', 'Bambu Studio 3MF file saved!', 'success');
         } catch(err) {
             console.error("3MF Export Error by Christian Hohlfeld:", err);
@@ -881,7 +813,6 @@ const VoxelApp = {
     DOUBLE_TAP_THRESHOLD: 300, // ms
     BACKEND_URL: "https://api.voxelshaper.com",
     HUB_URL: "https://hub.voxelshaper.com",
-    ONBOARDING_STORAGE_KEY: 'voxelshaper_onboarding_complete',
     // --- State ---
     scene: null, cam: null, ren: null, gridHelper: null, boxHelper: null,
     sharedBoxGeometry: null,
@@ -916,6 +847,7 @@ const VoxelApp = {
     activeDrawingLevel: { x: 0, y: 0, z: 0 },
     activePointers: new Map(),
     isPointerDown: false,
+    currentModelId: null, // NEW: Track current model ID for sharing
     mouseState: {
         isRotating: false, isPanning: false, isModifying: false, isDragging: false, isExtruding: false,
         lastX: 0, lastY: 0, downX: 0, downY: 0,
@@ -937,7 +869,6 @@ const VoxelApp = {
         lastPinchDist: null,
         lastPinchCenter: null,
     },
-    tutorialTimeouts: [],
     controls: {
         invertLookX: false, invertLookY: false, invertZoom: true,
         invertStrafeX: false, invertStrafeY: false,
@@ -949,7 +880,29 @@ const VoxelApp = {
         PAINT: { name: 'Paint', icon: 'fas fa-paint-brush' },
         DELETE: { name: 'Delete', icon: 'fas fa-trash' },
     },
-    keyboard: {}, 
+    keyboard: {},
+    
+    sampleProjectData: {
+        gridSize: 10,
+        voxels: [
+            { x: 3, y: 0, z: 3, color: '#8B4513' }, { x: 4, y: 0, z: 3, color: '#8B4513' }, { x: 5, y: 0, z: 3, color: '#8B4513' },
+            { x: 3, y: 0, z: 4, color: '#8B4513' }, { x: 4, y: 0, z: 4, color: '#8B4513' }, { x: 5, y: 0, z: 4, color: '#8B4513' },
+            { x: 3, y: 0, z: 5, color: '#8B4513' }, { x: 4, y: 0, z: 5, color: '#8B4513' }, { x: 5, y: 0, z: 5, color: '#8B4513' },
+            { x: 3, y: 1, z: 3, color: '#D2B48C' }, { x: 5, y: 1, z: 3, color: '#D2B48C' }, { x: 3, y: 1, z: 4, color: '#D2B48C' },
+            { x: 5, y: 1, z: 4, color: '#D2B48C' }, { x: 3, y: 1, z: 5, color: '#D2B48C' }, { x: 4, y: 1, z: 5, color: '#D2B48C' },
+            { x: 5, y: 1, z: 5, color: '#D2B48C' }, { x: 3, y: 2, z: 3, color: '#D2B48C' }, { x: 5, y: 2, z: 3, color: '#D2B48C' },
+            { x: 3, y: 2, z: 4, color: '#D2B48C' }, { x: 5, y: 2, z: 4, color: '#D2B48C' }, { x: 3, y: 2, z: 5, color: '#D2B48C' },
+            { x: 4, y: 2, z: 5, color: '#D2B48C' }, { x: 5, y: 2, z: 5, color: '#D2B48C' }, { x: 2, y: 3, z: 2, color: '#A52A2A' },
+            { x: 3, y: 3, z: 2, color: '#A52A2A' }, { x: 4, y: 3, z: 2, color: '#A52A2A' }, { x: 5, y: 3, z: 2, color: '#A52A2A' },
+            { x: 6, y: 3, z: 2, color: '#A52A2A' }, { x: 2, y: 3, z: 3, color: '#A52A2A' }, { x: 6, y: 3, z: 3, color: '#A52A2A' },
+            { x: 2, y: 3, z: 4, color: '#A52A2A' }, { x: 6, y: 3, z: 4, color: '#A52A2A' }, { x: 2, y: 3, z: 5, color: '#A52A2A' },
+            { x: 6, y: 3, z: 5, color: '#A52A2A' }, { x: 2, y: 3, z: 6, color: '#A52A2A' }, { x: 3, y: 3, z: 6, color: '#A52A2A' },
+            { x: 4, y: 3, z: 6, color: '#A52A2A' }, { x: 5, y: 3, z: 6, color: '#A52A2A' }, { x: 6, y: 3, z: 6, color: '#A52A2A' },
+            { x: 3, y: 4, z: 3, color: '#A52A2A' }, { x: 4, y: 4, z: 3, color: '#A52A2A' }, { x: 5, y: 4, z: 3, color: '#A52A2A' },
+            { x: 3, y: 4, z: 4, color: '#A52A2A' }, { x: 4, y: 4, z: 4, color: '#A52A2A' }, { x: 5, y: 4, z: 4, color: '#A52A2A' },
+            { x: 3, y: 4, z: 5, color: '#A52A2A' }, { x: 4, y: 4, z: 5, color: '#A52A2A' }, { x: 5, y: 4, z: 5, color: '#A52A2A' },
+        ]
+    },
     
     key: (x, y, z) => (x | ((y + 1) << 10) | (z << 20)) >>> 0,
     parseKey: (k) => [k & 1023, ((k >> 10) & 1023) - 1, (k >> 20) & 1023],
@@ -993,117 +946,6 @@ const VoxelApp = {
         document.body.style.overflow = show ? 'hidden' : '';
     },
 
-    isOnboardingComplete: function() {
-        return localStorage.getItem(this.ONBOARDING_STORAGE_KEY) === 'true';
-    },
-
-    markOnboardingComplete: function() {
-        localStorage.setItem(this.ONBOARDING_STORAGE_KEY, 'true');
-    },
-
-    startOnboardingFlow: function() {
-        this.clearTutorialTimeouts();
-        this.openOnboardingModal();
-    },
-
-    openOnboardingModal: function() {
-        const modal = document.getElementById('onboardingModal');
-        if (modal && !modal.open) {
-            modal.showModal();
-        }
-    },
-
-    closeOnboardingModal: function() {
-        const modal = document.getElementById('onboardingModal');
-        if (modal && modal.open) {
-            modal.close();
-        }
-    },
-
-    clearTutorialTimeouts: function() {
-        if (!Array.isArray(this.tutorialTimeouts)) {
-            this.tutorialTimeouts = [];
-            return;
-        }
-        this.tutorialTimeouts.forEach(timeoutId => clearTimeout(timeoutId));
-        this.tutorialTimeouts = [];
-    },
-
-    skipOnboarding: function() {
-        const hadAutosave = !!localStorage.getItem('voxelshaper_autosave');
-        this.markOnboardingComplete();
-        this.closeOnboardingModal();
-        this.clearTutorialTimeouts();
-        if (hadAutosave) {
-            this.loadAutosavedScene();
-        } else {
-            this.showToast('Welcome', 'You are ready to start building!', 'info', 2500);
-        }
-    },
-
-    loadSampleProject: function() {
-        this.markOnboardingComplete();
-        this.closeOnboardingModal();
-        this.clearTutorialTimeouts();
-
-        const voxels = [];
-        const addLayer = (y, xStart, xEnd, zStart, zEnd, color) => {
-            for (let x = xStart; x <= xEnd; x++) {
-                for (let z = zStart; z <= zEnd; z++) {
-                    voxels.push({ x, y, z, color });
-                }
-            }
-        };
-
-        addLayer(0, 7, 12, 7, 12, '#f97316');
-        addLayer(1, 8, 11, 8, 11, '#fde047');
-        addLayer(2, 9, 10, 9, 10, '#ef4444');
-
-        voxels.push({ x: 9, y: 1, z: 7, color: '#8b5cf6' });
-        voxels.push({ x: 10, y: 1, z: 7, color: '#8b5cf6' });
-        voxels.push({ x: 8, y: 1, z: 9, color: '#60a5fa' });
-        voxels.push({ x: 11, y: 1, z: 9, color: '#60a5fa' });
-        voxels.push({ x: 8, y: 1, z: 10, color: '#60a5fa' });
-        voxels.push({ x: 11, y: 1, z: 10, color: '#60a5fa' });
-
-        const sampleData = {
-            gridSize: 24,
-            currentDrawingAxis: 'y',
-            activeDrawingLevel: { x: 0, y: 0, z: 0 },
-            voxels,
-            templateImageData: null,
-            templateImagePinnedY: null,
-            templateImageAxis: 'z',
-        };
-
-        if (this.loadFromData(sampleData)) {
-            this.showToast('Sample Loaded', 'Explore the sample project and try the tools!', 'info', 3200);
-            this.autosaveScene();
-        } else {
-            this.showToast('Load Error', 'Could not load the sample project.', 'error', 3200);
-        }
-    },
-
-    startTutorial: function() {
-        this.markOnboardingComplete();
-        this.closeOnboardingModal();
-        this.clearTutorialTimeouts();
-
-        const steps = [
-            { title: 'Welcome to VoxelShaper', message: 'Left click to add voxels, Shift + click to remove them.', duration: 3500 },
-            { title: 'Navigation Tips', message: 'Hold right mouse to orbit, middle mouse (or space + drag) to pan, scroll to zoom.', duration: 3500 },
-            { title: 'Change Modes', message: 'Press 1/2/3 or use the toolbar to switch between Select, Paint, and Delete.', duration: 3500 },
-            { title: 'Stay Productive', message: 'Use Ctrl+Z / Ctrl+Y (or three-finger tap on mobile) to undo and redo.', duration: 3500 }
-        ];
-
-        steps.forEach((step, index) => {
-            const timeoutId = setTimeout(() => {
-                this.showToast(step.title, step.message, 'info', step.duration || 3200);
-            }, index * 3600);
-            this.tutorialTimeouts.push(timeoutId);
-        });
-    },
-
     init: function() {
         this.setupDOM();
         if (typeof this.keyboard === 'undefined' || this.keyboard === null) {
@@ -1117,12 +959,13 @@ const VoxelApp = {
         this.setupEventListeners();
         
         const urlParams = new URLSearchParams(window.location.search);
-        if (!urlParams.has('modelId') && !window.location.hash.includes('#oauth_success')) {
-            if (this.isOnboardingComplete()) {
-                this.loadAutosavedScene();
-            } else {
-                this.startOnboardingFlow();
-            }
+        
+        // Onboarding logic
+        const onboardingComplete = localStorage.getItem('voxelshaper_onboarding_complete') === 'true';
+        if (!onboardingComplete && !urlParams.has('modelId')) {
+            this.startOnboarding();
+        } else if (!urlParams.has('modelId') && !window.location.hash.includes('#oauth_success')) {
+            this.loadAutosavedScene(); 
         }
 
         this.updateModeUI();
@@ -1181,12 +1024,15 @@ const VoxelApp = {
                 const user = await this.request('/api/user/me');
                 this.user = user;
                 this.updateLoginStateUI();
+                trackEvent('login_success', { user_id: this.user.id, method: 'oauth' });
                 this.showToast('Login Successful', 'You are now logged in via OAuth!', 'info');
             } catch (e) {
                 console.error("OAuth redirect user fetch failed:", e);
                 this.showToast('Login Error', 'Failed to retrieve user data after OAuth.', 'error');
             } finally {
-                window.history.replaceState({}, document.title, window.location.pathname);
+                // Restore original URL from state if it exists
+                const originalUrl = new URLSearchParams(window.location.hash.substring(1)).get('state') || window.location.pathname;
+                window.history.replaceState({}, document.title, originalUrl);
             }
         }
     },
@@ -1217,6 +1063,7 @@ const VoxelApp = {
                 });
                 this.user = response.user;
                 this.updateLoginStateUI();
+                trackEvent('login_success', { user_id: this.user.id, method: 'magic_link' });
                 this.showToast('Login Successful', 'You are now logged in!', 'info');
             } catch (e) {
                 this.showToast('Login Error', e.message, 'error');
@@ -1239,9 +1086,6 @@ const VoxelApp = {
         const urlModelId = urlParams.get('modelId');
         if (urlModelId) {
             await this.loadProjectFromModelId(urlModelId);
-            const newUrl = new URL(window.location);
-            newUrl.searchParams.delete('modelId');
-            window.history.replaceState({}, document.title, newUrl.pathname);
         }
     },
     
@@ -1413,22 +1257,6 @@ const VoxelApp = {
             document.getElementById('uploadProjectModal').showModal();
         });
 
-        const onboardingLoadSampleBtn = document.getElementById('onboardingLoadSampleBtn');
-        if (onboardingLoadSampleBtn) onboardingLoadSampleBtn.addEventListener('click', () => this.loadSampleProject());
-        const onboardingStartTutorialBtn = document.getElementById('onboardingStartTutorialBtn');
-        if (onboardingStartTutorialBtn) onboardingStartTutorialBtn.addEventListener('click', () => this.startTutorial());
-        const onboardingSkipBtn = document.getElementById('onboardingSkipBtn');
-        if (onboardingSkipBtn) onboardingSkipBtn.addEventListener('click', () => this.skipOnboarding());
-        const onboardingCloseBtn = document.getElementById('onboardingCloseBtn');
-        if (onboardingCloseBtn) onboardingCloseBtn.addEventListener('click', () => this.skipOnboarding());
-        const onboardingModal = document.getElementById('onboardingModal');
-        if (onboardingModal) {
-            onboardingModal.addEventListener('cancel', (event) => {
-                event.preventDefault();
-                this.skipOnboarding();
-            });
-        }
-
         document.getElementById('uploadConfirmBtn').addEventListener('click', (e) => {
             e.preventDefault();
             this.uploadProjectToHub();
@@ -1448,27 +1276,37 @@ const VoxelApp = {
         });
         
         document.getElementById('exportBambuStudioBtn').addEventListener('click', () => {
+            trackEvent('export', { format: '3mf_bambu', voxel_count: this.voxels.size });
             const scaleUnit = document.querySelector('input[name="exportScaleUnit"]:checked').value;
-            VoxelApp3MFExporter.exportBambuStudio3MF(this.voxels, this.VS, this.showToast, this.parseKey, scaleUnit, {
-                gridSize: this.GRID,
-                voxelCount: this.voxels.size,
-                loginStatus: this.user ? 'logged_in' : 'anonymous',
-            });
+            VoxelApp3MFExporter.exportBambuStudio3MF(this.voxels, this.VS, this.showToast, this.parseKey, scaleUnit);
             document.getElementById('exportOptionsModal').close();
         });
 
         document.getElementById('exportSTLBtn').addEventListener('click', () => {
+            trackEvent('export', { format: 'stl', voxel_count: this.voxels.size });
             const scaleUnit = document.querySelector('input[name="exportScaleUnit"]:checked').value;
             const upAxis = document.querySelector('input[name="exportUpAxis"]:checked').value;
             this.exportSTL(scaleUnit, upAxis);
             document.getElementById('exportOptionsModal').close();
         });
+
+        // Onboarding listeners
+        document.getElementById('loadSampleProjectBtn').addEventListener('click', () => this.loadSampleProject());
+        document.getElementById('startBlankBtn').addEventListener('click', () => this.markOnboardingComplete());
     },
 
-    // --- NEW: Mobile Tap Handler ---
+    // --- UPDATED: Mobile Tap Handler ---
     handleTapInteraction: function(event) {
         if (this.currentMode === 'SELECT') {
-            this.handleFaceSelection(event);
+            const target = this.getFaceTarget(event.clientX, event.clientY);
+            // If the double tap hits an already-selected face, extrude by one unit.
+            if (target && this.selectedFaces.has(target.faceKey)) {
+                trackEvent('extrude', { distance: 1, method: 'double_tap' });
+                this.extrudeSelectedFaces(1);
+            } else {
+                // Otherwise, treat it as a regular selection tap.
+                this.handleFaceSelection(event);
+            }
         } else {
             const targetInfo = this.getRayTargetInfo(this.mouseState.downX, this.mouseState.downY);
             if (targetInfo) this.modifyVoxel(targetInfo.x, targetInfo.y, targetInfo.z, targetInfo.normal);
@@ -1697,6 +1535,7 @@ const VoxelApp = {
 
         if (this.mouseState.isExtruding) {
             const distance = this.ghostVoxels.size > 0 ? (this.ghostVoxels.get(this.ghostVoxels.keys().next().value).distance || 0) : 0;
+            if (distance !== 0) trackEvent('extrude', { distance: distance, method: 'drag' });
             this.updateExtrudePreview(0);
             if (distance !== 0) this.extrudeSelectedFaces(distance);
         } else if (this.currentMode === 'SELECT' && this.selectionChange.before) {
@@ -1733,9 +1572,6 @@ const VoxelApp = {
         this.marqueeElement.style.display = 'none';
     },
 
-    // The rest of the VoxelApp methods remain largely the same.
-    // I am pasting the full object for completeness.
-    
     toggleSelectionLock: function() {
         this.isSelectionLocked = !this.isSelectionLocked;
         localStorage.setItem('isSelectionLocked', this.isSelectionLocked);
@@ -1753,23 +1589,26 @@ const VoxelApp = {
         if (mobileIcon) mobileIcon.className = iconClass;
     },
 
+    updateUrlWithModelId: function() {
+        if (!this.currentModelId) return;
+        const newUrl = new URL(window.location.href);
+        newUrl.searchParams.set('modelId', this.currentModelId);
+        window.history.replaceState({ path: newUrl.href }, '', newUrl.href);
+    },
+
     copyShareLink: function() {
-        const link = window.location.href;
+        if (!this.currentModelId) {
+            this.showToast('Cannot Share', 'Please upload your project to the Hub first to get a shareable link.', 'warning');
+            document.getElementById('shareModal').close();
+            document.getElementById('uploadProjectModal').showModal();
+            return;
+        }
+        const link = `${window.location.origin}${window.location.pathname}?modelId=${this.currentModelId}`;
         navigator.clipboard.writeText(link).then(() => {
-            if (typeof window.trackEvent === 'function') {
-                window.trackEvent('share_link_copied', {
-                    category: 'share',
-                    label: 'copy_url',
-                    metadata: {
-                        login_status: this.user ? 'logged_in' : 'anonymous',
-                        voxel_count: this.voxels.size,
-                        grid_size: this.GRID,
-                    },
-                });
-            }
-            this.showToast('Link Copied', 'The current URL has been copied to your clipboard.', 'info');
+            trackEvent('share', { method: 'copy_link', model_id: this.currentModelId });
+            this.showToast('Link Copied', 'The shareable link has been copied to your clipboard.', 'info');
         }).catch(err => {
-            console.error('Failed to copy: ', err);
+            console.error('Failed to copy share link: ', err);
             this.showToast('Copy Failed', 'Could not copy the link.', 'error');
         });
         document.getElementById('shareModal').close();
@@ -1813,22 +1652,10 @@ const VoxelApp = {
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify(hubDocument)
             });
-            this.showToast('Upload Successful!', `Project saved. Model ID: ${response.public_id}`, 'info');
-            if (typeof window.trackEvent === 'function') {
-                const metadata = {
-                    grid_size: this.GRID,
-                    voxel_count: this.voxels.size,
-                    visibility: hubDocument.visibility,
-                    has_description: !!hubDocument.description,
-                    login_status: 'logged_in',
-                };
-                if (response && response.public_id) metadata.model_id = response.public_id;
-                window.trackEvent('hub_upload_success', {
-                    category: 'hub',
-                    label: hubDocument.category || 'uncategorized',
-                    metadata,
-                });
-            }
+            this.currentModelId = response.public_id;
+            this.updateUrlWithModelId();
+            trackEvent('upload_hub', { model_id: this.currentModelId, visibility: hubDocument.visibility });
+            this.showToast('Upload Successful!', `Project saved. Share link updated.`, 'success');
         } catch (error) {
             this.showToast('Upload Failed', error.message, 'error');
         }
@@ -1867,11 +1694,17 @@ const VoxelApp = {
             
             this.rebuildSceneFromVoxels();
             this.resetCamera();
+            this.currentModelId = modelId; // Keep track of the loaded ID
+            this.updateUrlWithModelId(); // Ensure URL is correct
             this.showToast('Project Loaded', `Loaded "${data.name}"`, 'info');
 
         } catch (error) {
             console.error("Failed to load project from Hub:", error);
             this.showToast('Load Error', error.message, 'error');
+            // Clear the bad modelId from URL
+            const cleanUrl = new URL(window.location.href);
+            cleanUrl.searchParams.delete('modelId');
+            window.history.replaceState({}, document.title, cleanUrl.href);
         }
     },
 
@@ -2115,16 +1948,20 @@ const VoxelApp = {
     },
     
     handleDragSelection: function (e) {
+        // line selection when locked
         if (this.isSelectionLocked) {
             return this.handleLineSelectionDrag(e);
         }
 
+        // if drag started on empty space -> marquee
         if (this.mouseState.selectionDragStartTarget === null && !this.isMobile) {
             this.selectVoxelsInMarquee();
             return true;
         }
 
-        const currentNormalIndex = this.selectedFaces.size > 0 ? parseInt([...this.selectedFaces][0].split(':')[1], 10) : -1;
+        const currentNormalIndex =
+            this.selectedFaces.size > 0 ? parseInt([...this.selectedFaces][0].split(':')[1], 10) : -1;
+
         const target = this.getFaceTarget(e.clientX, e.clientY);
         if (!target) return false;
 
@@ -2146,61 +1983,125 @@ const VoxelApp = {
 
         const [startKeyStr, startNormalIdxStr] = start.faceKey.split(':');
         const startNormalIdx = parseInt(startNormalIdxStr, 10);
-        this.selectionNormalIndex = startNormalIdx; 
+        this.selectionNormalIndex = startNormalIdx;
         const [sx, sy, sz] = this.parseKey(parseInt(startKeyStr, 10));
 
+        let cx, cy, cz;
         const cur = this.getFaceTarget(e.clientX, e.clientY);
-        if (!cur) return false;
-        const [cx, cy, cz] = this.parseKey(parseInt(cur.faceKey.split(':')[0], 10));
+
+        if (cur) {
+            // We hit a face, get the voxel coords from the key
+            [cx, cy, cz] = this.parseKey(parseInt(cur.faceKey.split(':')[0], 10));
+        } else {
+            // Fallback: We are outside the grid, so raycast to an infinite plane
+            // defined by the starting face to determine virtual coordinates.
+            const startNormal = this.getNormalFromIndex(startNormalIdx);
+            
+            // The plane passes through the center of the starting voxel's face
+            const faceCenterPosition = new THREE.Vector3(
+                (sx + 0.5) * this.VS,
+                (sy + 0.5) * this.VS,
+                (sz + 0.5) * this.VS
+            ).addScaledVector(startNormal, 0.5 * this.VS);
+
+            const selectionPlane = new THREE.Plane().setFromNormalAndCoplanarPoint(startNormal, faceCenterPosition);
+
+            const rect = this.cvs.getBoundingClientRect();
+            const mouse = new THREE.Vector2(
+                ((e.clientX - rect.left) / rect.width) * 2 - 1,
+                -((e.clientY - rect.top) / rect.height) * 2 + 1
+            );
+            const raycaster = new THREE.Raycaster();
+            raycaster.setFromCamera(mouse, this.cam);
+
+            const intersectionPoint = new THREE.Vector3();
+            if (raycaster.ray.intersectPlane(selectionPlane, intersectionPoint)) {
+                // Convert the 3D intersection point to grid coordinates.
+                // Subtract a tiny amount along the normal so points on a boundary floor correctly.
+                const adjustedPoint = intersectionPoint.clone().addScaledVector(startNormal, -0.001);
+                cx = Math.floor(adjustedPoint.x / this.VS);
+                cy = Math.floor(adjustedPoint.y / this.VS);
+                cz = Math.floor(adjustedPoint.z / this.VS);
+            } else {
+                return false; // Ray is parallel to the plane, can't determine a point.
+            }
+        }
 
         let allowedAxes;
-        if (startNormalIdx === 0 || startNormalIdx === 1) allowedAxes = ['y', 'z'];
-        else if (startNormalIdx === 2 || startNormalIdx === 3) allowedAxes = ['x', 'z'];
-        else allowedAxes = ['x', 'y'];
+        if (startNormalIdx === 0 || startNormalIdx === 1) {      // ±X face -> move in Y/Z
+            allowedAxes = ['y', 'z'];
+        } else if (startNormalIdx === 2 || startNormalIdx === 3) { // ±Y face -> move in X/Z
+            allowedAxes = ['x', 'z'];
+        } else {                                                   // ±Z face -> move in X/Y
+            allowedAxes = ['x', 'y'];
+        }
 
         const deltas = { x: Math.abs(cx - sx), y: Math.abs(cy - sy), z: Math.abs(cz - sz) };
         let axis = null;
+        
+        // Keyboard override still takes precedence
         const forced = e.shiftKey ? 'z' : (e.ctrlKey ? 'x' : null);
         if (forced && allowedAxes.includes(forced)) {
             axis = forced;
         } else {
-            axis = this.mouseState.selectionAxisLock;
-            if (!axis) {
-                const candidates = allowedAxes.filter(a => deltas[a] >= 1);
-                if (candidates.length === 0) return false;
-                axis = candidates.reduce((a, b) => (deltas[a] >= deltas[b] ? a : b));
-            } else if (allowedAxes.includes(axis)) {
-                const others = allowedAxes.filter(a => a !== axis);
-                const leader = deltas[axis];
-                const challenger = Math.max(...others.map(a => deltas[a]));
-                if (challenger - leader >= 1) {
-                    axis = others.reduce((a, b) => (deltas[a] >= deltas[b] ? a : b));
+            // Always determine the dominant axis from the allowed set.
+            // This makes the direction fully changeable during the drag.
+            let maxDelta = -1;
+            allowedAxes.forEach(allowedAxis => {
+                if (deltas[allowedAxis] > maxDelta) {
+                    maxDelta = deltas[allowedAxis];
+                    axis = allowedAxis;
                 }
-            } else {
-                axis = allowedAxes.reduce((a, b) => (deltas[a] >= deltas[b] ? a : b));
-            }
+            });
         }
-        this.mouseState.selectionAxisLock = axis;
 
+        this.mouseState.selectionAxisLock = axis;
+        if (!axis) return false;
+
+        // End coordinates with chosen axis
         let ex = sx, ey = sy, ez = sz;
         if (axis === 'x') ex = cx;
         if (axis === 'y') ey = cy;
         if (axis === 'z') ez = cz;
 
-        const base = this.selectionChange.before ? new Set(this.selectionChange.before) : new Set();
-        const step = (a, b) => (a <= b ? 1 : -1);
-        const inBounds = (x, y, z) => x >= 0 && x < this.GRID && y >= -1 && y < this.GRID && z >= 0 && z < this.GRID;
+        // Build new selection. Start with the "before" state, but only keep faces
+        // that share the same orientation as the line we are drawing.
+        const base = new Set();
+        if(this.selectionChange.before) {
+            this.selectionChange.before.forEach(faceKey => {
+                if(parseInt(faceKey.split(':')[1], 10) === startNormalIdx) {
+                    base.add(faceKey);
+                }
+            });
+        }
+        
+        // Always add the start face.
+        base.add(start.faceKey);
 
+        const step = (a, b) => (a <= b ? 1 : -1);
+        const inBounds = (x, y, z) =>
+            x >= 0 && x < this.GRID &&
+            y >= -1 && y < this.GRID && // allow foundation (y === -1)
+            z >= 0 && z < this.GRID;
+        
+        // Draw the line from start to end along the dominant axis
         if (axis === 'x') {
             const inc = step(sx, ex);
-            for (let x = sx; x !== ex + inc; x += inc) if (inBounds(x, ey, ez)) base.add(`${this.key(x, ey, ez)}:${startNormalIdx}`);
+            for (let x = sx; x !== ex + inc; x += inc) {
+                if (inBounds(x, sy, sz)) base.add(`${this.key(x, sy, sz)}:${startNormalIdx}`);
+            }
         } else if (axis === 'y') {
             const inc = step(sy, ey);
-            for (let y = sy; y !== ey + inc; y += inc) if (inBounds(ex, y, ez)) base.add(`${this.key(ex, y, ez)}:${startNormalIdx}`);
+            for (let y = sy; y !== ey + inc; y += inc) {
+                if (inBounds(sx, y, sz)) base.add(`${this.key(sx, y, sz)}:${startNormalIdx}`);
+            }
         } else { // 'z'
             const inc = step(sz, ez);
-            for (let z = sz; z !== ez + inc; z += inc) if (inBounds(ex, ey, z)) base.add(`${this.key(ex, ey, z)}:${startNormalIdx}`);
+            for (let z = sz; z !== ez + inc; z += inc) {
+                if (inBounds(sx, sy, z)) base.add(`${this.key(sx, sy, z)}:${startNormalIdx}`);
+            }
         }
+
         this.selectedFaces = base;
         this.updateSelectionVisuals();
         this.marqueeElement.style.display = 'none';
@@ -2562,8 +2463,8 @@ const VoxelApp = {
             const nMat = new THREE.Matrix3().getNormalMatrix(hit.object.matrixWorld);
             normal.applyNormalMatrix(nMat).normalize();
             const ax = Math.abs(normal.x), ay = Math.abs(normal.y), az = Math.abs(normal.z);
-            if (ax >= ay && ax >= az) normal.set(Math.sign(normal.x), 0, 0);
-            else if (ay >= ax && ay >= az) normal.set(0, Math.sign(normal.y), 0);
+            if (ax >= ay && ax >= az) nrm.set(Math.sign(normal.x), 0, 0);
+            else if (ay >= ax && ay >= az) nrm.set(0, Math.sign(normal.y), 0);
             else normal.set(0, 0, Math.sign(normal.z));
             const offset = (this.currentMode === 'PAINT' || this.currentMode === 'DELETE') ? -(0.5 * this.VS - 0.001) : +(0.5 * this.VS + 0.001);
             pos.addScaledVector(normal, offset);
@@ -2655,6 +2556,8 @@ const VoxelApp = {
             if (v.mesh) this.scene.remove(v.mesh);
         });
         this.voxels.clear();
+        this.currentModelId = null; // Clear model ID on clear
+        this.updateUrlWithModelId();
         localStorage.removeItem('voxelshaper_autosave');
         this.showToast('Project Cleared', '', 'info');
     },
@@ -2778,6 +2681,7 @@ const VoxelApp = {
 
     loginLogout: async function() {
         if (this.user) {
+            trackEvent('logout');
             try {
                 await this.request('/auth/logout', { method: 'POST' });
                 this.user = null;
@@ -2793,6 +2697,7 @@ const VoxelApp = {
     },
     
     signInWithProvider: function(providerName) {
+        trackEvent('login_start', { method: providerName });
         try {
             if (this.voxels.size > 0) {
                 const data = { 
@@ -2834,6 +2739,7 @@ const VoxelApp = {
             this.showToast('Error', 'Please accept the Terms of Service.', 'error');
             return;
         }
+        trackEvent('login_start', { method: 'magic_link' });
         try {
             await this.request('/auth/magic-link', {
                 method: 'POST',
@@ -2859,6 +2765,7 @@ const VoxelApp = {
     },
 
     saveJSON: function() {
+        trackEvent('save_project');
         const data = { 
             gridSize: this.GRID, 
             currentDrawingAxis: this.currentDrawingAxis,
@@ -2922,6 +2829,7 @@ const VoxelApp = {
     },
 
     loadJSON: function(event) {
+        trackEvent('load_project');
         const file = event.target.files[0]; if (!file) return;
         const reader = new FileReader();
         reader.onload = (e) => {
@@ -2978,21 +2886,6 @@ const VoxelApp = {
         const a = document.createElement('a');
         a.href = url; a.download = 'voxel-model.stl'; a.click();
         URL.revokeObjectURL(url);
-
-        if (typeof window.trackEvent === 'function') {
-            const metadata = {
-                voxel_count: this.voxels.size,
-                grid_size: this.GRID,
-                scale_unit: scaleUnit,
-                up_axis: upAxis,
-                login_status: this.user ? 'logged_in' : 'anonymous',
-            };
-            window.trackEvent('export_stl', {
-                category: 'export',
-                label: 'stl',
-                metadata,
-            });
-        }
 
         this.showToast('Export Complete', 'Downloaded voxel-model.stl', 'info');
     },
@@ -3409,6 +3302,25 @@ const VoxelApp = {
                 localStorage.removeItem('voxelshaper_autosave');
             }
         }
+    },
+
+    // --- NEW: Onboarding Methods ---
+    startOnboarding: function() {
+        trackEvent('onboarding_start');
+        document.getElementById('onboardingModal').showModal();
+    },
+
+    markOnboardingComplete: function() {
+        trackEvent('onboarding_complete', { action: 'start_blank' });
+        localStorage.setItem('voxelshaper_onboarding_complete', 'true');
+        document.getElementById('onboardingModal').close();
+    },
+
+    loadSampleProject: function() {
+        trackEvent('onboarding_complete', { action: 'load_sample' });
+        this.loadFromData(this.sampleProjectData);
+        this.markOnboardingComplete();
+        this.showToast('Sample Loaded', 'Explore the sample house project!', 'info');
     }
 };
 
@@ -3419,3 +3331,4 @@ document.addEventListener('DOMContentLoaded', () => VoxelApp.init());
 
 </body>
 </html>
+
