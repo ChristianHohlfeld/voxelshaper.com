@@ -192,6 +192,28 @@
             -webkit-touch-callout: default;
             touch-action: pan-y; /* Allow scrolling inside modals on mobile */
         }
+
+        /* Visuelles Haptic-Overlay */
+        #haptic-layer {
+          position: absolute;
+          inset: 0;
+          pointer-events: none;
+          z-index: 40; /* unter Toast (z-50), über Canvas */
+        }
+        .haptic-ripple {
+          position: absolute;
+          width: 20px;
+          height: 20px;
+          border-radius: 9999px;
+          border: 2px solid rgba(255,255,255,.65);
+          transform: translate(-50%, -50%) scale(0.7);
+          opacity: 0;
+          animation: hRipple .35s ease-out forwards;
+        }
+        @keyframes hRipple {
+          0%   { opacity: .85; transform: translate(-50%, -50%) scale(0.7); }
+          100% { opacity: 0;   transform: translate(-50%, -50%) scale(2.2); }
+        }
     </style>
 </head>
 <body class="bg-base-100 min-h-screen text-base-content flex flex-col">
@@ -315,6 +337,7 @@
 <div id="container">
     <canvas id="voxelCanvas" tabindex="0"></canvas>
     <div id="marquee" class="marquee"></div>
+    <div id="haptic-layer"></div>
     <input type="file" id="fileInput" accept=".json" class="hidden">
     <input type="file" id="imageFileInput" accept="image/*" class="hidden">
 </div>
@@ -837,6 +860,7 @@ const VoxelApp = {
     activePointers: new Map(),
     isPointerDown: false,
     currentModelId: null, // NEW: Track current model ID for sharing
+    hapticLayer: null,
     mouseState: {
         isRotating: false, isPanning: false, isModifying: false, isDragging: false, isExtruding: false,
         lastX: 0, lastY: 0, downX: 0, downY: 0,
@@ -930,6 +954,7 @@ const VoxelApp = {
         this.setupThree();
         this.rebuildFoundation();
         this.setupEventListeners();
+        this.initVisualHapticLayer();
         
         const urlParams = new URLSearchParams(window.location.search);
         
@@ -1260,12 +1285,6 @@ const VoxelApp = {
         document.getElementById('startBlankBtn').addEventListener('click', () => this.markOnboardingComplete());
     },
 
-    triggerHapticFeedback: function() {
-        if (navigator.vibrate) {
-            navigator.vibrate(50); // A short, decisive vibration
-        }
-    },
-
     handleTapInteraction: function(event) {
         if (this.currentMode === 'SELECT') {
             const target = this.getFaceTarget(event.clientX, event.clientY);
@@ -1295,6 +1314,11 @@ const VoxelApp = {
         this.currentStroke = new Map();
         this.isPointerDown = true;
         this.activePointers.set(e.pointerId, { x: e.clientX, y: e.clientY });
+        
+        if (this.isMobile && this.activePointers.size >= 2 && this.touchState.longPressTimeout) {
+          clearTimeout(this.touchState.longPressTimeout);
+          this.touchState.longPressTimeout = null;
+        }
 
         this.mouseState.downX = e.clientX;
         this.mouseState.downY = e.clientY;
@@ -1304,7 +1328,7 @@ const VoxelApp = {
         if (this.isMobile) {
             if (this.activePointers.size === 1) {
                 this.touchState.longPressTimeout = setTimeout(() => {
-                    this.triggerHapticFeedback();
+                    this.hapticOrVisualAt(this.mouseState.downX, this.mouseState.downY);
                     this.touchState.isInteracting = true;
                     this.touchState.isLookAround = false;
                     
@@ -1324,6 +1348,8 @@ const VoxelApp = {
                                 this.mouseState.dragStartPoint.copy(target.intersectionPoint);
                             }
                         }
+                    } else {
+                        this.mouseState.isModifying = true;
                     }
                 }, this.LONG_PRESS_DURATION);
             } else if (this.activePointers.size === 3) {
@@ -1370,6 +1396,10 @@ const VoxelApp = {
             const targetInfo = this.getRayTargetInfo(e.clientX, e.clientY);
             this.updateToolPreview(targetInfo);
             return;
+        }
+
+        if (this.isMobile && this.activePointers.size !== 3) {
+          this.touchState.isThreeFingerUndoCandidate = false;
         }
         
         const dist = Math.hypot(e.clientX - this.mouseState.downX, e.clientY - this.mouseState.downY);
@@ -1491,6 +1521,13 @@ const VoxelApp = {
     
     onPointerUp: function(e) {
         if (!this.isPointerDown) return;
+        
+        const beforeCount = this.activePointers.size;
+
+        if(this.touchState.longPressTimeout) {
+            clearTimeout(this.touchState.longPressTimeout);
+            this.touchState.longPressTimeout = null;
+        }
 
         if (this.isMobile) {
             if (this.touchState.isThreeFingerUndoCandidate) {
@@ -1501,11 +1538,6 @@ const VoxelApp = {
             }
         } else if (!this.mouseState.isDragging && this.mouseState.isModifying) { // Desktop tap
             this.handleTapInteraction(e);
-        }
-
-        if(this.touchState.longPressTimeout) {
-            clearTimeout(this.touchState.longPressTimeout);
-            this.touchState.longPressTimeout = null;
         }
 
         if (this.mouseState.isExtruding) {
@@ -1536,8 +1568,13 @@ const VoxelApp = {
         if (document.pointerLockElement === this.cvs) document.exitPointerLock();
         
         this.activePointers.delete(e.pointerId);
+        const nowCount = this.activePointers.size;
 
-        if (this.isMobile && this.activePointers.size === 1) {
+        if (this.isMobile && beforeCount >= 3 && nowCount < 3) {
+            this.touchState.isThreeFingerUndoCandidate = false;
+        }
+
+        if (this.isMobile && beforeCount >= 2 && nowCount === 1) {
             const remainingPointer = this.activePointers.values().next().value;
             this.mouseState.downX = remainingPointer.x;
             this.mouseState.downY = remainingPointer.y;
@@ -3322,7 +3359,62 @@ const VoxelApp = {
         this.loadFromData(this.sampleProjectData);
         this.markOnboardingComplete();
         this.showToast('Sample Loaded', 'Explore the sample house project!', 'info');
-    }
+    },
+
+    initVisualHapticLayer: function () {
+      if (!this.containerDiv) return;
+      this.hapticLayer = document.getElementById('haptic-layer');
+      if (!this.hapticLayer) {
+        this.hapticLayer = document.createElement('div');
+        this.hapticLayer.id = 'haptic-layer';
+        this.containerDiv.appendChild(this.hapticLayer);
+      }
+    },
+    
+    fallbackHaptic: function (clientX, clientY, color) {
+      // 1) kleines „Squish“-Feedback auf dem Container
+      try {
+        this.containerDiv.animate(
+          [{ transform: 'scale(1)' }, { transform: 'scale(0.985)' }, { transform: 'scale(1)' }],
+          { duration: 120, easing: 'ease-out' }
+        );
+      } catch {}
+
+      // 2) Ripple an der Touch-Position
+      if (!this.hapticLayer) this.initVisualHapticLayer();
+      if (!this.hapticLayer) return;
+
+      const rect = this.containerDiv.getBoundingClientRect();
+      const x = clientX - rect.left;
+      const y = clientY - rect.top;
+
+      const ripple = document.createElement('div');
+      ripple.className = 'haptic-ripple';
+
+      // Farbwahl: Delete = rot, sonst aktuelle Zeichenfarbe
+      const stroke = color || (this.currentMode === 'DELETE' ? 'rgba(255,0,0,.65)' : this.currentColor || '#ffffff');
+      ripple.style.borderColor = stroke;
+
+      ripple.style.left = `${x}px`;
+      ripple.style.top  = `${y}px`;
+
+      this.hapticLayer.appendChild(ripple);
+      ripple.addEventListener('animationend', () => ripple.remove());
+    },
+    
+    hapticOrVisualAt: function (clientX, clientY) {
+      const isIOS = /iP(ad|hone|od)/.test(navigator.userAgent) ||
+                    (navigator.userAgent.includes('Mac') && 'ontouchend' in document);
+
+      let didVibrate = false;
+      if (!isIOS && document.visibilityState === 'visible' && 'vibrate' in navigator) {
+        if (!navigator.userActivation || navigator.userActivation.isActive) {
+          didVibrate = !!navigator.vibrate(40); // 30–60 ms sind am zuverlässigsten
+        }
+      }
+      if (!didVibrate) this.fallbackHaptic(clientX, clientY);
+      return didVibrate;
+    },
 };
 
 document.addEventListener('DOMContentLoaded', () => VoxelApp.init());
