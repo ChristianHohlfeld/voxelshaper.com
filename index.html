@@ -8,6 +8,63 @@
         gtag('config', 'G-DMNJKVCNBM');
     </script>
 
+    <script>
+        (function() {
+            const pendingEvents = [];
+
+            const normalizeKey = (key) => key
+                .replace(/([a-z\d])([A-Z])/g, '$1_$2')
+                .replace(/[^a-zA-Z0-9]+/g, '_')
+                .replace(/_{2,}/g, '_')
+                .replace(/^_|_$/g, '')
+                .toLowerCase();
+
+            const buildPayload = (params = {}) => {
+                const payload = { event_category: params.category || 'app_interaction' };
+
+                if (params.label) payload.event_label = params.label;
+                if (typeof params.value === 'number') payload.value = params.value;
+                if (params.nonInteraction != null) payload.non_interaction = !!params.nonInteraction;
+
+                if (params.metadata && typeof params.metadata === 'object') {
+                    Object.entries(params.metadata).forEach(([key, value]) => {
+                        if (value === undefined) return;
+                        payload[`meta_${normalizeKey(key)}`] = value;
+                    });
+                }
+
+                return payload;
+            };
+
+            const flushPending = () => {
+                if (typeof window.gtag !== 'function') return false;
+                while (pendingEvents.length) {
+                    const { name, payload } = pendingEvents.shift();
+                    window.gtag('event', name, payload);
+                }
+                return true;
+            };
+
+            window.trackEvent = (name, params = {}) => {
+                if (!name) return;
+                const payload = buildPayload(params);
+                if (typeof window.gtag === 'function') {
+                    window.gtag('event', name, payload);
+                } else {
+                    pendingEvents.push({ name, payload });
+                }
+            };
+
+            if (!flushPending()) {
+                const intervalId = window.setInterval(() => {
+                    if (flushPending()) window.clearInterval(intervalId);
+                }, 1000);
+            }
+
+            // TODO: Emit onboarding/tutorial analytics via trackEvent once the new activation flow ships.
+        })();
+    </script>
+
     <meta charset="UTF-8">
     <title>VoxelShaper - Easy Voxel Editor &amp; CAD for 3D Printing</title>
     <meta name="description" content="Create, design, and export 3D models for printing with VoxelShaper, the easy-to-use online voxel editor. Perfect for makers, hobbyists, and Bambu Lab users. Supports multicolor 3MF and STL exports.">
@@ -528,7 +585,7 @@
 
 // --- START: 3MF EXPORTER INTEGRATION ---
 const VoxelApp3MFExporter = {
-    exportBambuStudio3MF: async function(voxels, voxelSize, showToast, parseKey, scaleUnit) {
+    exportBambuStudio3MF: async function(voxels, voxelSize, showToast, parseKey, scaleUnit, analyticsContext = {}) {
         if (!voxels || voxels.size === 0) {
             showToast('Export Error', 'Scene is empty.', 'warning');
             return;
@@ -581,7 +638,24 @@ const VoxelApp3MFExporter = {
 
             const blob = await zip.generateAsync({type:"blob", compression:"DEFLATE", compressionOptions:{level:6}});
             saveAs(blob, "VoxelShaper_Export.3mf");
-            
+
+            if (typeof window.trackEvent === 'function') {
+                const metadata = {
+                    voxel_count: voxelArray.length,
+                    palette_count: palette.length,
+                    scale_unit: scaleUnit,
+                    voxel_size_mm: voxelMM,
+                };
+                if (analyticsContext.gridSize !== undefined) metadata.grid_size = analyticsContext.gridSize;
+                if (analyticsContext.voxelCount !== undefined) metadata.scene_voxel_count = analyticsContext.voxelCount;
+                if (analyticsContext.loginStatus) metadata.login_status = analyticsContext.loginStatus;
+                window.trackEvent('export_3mf', {
+                    category: 'export',
+                    label: 'bambu_3mf',
+                    metadata,
+                });
+            }
+
             showToast('Export Complete', 'Bambu Studio 3MF file saved!', 'success');
         } catch(err) {
             console.error("3MF Export Error by Christian Hohlfeld:", err);
@@ -1221,7 +1295,11 @@ const VoxelApp = {
         
         document.getElementById('exportBambuStudioBtn').addEventListener('click', () => {
             const scaleUnit = document.querySelector('input[name="exportScaleUnit"]:checked').value;
-            VoxelApp3MFExporter.exportBambuStudio3MF(this.voxels, this.VS, this.showToast, this.parseKey, scaleUnit);
+            VoxelApp3MFExporter.exportBambuStudio3MF(this.voxels, this.VS, this.showToast, this.parseKey, scaleUnit, {
+                gridSize: this.GRID,
+                voxelCount: this.voxels.size,
+                loginStatus: this.user ? 'logged_in' : 'anonymous',
+            });
             document.getElementById('exportOptionsModal').close();
         });
 
@@ -1524,6 +1602,17 @@ const VoxelApp = {
     copyShareLink: function() {
         const link = window.location.href;
         navigator.clipboard.writeText(link).then(() => {
+            if (typeof window.trackEvent === 'function') {
+                window.trackEvent('share_link_copied', {
+                    category: 'share',
+                    label: 'copy_url',
+                    metadata: {
+                        login_status: this.user ? 'logged_in' : 'anonymous',
+                        voxel_count: this.voxels.size,
+                        grid_size: this.GRID,
+                    },
+                });
+            }
             this.showToast('Link Copied', 'The current URL has been copied to your clipboard.', 'info');
         }).catch(err => {
             console.error('Failed to copy: ', err);
@@ -1571,6 +1660,21 @@ const VoxelApp = {
                 body: JSON.stringify(hubDocument)
             });
             this.showToast('Upload Successful!', `Project saved. Model ID: ${response.public_id}`, 'info');
+            if (typeof window.trackEvent === 'function') {
+                const metadata = {
+                    grid_size: this.GRID,
+                    voxel_count: this.voxels.size,
+                    visibility: hubDocument.visibility,
+                    has_description: !!hubDocument.description,
+                    login_status: 'logged_in',
+                };
+                if (response && response.public_id) metadata.model_id = response.public_id;
+                window.trackEvent('hub_upload_success', {
+                    category: 'hub',
+                    label: hubDocument.category || 'uncategorized',
+                    metadata,
+                });
+            }
         } catch (error) {
             this.showToast('Upload Failed', error.message, 'error');
         }
@@ -2720,6 +2824,21 @@ const VoxelApp = {
         const a = document.createElement('a');
         a.href = url; a.download = 'voxel-model.stl'; a.click();
         URL.revokeObjectURL(url);
+
+        if (typeof window.trackEvent === 'function') {
+            const metadata = {
+                voxel_count: this.voxels.size,
+                grid_size: this.GRID,
+                scale_unit: scaleUnit,
+                up_axis: upAxis,
+                login_status: this.user ? 'logged_in' : 'anonymous',
+            };
+            window.trackEvent('export_stl', {
+                category: 'export',
+                label: 'stl',
+                metadata,
+            });
+        }
 
         this.showToast('Export Complete', 'Downloaded voxel-model.stl', 'info');
     },
