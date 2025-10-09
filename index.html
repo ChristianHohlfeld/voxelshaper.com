@@ -1,4 +1,5 @@
-<html lang="en" data-theme="dark"><head>
+<html lang="en" data-theme="dark">
+<head>
     <script async="" src="https://www.googletagmanager.com/gtag/js?id=G-DMNJKVCNBM"></script>
     <script>
         window.dataLayer = window.dataLayer || [];
@@ -79,7 +80,7 @@
             height: 100%;
             margin: 0;
             padding: 0;
-            touch-action: auto;
+            touch-action: manipulation; /* Prevent double-tap zoom globally */
         }
         #container, #voxelCanvas { 
             touch-action: none;
@@ -189,6 +190,7 @@
             -webkit-user-select: text;
             user-select: text;
             -webkit-touch-callout: default;
+            touch-action: pan-y; /* Allow scrolling inside modals on mobile */
         }
     </style>
 </head>
@@ -250,7 +252,7 @@
                             <li>
                                 <a id="cycleImageAxisBtn" class="flex justify-between">
                                     <span>Cycle Image Axis</span>
-                                    <span id="current-image-axis-display" class="badge badge-accent">Y</span>
+                                    <span id="current-image-axis-display" class="badge badge-accent">Z</span>
                                 </a>
                             </li>
                         </ul>
@@ -282,11 +284,11 @@
         <div id="color-history-palette" class="controls-group gap-1"></div>
         <button id="modeToggle" class="btn btn-sm btn-neutral">Mode</button>
         <span id="current-mode" class="font-bold text-success text-center text-sm whitespace-nowrap">Mode: Select</span>
-        <button id="selectionLockToggle" class="btn btn-sm btn-ghost hidden text-lg"><i class="fas fa-unlock"></i></button>
+        <button id="selectionLockToggle" class="btn btn-sm btn-ghost text-lg"><i class="fas fa-lock"></i></button>
         <div id="brush-controls" class="controls-group">
             <div class="divider divider-horizontal"></div>
             <label for="brush-size-slider" class="text-sm whitespace-nowrap">Brush:</label>
-            <input type="range" id="brush-size-slider" min="1" max="10" value="1" class="range range-xs w-24">
+            <input type="range" id="brush-size-slider" min="1" max="10" value="1" class="range range-xs w-24" disabled>
             <span id="brush-size-display" class="font-bold text-sm text-base-content/50">1x1</span>
         </div>
     </div>
@@ -318,6 +320,12 @@
 </div>
 
 <div id="mobile-ui-container">
+    <!-- NEW: Mobile Undo/Redo Overlay -->
+    <div id="mobile-undo-redo-overlay" class="absolute top-4 left-4 z-50 flex flex-col gap-2" style="padding-top: var(--safe-top);">
+        <button id="mobile-overlay-undo" class="btn btn-circle btn-ghost bg-base-200/80 backdrop-blur-sm shadow-lg"><i class="fas fa-undo"></i></button>
+        <button id="mobile-overlay-redo" class="btn btn-circle btn-ghost bg-base-200/80 backdrop-blur-sm shadow-lg"><i class="fas fa-redo"></i></button>
+    </div>
+
     <div class="mobile-bottom-bar flex items-center justify-around p-2 bg-base-200 border-t border-base-content/20">
         <button id="goToHubBtnMobile" class="btn btn-ghost rounded-full" aria-label="Go to Hub"><i class="fas fa-home"></i></button>
         <div class="dropdown dropdown-top">
@@ -354,8 +362,8 @@
                  <div class="divider my-1"></div>
                 <li><a id="mobile-cycle-image-axis" class="flex justify-between"><span>Image Axis</span> <span id="mobile-image-axis-display" class="badge badge-accent">Z</span></a></li>
                 <div class="divider my-1"></div>
-                <li><a id="mobile-selection-lock-toggle" class="flex justify-between"><span>Select Lock</span> <span id="mobile-lock-status-icon"><i class="fas fa-unlock"></i></span></a></li>
-                <li><a id="mobile-properties">Grid & Brush Size</a></li>
+                <li><a id="mobile-selection-lock-toggle" class="flex justify-between"><span>Select Lock</span> <span id="mobile-lock-status-icon"><i class="fas fa-lock"></i></span></a></li>
+                <li><a id="mobile-properties">Grid &amp; Brush Size</a></li>
                 <li><a id="mobile-reset-camera">Reset Camera</a></li>
                 <li><a id="mobile-settings">Control Settings</a></li>
             </ul>
@@ -409,7 +417,7 @@
 </dialog>
 <dialog id="mobilePropertiesModal" class="modal">
     <div class="modal-box">
-        <h3 class="font-bold text-lg">Grid & Brush Size</h3>
+        <h3 class="font-bold text-lg">Grid &amp; Brush Size</h3>
         <div class="py-4 space-y-4">
             <div>
                 <label for="mobile-grid-size-slider" class="label"><span class="label-text">Grid Size: <span id="mobile-grid-size-display">10³</span></span></label>
@@ -417,7 +425,7 @@
             </div>
             <div>
                 <label for="mobile-brush-size-slider" class="label"><span class="label-text">Brush Size: <span id="mobile-brush-size-display">1x1</span></span></label>
-                <input type="range" id="mobile-brush-size-slider" min="1" max="10" value="1" class="range range-accent">
+                <input type="range" id="mobile-brush-size-slider" min="1" max="10" value="1" class="range range-accent" disabled>
             </div>
         </div>
         <div class="modal-action">
@@ -487,7 +495,7 @@
 <dialog id="shareModal" class="modal">
     <div class="modal-box">
         <h3 class="font-bold text-lg">Share &amp; Publish Project</h3>
-        <p class="py-4">Choose how you would like to share your work, Christian Heinrich Hohlfeld.</p>
+        <p class="py-4">Choose how you would like to share your work.</p>
         <div class="flex flex-col gap-3">
             <button id="copyShareLinkBtn" class="btn btn-primary"><i class="fas fa-link mr-2"></i>Copy Share Link</button>
             <button id="uploadToHubFromShareBtn" class="btn btn-success"><i class="fas fa-cloud-upload-alt mr-2"></i>Upload to VoxelShaper Hub</button>
@@ -514,23 +522,11 @@
  * ==================================================================================
  * VoxelShaper Core Application Logic (Christian Heinrich Hohlfeld - Konstanz, Germany)
  * This application is a single-file, three.js-based voxel editor.
+ * Mobile touch controls updated by Christian H. Hohlfeld & Gemini in Oct 2025.
  * ==================================================================================
  */
 
 // --- START: 3MF EXPORTER INTEGRATION ---
-/**
- * ==================================================================================
- * 3MF Exporter for Bambu Lab Studio
- * * This file contains the final, validated function for exporting a voxel
- * model from the VoxelShaper application into a native Bambu Studio project file.
- * * Author: Christian Heinrich Hohlfeld & Gemini
- * * Based on a unique idea by: Christian Heinrich Hohlfeld
- * * Date: 06. Oktober 2025
- * * Location: Konstanz, Germany
- * * This implementation rigorously follows the verified Bambu Studio file structure,
- * creating a full project with auto-assigned filament slots.
- * ==================================================================================
- */
 const VoxelApp3MFExporter = {
     exportBambuStudio3MF: async function(voxels, voxelSize, showToast, parseKey, scaleUnit) {
         if (!voxels || voxels.size === 0) {
@@ -546,7 +542,6 @@ const VoxelApp3MFExporter = {
         try {
             const voxelArray = Array.from(voxels.entries()).map(([key, data]) => {
                 const [x, y, z] = parseKey(key);
-                // Filter out foundation voxels (y=-1) which were virtualized for selection
                 if (y < 0) return null;
                 return {x, y, z, color: this.normalizeColor(data.color)};
             }).filter(v => v !== null);
@@ -589,12 +584,11 @@ const VoxelApp3MFExporter = {
             
             showToast('Export Complete', 'Bambu Studio 3MF file saved!', 'success');
         } catch(err) {
-            console.error(err);
+            console.error("3MF Export Error by Christian Hohlfeld:", err);
             showToast('Export Error', err.message, 'error');
         }
     },
     
-    // --- Helper functions from your working example ---
     esc: (s) => String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/"/g,'&quot;'),
     pad2: (n) => String(n).padStart(2,'0'),
     ymd: (d=new Date()) => `${d.getFullYear()}-${VoxelApp3MFExporter.pad2(d.getMonth()+1)}-${VoxelApp3MFExporter.pad2(d.getDate())}`,
@@ -623,16 +617,12 @@ const VoxelApp3MFExporter = {
         const V = [], T = [];
         const s = +voxelMM || 1;
         const colorToIdx = new Map(palette.map((c, i) => [c, i]));
-        // Local cube vertices [x, y, z] where 0 <= x,y,z <= 1
         const CUBE_V = [[0,0,0],[1,0,0],[1,1,0],[0,1,0],[0,0,1],[1,0,1],[1,1,1],[0,1,1]];
-        // Cube triangles (12 total faces)
         const CUBE_T = [[0,2,1],[0,3,2],[4,5,6],[4,6,7],[0,4,7],[0,7,3],[1,2,6],[1,6,5],[3,7,6],[3,6,2],[0,1,5],[0,5,4]];
         
         for (const v of voxels) {
             const base = V.length;
             for (const [x, y, z] of CUBE_V) {
-                // Editor Y-up -> Printer Z-up transform is X'=X, Y'=-Z, Z'=Y
-                // IMPORTANT FIX: Ensure local cube Z (offset z) is used for Y' coordinate, and local cube Y (offset y) is used for Z'
                 V.push([this.fmt((v.x + x) * s), this.fmt(-(v.z + z) * s), this.fmt((v.y + y) * s)]);
             }
             const token = this.tokenFromPaletteIndex(colorToIdx.get(v.color));
@@ -753,21 +743,9 @@ const VoxelApp3MFExporter = {
         return x;
     },
 
-    buildContentTypesXML: () => `<?xml version="1.0" encoding="UTF-8"?><Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">
-  <Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>
-  <Default Extension="png"  ContentType="image/png"/>
-  <Default Extension="json" ContentType="application/json"/>
-  <Default Extension="config" ContentType="text/xml"/>
-  <Default Extension="xml" ContentType="application/xml"/>
-  <Default Extension="model" ContentType="application/vnd.ms-package.3dmanufacturing-3dmodel+xml"/>
-</Types>`,
-    buildRootRelsXML: () => `<?xml version="1.0" encoding="UTF-8"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">
-  <Relationship Id="rel0" Type="http://schemas.microsoft.com/3dmanufacturing/2013/01/3dmodel" Target="/3D/3dmodel.model"/>
-</Relationships>`,
-    buildModelRelsXML: () => `<?xml version="1.0" encoding="UTF-8"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">
-  <Relationship Id="rThumb1" Type="http://schemas.openxmlformats.org/package/2006/relationships/metadata/thumbnail" Target="/Metadata/plate_1.png"/>
-  <Relationship Id="rThumb2" Type="http://schemas.openxmlformats.org/package/2006/relationships/metadata/thumbnail" Target="/Metadata/plate_1_small.png"/>
-</Relationships>`,   
+    buildContentTypesXML: () => `<?xml version="1.0" encoding="UTF-8"?><Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types"><Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/><Default Extension="png" ContentType="image/png"/><Default Extension="json" ContentType="application/json"/><Default Extension="config" ContentType="text/xml"/><Default Extension="xml" ContentType="application/xml"/><Default Extension="model" ContentType="application/vnd.ms-package.3dmanufacturing-3dmodel+xml"/></Types>`,
+    buildRootRelsXML: () => `<?xml version="1.0" encoding="UTF-8"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rel0" Type="http://schemas.microsoft.com/3dmanufacturing/2013/01/3dmodel" Target="/3D/3dmodel.model"/></Relationships>`,
+    buildModelRelsXML: () => `<?xml version="1.0" encoding="UTF-8"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rThumb1" Type="http://schemas.openxmlformats.org/package/2006/relationships/metadata/thumbnail" Target="/Metadata/plate_1.png"/><Relationship Id="rThumb2" Type="http://schemas.openxmlformats.org/package/2006/relationships/metadata/thumbnail" Target="/Metadata/plate_1_small.png"/></Relationships>`,    
     dataURLtoUint8Array: function(dataURL) {
         const base64 = dataURL.split(',')[1];
         const binary = atob(base64);
@@ -800,10 +778,12 @@ const VoxelApp = {
     VS: 1,
     GRID_DEFAULT: 10,
     ROTATE_SPEED: 0.003,
+    MOBILE_ROTATE_SPEED_MULT: 1.5,
     PAN_SPEED: 0.05,
     PINCH_ZOOM_MULT: 50,
     DRAG_THRESHOLD: 5,
     MAX_HISTORY_SIZE: 50,
+    DOUBLE_TAP_THRESHOLD: 300, // ms
     BACKEND_URL: "https://api.voxelshaper.com",
     HUB_URL: "https://hub.voxelshaper.com",
     // --- State ---
@@ -830,9 +810,9 @@ const VoxelApp = {
     templateImageAxis: 'z',
     selectedFaces: new Set(),
     selectionFaceMeshes: new Map(),
-    isSelectionLocked: false, // NEW
-selectionNormalIndex: null,                 // enforced face orientation for current selection
-AUTO_RESET_ORIENTATION_ON_MISMATCH: false, // set true to auto-switch orientation instead of blocking
+    isSelectionLocked: false,
+    selectionNormalIndex: null, 
+    AUTO_RESET_ORIENTATION_ON_MISMATCH: false,
     ghostVoxels: new Map(),
     previewBrush: null,
     previewVoxel: null,
@@ -852,8 +832,14 @@ AUTO_RESET_ORIENTATION_ON_MISMATCH: false, // set true to auto-switch orientatio
         selectionAxisLock: null,
         selectionDragStartTarget: null,
     },
-    touchState: {
-        isTapCandidate: false, lastPinchDist: null, lastPinchCenter: null,
+    touchState: { // NEW: Mobile-specific state
+        lastTapTime: 0,
+        isDoubleTapCandidate: false,
+        isInteracting: false,
+        isLookAround: false,
+        isThreeFingerUndoCandidate: false,
+        lastPinchDist: null,
+        lastPinchCenter: null,
     },
     controls: {
         invertLookX: false, invertLookY: false, invertZoom: true,
@@ -897,15 +883,14 @@ AUTO_RESET_ORIENTATION_ON_MISMATCH: false, // set true to auto-switch orientatio
         document.body.classList.toggle('has-mobile-bar', this.isMobile);
     },
     tryLockOrientation: async function () {
-        if ('orientation' in screen && screen.orientation && screen.orientation.lock) {
+        if (this.isMobile && 'orientation' in screen && screen.orientation && screen.orientation.lock) {
             try { await screen.orientation.lock('portrait'); } catch (e) { /* Not allowed by browser */ }
         }
     },
     updateOrientationOverlay: function () {
         const isPortrait = window.matchMedia('(orientation: portrait)').matches;
-        const isTouch = this.computeMobileMode();
         const overlay = document.getElementById('rotateOverlay');
-        const show = isTouch && !isPortrait;
+        const show = this.isMobile && !isPortrait;
         overlay.classList.toggle('show', show);
         this.cvs.style.pointerEvents = show ? 'none' : 'auto';
         document.body.style.overflow = show ? 'hidden' : '';
@@ -1065,7 +1050,7 @@ AUTO_RESET_ORIENTATION_ON_MISMATCH: false, // set true to auto-switch orientatio
         this.flySpeed = parseFloat(localStorage.getItem('voxelEditorFlySpeed') || 0.1);
         this.brushSize = parseInt(localStorage.getItem('voxelEditorBrushSize') || 1);
         this.colorHistory = JSON.parse(localStorage.getItem('voxelColorHistory')) || [];
-        this.isSelectionLocked = localStorage.getItem('isSelectionLocked') === 'true'; // NEW
+        this.isSelectionLocked = localStorage.getItem('isSelectionLocked') === 'true';
         this.controls.invertLookX = localStorage.getItem('invertLookX') === 'true';
         this.controls.invertLookY = localStorage.getItem('invertLookY') === 'true';
         this.controls.invertZoom = localStorage.getItem('invertZoom') !== 'false';
@@ -1084,7 +1069,6 @@ AUTO_RESET_ORIENTATION_ON_MISMATCH: false, // set true to auto-switch orientatio
     },
 
     setupThree: function() {
-        // --- Performance Improvement: Create shared geometry once ---
         this.sharedBoxGeometry = new THREE.BoxGeometry(this.VS, this.VS, this.VS);
         
         this.scene = new THREE.Scene();
@@ -1102,7 +1086,6 @@ AUTO_RESET_ORIENTATION_ON_MISMATCH: false, // set true to auto-switch orientatio
         this.scene.add(dirLight);
         this.scene.add(new THREE.HemisphereLight(0xffffff, 0x444444, 0.2));
         
-        // Use shared geometry
         this.previewVoxel = new THREE.Mesh(
             this.sharedBoxGeometry,
             new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.5, depthTest: false })
@@ -1113,18 +1096,13 @@ AUTO_RESET_ORIENTATION_ON_MISMATCH: false, // set true to auto-switch orientatio
         this.previewBrush = new THREE.Group();
         this.scene.add(this.previewBrush);
 
-        // NEW: Create single virtual ground plane mesh for raycasting only
         const groundSize = this.GRID * this.VS * 2;
         const groundGeometry = new THREE.PlaneGeometry(groundSize, groundSize);
-        // Use a material that is invisible but still detectable by the raycaster
         const groundMaterial = new THREE.MeshBasicMaterial({ color: 0x2a2e37, transparent: true, opacity: 0.01, side: THREE.DoubleSide, visible: false }); 
         this.groundPlaneMesh = new THREE.Mesh(groundGeometry, groundMaterial);
         
-        // This mesh represents the top face of the old foundation layer (y=-1), which is the world y=0 plane, facing up (+Y)
         this.groundPlaneMesh.rotation.x = -Math.PI / 2;
         this.groundPlaneMesh.position.set(this.GRID * this.VS / 2, 0, this.GRID * this.VS / 2);
-
-        // Tag the mesh for identification in getFaceTarget
         this.groundPlaneMesh.userData.isFoundation = true;
         this.scene.add(this.groundPlaneMesh);
 
@@ -1137,7 +1115,7 @@ AUTO_RESET_ORIENTATION_ON_MISMATCH: false, // set true to auto-switch orientatio
         window.addEventListener('orientationchange', () => this.updateOrientationOverlay());
         this.containerDiv.addEventListener('pointerdown', (e) => this.onPointerDown(e));
         this.containerDiv.addEventListener('pointermove', (e) => this.onPointerMove(e));
-        window.addEventListener('pointerup', (e) => this.onPointerUp(e)); // Listen on window for reliable release
+        window.addEventListener('pointerup', (e) => this.onPointerUp(e));
         this.containerDiv.addEventListener('pointerleave', (e) => this.onPointerUp(e));
         this.containerDiv.addEventListener('pointercancel', (e) => this.onPointerUp(e));
         this.containerDiv.addEventListener('wheel', (e) => this.onMouseWheel(e), { passive: false });
@@ -1174,6 +1152,8 @@ AUTO_RESET_ORIENTATION_ON_MISMATCH: false, // set true to auto-switch orientatio
         document.getElementById('redoBtn').addEventListener('click', () => this.redo());
 
         // Mobile controls
+        document.getElementById('mobile-overlay-undo').addEventListener('click', () => this.undo());
+        document.getElementById('mobile-overlay-redo').addEventListener('click', () => this.redo());
         document.getElementById('mobile-mode-toggle').addEventListener('click', () => this.cycleMode());
         document.getElementById('mobile-selection-lock-toggle').addEventListener('click', () => this.toggleSelectionLock());
         document.getElementById('mobile-color-picker').addEventListener('input', (e) => this.setColor(e.target.value));
@@ -1201,14 +1181,8 @@ AUTO_RESET_ORIENTATION_ON_MISMATCH: false, // set true to auto-switch orientatio
         document.getElementById('exportBtnMobile').addEventListener('click', () => document.getElementById('exportOptionsModal').showModal());
         document.getElementById('mobile-share').addEventListener('click', () => document.getElementById('shareModal').showModal());
 
-        document.getElementById('goToHubBtn').addEventListener('click', () => {
-            const w = window.open(this.HUB_URL, '_blank', 'noopener,noreferrer');
-            if (w) w.opener = null;
-        });
-        document.getElementById('goToHubBtnMobile').addEventListener('click', () => {
-            const w = window.open(this.HUB_URL, '_blank', 'noopener,noreferrer');
-            if (w) w.opener = null;
-        });
+        document.getElementById('goToHubBtn').addEventListener('click', () => window.open(this.HUB_URL, '_blank', 'noopener,noreferrer'));
+        document.getElementById('goToHubBtnMobile').addEventListener('click', () => window.open(this.HUB_URL, '_blank', 'noopener,noreferrer'));
 
         document.getElementById('loadImageBtnMobile').addEventListener('click', () => this.loadImageTemplate());
         document.getElementById('removeImageBtnMobile').addEventListener('click', () => this.removeImageTemplate());
@@ -1220,14 +1194,12 @@ AUTO_RESET_ORIENTATION_ON_MISMATCH: false, // set true to auto-switch orientatio
         document.getElementById('loginLogoutBtn').addEventListener('click', this.loginLogout.bind(this));
         document.getElementById('mobile-login-logout').addEventListener('click', this.loginLogout.bind(this));
         
-        // NEW Share/Upload Modal Listeners
         document.getElementById('shareBtn').addEventListener('click', () => document.getElementById('shareModal').showModal());
         document.getElementById('copyShareLinkBtn').addEventListener('click', () => this.copyShareLink());
         document.getElementById('uploadToHubFromShareBtn').addEventListener('click', () => {
             document.getElementById('shareModal').close();
             document.getElementById('uploadProjectModal').showModal();
         });
-
 
         document.getElementById('uploadConfirmBtn').addEventListener('click', (e) => {
             e.preventDefault();
@@ -1249,13 +1221,7 @@ AUTO_RESET_ORIENTATION_ON_MISMATCH: false, // set true to auto-switch orientatio
         
         document.getElementById('exportBambuStudioBtn').addEventListener('click', () => {
             const scaleUnit = document.querySelector('input[name="exportScaleUnit"]:checked').value;
-            VoxelApp3MFExporter.exportBambuStudio3MF(
-                this.voxels, 
-                this.VS, 
-                this.showToast,
-                this.parseKey,
-                scaleUnit
-            );
+            VoxelApp3MFExporter.exportBambuStudio3MF(this.voxels, this.VS, this.showToast, this.parseKey, scaleUnit);
             document.getElementById('exportOptionsModal').close();
         });
 
@@ -1265,22 +1231,279 @@ AUTO_RESET_ORIENTATION_ON_MISMATCH: false, // set true to auto-switch orientatio
             this.exportSTL(scaleUnit, upAxis);
             document.getElementById('exportOptionsModal').close();
         });
-        
-        let lastTouchEnd = 0;
-        this.containerDiv.addEventListener('touchend', (e) => {
-          const now = Date.now();
-          if (now - lastTouchEnd < 300) {
-            e.preventDefault();
-          }
-          lastTouchEnd = now;
-        }, { passive: false });
-        this.containerDiv.addEventListener('dblclick', (e) => e.preventDefault(), { passive: false });
-        document.addEventListener('selectstart', (e) => {
-            if (!e.target.closest('input, textarea, select, [contenteditable]')) e.preventDefault();
-        }, { passive: false });
-        window.addEventListener('gesturestart', (e) => e.preventDefault(), { passive: false });
     },
 
+    // --- NEW: Mobile Tap Handler ---
+    handleTapInteraction: function(event) {
+        if (this.currentMode === 'SELECT') {
+            this.handleFaceSelection(event);
+        } else {
+            const targetInfo = this.getRayTargetInfo(this.mouseState.downX, this.mouseState.downY);
+            if (targetInfo) this.modifyVoxel(targetInfo.x, targetInfo.y, targetInfo.z, targetInfo.normal);
+        }
+    },
+
+    onPointerDown: function (e) {
+        if (e.target !== this.cvs) return;
+        e.preventDefault();
+
+        // Close any open dropdowns on canvas touch
+        if (document.activeElement && document.activeElement.blur) {
+            document.activeElement.blur();
+        }
+
+        this.currentStroke = new Map();
+        this.isPointerDown = true;
+        this.activePointers.set(e.pointerId, { x: e.clientX, y: e.clientY });
+
+        this.mouseState.downX = e.clientX;
+        this.mouseState.downY = e.clientY;
+        this.mouseState.lastX = e.clientX;
+        this.mouseState.lastY = e.clientY;
+        
+        if (this.isMobile) {
+            const now = Date.now();
+            if (now - this.touchState.lastTapTime < this.DOUBLE_TAP_THRESHOLD) {
+                this.touchState.isDoubleTapCandidate = true;
+            }
+            this.touchState.lastTapTime = now;
+            
+            if (this.activePointers.size === 3) {
+                this.touchState.isThreeFingerUndoCandidate = true;
+            } else {
+                this.touchState.isThreeFingerUndoCandidate = false;
+            }
+            return;
+        }
+
+        // --- Desktop Logic ---
+        this.mouseState.isModifying = (e.button === 0);
+        this.mouseState.isPanning = (e.button === 1);
+        
+        if (this.mouseState.isModifying && this.currentMode === 'SELECT') {
+            this.selectionChange.before = new Set(this.selectedFaces);
+            const target = this.getFaceTarget(e.clientX, e.clientY);
+            this.mouseState.selectionDragStartTarget = target;
+            if (target && this.selectedFaces.has(target.faceKey)) {
+                const startNormalIdx = parseInt(target.faceKey.split(':')[1], 10);
+                const sameOrientation = [...this.selectedFaces].every(k => parseInt(k.split(':')[1], 10) === startNormalIdx);
+                if (sameOrientation) {
+                    this.mouseState.isExtruding = true;
+                    this.mouseState.extrudeNormal = target.normal.clone();
+                    const viewN = this.cam.getWorldDirection(new THREE.Vector3()).negate();
+                    this.mouseState.drawingPlane.setFromNormalAndCoplanarPoint(viewN, target.intersectionPoint);
+                    this.mouseState.dragStartPoint.copy(target.intersectionPoint);
+                }
+            }
+        } else if (e.button === 2) {
+            this.cvs.focus();
+            this.cvs.requestPointerLock();
+        }
+    },
+
+    
+    onPointerMove: function(e) {
+        if (document.pointerLockElement === this.cvs) {
+            this.mouseState.mouseMovementX += e.movementX;
+            this.mouseState.mouseMovementY += e.movementY;
+            return;
+        }
+
+        if (!this.isPointerDown) {
+            if (!this.isMobile) {
+                const targetInfo = this.getRayTargetInfo(e.clientX, e.clientY);
+                this.updateToolPreview(targetInfo);
+            }
+            return;
+        }
+        
+        const dist = Math.hypot(e.clientX - this.mouseState.downX, e.clientY - this.mouseState.downY);
+        if (!this.mouseState.isDragging && dist > this.DRAG_THRESHOLD) {
+            this.mouseState.isDragging = true;
+            this.touchState.isDoubleTapCandidate = false; // Dragging cancels a double tap action
+            this.touchState.isThreeFingerUndoCandidate = false; // Dragging cancels undo gesture
+        }
+
+        // --- Mobile Logic ---
+        if (this.isMobile) {
+            if (this.mouseState.isDragging) {
+                // If this is the first move event that qualifies as a drag, decide the gesture type.
+                if (!this.touchState.isInteracting && !this.touchState.isLookAround) {
+                    if (this.touchState.isDoubleTapCandidate) {
+                        this.touchState.isInteracting = true;
+                        // Initialize interaction state (like desktop onPointerDown)
+                         if (this.currentMode === 'SELECT') {
+                            this.selectionChange.before = new Set(this.selectedFaces);
+                            const target = this.getFaceTarget(e.clientX, e.clientY);
+                            this.mouseState.selectionDragStartTarget = target;
+                            if (target && this.selectedFaces.has(target.faceKey)) {
+                                const startNormalIdx = parseInt(target.faceKey.split(':')[1], 10);
+                                if ([...this.selectedFaces].every(k => parseInt(k.split(':')[1], 10) === startNormalIdx)) {
+                                    this.mouseState.isExtruding = true;
+                                    this.mouseState.extrudeNormal = target.normal.clone();
+                                    const viewN = this.cam.getWorldDirection(new THREE.Vector3()).negate();
+                                    this.mouseState.drawingPlane.setFromNormalAndCoplanarPoint(viewN, target.intersectionPoint);
+                                    this.mouseState.dragStartPoint.copy(target.intersectionPoint);
+                                }
+                            }
+                        }
+                    } else if (this.activePointers.size === 1) {
+                        this.touchState.isLookAround = true;
+                    }
+                }
+            }
+
+            if (this.touchState.isInteracting) {
+                // Same logic as desktop interaction drag
+                if (this.mouseState.isExtruding) {
+                    const raycaster = new THREE.Raycaster();
+                    const mouse = new THREE.Vector2(((e.clientX - this.cvs.getBoundingClientRect().left) / this.cvs.clientWidth) * 2 - 1, -((e.clientY - this.cvs.getBoundingClientRect().top) / this.cvs.clientHeight) * 2 + 1);
+                    raycaster.setFromCamera(mouse, this.cam);
+                    const intersection = new THREE.Vector3();
+                    if (raycaster.ray.intersectPlane(this.mouseState.drawingPlane, intersection)) {
+                        const dragVector = intersection.clone().sub(this.mouseState.dragStartPoint);
+                        const extrusionDistance = dragVector.dot(this.mouseState.extrudeNormal);
+                        const voxelDistance = Math.round(extrusionDistance / this.VS);
+                        this.updateExtrudePreview(voxelDistance);
+                    }
+                } else if (this.currentMode === 'SELECT') {
+                    this.handleDragSelection(e);
+                } else {
+                    let targetInfo = this.getRayTargetInfo(e.clientX, e.clientY);
+                    if (targetInfo) {
+                        const coords = {x: targetInfo.x, y: targetInfo.y, z: targetInfo.z};
+                        if (!this.mouseState.lastActionCoords || coords.x !== this.mouseState.lastActionCoords.x || coords.y !== this.mouseState.lastActionCoords.y || coords.z !== this.mouseState.lastActionCoords.z) {
+                            this.drawVoxelLine(this.mouseState.lastActionCoords || coords, coords, this.mouseState.lastActionNormal || targetInfo.normal);
+                            this.mouseState.lastActionCoords = coords;
+                            this.mouseState.lastActionNormal = targetInfo.normal;
+                        }
+                    }
+                }
+            } else if (this.activePointers.size === 2) {
+                const pointers = Array.from(this.activePointers.values());
+                const newDist = Math.hypot(pointers[0].x - pointers[1].x, pointers[0].y - pointers[1].y);
+                const center = { x: (pointers[0].x + pointers[1].x) / 2, y: (pointers[0].y + pointers[1].y) / 2 };
+                if (!this.touchState.lastPinchDist) this.touchState.lastPinchDist = newDist;
+                let zoomDelta = (this.touchState.lastPinchDist - newDist) * this.PINCH_ZOOM_MULT * 0.001;
+                if (this.controls.invertZoom) zoomDelta *= -1;
+                this.cam.position.addScaledVector(this.cam.getWorldDirection(new THREE.Vector3()), zoomDelta);
+                this.touchState.lastPinchDist = newDist;
+
+                if (this.touchState.lastPinchCenter) {
+                    const deltaX = center.x - this.touchState.lastPinchCenter.x;
+                    const deltaY = center.y - this.touchState.lastPinchCenter.y;
+                    const strafeX = this.controls.invertStrafeX ? deltaX : -deltaX;
+                    const strafeY = this.controls.invertStrafeY ? -deltaY : deltaY;
+                    const pan = new THREE.Vector3(strafeX * this.PAN_SPEED, strafeY * this.PAN_SPEED, 0);
+                    pan.applyQuaternion(this.cam.quaternion);
+                    this.cam.position.add(pan);
+                }
+                this.touchState.lastPinchCenter = center;
+            } else if (this.touchState.isLookAround) { // Single-finger drag for look
+                const deltaX = e.clientX - this.mouseState.lastX;
+                const deltaY = e.clientY - this.mouseState.lastY;
+                this.euler.y -= (this.controls.invertLookX ? -deltaX : deltaX) * this.ROTATE_SPEED * this.MOBILE_ROTATE_SPEED_MULT;
+                this.euler.x -= (this.controls.invertLookY ? -deltaY : deltaY) * this.ROTATE_SPEED * this.MOBILE_ROTATE_SPEED_MULT;
+            }
+            
+            this.activePointers.set(e.pointerId, { x: e.clientX, y: e.clientY });
+
+        } else { // --- Desktop Logic ---
+            if (this.mouseState.isExtruding) {
+                 const raycaster = new THREE.Raycaster();
+                const mouse = new THREE.Vector2(((e.clientX - this.cvs.getBoundingClientRect().left) / this.cvs.clientWidth) * 2 - 1, -((e.clientY - this.cvs.getBoundingClientRect().top) / this.cvs.clientHeight) * 2 + 1);
+                raycaster.setFromCamera(mouse, this.cam);
+                const intersection = new THREE.Vector3();
+                if (raycaster.ray.intersectPlane(this.mouseState.drawingPlane, intersection)) {
+                    const dragVector = intersection.clone().sub(this.mouseState.dragStartPoint);
+                    const extrusionDistance = dragVector.dot(this.mouseState.extrudeNormal);
+                    const voxelDistance = Math.round(extrusionDistance / this.VS);
+                    this.updateExtrudePreview(voxelDistance);
+                }
+            } else if (this.mouseState.isDragging && this.mouseState.isModifying) {
+                if (this.currentMode === 'SELECT') {
+                    this.handleDragSelection(e);
+                } else {
+                    let targetInfo = this.getRayTargetInfo(e.clientX, e.clientY);
+                    if (targetInfo) {
+                        const coords = {x: targetInfo.x, y: targetInfo.y, z: targetInfo.z};
+                        if (!this.mouseState.lastActionCoords || coords.x !== this.mouseState.lastActionCoords.x || coords.y !== this.mouseState.lastActionCoords.y || coords.z !== this.mouseState.lastActionCoords.z) {
+                            this.drawVoxelLine(this.mouseState.lastActionCoords || coords, coords, this.mouseState.lastActionNormal || targetInfo.normal);
+                            this.mouseState.lastActionCoords = coords;
+                            this.mouseState.lastActionNormal = targetInfo.normal;
+                        }
+                    }
+                }
+            } else if (this.mouseState.isPanning) {
+                const deltaX = e.clientX - this.mouseState.lastX;
+                const deltaY = e.clientY - this.mouseState.lastY;
+                const pan = new THREE.Vector3(-deltaX * this.PAN_SPEED, deltaY * this.PAN_SPEED, 0);
+                pan.applyQuaternion(this.cam.quaternion);
+                this.cam.position.add(pan);
+            }
+        }
+        
+        this.mouseState.lastX = e.clientX;
+        this.mouseState.lastY = e.clientY;
+        this.euler.x = Math.max(-Math.PI / 2, Math.min(Math.PI / 2, this.euler.x));
+        this.cam.quaternion.setFromEuler(this.euler);
+    },
+    
+    onPointerUp: function(e) {
+        if (!this.isPointerDown) return;
+
+        if (this.isMobile) {
+            if (this.touchState.isThreeFingerUndoCandidate) {
+                this.undo();
+                this.showToast('Action', 'Undo', 'info', 1000);
+            } else if (this.touchState.isDoubleTapCandidate) { // Is a double tap without drag
+                this.handleTapInteraction(e);
+            }
+        } else if (!this.mouseState.isDragging && this.mouseState.isModifying) { // Desktop tap
+            this.handleTapInteraction(e);
+        }
+
+        if (this.mouseState.isExtruding) {
+            const distance = this.ghostVoxels.size > 0 ? (this.ghostVoxels.get(this.ghostVoxels.keys().next().value).distance || 0) : 0;
+            this.updateExtrudePreview(0);
+            if (distance !== 0) this.extrudeSelectedFaces(distance);
+        } else if (this.currentMode === 'SELECT' && this.selectionChange.before) {
+            const beforeSet = this.selectionChange.before;
+            const afterSet = this.selectedFaces;
+            if (this.mouseState.isDragging || beforeSet.size !== afterSet.size || ![...beforeSet].every(value => afterSet.has(value))) {
+                this.addHistoryStep({ type: 'SELECT', before: beforeSet, after: new Set(afterSet) });
+            }
+        }
+
+        if (this.mouseState.isModifying && this.currentStroke && this.currentStroke.size > 0) {
+            const actualChanges = new Map();
+            for (const [key, value] of this.currentStroke.entries()) {
+                const beforeColor = value.before ? value.before.color : null;
+                const afterColor = value.after ? value.after.color : null;
+                if (beforeColor !== afterColor) {
+                    actualChanges.set(key, value);
+                }
+            }
+            if (actualChanges.size > 0) this.addHistoryStep({ type: 'MODIFY', changes: actualChanges });
+        }
+
+        if (document.pointerLockElement === this.cvs) document.exitPointerLock();
+        
+        this.activePointers.delete(e.pointerId);
+        if (this.activePointers.size === 0) this.isPointerDown = false;
+
+        // --- Universal Cleanup ---
+        this.currentStroke = null;
+        Object.keys(this.touchState).forEach(key => this.touchState[key] = (typeof this.touchState[key] === 'number' ? 0 : null));
+        this.touchState.isDoubleTapCandidate = false; this.touchState.isInteracting = false; this.touchState.isLookAround = false; this.touchState.isThreeFingerUndoCandidate = false;
+        Object.keys(this.mouseState).forEach(key => { if(typeof this.mouseState[key] === 'boolean') this.mouseState[key] = false });
+        this.mouseState.lastActionCoords = null; this.mouseState.lastActionNormal = null; this.mouseState.selectionAxisLock = null; this.mouseState.selectionDragStartTarget = null;
+        this.marqueeElement.style.display = 'none';
+    },
+
+    // The rest of the VoxelApp methods remain largely the same.
+    // I am pasting the full object for completeness.
+    
     toggleSelectionLock: function() {
         this.isSelectionLocked = !this.isSelectionLocked;
         localStorage.setItem('isSelectionLocked', this.isSelectionLocked);
@@ -1394,484 +1617,6 @@ AUTO_RESET_ORIENTATION_ON_MISMATCH: false, // set true to auto-switch orientatio
         }
     },
 
-    onPointerDown: function (e) {
-    e.preventDefault();
-    if (e.target !== this.cvs) return;
-
-    this.currentStroke = new Map();
-    this.isPointerDown = true;
-    this.activePointers.set(e.pointerId, { x: e.clientX, y: e.clientY });
-
-    this.mouseState.downX = e.clientX;
-    this.mouseState.downY = e.clientY;
-    this.mouseState.lastX = e.clientX;
-    this.mouseState.lastY = e.clientY;
-
-    // multi-touch -> handled elsewhere
-    if (this.isMobile && this.activePointers.size > 1) {
-        this.touchState.isTapCandidate = false;
-        return;
-    }
-    this.touchState.isTapCandidate = true;
-
-    if ((this.isMobile && this.activePointers.size === 1) || (!this.isMobile && e.button === 0)) {
-        this.mouseState.isModifying = true;
-
-        if (this.currentMode === 'SELECT') {
-            // snapshot selection for undo
-            this.selectionChange.before = new Set(this.selectedFaces);
-
-            // what’s under the cursor?
-            const target = this.getFaceTarget(e.clientX, e.clientY);
-            this.mouseState.selectionDragStartTarget = target;
-
-            // ✅ EXTRUDE ONLY IF: the start face exists AND it’s already selected
-            // (no modifiers needed, and never arm extrusion later in the drag)
-            if (target && this.selectedFaces.has(target.faceKey)) {
-                // also enforce “same orientation” with the rest of the selection
-                const startNormalIdx = parseInt(target.faceKey.split(':')[1], 10);
-                const sameOrientation =
-                    this.selectedFaces.size === 0 ||
-                    [...this.selectedFaces].every(k => parseInt(k.split(':')[1], 10) === startNormalIdx);
-
-                if (sameOrientation) {
-                    this.mouseState.isExtruding = true;
-                    this.mouseState.extrudeNormal = target.normal.clone();
-
-                    // plane perpendicular to view, passing through intersection
-                    const viewN = this.cam.getWorldDirection(new THREE.Vector3()).negate();
-                    this.mouseState.drawingPlane.setFromNormalAndCoplanarPoint(viewN, target.intersectionPoint);
-                    this.mouseState.dragStartPoint.copy(target.intersectionPoint);
-                }
-            }
-        }
-    } else if (!this.isMobile && e.button === 1) {
-        this.mouseState.isPanning = true;
-    } else if (!this.isMobile && e.button === 2) {
-        this.cvs.focus();
-        this.cvs.requestPointerLock();
-    }
-},
-
-    
-    onPointerMove: function(e) {
-        if (document.pointerLockElement === this.cvs) {
-            this.mouseState.mouseMovementX += e.movementX;
-            this.mouseState.mouseMovementY += e.movementY;
-            return;
-        }
-
-        if (!this.isPointerDown) {
-            if (!this.isMobile) {
-                const targetInfo = this.getRayTargetInfo(e.clientX, e.clientY);
-                this.updateToolPreview(targetInfo);
-            }
-            return;
-        }
-        
-        const dist = Math.hypot(e.clientX - this.mouseState.downX, e.clientY - this.mouseState.downY);
-        if (!this.mouseState.isDragging && dist > this.DRAG_THRESHOLD) {
-            this.mouseState.isDragging = true;
-            this.touchState.isTapCandidate = false;
-        }
-
-        let actionTaken = false;
-
-        if (this.mouseState.isExtruding) {
-             const raycaster = new THREE.Raycaster();
-            const mouse = new THREE.Vector2(((e.clientX - this.cvs.getBoundingClientRect().left) / this.cvs.clientWidth) * 2 - 1, -((e.clientY - this.cvs.getBoundingClientRect().top) / this.cvs.clientHeight) * 2 + 1);
-            raycaster.setFromCamera(mouse, this.cam);
-            const intersection = new THREE.Vector3();
-            if (raycaster.ray.intersectPlane(this.mouseState.drawingPlane, intersection)) {
-                const dragVector = intersection.clone().sub(this.mouseState.dragStartPoint);
-                const extrusionDistance = dragVector.dot(this.mouseState.extrudeNormal);
-                const voxelDistance = Math.round(extrusionDistance / this.VS);
-                this.updateExtrudePreview(voxelDistance);
-            }
-            actionTaken = true;
-        } else if (this.isMobile && this.activePointers.size === 2) {
-            const pointers = Array.from(this.activePointers.values());
-            const newDist = Math.hypot(pointers[0].x - pointers[1].x, pointers[0].y - pointers[1].y);
-            const center = { x: (pointers[0].x + pointers[1].x) / 2, y: (pointers[0].y + pointers[1].y) / 2 };
-            if (!this.touchState.lastPinchDist) this.touchState.lastPinchDist = newDist;
-            let zoomDelta = (this.touchState.lastPinchDist - newDist) * this.PINCH_ZOOM_MULT * 0.001;
-            if (this.controls.invertZoom) zoomDelta *= -1;
-            this.cam.position.addScaledVector(this.cam.getWorldDirection(new THREE.Vector3()), zoomDelta);
-            this.touchState.lastPinchDist = newDist;
-
-            if (this.touchState.lastPinchCenter) {
-                const deltaX = center.x - this.touchState.lastPinchCenter.x;
-                const deltaY = center.y - this.touchState.lastPinchCenter.y;
-                const strafeX = this.controls.invertStrafeX ? deltaX : -deltaX;
-                const strafeY = this.controls.invertStrafeY ? -deltaY : deltaY;
-                const pan = new THREE.Vector3(strafeX * this.PAN_SPEED, strafeY * this.PAN_SPEED, 0);
-                pan.applyQuaternion(this.cam.quaternion);
-                this.cam.position.add(pan);
-            }
-            this.touchState.lastPinchCenter = center;
-            actionTaken = true;
-
-        } else if (this.mouseState.isDragging && (this.isMobile && this.activePointers.size === 1 || !this.isMobile)) {
-            if (this.currentMode === 'SELECT') {
-                actionTaken = this.handleDragSelection(e);
-            } else {
-                let targetInfo = this.getRayTargetInfo(e.clientX, e.clientY);
-                if (targetInfo) {
-                    const coords = {x: targetInfo.x, y: targetInfo.y, z: targetInfo.z};
-                    if (!this.mouseState.lastActionCoords || coords.x !== this.mouseState.lastActionCoords.x || coords.y !== this.mouseState.lastActionCoords.y || coords.z !== this.mouseState.lastActionCoords.z) {
-                        this.drawVoxelLine(this.mouseState.lastActionCoords || coords, coords, this.mouseState.lastActionNormal || targetInfo.normal);
-                        this.mouseState.lastActionCoords = coords;
-                        this.mouseState.lastActionNormal = targetInfo.normal;
-                    }
-                    actionTaken = true;
-                }
-            }
-        }
-
-        if (!actionTaken && (this.isMobile || this.mouseState.isPanning)) {
-            const currentPointer = this.activePointers.get(e.pointerId) || {x: this.mouseState.lastX, y: this.mouseState.lastY};
-            const deltaX = e.clientX - currentPointer.x;
-            const deltaY = e.clientY - currentPointer.y;
-            if (this.isMobile && this.activePointers.size === 1) {
-                this.euler.y -= (this.controls.invertLookX ? -deltaX : deltaX) * this.ROTATE_SPEED;
-                this.euler.x -= (this.controls.invertLookY ? -deltaY : deltaY) * this.ROTATE_SPEED;
-            } else if (this.mouseState.isPanning) {
-                 const pan = new THREE.Vector3(-deltaX * this.PAN_SPEED, deltaY * this.PAN_SPEED, 0);
-                pan.applyQuaternion(this.cam.quaternion);
-                this.cam.position.add(pan);
-            }
-        }
-
-        if (this.isMobile) this.activePointers.set(e.pointerId, { x: e.clientX, y: e.clientY });
-        this.mouseState.lastX = e.clientX;
-        this.mouseState.lastY = e.clientY;
-
-        this.euler.x = Math.max(-Math.PI / 2, Math.min(Math.PI / 2, this.euler.x));
-        this.cam.quaternion.setFromEuler(this.euler);
-    },
-    
-    onPointerUp: function(e) {
-        if (!this.isPointerDown) return;
-
-        if (this.touchState.isTapCandidate && this.mouseState.isModifying) {
-            if (this.currentMode === 'SELECT') {
-                this.handleFaceSelection(e);
-            } else {
-                const targetInfo = this.getRayTargetInfo(this.mouseState.downX, this.mouseState.downY);
-                if (targetInfo) this.modifyVoxel(targetInfo.x, targetInfo.y, targetInfo.z, targetInfo.normal);
-            }
-        }
-        
-        if (this.mouseState.isExtruding) {
-            const distance = this.ghostVoxels.size > 0 ? (this.ghostVoxels.get(this.ghostVoxels.keys().next().value).distance || 0) : 0;
-            this.updateExtrudePreview(0);
-            if (distance !== 0) {
-                 this.extrudeSelectedFaces(distance);
-            }
-        } else if (this.currentMode === 'SELECT' && this.selectionChange.before) {
-            const beforeSet = this.selectionChange.before;
-            const afterSet = this.selectedFaces;
-            if (this.mouseState.isDragging || beforeSet.size !== afterSet.size || ![...beforeSet].every(value => afterSet.has(value))) {
-                this.addHistoryStep({ type: 'SELECT', before: beforeSet, after: new Set(afterSet) });
-            }
-        }
-
-        if (this.mouseState.isModifying && this.currentStroke && this.currentStroke.size > 0) {
-            const actualChanges = new Map();
-            for (const [key, value] of this.currentStroke.entries()) {
-                const beforeColor = value.before ? value.before.color : null;
-                const afterColor = value.after ? value.after.color : null;
-                if (beforeColor !== afterColor) {
-                    actualChanges.set(key, value);
-                }
-            }
-            if (actualChanges.size > 0) {
-                 this.addHistoryStep({ type: 'MODIFY', changes: actualChanges });
-            }
-        }
-
-        if (document.pointerLockElement === this.cvs) {
-            document.exitPointerLock();
-        }
-        
-        this.activePointers.delete(e.pointerId);
-        if (this.activePointers.size === 0) {
-            this.isPointerDown = false;
-        }
-
-        this.currentStroke = null;
-        this.touchState.isTapCandidate = false;
-        this.touchState.lastPinchDist = null;
-        this.touchState.lastPinchCenter = null;
-        this.mouseState.isExtruding = false;
-        this.mouseState.isModifying = false;
-        this.mouseState.isDragging = false;
-        this.mouseState.isPanning = false;
-        this.mouseState.isRotating = false;
-        this.mouseState.lastActionCoords = null;
-        this.mouseState.lastActionNormal = null;
-        this.mouseState.selectionAxisLock = null;
-        this.mouseState.selectionDragStartTarget = null;
-        this.marqueeElement.style.display = 'none';
-    },
-
-handleDragSelection: function (e) {
-    // line selection when locked
-    if (this.isSelectionLocked) {
-        return this.handleLineSelectionDrag(e);
-    }
-
-    // if drag started on empty space -> marquee
-    if (this.mouseState.selectionDragStartTarget === null && !this.isMobile) {
-        this.selectVoxelsInMarquee();
-        return true;
-    }
-
-const currentNormalIndex =
-    this.selectedFaces.size > 0 ? parseInt([...this.selectedFaces][0].split(':')[1], 10) : -1;
-
-const target = this.getFaceTarget(e.clientX, e.clientY);
-if (!target) return false;
-
-const targetNormalIndex = parseInt(target.faceKey.split(':')[1], 10);
-if (currentNormalIndex === -1 || targetNormalIndex === currentNormalIndex) {
-    if (this.selectionNormalIndex == null) this.selectionNormalIndex = targetNormalIndex; // <- add this
-    if (!this.selectedFaces.has(target.faceKey)) {
-        this.selectedFaces.add(target.faceKey);
-        this.updateSelectionVisuals();
-    }
-    return true;
-}
-    return false;
-},
-   
-handleLineSelectionDrag: function (e) {
-    const start = this.mouseState.selectionDragStartTarget;
-    if (!start) return false;
-
-    const [startKeyStr, startNormalIdxStr] = start.faceKey.split(':');
-    const startNormalIdx = parseInt(startNormalIdxStr, 10);
-this.selectionNormalIndex = startNormalIdx; 
-    const [sx, sy, sz] = this.parseKey(parseInt(startKeyStr, 10));
-
-    // Prefer a stable plane when dragging from ±Y faces (ground-facing).
-    const preferFoundation = (startNormalIdx === 2 || startNormalIdx === 3);
-
-    // Let the end cell come from a stable ray hit; do NOT force same orientation as start.
-    const cur = this.getFaceTarget(e.clientX, e.clientY);
-    if (!cur) return false;
-    const [cx, cy, cz] = this.parseKey(parseInt(cur.faceKey.split(':')[0], 10));
-
-    // Allowed in-plane movement for the starting face orientation
-    let allowedAxes;
-    if (startNormalIdx === 0 || startNormalIdx === 1) {       // ±X face -> move in Y/Z
-        allowedAxes = ['y', 'z'];
-    } else if (startNormalIdx === 2 || startNormalIdx === 3) { // ±Y face -> move in X/Z
-        allowedAxes = ['x', 'z'];
-    } else {                                                   // ±Z face -> move in X/Y
-        allowedAxes = ['x', 'y'];
-    }
-
-    // Decide (and allow switching) which axis to lock
-    const deltas = { x: Math.abs(cx - sx), y: Math.abs(cy - sy), z: Math.abs(cz - sz) };
-
-    // Keyboard override: Shift => Z, Ctrl => X (only if allowed)
-    let axis = null;
-    const forced = e.shiftKey ? 'z' : (e.ctrlKey ? 'x' : null);
-    if (forced && allowedAxes.includes(forced)) {
-        axis = forced;
-    } else {
-        axis = this.mouseState.selectionAxisLock;
-        if (!axis) {
-            // Don’t lock until user has moved at least 1 cell to avoid early mis-locks
-            const candidates = allowedAxes.filter(a => deltas[a] >= 1);
-            if (candidates.length === 0) return false;
-            axis = candidates.reduce((a, b) => (deltas[a] >= deltas[b] ? a : b));
-        } else if (allowedAxes.includes(axis)) {
-            // Hysteresis: switch if another allowed axis leads by ≥1 cell
-            const others = allowedAxes.filter(a => a !== axis);
-            const leader = deltas[axis];
-            const challenger = Math.max(...others.map(a => deltas[a]));
-            if (challenger - leader >= 1) {
-                axis = others.reduce((a, b) => (deltas[a] >= deltas[b] ? a : b));
-            }
-        } else {
-            // If somehow locked to a disallowed axis, re-pick
-            axis = allowedAxes.reduce((a, b) => (deltas[a] >= deltas[b] ? a : b));
-        }
-    }
-    this.mouseState.selectionAxisLock = axis;
-
-    // End coordinates with chosen axis
-    let ex = sx, ey = sy, ez = sz;
-    if (axis === 'x') ex = cx;
-    if (axis === 'y') ey = cy;
-    if (axis === 'z') ez = cz;
-
-    // Build new selection = previous selection before drag + current line
-    const base = this.selectionChange.before ? new Set(this.selectionChange.before) : new Set();
-
-    const step = (a, b) => (a <= b ? 1 : -1);
-    const inBounds = (x, y, z) =>
-        x >= 0 && x < this.GRID &&
-        y >= -1 && y < this.GRID && // allow foundation (y === -1)
-        z >= 0 && z < this.GRID;
-
-    if (axis === 'x') {
-        const inc = step(sx, ex);
-        for (let x = sx; x !== ex + inc; x += inc) {
-            if (inBounds(x, ey, ez)) base.add(`${this.key(x, ey, ez)}:${startNormalIdx}`);
-        }
-    } else if (axis === 'y') {
-        const inc = step(sy, ey);
-        for (let y = sy; y !== ey + inc; y += inc) {
-            if (inBounds(ex, y, ez)) base.add(`${this.key(ex, y, ez)}:${startNormalIdx}`);
-        }
-    } else { // 'z'
-        const inc = step(sz, ez);
-        for (let z = sz; z !== ez + inc; z += inc) {
-            if (inBounds(ex, ey, z)) base.add(`${this.key(ex, ey, z)}:${startNormalIdx}`);
-        }
-    }
-
-    this.selectedFaces = base;
-    this.updateSelectionVisuals();
-    this.marqueeElement.style.display = 'none';
-    return true;
-},
-
-  selectVoxelsInMarquee: function() {
-    if (!this.selectionChange.before) return;
-
-    const rect = this.containerDiv.getBoundingClientRect();
-    const startX = parseFloat(this.marqueeElement.style.left) + rect.left;
-    const startY = parseFloat(this.marqueeElement.style.top) + rect.top;
-    const endX = startX + parseFloat(this.marqueeElement.style.width);
-    const endY = startY + parseFloat(this.marqueeElement.style.height);
-
-    // decide or reuse enforced orientation
-    let enforcedIdx = this.selectionNormalIndex;
-    if (enforcedIdx == null) {
-        // choose the face most toward the camera (feels natural)
-        const forward = new THREE.Vector3();
-        this.cam.getWorldDirection(forward);
-        let best = -Infinity, bestIdx = 0;
-        for (let i = 0; i < 6; i++) {
-            const n = this.getNormalFromIndex(i);
-            const dot = n.dot(forward.clone().negate());
-            if (dot > best) { best = dot; bestIdx = i; }
-        }
-        enforcedIdx = bestIdx;
-        this.selectionNormalIndex = enforcedIdx;
-    }
-
-    // start from "before" but keep only matching orientation
-    this.selectedFaces = new Set();
-    if (this.selectionChange.before) {
-        this.selectionChange.before.forEach(face => {
-            if (parseInt(face.split(':')[1], 10) === enforcedIdx) this.selectedFaces.add(face);
-        });
-    }
-
-    const allVoxelKeys = [...this.voxels.keys()];
-    for (let x = 0; x < this.GRID; x++) {
-        for (let z = 0; z < this.GRID; z++) {
-            allVoxelKeys.push(this.key(x, -1, z)); // include foundation
-        }
-    }
-
-allVoxelKeys.forEach(voxelKey => {
-    const [x, y, z] = this.parseKey(voxelKey);
-
-    // Foundation can only contribute +Y faces
-    if (y === -1 && enforcedIdx !== 2) return;
-
-    const pos3D = new THREE.Vector3(x + 0.5, y + 0.5, z + 0.5);
-
-        pos3D.project(this.cam);
-        const screenX = (pos3D.x * 0.5 + 0.5) * rect.width + rect.left;
-        const screenY = (-pos3D.y * 0.5 + 0.5) * rect.height + rect.top;
-
-        if (screenX >= startX && screenX <= endX && screenY >= startY && screenY <= endY) {
-            const i = enforcedIdx;
-            const normal = this.getNormalFromIndex(i);
-            const nx = x + normal.x, ny = y + normal.y, nz = z + normal.z;
-            const neighborKey = this.key(nx, ny, nz);
-
-            if (!this.voxels.has(neighborKey) && ny >= -1) {
-                this.selectedFaces.add(`${voxelKey}:${i}`);
-            }
-        }
-    });
-
-    this.updateSelectionVisuals();
-},
-
-
-handleFaceSelection: function (event) {
-    if (this.mouseState.isDragging) return;
-
-    const target = this.getFaceTarget(event.clientX, event.clientY);
-    if (!target) {
-        if (!event.ctrlKey && !event.shiftKey) {
-            this.selectedFaces.clear();
-            this.selectionNormalIndex = null;
-            this.updateSelectionVisuals();
-        }
-        return;
-    }
-
-    const faceKey = target.faceKey;
-    const targetNormalIndex = parseInt(faceKey.split(':')[1], 10);
-    const isAdd = event.ctrlKey || event.shiftKey;
-
-    // current enforced orientation (if any)
-    const currentNormalIndex =
-        this.selectionNormalIndex ??
-        (this.selectedFaces.size > 0
-            ? parseInt(this.selectedFaces.values().next().value.split(':')[1], 10)
-            : null);
-
-    if (!isAdd) {
-        // single click starts fresh and locks orientation to this face
-        this.selectedFaces.clear();
-        this.selectedFaces.add(faceKey);
-        this.selectionNormalIndex = targetNormalIndex;
-        this.updateSelectionVisuals();
-        return;
-    }
-
-    // toggle off if already selected
-    if (this.selectedFaces.has(faceKey)) {
-        this.selectedFaces.delete(faceKey);
-        if (this.selectedFaces.size === 0) this.selectionNormalIndex = null;
-        this.updateSelectionVisuals();
-        return;
-    }
-
-    // adding a new face
-    if (currentNormalIndex === null || currentNormalIndex === targetNormalIndex) {
-        this.selectedFaces.add(faceKey);
-        this.selectionNormalIndex = targetNormalIndex;
-        this.updateSelectionVisuals();
-        return;
-    }
-
-    // mismatch: either block or auto-reset (keep only new orientation)
-    if (this.AUTO_RESET_ORIENTATION_ON_MISMATCH) {
-        this.selectedFaces = new Set(
-            [...this.selectedFaces].filter(k => parseInt(k.split(':')[1], 10) === targetNormalIndex)
-        );
-        this.selectedFaces.add(faceKey);
-        this.selectionNormalIndex = targetNormalIndex;
-        this.updateSelectionVisuals();
-    } else {
-        this.showToast('Selection limited', 'All faces in a group must share the same orientation.', 'warning');
-    }
-},
-
-
-    
     onPointerLockChange: function() {
         if (document.pointerLockElement === this.cvs) {
             this.mouseState.isRotating = true;
@@ -2110,6 +1855,185 @@ handleFaceSelection: function (event) {
             z1 -= dz; if (z1 < 0) { z1 += dm; z0 += sz; }
         }
     },
+    
+    handleDragSelection: function (e) {
+        if (this.isSelectionLocked) {
+            return this.handleLineSelectionDrag(e);
+        }
+
+        if (this.mouseState.selectionDragStartTarget === null && !this.isMobile) {
+            this.selectVoxelsInMarquee();
+            return true;
+        }
+
+        const currentNormalIndex = this.selectedFaces.size > 0 ? parseInt([...this.selectedFaces][0].split(':')[1], 10) : -1;
+        const target = this.getFaceTarget(e.clientX, e.clientY);
+        if (!target) return false;
+
+        const targetNormalIndex = parseInt(target.faceKey.split(':')[1], 10);
+        if (currentNormalIndex === -1 || targetNormalIndex === currentNormalIndex) {
+            if (this.selectionNormalIndex == null) this.selectionNormalIndex = targetNormalIndex;
+            if (!this.selectedFaces.has(target.faceKey)) {
+                this.selectedFaces.add(target.faceKey);
+                this.updateSelectionVisuals();
+            }
+            return true;
+        }
+        return false;
+    },
+    
+    handleLineSelectionDrag: function (e) {
+        const start = this.mouseState.selectionDragStartTarget;
+        if (!start) return false;
+
+        const [startKeyStr, startNormalIdxStr] = start.faceKey.split(':');
+        const startNormalIdx = parseInt(startNormalIdxStr, 10);
+        this.selectionNormalIndex = startNormalIdx; 
+        const [sx, sy, sz] = this.parseKey(parseInt(startKeyStr, 10));
+
+        const cur = this.getFaceTarget(e.clientX, e.clientY);
+        if (!cur) return false;
+        const [cx, cy, cz] = this.parseKey(parseInt(cur.faceKey.split(':')[0], 10));
+
+        let allowedAxes;
+        if (startNormalIdx === 0 || startNormalIdx === 1) allowedAxes = ['y', 'z'];
+        else if (startNormalIdx === 2 || startNormalIdx === 3) allowedAxes = ['x', 'z'];
+        else allowedAxes = ['x', 'y'];
+
+        const deltas = { x: Math.abs(cx - sx), y: Math.abs(cy - sy), z: Math.abs(cz - sz) };
+        let axis = null;
+        const forced = e.shiftKey ? 'z' : (e.ctrlKey ? 'x' : null);
+        if (forced && allowedAxes.includes(forced)) {
+            axis = forced;
+        } else {
+            axis = this.mouseState.selectionAxisLock;
+            if (!axis) {
+                const candidates = allowedAxes.filter(a => deltas[a] >= 1);
+                if (candidates.length === 0) return false;
+                axis = candidates.reduce((a, b) => (deltas[a] >= deltas[b] ? a : b));
+            } else if (allowedAxes.includes(axis)) {
+                const others = allowedAxes.filter(a => a !== axis);
+                const leader = deltas[axis];
+                const challenger = Math.max(...others.map(a => deltas[a]));
+                if (challenger - leader >= 1) {
+                    axis = others.reduce((a, b) => (deltas[a] >= deltas[b] ? a : b));
+                }
+            } else {
+                axis = allowedAxes.reduce((a, b) => (deltas[a] >= deltas[b] ? a : b));
+            }
+        }
+        this.mouseState.selectionAxisLock = axis;
+
+        let ex = sx, ey = sy, ez = sz;
+        if (axis === 'x') ex = cx;
+        if (axis === 'y') ey = cy;
+        if (axis === 'z') ez = cz;
+
+        const base = this.selectionChange.before ? new Set(this.selectionChange.before) : new Set();
+        const step = (a, b) => (a <= b ? 1 : -1);
+        const inBounds = (x, y, z) => x >= 0 && x < this.GRID && y >= -1 && y < this.GRID && z >= 0 && z < this.GRID;
+
+        if (axis === 'x') {
+            const inc = step(sx, ex);
+            for (let x = sx; x !== ex + inc; x += inc) if (inBounds(x, ey, ez)) base.add(`${this.key(x, ey, ez)}:${startNormalIdx}`);
+        } else if (axis === 'y') {
+            const inc = step(sy, ey);
+            for (let y = sy; y !== ey + inc; y += inc) if (inBounds(ex, y, ez)) base.add(`${this.key(ex, y, ez)}:${startNormalIdx}`);
+        } else { // 'z'
+            const inc = step(sz, ez);
+            for (let z = sz; z !== ez + inc; z += inc) if (inBounds(ex, ey, z)) base.add(`${this.key(ex, ey, z)}:${startNormalIdx}`);
+        }
+        this.selectedFaces = base;
+        this.updateSelectionVisuals();
+        this.marqueeElement.style.display = 'none';
+        return true;
+    },
+
+    selectVoxelsInMarquee: function() {
+        if (!this.selectionChange.before) return;
+        const rect = this.containerDiv.getBoundingClientRect();
+        const startX = parseFloat(this.marqueeElement.style.left) + rect.left;
+        const startY = parseFloat(this.marqueeElement.style.top) + rect.top;
+        const endX = startX + parseFloat(this.marqueeElement.style.width);
+        const endY = startY + parseFloat(this.marqueeElement.style.height);
+        let enforcedIdx = this.selectionNormalIndex;
+        if (enforcedIdx == null) {
+            const forward = new THREE.Vector3(); this.cam.getWorldDirection(forward);
+            let best = -Infinity, bestIdx = 0;
+            for (let i = 0; i < 6; i++) {
+                const n = this.getNormalFromIndex(i); const dot = n.dot(forward.clone().negate());
+                if (dot > best) { best = dot; bestIdx = i; }
+            }
+            enforcedIdx = bestIdx; this.selectionNormalIndex = enforcedIdx;
+        }
+        this.selectedFaces = new Set();
+        if (this.selectionChange.before) {
+            this.selectionChange.before.forEach(face => {
+                if (parseInt(face.split(':')[1], 10) === enforcedIdx) this.selectedFaces.add(face);
+            });
+        }
+        const allVoxelKeys = [...this.voxels.keys()];
+        for (let x = 0; x < this.GRID; x++) for (let z = 0; z < this.GRID; z++) allVoxelKeys.push(this.key(x, -1, z));
+        allVoxelKeys.forEach(voxelKey => {
+            const [x, y, z] = this.parseKey(voxelKey);
+            if (y === -1 && enforcedIdx !== 2) return;
+            const pos3D = new THREE.Vector3(x + 0.5, y + 0.5, z + 0.5);
+            pos3D.project(this.cam);
+            const screenX = (pos3D.x * 0.5 + 0.5) * rect.width + rect.left;
+            const screenY = (-pos3D.y * 0.5 + 0.5) * rect.height + rect.top;
+            if (screenX >= startX && screenX <= endX && screenY >= startY && screenY <= endY) {
+                const i = enforcedIdx;
+                const normal = this.getNormalFromIndex(i);
+                const nx = x + normal.x, ny = y + normal.y, nz = z + normal.z;
+                const neighborKey = this.key(nx, ny, nz);
+                if (!this.voxels.has(neighborKey) && ny >= -1) this.selectedFaces.add(`${voxelKey}:${i}`);
+            }
+        });
+        this.updateSelectionVisuals();
+    },
+
+    handleFaceSelection: function (event) {
+        if (this.mouseState.isDragging && !this.isMobile) return;
+        const target = this.getFaceTarget(event.clientX, event.clientY);
+        if (!target) {
+            if (!event.ctrlKey && !event.shiftKey) {
+                this.selectedFaces.clear();
+                this.selectionNormalIndex = null;
+                this.updateSelectionVisuals();
+            } return;
+        }
+        const faceKey = target.faceKey;
+        const targetNormalIndex = parseInt(faceKey.split(':')[1], 10);
+        const isAdd = event.ctrlKey || event.shiftKey;
+        const currentNormalIndex = this.selectionNormalIndex ?? (this.selectedFaces.size > 0 ? parseInt(this.selectedFaces.values().next().value.split(':')[1], 10) : null);
+        if (!isAdd) {
+            this.selectedFaces.clear();
+            this.selectedFaces.add(faceKey);
+            this.selectionNormalIndex = targetNormalIndex;
+            this.updateSelectionVisuals();
+            return;
+        }
+        if (this.selectedFaces.has(faceKey)) {
+            this.selectedFaces.delete(faceKey);
+            if (this.selectedFaces.size === 0) this.selectionNormalIndex = null;
+            this.updateSelectionVisuals();
+            return;
+        }
+        if (currentNormalIndex === null || currentNormalIndex === targetNormalIndex) {
+            this.selectedFaces.add(faceKey);
+            this.selectionNormalIndex = targetNormalIndex;
+            this.updateSelectionVisuals();
+            return;
+        }
+        if (this.AUTO_RESET_ORIENTATION_ON_MISMATCH) {
+            this.selectedFaces = new Set([...this.selectedFaces].filter(k => parseInt(k.split(':')[1], 10) === targetNormalIndex));
+            this.selectedFaces.add(faceKey);
+            this.selectionNormalIndex = targetNormalIndex;
+            this.updateSelectionVisuals();
+        } else {
+            this.showToast('Selection limited', 'All faces in a group must share the same orientation.', 'warning');
+        }
+    },
 
     getNormalIndex: function(normal) {
         if (Math.abs(normal.x) > 0.5) return normal.x > 0 ? 0 : 1;
@@ -2151,15 +2075,15 @@ handleFaceSelection: function (event) {
         return intersects.length > 0 ? intersects[0] : null;
     },
     
-clearSelection: function() {
-    if (this.selectedFaces.size > 0) {
-        const before = new Set(this.selectedFaces);
-        this.selectedFaces.clear();
-        this.selectionNormalIndex = null; // <- reset enforced orientation
-        this.updateSelectionVisuals();
-        this.addHistoryStep({ type: 'SELECT', before, after: new Set() });
-    }
-},
+    clearSelection: function() {
+        if (this.selectedFaces.size > 0) {
+            const before = new Set(this.selectedFaces);
+            this.selectedFaces.clear();
+            this.selectionNormalIndex = null;
+            this.updateSelectionVisuals();
+            this.addHistoryStep({ type: 'SELECT', before, after: new Set() });
+        }
+    },
 
 
     updateSelectionVisuals: function () {
@@ -2171,14 +2095,11 @@ clearSelection: function() {
                 this.selectionFaceMeshes.delete(key);
             }
         });
-
         this.selectedFaces.forEach(faceKey => {
             if (this.selectionFaceMeshes.has(faceKey)) return;
-
             const [voxelKeyStr, normalIndexStr] = faceKey.split(':');
             const voxelKey = parseInt(voxelKeyStr, 10);
             const normal   = this.getNormalFromIndex(parseInt(normalIndexStr, 10));
-
             const voxelData = this.voxels.get(voxelKey);
             const isFoundation = !voxelData;
             
@@ -2189,21 +2110,17 @@ clearSelection: function() {
                 basePos = voxelData.mesh.position;
             } else if (isFoundation && y === -1) {
                 basePos = new THREE.Vector3(x * this.VS + 0.5, y * this.VS + 0.5, z * this.VS + 0.5);
-            } else {
-                return;
-            }
+            } else { return; }
             
             const plane = new THREE.Mesh(
               new THREE.PlaneGeometry(this.VS, this.VS),
               new THREE.MeshBasicMaterial({ color: 0xffff00, transparent: true, opacity: 0.6, side: THREE.DoubleSide })
             );
-
             plane.position.set(
               basePos.x + normal.x * 0.501,
               basePos.y + normal.y * 0.501,
               basePos.z + normal.z * 0.501
             );
-
             plane.lookAt(plane.position.clone().add(normal));
             this.scene.add(plane);
             this.selectionFaceMeshes.set(faceKey, plane);
@@ -2213,10 +2130,8 @@ clearSelection: function() {
     getFaceTarget: function (clientX, clientY) {
         const hit = this.getFaceAt(clientX, clientY);
         if (!hit) return null;
-
         let voxelKey = null;
         let nrm = null;
-
         if (hit.object.userData.isFoundation) {
             nrm = new THREE.Vector3(0, 1, 0); 
             const worldPos = hit.point.clone();
@@ -2240,7 +2155,6 @@ clearSelection: function() {
             else if (ay >= ax && ay >= az) nrm.set(0, Math.sign(nrm.y), 0);
             else nrm.set(0, 0, Math.sign(nrm.z));
         }
-
         const normalIndex = this.getNormalIndex(nrm);
         return {
           faceKey: `${voxelKey}:${normalIndex}`,
@@ -2256,7 +2170,6 @@ clearSelection: function() {
             ghost.mesh.material.dispose();
         });
         this.ghostVoxels.clear();
-
         if (this.selectedFaces.size === 0) return;
         
         const firstFaceKey = this.selectedFaces.keys().next().value;
@@ -2266,19 +2179,14 @@ clearSelection: function() {
         const extrudeColor = this.currentColor;
         const ghostMat = new THREE.MeshLambertMaterial({ color: extrudeColor, transparent: true, opacity: 0.5 });
         const deleteMat = new THREE.MeshLambertMaterial({ color: 0xff0000, transparent: true, opacity: 0.4 });
-
         this.selectedFaces.forEach(faceKey => {
             const [voxelKeyStr] = faceKey.split(':');
             const voxelKey = parseInt(voxelKeyStr);
             const [x, y, z] = this.parseKey(voxelKey);
-
             if (distance > 0) { // Preview ADDING
                 for (let i = 1; i <= distance; i++) {
-                    const newX = x + normal.x * i;
-                    const newY = y + normal.y * i;
-                    const newZ = z + normal.z * i;
+                    const newX = x + normal.x * i, newY = y + normal.y * i, newZ = z + normal.z * i;
                     const newKey = this.key(newX, newY, newZ);
-
                     if (!this.voxels.has(newKey) && !this.ghostVoxels.has(newKey) && newY >= 0) {
                         const ghostMesh = new THREE.Mesh(this.sharedBoxGeometry, ghostMat.clone());
                         ghostMesh.position.set(newX * this.VS + 0.5, newY * this.VS + 0.5, newZ * this.VS + 0.5);
@@ -2291,9 +2199,7 @@ clearSelection: function() {
                 const cutDirection = normal.clone().multiplyScalar(-1);
                 
                 for (let i = 0; i < distanceAbs; i++) {
-                    const delX = x + cutDirection.x * i; 
-                    const delY = y + cutDirection.y * i; 
-                    const delZ = z + cutDirection.z * i; 
+                    const delX = x + cutDirection.x * i, delY = y + cutDirection.y * i, delZ = z + cutDirection.z * i; 
                     const delKey = this.key(delX, delY, delZ);
                     
                     if (this.voxels.has(delKey) && !this.ghostVoxels.has(delKey) && delY >= 0) {
@@ -2325,14 +2231,10 @@ clearSelection: function() {
             
             const extrudeColor = this.currentColor; 
             const [x, y, z] = this.parseKey(voxelKey);
-
             if (!isNegativeExtrude) { // Positive extrude (ADD)
                 if (!extrudeColor) continue;
                 for (let i = 1; i <= distanceAbs; i++) {
-                    const newX = x + normal.x * i;
-                    const newY = y + normal.y * i;
-                    const newZ = z + normal.z * i;
-                    
+                    const newX = x + normal.x * i, newY = y + normal.y * i, newZ = z + normal.z * i;
                     if (newX < 0 || newX >= this.GRID || newY < 0 || newY >= this.GRID || newZ < 0 || newZ >= this.GRID) break;
                     
                     const newKey = this.key(newX, newY, newZ);
@@ -2350,23 +2252,19 @@ clearSelection: function() {
                     if (i === distanceAbs) newFacesToSelect.add(`${newKey}:${normalIndex}`);
                 }
             } else { // Negative extrude (DELETE/CUT)
-                 const cutDirection = normal.clone().multiplyScalar(-1);
-                 for (let i = 0; i < distanceAbs; i++) {
-                    const delX = x + cutDirection.x * i; 
-                    const delY = y + cutDirection.y * i; 
-                    const delZ = z + cutDirection.z * i; 
+                const cutDirection = normal.clone().multiplyScalar(-1);
+                for (let i = 0; i < distanceAbs; i++) {
+                    const delX = x + cutDirection.x * i, delY = y + cutDirection.y * i, delZ = z + cutDirection.z * i; 
                     const delKey = this.key(delX, delY, delZ);
                     const voxelToDelete = this.voxels.get(delKey);
-                      
-                      if (voxelToDelete && delY >= 0) {
+                    
+                    if (voxelToDelete && delY >= 0) {
                         if (!changes.has(delKey)) changes.set(delKey, { before: { color: voxelToDelete.color }, after: null });
                         this.scene.remove(voxelToDelete.mesh);
                         this.voxels.delete(delKey);
                     }
                 }
-                const adjacentVoxelX = x + normal.x * distance;
-                const adjacentVoxelY = y + normal.y * distance;
-                const adjacentVoxelZ = z + normal.z * distance;
+                const adjacentVoxelX = x + normal.x * distance, adjacentVoxelY = y + normal.y * distance, adjacentVoxelZ = z + normal.z * distance;
                 const adjacentKey = this.key(adjacentVoxelX, adjacentVoxelY, adjacentVoxelZ);
                 
                 if (this.voxels.has(adjacentKey) || adjacentVoxelY === -1) {
@@ -2385,73 +2283,49 @@ clearSelection: function() {
     },
 
     getRayTargetInfo: function (clientX, clientY) {
-    // Use the same rect for X and Y to avoid DPI/CSS mismatches
-    const rect = this.cvs.getBoundingClientRect();
-    const mouse = new THREE.Vector2(
-        ((clientX - rect.left) / rect.width) * 2 - 1,
-        -((clientY - rect.top) / rect.height) * 2 + 1
-    );
-
-    const raycaster = new THREE.Raycaster();
-    raycaster.setFromCamera(mouse, this.cam);
-
-    // Collect intersectable meshes (user voxels + the invisible ground plane mesh)
-    const userMeshes = [];
-    this.voxels.forEach(v => { if (v.mesh) userMeshes.push(v.mesh); });
-    const allMeshes = [...userMeshes, this.groundPlaneMesh].filter(m => m && m.visible !== false);
-
-    if (allMeshes.length === 0) return null;
-
-    const intersects = raycaster.intersectObjects(allMeshes, false);
-    if (intersects.length === 0) return null;
-
-    const hit = intersects[0];
-    const pos = hit.point.clone();
-
-    let normal;
-
-    if (hit.object.userData && hit.object.userData.isFoundation) {
-        // Foundation = world Y=0 plane, act as if hitting a voxel top face
-        normal = new THREE.Vector3(0, 1, 0);
-        pos.addScaledVector(normal, 0.5 * this.VS + 0.001);
-    } else {
-        // World-space, axis-aligned face normal
-        normal = hit.face.normal.clone();
-        const nMat = new THREE.Matrix3().getNormalMatrix(hit.object.matrixWorld);
-        normal.applyNormalMatrix(nMat).normalize();
-
-        const ax = Math.abs(normal.x), ay = Math.abs(normal.y), az = Math.abs(normal.z);
-        if (ax >= ay && ax >= az) normal.set(Math.sign(normal.x), 0, 0);
-        else if (ay >= ax && ay >= az) normal.set(0, Math.sign(normal.y), 0);
-        else normal.set(0, 0, Math.sign(normal.z));
-
-        // Offset half a voxel toward or away from the face depending on mode
-        const offset = (this.currentMode === 'PAINT' || this.currentMode === 'DELETE')
-            ? -(0.5 * this.VS - 0.001) // target the inside voxel when painting/deleting
-            : +(0.5 * this.VS + 0.001); // target the outside voxel when adding/selecting
-        pos.addScaledVector(normal, offset);
-    }
-
-    const x = Math.floor(pos.x / this.VS);
-    const y = Math.floor(pos.y / this.VS);
-    const z = Math.floor(pos.z / this.VS);
-
-    return { x, y, z, normal, intersectionPoint: hit.point.clone() };
-},
+        const rect = this.cvs.getBoundingClientRect();
+        const mouse = new THREE.Vector2(((clientX - rect.left) / rect.width) * 2 - 1, -((clientY - rect.top) / rect.height) * 2 + 1);
+        const raycaster = new THREE.Raycaster();
+        raycaster.setFromCamera(mouse, this.cam);
+        const userMeshes = [];
+        this.voxels.forEach(v => { if (v.mesh) userMeshes.push(v.mesh); });
+        const allMeshes = [...userMeshes, this.groundPlaneMesh].filter(m => m && m.visible !== false);
+        if (allMeshes.length === 0) return null;
+        const intersects = raycaster.intersectObjects(allMeshes, false);
+        if (intersects.length === 0) return null;
+        const hit = intersects[0];
+        const pos = hit.point.clone();
+        let normal;
+        if (hit.object.userData && hit.object.userData.isFoundation) {
+            normal = new THREE.Vector3(0, 1, 0);
+            pos.addScaledVector(normal, 0.5 * this.VS + 0.001);
+        } else {
+            normal = hit.face.normal.clone();
+            const nMat = new THREE.Matrix3().getNormalMatrix(hit.object.matrixWorld);
+            normal.applyNormalMatrix(nMat).normalize();
+            const ax = Math.abs(normal.x), ay = Math.abs(normal.y), az = Math.abs(normal.z);
+            if (ax >= ay && ax >= az) normal.set(Math.sign(normal.x), 0, 0);
+            else if (ay >= ax && ay >= az) normal.set(0, Math.sign(normal.y), 0);
+            else normal.set(0, 0, Math.sign(normal.z));
+            const offset = (this.currentMode === 'PAINT' || this.currentMode === 'DELETE') ? -(0.5 * this.VS - 0.001) : +(0.5 * this.VS + 0.001);
+            pos.addScaledVector(normal, offset);
+        }
+        const x = Math.floor(pos.x / this.VS);
+        const y = Math.floor(pos.y / this.VS);
+        const z = Math.floor(pos.z / this.VS);
+        return { x, y, z, normal, intersectionPoint: hit.point.clone() };
+    },
 
     
     updateToolPreview: function(targetInfo) {
         this.previewVoxel.visible = false;
         this.previewBrush.visible = false;
         if (this.currentMode === 'SELECT' || !targetInfo) return;
-
         const {x, y, z, normal} = targetInfo;
         const coords = {x, y, z};
         const targetKey = this.key(x, y, z);
         const voxelExists = this.voxels.has(targetKey);
-
         if ((this.currentMode === 'PAINT' || this.currentMode === 'DELETE') && !voxelExists) return;
-
         if (this.brushSize <= 1) {
             this.updateSingleVoxelPreview(coords);
         } else {
@@ -2465,10 +2339,8 @@ clearSelection: function() {
             this.previewBrush.remove(child);
             child.material.dispose();
         }
-
         const size = this.brushSize;
         const halfSize = Math.floor(size / 2);
-
         let iter1, iter2;
         if (Math.abs(normal.x) > 0.5) { iter1 = 'y'; iter2 = 'z'; } 
         else if (Math.abs(normal.y) > 0.5) { iter1 = 'x'; iter2 = 'z'; } 
@@ -2477,9 +2349,7 @@ clearSelection: function() {
         const isDelete = this.currentMode === 'DELETE';
         const previewColor = isDelete ? 0xff0000 : this.currentColor;
         const opacity = isDelete ? 0.4 : 0.5;
-
         const previewMat = new THREE.MeshBasicMaterial({ color: previewColor, transparent: true, opacity: opacity, depthTest: false });
-
         for (let i = 0; i < size; i++) {
             for (let j = 0; j < size; j++) {
                 const brushCoords = { ...coords };
@@ -2569,7 +2439,6 @@ clearSelection: function() {
         this.activeDrawingLevel = { x: 0, y: 0, z: 0 };
         this.updateAxisAndLevelUI();
         this.rebuildHelpers();
-
         const size = this.GRID * this.VS;
         this.cam.position.set(size, size * 1.2, size * 1.5);
         this.cam.lookAt(size / 2, size / 2, size / 2);
@@ -2589,7 +2458,6 @@ clearSelection: function() {
         const brushSlider = document.getElementById('brush-size-slider');
         const brushDisplay = document.getElementById('brush-size-display');
         const mobileBrushSlider = document.getElementById('mobile-brush-size-slider');
-
         if (brushSlider) brushSlider.disabled = !isBrushMode;
         if (mobileBrushSlider) mobileBrushSlider.disabled = !isBrushMode;
         
@@ -2631,19 +2499,20 @@ clearSelection: function() {
     
     showToast: function(title, message, type = 'info', duration = 1500) {
         const container = document.getElementById('toast-container');
-        const alertClass = { success: 'alert-success', info: 'alert-info',
-                               warning: 'alert-warning', error: 'alert-error' }[type] || 'alert-info';
+        const alertClass = { success: 'alert-success', info: 'alert-info', warning: 'alert-warning', error: 'alert-error' }[type] || 'alert-info';
         const toast = document.createElement('div');
         toast.className = `alert ${alertClass} shadow-lg`;
         const wrap = document.createElement('div');
         const strong = document.createElement('strong');
         strong.textContent = title;
-        const br = document.createElement('br');
-        const span = document.createElement('span');
-        span.textContent = message;
         wrap.appendChild(strong);
-        wrap.appendChild(br);
-        wrap.appendChild(span);
+        if(message) {
+             const br = document.createElement('br');
+             const span = document.createElement('span');
+             span.textContent = message;
+             wrap.appendChild(br);
+             wrap.appendChild(span);
+        }
         toast.appendChild(wrap);
         container.appendChild(toast);
         setTimeout(() => toast.remove(), duration);
@@ -2910,10 +2779,8 @@ clearSelection: function() {
             mesh.position.set(x * this.VS + 0.5, y * this.VS + 0.5, z * this.VS + 0.5);
             mesh.castShadow = true;
             mesh.receiveShadow = true;
-
             mesh.userData.isVoxel = true;
             mesh.userData.isFoundation = false;
-
             this.scene.add(mesh);
             voxelData.mesh = mesh;
         });
@@ -2940,7 +2807,6 @@ clearSelection: function() {
                 action.changes.forEach((change, key) => {
                     const [x, y, z] = this.parseKey(key);
                     if (y < 0) return;
-
                     if (change.before === null) {
                         const existingVoxel = this.voxels.get(key);
                         if (existingVoxel) {
@@ -2982,7 +2848,6 @@ clearSelection: function() {
                 action.changes.forEach((change, key) => {
                      const [x, y, z] = this.parseKey(key);
                     if (y < 0) return;
-
                     if (change.after === null) {
                         const existingVoxel = this.voxels.get(key);
                         if (existingVoxel) {
@@ -3217,9 +3082,7 @@ clearSelection: function() {
         const sizeAll = this.GRID * this.VS;
         const center = sizeAll / 2;
         const offset = -0.01;
-
         this.templateImageMesh.rotation.set(0, 0, 0);
-
         switch (this.templateImageAxis) {
             case 'x':
                 this.templateImageMesh.rotation.y = Math.PI / 2;
@@ -3280,4 +3143,6 @@ document.addEventListener('DOMContentLoaded', () => VoxelApp.init());
 </script>
 
 
-</body></html>
+
+</body>
+</html>
