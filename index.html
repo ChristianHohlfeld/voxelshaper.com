@@ -90,9 +90,6 @@
             margin: 0;
             padding: 0;
             touch-action: none; /* More aggressive prevention of default touch actions */
-            -webkit-touch-callout: none; /* Disable iOS callout sheet */
-            -webkit-user-select: none; /* Disable selection */
-            user-select: none;
         }
         #container, #voxelCanvas { 
             touch-action: none;
@@ -182,12 +179,13 @@
         body.has-mobile-bar {
             padding-bottom: 0 !important; /* Let the bar float */
         }
-        
-        .dropdown-content {
-            max-height: 60vh;
-            overflow-y: auto;
+        :where(html, body, #container, #voxelCanvas, #controls, #mobile-ui-container,
+                .mobile-bottom-bar, .btn, .dropdown, .menu, .modal, label, span, div) {
+            -webkit-user-select: none;
+            user-select: none;
+            -webkit-touch-callout: none;
+            -webkit-tap-highlight-color: transparent;
         }
-        
         input, textarea, select, [contenteditable] {
             -webkit-user-select: text;
             user-select: text;
@@ -328,6 +326,7 @@
     </div>
 
     <div class="mobile-bottom-bar flex items-center justify-around p-2 bg-base-200 border-t border-base-content/20">
+        <button id="goToHubBtnMobile" class="btn btn-ghost rounded-full" aria-label="Go to Hub"><i class="fas fa-home"></i></button>
         <div class="dropdown dropdown-top">
             <label tabindex="0" class="btn btn-ghost rounded-full" aria-label="File Menu"><i class="fas fa-folder-open"></i></label>
             <ul tabindex="0" class="dropdown-content z-[1] menu p-2 shadow bg-base-300 rounded-box w-52">
@@ -1204,6 +1203,7 @@ const VoxelApp = {
         document.getElementById('mobile-share').addEventListener('click', () => document.getElementById('shareModal').showModal());
 
         document.getElementById('goToHubBtn').addEventListener('click', () => window.open(this.HUB_URL, '_blank', 'noopener,noreferrer'));
+        document.getElementById('goToHubBtnMobile').addEventListener('click', () => window.open(this.HUB_URL, '_blank', 'noopener,noreferrer'));
 
         document.getElementById('loadImageBtnMobile').addEventListener('click', () => this.loadImageTemplate());
         document.getElementById('removeImageBtnMobile').addEventListener('click', () => this.removeImageTemplate());
@@ -1287,6 +1287,7 @@ const VoxelApp = {
         if (e.target !== this.cvs) return;
         e.preventDefault();
 
+        // Close any open dropdowns on canvas touch
         if (document.activeElement && document.activeElement.blur) {
             document.activeElement.blur();
         }
@@ -1489,120 +1490,81 @@ const VoxelApp = {
     },
     
     onPointerUp: function(e) {
-    if (!this.isPointerDown) return;
+        if (!this.isPointerDown) return;
 
-    // Stop pending long-press
-    if (this.touchState.longPressTimeout) {
-        clearTimeout(this.touchState.longPressTimeout);
-        this.touchState.longPressTimeout = null;
-    }
-
-    // Track pointer counts before/after
-    const beforeCount = this.activePointers.size;
-    this.activePointers.delete(e.pointerId);
-    const nowCount = this.activePointers.size;
-
-    // *** Fix der tatsächlichen Ursache ***
-    // Beim Wechsel von 2+ Fingern auf genau 1 Finger wurden die Basiskoordinaten
-    // (downX/downY/lastX/lastY) NICHT auf den verbliebenen Finger "rebased".
-    // Dadurch entstand beim ersten Move ein großes Delta -> Sprung im Look.
-    // Lösung: Rebase und KEIN Finalisieren des Gesten-Zyklus, solange noch 1 Finger unten ist.
-    if (this.isMobile && beforeCount >= 2 && nowCount === 1) {
-        const remaining = Array.from(this.activePointers.values())[0];
-        if (remaining) {
-            this.mouseState.downX = remaining.x;
-            this.mouseState.downY = remaining.y;
-            this.mouseState.lastX = remaining.x;
-            this.mouseState.lastY = remaining.y;
-        }
-        // Nach Multi-Touch explizit Multi-Touch-Zustand beenden,
-        // Look erst wieder nach neuem Drag-Threshold starten
-        this.touchState.lastPinchDist = null;
-        this.touchState.lastPinchCenter = null;
-        this.touchState.isInteracting = false;
-        this.touchState.isLookAround = false;
-
-        this.mouseState.isDragging = false;
-        this.mouseState.isExtruding = false;
-        this.mouseState.selectionAxisLock = null;
-        // Mindestens ein Finger bleibt unten -> Gesture NICHT finalisieren
-        return;
-    }
-
-    // Solange noch Pointer unten sind, NICHT finalisieren (kein Tap/Extrude/History-Commit).
-    if (nowCount > 0) return;
-
-    // Ab hier: keine Pointer mehr unten -> Gestenende finalisieren
-    if (this.isMobile) {
-        if (this.touchState.isThreeFingerUndoCandidate) {
-            this.undo();
-            this.showToast('Action', 'Undo', 'info', 1000);
-        } else if (this.touchState.isInteracting && !this.mouseState.isDragging) {
+        if (this.isMobile) {
+            if (this.touchState.isThreeFingerUndoCandidate) {
+                this.undo();
+                this.showToast('Action', 'Undo', 'info', 1000);
+            } else if (this.touchState.isInteracting && !this.mouseState.isDragging) { // Is a long press tap
+                this.handleTapInteraction(e);
+            }
+        } else if (!this.mouseState.isDragging && this.mouseState.isModifying) { // Desktop tap
             this.handleTapInteraction(e);
         }
-    } else if (!this.mouseState.isDragging && this.mouseState.isModifying) {
-        this.handleTapInteraction(e);
-    }
 
-    // Extrusion abschließen, falls aktiv
-    if (this.mouseState.isExtruding) {
-        const distance = this.ghostVoxels.size > 0
-            ? (this.ghostVoxels.get(this.ghostVoxels.keys().next().value).distance || 0)
-            : 0;
-        this.updateExtrudePreview(0);
-        if (distance !== 0) this.extrudeSelectedFaces(distance);
-    } else if (this.currentMode === 'SELECT' && this.selectionChange.before) {
-        const beforeSet = this.selectionChange.before;
-        const afterSet = this.selectedFaces;
-        if (
-            this.mouseState.isDragging ||
-            beforeSet.size !== afterSet.size ||
-            ![...beforeSet].every(v => afterSet.has(v))
-        ) {
-            this.addHistoryStep({ type: 'SELECT', before: beforeSet, after: new Set(afterSet) });
+        if(this.touchState.longPressTimeout) {
+            clearTimeout(this.touchState.longPressTimeout);
+            this.touchState.longPressTimeout = null;
         }
-    }
 
-    // Stroke-Änderungen committen
-    if (this.mouseState.isModifying && this.currentStroke && this.currentStroke.size > 0) {
-        const actualChanges = new Map();
-        for (const [key, value] of this.currentStroke.entries()) {
-            const beforeColor = value.before ? value.before.color : null;
-            const afterColor  = value.after  ? value.after.color  : null;
-            if (beforeColor !== afterColor) actualChanges.set(key, value);
+        if (this.mouseState.isExtruding) {
+            const distance = this.ghostVoxels.size > 0 ? (this.ghostVoxels.get(this.ghostVoxels.keys().next().value).distance || 0) : 0;
+            if (distance !== 0) trackEvent('extrude', { distance: distance, method: 'drag' });
+            this.updateExtrudePreview(0);
+            if (distance !== 0) this.extrudeSelectedFaces(distance);
+        } else if (this.currentMode === 'SELECT' && this.selectionChange.before) {
+            const beforeSet = this.selectionChange.before;
+            const afterSet = this.selectedFaces;
+            if (this.mouseState.isDragging || beforeSet.size !== afterSet.size || ![...beforeSet].every(value => afterSet.has(value))) {
+                this.addHistoryStep({ type: 'SELECT', before: beforeSet, after: new Set(afterSet) });
+            }
         }
-        if (actualChanges.size > 0) this.addHistoryStep({ type: 'MODIFY', changes: actualChanges });
-    }
 
-    // Pointer-Lock verlassen (Desktop)
-    if (document.pointerLockElement === this.cvs) {
-        document.exitPointerLock();
-    }
+        if (this.mouseState.isModifying && this.currentStroke && this.currentStroke.size > 0) {
+            const actualChanges = new Map();
+            for (const [key, value] of this.currentStroke.entries()) {
+                const beforeColor = value.before ? value.before.color : null;
+                const afterColor = value.after ? value.after.color : null;
+                if (beforeColor !== afterColor) {
+                    actualChanges.set(key, value);
+                }
+            }
+            if (actualChanges.size > 0) this.addHistoryStep({ type: 'MODIFY', changes: actualChanges });
+        }
 
-    // Kein Finger mehr unten
-    this.isPointerDown = false;
+        if (document.pointerLockElement === this.cvs) document.exitPointerLock();
+        
+        this.activePointers.delete(e.pointerId);
 
-    // Cleanup
-    this.currentStroke = null;
-    this.touchState.isInteracting = false;
-    this.touchState.isLookAround = false;
-    this.touchState.isThreeFingerUndoCandidate = false;
-    this.touchState.lastPinchDist = null;
-    this.touchState.lastPinchCenter = null;
+        if (this.isMobile && this.activePointers.size === 1) {
+            const remainingPointer = this.activePointers.values().next().value;
+            this.mouseState.downX = remainingPointer.x;
+            this.mouseState.downY = remainingPointer.y;
+            this.mouseState.lastX = remainingPointer.x;
+            this.mouseState.lastY = remainingPointer.y;
+            this.mouseState.isDragging = false; 
+            this.touchState.isInteracting = false; 
+        }
+        
+        if (this.activePointers.size === 0) this.isPointerDown = false;
 
-    this.mouseState.isRotating = false;
-    this.mouseState.isPanning = false;
-    this.mouseState.isModifying = false;
-    this.mouseState.isDragging = false;
-    this.mouseState.isExtruding = false;
-    this.mouseState.lastActionCoords = null;
-    this.mouseState.lastActionNormal = null;
-    this.mouseState.selectionAxisLock = null;
-    this.mouseState.selectionDragStartTarget = null;
-
-    this.marqueeElement.style.display = 'none';
-},
-
+        // --- Universal Cleanup ---
+        this.currentStroke = null;
+        this.touchState.longPressTimeout = null;
+        this.touchState.isInteracting = false;
+        this.touchState.isLookAround = false;
+        this.touchState.isThreeFingerUndoCandidate = false;
+        this.touchState.lastPinchDist = null;
+        this.touchState.lastPinchCenter = null;
+        
+        Object.keys(this.mouseState).forEach(key => { if(typeof this.mouseState[key] === 'boolean') this.mouseState[key] = false });
+        this.mouseState.lastActionCoords = null;
+        this.mouseState.lastActionNormal = null;
+        this.mouseState.selectionAxisLock = null;
+        this.mouseState.selectionDragStartTarget = null;
+        this.marqueeElement.style.display = 'none';
+    },
 
     toggleSelectionLock: function() {
         this.isSelectionLocked = !this.isSelectionLocked;
@@ -1929,16 +1891,7 @@ const VoxelApp = {
 
         switch (mode) {
             case 'PAINT':
-                if (!existingVoxel) {
-                     const mesh = new THREE.Mesh(this.sharedBoxGeometry, this.getMaterial(this.currentColor));
-                    mesh.position.set(x * this.VS + 0.5, y * this.VS + 0.5, z * this.VS + 0.5);
-                    mesh.castShadow = true;
-                    mesh.receiveShadow = true;
-                    this.scene.add(mesh);
-                    this.voxels.set(k, { color: this.currentColor, mesh: mesh });
-                    modified = true;
-                    this.addColorToHistory(this.currentColor);
-                } else if (existingVoxel.color !== this.currentColor) {
+                if (existingVoxel && existingVoxel.color !== this.currentColor) {
                     existingVoxel.mesh.material = this.getMaterial(this.currentColor);
                     this.voxels.get(k).color = this.currentColor;
                     modified = true;
@@ -3051,7 +3004,6 @@ const VoxelApp = {
         this.autosaveScene();
     },
 
- 
     redo: function() {
         if (this.historyPointer >= this.history.length - 1) return;
         this.historyPointer++;
@@ -3380,5 +3332,4 @@ document.addEventListener('DOMContentLoaded', () => VoxelApp.init());
 
 </body>
 </html>
-
 
