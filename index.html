@@ -500,6 +500,10 @@
             <button id="copyShareLinkBtn" class="btn btn-primary"><i class="fas fa-link mr-2"></i>Copy Share Link</button>
             <button id="uploadToHubFromShareBtn" class="btn btn-success"><i class="fas fa-cloud-upload-alt mr-2"></i>Upload to VoxelShaper Hub</button>
         </div>
+        <div id="shareLinkWrapper" class="mt-4 hidden">
+            <p class="text-sm font-semibold">Share Link</p>
+            <a id="shareLinkDisplay" class="link break-all" target="_blank" rel="noopener"></a>
+        </div>
         <div class="modal-action">
             <form method="dialog"><button class="btn btn-ghost">Cancel</button></form>
         </div>
@@ -847,6 +851,7 @@ const VoxelApp = {
     },
     user: null,
     token: null,
+    currentModelId: null,
     Modes: {
         SELECT: { name: 'Select', icon: 'fas fa-mouse-pointer' },
         PAINT: { name: 'Paint', icon: 'fas fa-paint-brush' },
@@ -898,6 +903,7 @@ const VoxelApp = {
 
     init: function() {
         this.setupDOM();
+        this.updateShareLinkUI();
         if (typeof this.keyboard === 'undefined' || this.keyboard === null) {
             this.keyboard = {};
         }
@@ -1027,9 +1033,6 @@ const VoxelApp = {
         const urlModelId = urlParams.get('modelId');
         if (urlModelId) {
             await this.loadProjectFromModelId(urlModelId);
-            const newUrl = new URL(window.location);
-            newUrl.searchParams.delete('modelId');
-            window.history.replaceState({}, document.title, newUrl.pathname);
         }
     },
     
@@ -1521,13 +1524,57 @@ const VoxelApp = {
         if (mobileIcon) mobileIcon.className = iconClass;
     },
 
+    setCurrentModelId: function(modelId) {
+        this.currentModelId = modelId;
+        this.updateModelIdInUrl(modelId);
+        this.updateShareLinkUI();
+    },
+
+    updateModelIdInUrl: function(modelId) {
+        const url = new URL(window.location.href);
+        if (modelId) {
+            url.searchParams.set('modelId', modelId);
+        } else {
+            url.searchParams.delete('modelId');
+        }
+        window.history.replaceState({}, document.title, url.toString());
+    },
+
+    getShareUrl: function() {
+        if (!this.currentModelId) return null;
+        const url = new URL(window.location.href);
+        url.searchParams.set('modelId', this.currentModelId);
+        return url.toString();
+    },
+
+    updateShareLinkUI: function() {
+        const wrapper = document.getElementById('shareLinkWrapper');
+        const linkEl = document.getElementById('shareLinkDisplay');
+        if (!wrapper || !linkEl) return;
+        const shareUrl = this.getShareUrl();
+        if (shareUrl) {
+            linkEl.textContent = shareUrl;
+            linkEl.href = shareUrl;
+            wrapper.classList.remove('hidden');
+        } else {
+            linkEl.textContent = '';
+            linkEl.removeAttribute('href');
+            wrapper.classList.add('hidden');
+        }
+    },
+
     copyShareLink: function() {
-        const link = window.location.href;
-        navigator.clipboard.writeText(link).then(() => {
-            this.showToast('Link Copied', 'The current URL has been copied to your clipboard.', 'info');
+        const shareUrl = this.getShareUrl();
+        if (!shareUrl) {
+            this.showToast('No Share Link', 'Upload your project to the Hub to generate a share link.', 'warning');
+            return;
+        }
+        navigator.clipboard.writeText(shareUrl).then(() => {
+            this.showToast('Link Copied', 'Share link copied to clipboard.', 'info');
+            window.open(shareUrl, '_blank', 'noopener');
         }).catch(err => {
             console.error('Failed to copy: ', err);
-            this.showToast('Copy Failed', 'Could not copy the link.', 'error');
+            this.showToast('Copy Failed', 'Could not copy the share link.', 'error');
         });
         document.getElementById('shareModal').close();
     },
@@ -1570,7 +1617,9 @@ const VoxelApp = {
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify(hubDocument)
             });
-            this.showToast('Upload Successful!', `Project saved. Model ID: ${response.public_id}`, 'info');
+            this.setCurrentModelId(response.public_id);
+            const shareUrl = this.getShareUrl();
+            this.showToast('Upload Successful!', `Project saved. Share it: ${shareUrl}`, 'info');
         } catch (error) {
             this.showToast('Upload Failed', error.message, 'error');
         }
@@ -1606,10 +1655,11 @@ const VoxelApp = {
             const requiredGridSize = Math.max(maxX, maxY, maxZ) + 1;
             const finalGridSize = Math.max(requiredGridSize, projectData.gridSize || this.GRID_DEFAULT);
             this.setGridSize(finalGridSize);
-            
+
             this.rebuildSceneFromVoxels();
             this.resetCamera();
             this.showToast('Project Loaded', `Loaded "${data.name}"`, 'info');
+            this.setCurrentModelId(modelId);
 
         } catch (error) {
             console.error("Failed to load project from Hub:", error);
