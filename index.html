@@ -103,10 +103,10 @@
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
 
     <style>
-		        .Cookiebotwidget-logo {
-  outline: 0px solid #1032CF !important;
-  outline-offset: 1px;
-}
+		.Cookiebotwidget-logo {
+            outline: 0px solid #1032CF !important;
+            outline-offset: 1px;
+        }
         :root { --toast-z-index: 9999; }
         html, body {
             overflow: hidden;
@@ -138,6 +138,7 @@
         #voxelCanvas:focus { 
             outline: none; 
         }
+        /* Desktop controls alignment fix */
         #controls {
             flex-wrap: nowrap;
         }
@@ -173,7 +174,11 @@
             cursor: pointer;
             border: 2px solid #555;
         }
-
+        /* Style for the new rounded preview slider group */
+        #in-app-rounded-controls {
+            transition: all 0.2s ease-in-out;
+            max-width: 15rem; /* Ensure it stays compact on desktop */
+        }
         .marquee {
             position: absolute;
             border: 1px dashed #ffff00;
@@ -337,6 +342,19 @@
             <input type="range" id="brush-size-slider" min="1" max="10" value="1" class="range range-xs w-24" disabled>
             <span id="brush-size-display" class="font-bold text-sm text-base-content/50">1x1</span>
         </div>
+        
+        <!-- NEW IN-APP ROUNDED PREVIEW CONTROLS -->
+        <div id="in-app-rounded-controls" class="controls-group border border-base-300 rounded-lg p-1">
+            <label for="roundedPreviewToggle" class="label cursor-pointer gap-2">
+                <span class="label-text text-sm">Rounded Preview:</span>
+                <input type="checkbox" id="roundedPreviewToggle" class="toggle toggle-accent toggle-sm">
+            </label>
+            <div id="preview-slider-group" class="controls-group gap-1 ml-2">
+                 <input type="range" id="previewRoundnessSlider" min="0.01" max="1.0" value="0.25" step="0.01" class="range range-xs w-16">
+                 <span id="preview-factor-display" class="font-bold text-sm text-accent w-8 text-right">0.25</span>
+            </div>
+        </div>
+
     </div>
 
     <div class="flex-grow"></div>
@@ -353,9 +371,9 @@
             <i class="fas fa-share-alt"></i>
         </button>
 
-		<button id="loginLogoutBtn" class="btn btn-sm btn-info">Login</button>
-		<span id="userIdDisplay" class="font-bold text-info whitespace-nowrap overflow-hidden text-ellipsis max-w-xs flex items-center gap-1"></span>
-		
+        <button id="loginLogoutBtn" class="btn btn-sm btn-info">Login</button>
+        <span id="userIdDisplay" class="font-bold text-info whitespace-nowrap overflow-hidden text-ellipsis max-w-xs flex items-center gap-1"></span>
+        
     </div>
 </div>
 <div id="container">
@@ -370,8 +388,8 @@
 <div id="mobile-ui-container">
   <!-- Undo/Redo overlay -->
   <div id="mobile-undo-redo-overlay"
-       class="absolute bottom-24 right-4 z-50 flex flex-row gap-2"
-       style="bottom: calc(5.5rem + var(--safe-bottom));">
+        class="absolute bottom-24 right-4 z-50 flex flex-row gap-2"
+        style="bottom: calc(5.5rem + var(--safe-bottom));">
     <button id="mobile-overlay-undo" class="btn btn-circle btn-ghost bg-base-200/80 backdrop-blur-sm shadow-lg">
       <i class="fas fa-undo"></i>
     </button>
@@ -459,8 +477,8 @@
     </div>
 
     <input type="color" id="mobile-color-picker"
-           value="#FFFFFF"
-           class="rounded-full p-1 border-2 border-base-content/50 bg-clip-content">
+            value="#FFFFFF"
+            class="rounded-full p-1 border-2 border-base-content/50 bg-clip-content">
 
     <button class="btn btn-ghost rounded-full" id="mobile-mode-toggle" aria-label="Toggle Mode">
       <i id="mobile-mode-icon" class="fas fa-mouse-pointer"></i>
@@ -471,6 +489,26 @@
 <dialog id="exportOptionsModal" class="modal">
     <div class="modal-box">
         <h3 class="font-bold text-lg">Export Options</h3>
+        
+        <!-- Shape Type Selection -->
+        <div class="form-control mb-4">
+            <label class="label"><span class="label-text font-semibold">Shape Type:</span></label>
+            <div class="flex gap-3">
+                <label class="flex items-center"><input type="radio" name="exportShapeType" value="blocky" class="radio radio-primary" checked><span class="ml-2">Blocky (Voxel Cubes)</span></label>
+                <label class="flex items-center"><input type="radio" name="exportShapeType" value="rounded" id="roundedExportRadio" class="radio radio-primary"><span class="ml-2">Rounded (Filleted Edges)</span></label>
+            </div>
+        </div>
+
+        <!-- NEW: Roundness Slider -->
+        <div class="form-control mb-4" id="roundnessSliderGroup">
+            <label class="label">
+                <span class="label-text">Fillet Factor: </span>
+                <span id="fillet-factor-display" class="font-bold text-primary">0.25</span>
+            </label>
+            <input type="range" id="filletRoundnessSlider" min="0.01" max="1.0" value="0.25" step="0.01" class="range range-xs range-primary">
+            <p class="text-xs text-gray-400 mt-1">Factor $1.00$ = Max Roundness (half voxel unit).</p>
+        </div>
+        
         <div class="form-control mb-4">
             <label class="label"><span class="label-text">Scale Unit (for 3MF &amp; STL):</span></label>
             <div class="flex gap-3">
@@ -487,7 +525,7 @@
         </div>
         <div class="modal-action">
             <button id="exportBambuStudioBtn" class="btn btn-accent">Export for Bambu Lab (3MF)</button>
-            <button id="exportSTLBtn" class="btn btn-primary">Export STL</button>
+            <button id="exportSTLFinalBtn" class="btn btn-primary">Export STL</button>
             <form method="dialog"><button class="btn btn-ghost">Cancel</button></form>
         </div>
     </div>
@@ -605,7 +643,7 @@
         <p class="py-4">Here are some quick tips to get you started:</p>
         <ul class="list-disc list-inside space-y-2">
             <li><b>Look Around:</b> Drag with one finger.</li>
-            <li><b>Zoom & Pan:</b> Pinch or drag with two fingers.</li>
+            <li><b>Zoom &amp; Pan:</b> Pinch or drag with two fingers.</li>
             <li><b>Paint / Select / Delete:</b> Double-tap and hold, then drag.</li>
             <li><b>Undo:</b> Tap with three fingers.</li>
         </ul>
@@ -632,12 +670,92 @@
  * VoxelShaper Core Application Logic (Christian Heinrich Hohlfeld - Konstanz, Germany)
  * This application is a single-file, three.js-based voxel editor.
  * Mobile touch controls updated by Christian H. Hohlfeld & Gemini in Oct 2025.
+ *
+ * Major features integrated by Christian H. Hohlfeld:
+ * 1. SDF Voxel Rounding Logic (createRoundedVoxelGeometry)
+ * 2. Dual Mesh Groups for Blocky (originalVoxelsGroup) vs. Rounded (roundedVoxelsGroup) Previews.
+ * 3. In-App UI for toggling Rounded Preview and controlling the Fillet Factor.
+ * 4. Export UI/Logic updated to support Rounded Mesh export (3MF and STL).
+ * 5. Onboarding Modal implemented.
+ * * FIX APPLIED: Selection/Extrude logic modified to target the underlying individual block meshes 
+ * (in originalVoxelsGroup) regardless of the visual preview mode, ensuring reliable 
+ * face detection for all modification operations.
  * ==================================================================================
  */
 
-// --- START: 3MF EXPORTER INTEGRATION ---
+// --- START: SDF UTILITY FUNCTIONS (Christian Heinrich Hohlfeld's approach) ---
+
+const VOXEL_SEGMENTS = 10; // Controls smoothness/resolution for the rounded mesh.
+const VOXEL_SIZE_EXPORT = 1.0; 
+
+/**
+ * Creates a BufferGeometry for a single rounded voxel (rounded cube/filleted box) at a specific position.
+ * This uses the Signed Distance Field (SDF) approximation method to create rounded edges/corners.
+ * @param {THREE.Vector3} position - Voxel grid coordinates (x, y, z).
+ * @param {number} roundnessFactor - Interpolation factor (0 = Cube, 1 = Max Roundness).
+ * @param {number} voxelUnitSize - The size of one voxel unit (VoxelApp.VS).
+ * @returns {THREE.BufferGeometry} The rounded geometry.
+ */
+function createRoundedVoxelGeometry(position, roundnessFactor, voxelUnitSize) {
+    // 1. Setup based on VoxelApp properties
+    const s = voxelUnitSize; // Voxel Size
+    // Create a detailed box for vertex manipulation
+    let geometry = new THREE.BoxGeometry(s, s, s, VOXEL_SEGMENTS, VOXEL_SEGMENTS, VOXEL_SEGMENTS);
+    
+    const positionAttribute = geometry.getAttribute('position');
+    const vector = new THREE.Vector3();
+    
+    const H = s / 2; // Half size (0.5)
+    
+    // R (Fillet Radius): Max factor of 0.45 keeps the fillet radius below H (0.5) for clean merging.
+    const R_MAX_FACTOR = 0.45; 
+    const R = Math.max(0.001, roundnessFactor * H * R_MAX_FACTOR); 
+
+    // The inner flat core distance: half size minus fillet radius
+    const R_CENTER = H - R;
+
+    // Apply rounding effect to each vertex
+    for (let i = 0; i < positionAttribute.count; i++) {
+        vector.fromBufferAttribute(positionAttribute, i);
+        
+        // 1. Clamp coordinates to define the center of the arc/sphere transition area
+        // This ensures the central core area remains flat.
+        const clampedX = Math.max(-R_CENTER, Math.min(R_CENTER, vector.x));
+        const clampedY = Math.max(-R_CENTER, Math.min(R_CENTER, vector.y));
+        const clampedZ = Math.max(-R_CENTER, Math.min(R_CENTER, vector.z));
+        
+        // 2. Calculate the vector from the clamped core center to the current vertex
+        const diffVector = new THREE.Vector3(vector.x - clampedX, vector.y - clampedY, vector.z - clampedZ);
+        const length = diffVector.length();
+
+        if (length > 0) {
+            // 3. Normalize the vector and scale by the actual Fillet Radius R
+            const normalizedDiff = diffVector.normalize();
+            const newPosition = new THREE.Vector3(clampedX, clampedY, clampedZ)
+                .add(normalizedDiff.multiplyScalar(R));
+            
+            vector.copy(newPosition);
+        }
+        
+        // 4. Apply Voxel Offset (Translate from origin to actual world position center)
+        // (grid_coord * size + half_size)
+        vector.x += position.x * s + (s / 2);
+        vector.y += position.y * s + (s / 2);
+        vector.z += position.z * s + (s / 2);
+
+        positionAttribute.setXYZ(i, vector.x, vector.y, vector.z);
+    }
+
+    geometry.attributes.position.needsUpdate = true;
+    geometry.computeVertexNormals();
+    
+    return geometry;
+}
+
+
+// --- START: 3MF EXPORTER INTEGRATION (Updated for Rounding Support) ---
 const VoxelApp3MFExporter = {
-    exportBambuStudio3MF: async function(voxels, voxelSize, showToast, parseKey, scaleUnit) {
+    exportBambuStudio3MF: async function(voxels, voxelSize, showToast, parseKey, scaleUnit, isRounded = false, roundnessFactor = 0) {
         if (!voxels || voxels.size === 0) {
             showToast('Export Error', 'Scene is empty.', 'warning');
             return;
@@ -649,6 +767,11 @@ const VoxelApp3MFExporter = {
         showToast('Exporting...', 'Building Bambu Studio Project File...', 'info');
 
         try {
+            // Get export settings (check the actual state of radio buttons)
+            const shapeType = document.querySelector('input[name="exportShapeType"]:checked').value;
+            isRounded = shapeType === 'rounded';
+            roundnessFactor = isRounded ? parseFloat(document.getElementById('filletRoundnessSlider').value) : 0;
+
             const voxelArray = Array.from(voxels.entries()).map(([key, data]) => {
                 const [x, y, z] = parseKey(key);
                 if (y < 0) return null;
@@ -663,7 +786,8 @@ const VoxelApp3MFExporter = {
             const palette = Array.from(new Set(voxelArray.map(v => v.color))).slice(0, 16);
             const voxelMM = (scaleUnit === 'cm' ? 10 : 1) * voxelSize;
 
-            const mainMesh = this.buildPaintMesh(voxelArray, voxelMM, palette);
+            // MODIFIED: buildPaintMesh now respects rounding and merging
+            const mainMesh = this.buildPaintMesh(voxelArray, voxelMM, palette, isRounded, roundnessFactor); 
             const dummies = palette.map((_, i) => this.tinyTriangle(-0.2 - i * 0.05));
             
             const { xml: modelXML, ids } = this.build3DModelXML({ mainMesh, dummies });
@@ -689,12 +813,15 @@ const VoxelApp3MFExporter = {
             metadata.file("model_settings.config",  modelXMLset);
 
             const blob = await zip.generateAsync({type:"blob", compression:"DEFLATE", compressionOptions:{level:6}});
-            saveAs(blob, "VoxelShaper_Export.3mf");
             
-            showToast('Export Complete', 'Bambu Studio 3MF file saved!', 'success');
+            const filename = isRounded ? `VoxelShaper_rounded_${roundnessFactor.toFixed(2)}.3mf` : "VoxelShaper_blocky.3mf";
+            saveAs(blob, filename);
+            
+            showToast('Export Complete', `${filename} saved!`, 'success');
         } catch(err) {
             console.error("3MF Export Error by Christian Hohlfeld:", err);
             showToast('Export Error', err.message, 'error');
+            trackEvent('error', { context: '3mf_export', message: err.message });
         }
     },
     
@@ -722,25 +849,98 @@ const VoxelApp3MFExporter = {
     
     tokenFromPaletteIndex: function(i) { return this.tokenForColorNumber(i + 1); },
 
-    buildPaintMesh: function(voxels, voxelMM, palette) {
-        const V = [], T = [];
-        const s = +voxelMM || 1;
-        const colorToIdx = new Map(palette.map((c, i) => [c, i]));
-        const CUBE_V = [[0,0,0],[1,0,0],[1,1,0],[0,1,0],[0,0,1],[1,0,1],[1,1,1],[0,1,1]];
-        const CUBE_T = [[0,2,1],[0,3,2],[4,5,6],[4,6,7],[0,4,7],[0,7,3],[1,2,6],[1,6,5],[3,7,6],[3,6,2],[0,1,5],[0,5,4]];
-        
-        for (const v of voxels) {
-            const base = V.length;
-            for (const [x, y, z] of CUBE_V) {
-                V.push([this.fmt((v.x + x) * s), this.fmt(-(v.z + z) * s), this.fmt((v.y + y) * s)]);
-            }
-            const token = this.tokenFromPaletteIndex(colorToIdx.get(v.color));
-            for (const [a, b, c] of CUBE_T) {
-                T.push([base + a, base + b, base + c, token]);
-            }
-        }
-        return { V, T, palette };
-    },
+buildPaintMesh: function (voxels, voxelMM, palette, isRounded = false, roundnessFactor = 0) {
+  const V = [], T = [];
+  const colorToIdx = new Map(palette.map((c, i) => [c, i]));
+  const s_mm = +voxelMM || 1;
+
+  // Helper: BufferGeometryUtils handle (r128 attaches to THREE)
+  const BGU = (THREE && THREE.BufferGeometryUtils) || (typeof BufferGeometryUtils !== 'undefined' ? BufferGeometryUtils : null);
+  if (isRounded && !BGU) {
+    throw new Error('BufferGeometryUtils.mergeBufferGeometries not found. Make sure the utils script is loaded after three.min.js.');
+  }
+
+  if (isRounded) {
+    // --- ROUNDED (per-color merged) ---
+    const geomsByColor = new Map();
+
+    // 1) Build rounded geometry per voxel, bucketed by color
+    for (const v of voxels) {
+      const pos = new THREE.Vector3(v.x, v.y, v.z);
+      const g = createRoundedVoxelGeometry(pos, roundnessFactor, 1.0); // unit size; we scale in export units below
+      const hex = v.color;
+      if (!geomsByColor.has(hex)) geomsByColor.set(hex, []);
+      geomsByColor.get(hex).push(g);
+    }
+
+    // 2) Emit triangles per color group with the correct token
+    let base = 0;
+    for (const [hex, list] of geomsByColor) {
+      // Merge (safe for single-element lists)
+      const merged = (list.length > 1)
+        ? BGU.mergeBufferGeometries(list, false)
+        : list[0];
+
+      // Dispose originals we merged
+      if (list.length > 1) list.forEach(g => g.dispose());
+
+      const positions = merged.attributes.position.array;
+      const idx = colorToIdx.has(hex) ? colorToIdx.get(hex) : 0; // fallback to 1st slot if ever missing
+      const token = this.tokenFromPaletteIndex(idx);
+
+      // positions are [x,y,z] per vertex; 3 verts per triangle => 9 numbers
+      for (let i = 0; i < positions.length; i += 9) {
+        // scale to mm and apply your coordinate swap: (x, -z, y)
+        const x0 = positions[i + 0] * s_mm, y0 = positions[i + 1] * s_mm, z0 = positions[i + 2] * s_mm;
+        const x1 = positions[i + 3] * s_mm, y1 = positions[i + 4] * s_mm, z1 = positions[i + 5] * s_mm;
+        const x2 = positions[i + 6] * s_mm, y2 = positions[i + 7] * s_mm, z2 = positions[i + 8] * s_mm;
+
+        V.push(
+          [this.fmt(x0), this.fmt(-z0), this.fmt(y0)],
+          [this.fmt(x1), this.fmt(-z1), this.fmt(y1)],
+          [this.fmt(x2), this.fmt(-z2), this.fmt(y2)]
+        );
+        T.push([base, base + 1, base + 2, token]);
+        base += 3;
+      }
+      merged.dispose();
+    }
+
+    return { V, T, palette };
+  }
+
+  // --- BLOCKY (multi-color compatible; unchanged behavior) ---
+  const CUBE_V = [
+    [0,0,0],[1,0,0],[1,1,0],[0,1,0],
+    [0,0,1],[1,0,1],[1,1,1],[0,1,1]
+  ];
+  const CUBE_T = [
+    [0,2,1],[0,3,2], // bottom
+    [4,5,6],[4,6,7], // top
+    [0,4,7],[0,7,3], // left
+    [1,2,6],[1,6,5], // right
+    [3,7,6],[3,6,2], // front
+    [0,1,5],[0,5,4]  // back
+  ];
+
+  for (const v of voxels) {
+    const base = V.length;
+    for (const [x, y, z] of CUBE_V) {
+      // same axis swap as rounded path: (x, -z, y)
+      V.push([
+        this.fmt((v.x + x) * s_mm),
+        this.fmt(-(v.z + z) * s_mm),
+        this.fmt((v.y + y) * s_mm)
+      ]);
+    }
+    const token = this.tokenFromPaletteIndex(colorToIdx.get(v.color));
+    for (const [a, b, c] of CUBE_T) {
+      T.push([base + a, base + b, base + c, token]);
+    }
+  }
+
+  return { V, T, palette };
+},
     
     tinyTriangle: function(z = 0) {
         return {
@@ -929,8 +1129,13 @@ const VoxelApp = {
     activeDrawingLevel: { x: 0, y: 0, z: 0 },
     activePointers: new Map(),
     isPointerDown: false,
-    currentModelId: null, // NEW: Track current model ID for sharing
+    currentModelId: null, // Track current model ID for sharing
     hapticLayer: null,
+    // NEW ROUNDING STATE
+    isRoundedPreviewEnabled: localStorage.getItem('isRoundedPreviewEnabled') === 'true',
+    previewRoundnessFactor: parseFloat(localStorage.getItem('previewRoundnessFactor') || 0.25),
+    originalVoxelsGroup: null, // Holds the meshes when preview is OFF (Blocky)
+    roundedVoxelsGroup: null, // Holds the merged mesh when preview is ON (Rounded)
     mouseState: {
         isRotating: false, isPanning: false, isModifying: false, isDragging: false, isExtruding: false,
         lastX: 0, lastY: 0, downX: 0, downY: 0,
@@ -1154,6 +1359,8 @@ const VoxelApp = {
         this.cvs = document.getElementById('voxelCanvas');
         this.containerDiv = document.getElementById('container');
         this.marqueeElement = document.getElementById('marquee');
+        this.hapticLayer = document.getElementById('haptic-layer');
+
         const categories = ["Toy", "Decoration", "Functional", "Art", "General", "Character", "Vehicle", "Nature", "Architecture"];
         const categorySelect = document.getElementById('uploadCategory');
         categories.forEach(cat => {
@@ -1168,6 +1375,12 @@ const VoxelApp = {
         this.brushSize = parseInt(localStorage.getItem('voxelEditorBrushSize') || 1);
         this.colorHistory = JSON.parse(localStorage.getItem('voxelColorHistory')) || [];
         this.isSelectionLocked = localStorage.getItem('isSelectionLocked') === 'true';
+        
+        // START NEW STATE INITIALIZATION
+        this.isRoundedPreviewEnabled = localStorage.getItem('isRoundedPreviewEnabled') === 'true';
+        this.previewRoundnessFactor = parseFloat(localStorage.getItem('previewRoundnessFactor') || 0.25);
+        // END NEW STATE INITIALIZATION
+        
         this.controls.invertLookX = localStorage.getItem('invertLookX') === 'true';
         this.controls.invertLookY = localStorage.getItem('invertLookY') === 'true';
         this.controls.invertZoom = localStorage.getItem('invertZoom') !== 'false';
@@ -1190,6 +1403,13 @@ const VoxelApp = {
         
         this.scene = new THREE.Scene();
         this.scene.background = new THREE.Color(0x282c34);
+        
+        // NEW: Separate groups for blocky/rounded rendering
+        this.originalVoxelsGroup = new THREE.Group();
+        this.roundedVoxelsGroup = new THREE.Group();
+        this.scene.add(this.originalVoxelsGroup);
+        this.scene.add(this.roundedVoxelsGroup);
+        
         this.cam = new THREE.PerspectiveCamera(75, this.containerDiv.clientWidth / this.containerDiv.clientHeight, 0.1, 1000);
         this.euler = new THREE.Euler(0, 0, 0, 'YXZ');
         this.resetCamera();
@@ -1224,6 +1444,10 @@ const VoxelApp = {
         this.scene.add(this.groundPlaneMesh);
 
         this.rebuildHelpers();
+        // Ensure initial visibility matches stored state and build the preview once if needed
+        this.originalVoxelsGroup.visible = !this.isRoundedPreviewEnabled;
+        this.roundedVoxelsGroup.visible  =  this.isRoundedPreviewEnabled;
+        if (this.isRoundedPreviewEnabled) this.rebuildRoundedPreview();
     },
     
     setupEventListeners: function() {
@@ -1266,6 +1490,36 @@ const VoxelApp = {
         document.getElementById('resetCameraBtn').addEventListener('click', () => this.resetCamera());
         document.getElementById('undoBtn').addEventListener('click', () => this.undo());
         document.getElementById('redoBtn').addEventListener('click', () => this.redo());
+
+        // Export Modal Controls (Updated)
+        document.getElementById('exportBambuStudioBtn').addEventListener('click', () => {
+            trackEvent('export', { format: '3mf_bambu', voxel_count: this.voxels.size });
+            const scaleUnit = document.querySelector('input[name="exportScaleUnit"]:checked').value;
+            VoxelApp3MFExporter.exportBambuStudio3MF(this.voxels, this.VS, this.showToast, this.parseKey, scaleUnit);
+            document.getElementById('exportOptionsModal').close();
+        });
+
+        document.getElementById('exportSTLFinalBtn').addEventListener('click', () => {
+            const scaleUnit = document.querySelector('input[name="exportScaleUnit"]:checked').value;
+            const upAxis = document.querySelector('input[name="exportUpAxis"]:checked').value;
+            const shapeType = document.querySelector('input[name="exportShapeType"]:checked').value;
+            const isRounded = shapeType === 'rounded';
+            
+            trackEvent('export', { format: isRounded ? 'stl_rounded' : 'stl_blocky', voxel_count: this.voxels.size });
+            this.exportSTL(scaleUnit, upAxis, isRounded);
+            document.getElementById('exportOptionsModal').close();
+        });
+        
+        document.getElementById('roundedExportRadio').addEventListener('change', this.updateExportRoundnessUI.bind(this));
+        document.getElementById('filletRoundnessSlider').addEventListener('input', this.updateExportRoundnessUI.bind(this));
+
+        // NEW: In-App Preview Controls
+        const previewToggle = document.getElementById('roundedPreviewToggle');
+        const previewSlider = document.getElementById('previewRoundnessSlider');
+        
+        if (previewToggle) previewToggle.addEventListener('change', this.toggleRoundedPreview.bind(this));
+        if (previewSlider) previewSlider.addEventListener('input', this.setPreviewRoundnessFactor.bind(this));
+
 
         // Mobile controls
         document.getElementById('mobile-overlay-undo').addEventListener('click', () => this.undo());
@@ -1334,26 +1588,115 @@ const VoxelApp = {
             document.getElementById('clearConfirmationModal').close();
         });
         
-        document.getElementById('exportBambuStudioBtn').addEventListener('click', () => {
-            trackEvent('export', { format: '3mf_bambu', voxel_count: this.voxels.size });
-            const scaleUnit = document.querySelector('input[name="exportScaleUnit"]:checked').value;
-            VoxelApp3MFExporter.exportBambuStudio3MF(this.voxels, this.VS, this.showToast, this.parseKey, scaleUnit);
-            document.getElementById('exportOptionsModal').close();
-        });
-
-        document.getElementById('exportSTLBtn').addEventListener('click', () => {
-            trackEvent('export', { format: 'stl', voxel_count: this.voxels.size });
-            const scaleUnit = document.querySelector('input[name="exportScaleUnit"]:checked').value;
-            const upAxis = document.querySelector('input[name="exportUpAxis"]:checked').value;
-            this.exportSTL(scaleUnit, upAxis);
-            document.getElementById('exportOptionsModal').close();
-        });
-
+        // Initial UI updates
+        this.updateExportRoundnessUI();
+        this.updateInAppRoundnessUI();
         // Onboarding listeners
         document.getElementById('loadSampleProjectBtn').addEventListener('click', () => this.loadSampleProject());
         document.getElementById('startBlankBtn').addEventListener('click', () => this.markOnboardingComplete());
     },
+    
+    updateExportRoundnessUI: function() {
+        const isRounded = document.getElementById('roundedExportRadio').checked;
+        const sliderGroup = document.getElementById('roundnessSliderGroup');
+        const slider = document.getElementById('filletRoundnessSlider');
+        const display = document.getElementById('fillet-factor-display');
 
+        if (sliderGroup) {
+            sliderGroup.style.display = isRounded ? 'block' : 'none';
+        }
+        if (display && slider) {
+            display.textContent = parseFloat(slider.value).toFixed(2);
+        }
+        
+        // Update export radio label text
+        const roundedLabel = document.querySelector('label[for="roundedExportRadio"] span');
+        if (roundedLabel) {
+            roundedLabel.textContent = isRounded ? 'Rounded (Filleted Edges)' : 'Rounded (Smoother Mesh)';
+        }
+    },
+    
+    toggleRoundedPreview: function(e) {
+        this.isRoundedPreviewEnabled = e ? e.target.checked : !this.isRoundedPreviewEnabled; 
+        localStorage.setItem('isRoundedPreviewEnabled', this.isRoundedPreviewEnabled);
+        
+        // Control visibility of the groups
+        this.originalVoxelsGroup.visible = !this.isRoundedPreviewEnabled;
+        this.roundedVoxelsGroup.visible = this.isRoundedPreviewEnabled;
+        
+        if (this.isRoundedPreviewEnabled) {
+            this.rebuildRoundedPreview();
+        } else {
+            this.disposeRoundedPreview();
+        }
+        this.updateInAppRoundnessUI();
+    },
+    
+    setPreviewRoundnessFactor: function(e) {
+        this.previewRoundnessFactor = parseFloat(e.target.value);
+        localStorage.setItem('previewRoundnessFactor', this.previewRoundnessFactor);
+        this.updateInAppRoundnessUI();
+        if (this.isRoundedPreviewEnabled) {
+            this.rebuildRoundedPreview();
+        }
+    },
+    
+    updateInAppRoundnessUI: function() {
+        const previewToggle = document.getElementById('roundedPreviewToggle');
+        const previewSlider = document.getElementById('previewRoundnessSlider');
+        const display = document.getElementById('preview-factor-display');
+        const sliderGroup = document.getElementById('preview-slider-group');
+
+        if (previewToggle) previewToggle.checked = this.isRoundedPreviewEnabled;
+        
+        if (sliderGroup && previewSlider) {
+            sliderGroup.style.opacity = this.isRoundedPreviewEnabled ? '1' : '0.5';
+            previewSlider.disabled = !this.isRoundedPreviewEnabled;
+        }
+
+        if (previewSlider) previewSlider.value = this.previewRoundnessFactor;
+        if (display) display.textContent = this.previewRoundnessFactor.toFixed(2);
+    },
+    
+rebuildRoundedPreview: function() {
+  this.disposeRoundedPreview();
+  if (this.voxels.size === 0) return;
+
+  // Group rounded voxel geometries by color
+  const geomsByColor = new Map();
+
+  this.voxels.forEach((v, k) => {
+    const [x, y, z] = this.parseKey(k);
+    if (y < 0) return; // skip foundation
+    const pos = new THREE.Vector3(x, y, z);
+    const geom = createRoundedVoxelGeometry(pos, this.previewRoundnessFactor, this.VS);
+
+    const hex = (v.color || '#ffffff').toUpperCase();
+    if (!geomsByColor.has(hex)) geomsByColor.set(hex, []);
+    geomsByColor.get(hex).push(geom);
+  });
+
+  // Merge each color group and add one mesh per color
+  for (const [hex, list] of geomsByColor) {
+    const merged = THREE.BufferGeometryUtils.mergeBufferGeometries(list, false);
+    list.forEach(g => g.dispose());
+
+    const mesh = new THREE.Mesh(merged, this.getMaterial(hex));
+    mesh.castShadow = true;
+    mesh.receiveShadow = true;
+    this.roundedVoxelsGroup.add(mesh);
+  }
+},
+
+
+    disposeRoundedPreview: function() {
+        this.roundedVoxelsGroup.children.forEach(child => {
+            if (child.geometry) child.geometry.dispose();
+            if (child.material) child.material.dispose();
+        });
+        this.roundedVoxelsGroup.remove(...this.roundedVoxelsGroup.children);
+    },
+    
     handleTapInteraction: function(event) {
         if (this.currentMode === 'SELECT') {
             const target = this.getFaceTarget(event.clientX, event.clientY);
@@ -1614,6 +1957,7 @@ const VoxelApp = {
             if (distance !== 0) trackEvent('extrude', { distance: distance, method: 'drag' });
             this.updateExtrudePreview(0);
             if (distance !== 0) this.extrudeSelectedFaces(distance);
+            this.onModelChanged(); // NEW: Trigger model change event
         } else if (this.currentMode === 'SELECT' && this.selectionChange.before) {
             const beforeSet = this.selectionChange.before;
             const afterSet = this.selectedFaces;
@@ -1631,7 +1975,11 @@ const VoxelApp = {
                     actualChanges.set(key, value);
                 }
             }
-            if (actualChanges.size > 0) this.addHistoryStep({ type: 'MODIFY', changes: actualChanges });
+            if (actualChanges.size > 0) {
+                 this.addHistoryStep({ type: 'MODIFY', changes: actualChanges });
+                 this.onModelChanged(); // NEW: Trigger model change event
+                 if (this.isRoundedPreviewEnabled) this.rebuildRoundedPreview();
+            }
         }
 
         if (document.pointerLockElement === this.cvs) document.exitPointerLock();
@@ -2006,7 +2354,7 @@ const VoxelApp = {
                 break;
             case 'DELETE':
                 if (existingVoxel) {
-                    this.scene.remove(existingVoxel.mesh);
+                    this.originalVoxelsGroup.remove(existingVoxel.mesh); // Changed to use original group
                     this.voxels.delete(k);
                     modified = true;
                 }
@@ -2017,7 +2365,7 @@ const VoxelApp = {
                     mesh.position.set(x * this.VS + 0.5, y * this.VS + 0.5, z * this.VS + 0.5);
                     mesh.castShadow = true;
                     mesh.receiveShadow = true;
-                    this.scene.add(mesh);
+                    this.originalVoxelsGroup.add(mesh); // Changed to use original group
                     this.voxels.set(k, { color: this.currentColor, mesh: mesh });
                     modified = true;
                     this.addColorToHistory(this.currentColor);
@@ -2029,6 +2377,7 @@ const VoxelApp = {
             const finalVoxel = this.voxels.get(k);
             const historyEntry = this.currentStroke.get(k);
             historyEntry.after = finalVoxel ? { color: finalVoxel.color } : null;
+            
         }
     },
     
@@ -2082,7 +2431,7 @@ const VoxelApp = {
     
     handleLineSelectionDrag: function (e) {
         const start = this.mouseState.selectionDragStartTarget;
-        if (!start) return false;
+        if (!start || !start.faceKey) return false;
 
         const [startKeyStr, startNormalIdxStr] = start.faceKey.split(':');
         const startNormalIdx = parseInt(startNormalIdxStr, 10);
@@ -2094,7 +2443,8 @@ const VoxelApp = {
 
         if (cur) {
             // We hit a face, get the voxel coords from the key
-            [cx, cy, cz] = this.parseKey(parseInt(cur.faceKey.split(':')[0], 10));
+            const [x, y, z] = this.parseKey(parseInt(cur.faceKey.split(':')[0], 10));
+            cx = x; cy = y; cz = z;
         } else {
             // Fallback: We are outside the grid, so raycast to an infinite plane
             // defined by the starting face to determine virtual coordinates.
@@ -2148,7 +2498,6 @@ const VoxelApp = {
             axis = forced;
         } else {
             // Always determine the dominant axis from the allowed set.
-            // This makes the direction fully changeable during the drag.
             let maxDelta = -1;
             allowedAxes.forEach(allowedAxis => {
                 if (deltas[allowedAxis] > maxDelta) {
@@ -2242,7 +2591,7 @@ const VoxelApp = {
         allVoxelKeys.forEach(voxelKey => {
             const [x, y, z] = this.parseKey(voxelKey);
             if (y === -1 && enforcedIdx !== 2) return;
-            const pos3D = new THREE.Vector3(x + 0.5, y + 0.5, z + 0.5);
+            const pos3D = new THREE.Vector3(x * this.VS + 0.5, y * this.VS + 0.5, z * this.VS + 0.5);
             pos3D.project(this.cam);
             const screenX = (pos3D.x * 0.5 + 0.5) * rect.width + rect.left;
             const screenY = (-pos3D.y * 0.5 + 0.5) * rect.height + rect.top;
@@ -2326,14 +2675,16 @@ const VoxelApp = {
         return null;
     },
 
+    // FIX: Always use the original (blocky) voxel meshes for accurate face detection, 
+    // regardless of whether the rounded preview is enabled.
     getFaceAt: function(clientX, clientY) {
         const rect = this.cvs.getBoundingClientRect();
         const mouse = new THREE.Vector2(((clientX - rect.left) / rect.width) * 2 - 1, -((clientY - rect.top) / rect.height) * 2 + 1);
         const raycaster = new THREE.Raycaster();
         raycaster.setFromCamera(mouse, this.cam);
         
-        const allMeshes = Array.from(this.voxels.values()).map(v => v.mesh).filter(m => m && m.visible);
-        allMeshes.push(this.groundPlaneMesh);
+        // Use only the original blocky meshes for face detection.
+        const allMeshes = [...this.originalVoxelsGroup.children, this.groundPlaneMesh].filter(m => m && m.visible);
 
         if (allMeshes.length === 0) return null;
         const intersects = raycaster.intersectObjects(allMeshes, false);
@@ -2372,8 +2723,10 @@ const VoxelApp = {
             
             let basePos;
             if (voxelData && voxelData.mesh) {
+                // If voxel exists, use its position (only in the original group)
                 basePos = voxelData.mesh.position;
             } else if (isFoundation && y === -1) {
+                // If it's foundation, calculate base position
                 basePos = new THREE.Vector3(x * this.VS + 0.5, y * this.VS + 0.5, z * this.VS + 0.5);
             } else { return; }
             
@@ -2392,19 +2745,23 @@ const VoxelApp = {
         });
     },
 
+    // FIX: Simplified face target detection based on reliable hits from getFaceAt
     getFaceTarget: function (clientX, clientY) {
         const hit = this.getFaceAt(clientX, clientY);
         if (!hit) return null;
         let voxelKey = null;
         let nrm = null;
-        if (hit.object.userData.isFoundation) {
-            nrm = new THREE.Vector3(0, 1, 0); 
+
+        if (hit.object === this.groundPlaneMesh || (hit.object.userData && hit.object.userData.isFoundation)) {
+            // --- Foundation Hit ---
+            nrm = new THREE.Vector3(0, 1, 0); // Always +Y for ground plane
             const worldPos = hit.point.clone();
             const x = Math.floor(worldPos.x / this.VS);
             const z = Math.floor(worldPos.z / this.VS);
             if (x < 0 || x >= this.GRID || z < 0 || z >= this.GRID) return null;
             voxelKey = this.key(x, -1, z); 
         } else {
+            // --- Voxel Hit (guaranteed to be an individual block mesh now) ---
             const voxelData = this.findVoxelDataByMesh(hit.object);
             if (!voxelData) return null;
             const basePos = hit.object.position;
@@ -2412,14 +2769,19 @@ const VoxelApp = {
             const y = Math.round(basePos.y / this.VS - 0.5);
             const z = Math.round(basePos.z / this.VS - 0.5);
             voxelKey = this.key(x, y, z);
+
+            // Get the face normal, transform it by the object's world matrix
             nrm = hit.face.normal.clone();
             const nMat = new THREE.Matrix3().getNormalMatrix(hit.object.matrixWorld);
             nrm.applyNormalMatrix(nMat).normalize();
+
+            // Snap the normal to the nearest major axis
             const ax = Math.abs(nrm.x), ay = Math.abs(nrm.y), az = Math.abs(nrm.z);
             if (ax >= ay && ax >= az) nrm.set(Math.sign(nrm.x), 0, 0);
             else if (ay >= ax && ay >= az) nrm.set(0, Math.sign(nrm.y), 0);
             else nrm.set(0, 0, Math.sign(nrm.z));
         }
+
         const normalIndex = this.getNormalIndex(nrm);
         return {
           faceKey: `${voxelKey}:${normalIndex}`,
@@ -2510,7 +2872,7 @@ const VoxelApp = {
                     const newMesh = new THREE.Mesh(this.sharedBoxGeometry, this.getMaterial(extrudeColor));
                     newMesh.position.set(newX * this.VS + 0.5, newY * this.VS + 0.5, newZ * this.VS + 0.5);
                     newMesh.castShadow = true; newMesh.receiveShadow = true;
-                    this.scene.add(newMesh);
+                    this.originalVoxelsGroup.add(newMesh); // Changed scene.add to originalVoxelsGroup.add
                     this.voxels.set(newKey, { color: extrudeColor, mesh: newMesh });
                     changes.get(newKey).after = { color: extrudeColor };
                     this.addColorToHistory(extrudeColor);
@@ -2525,7 +2887,7 @@ const VoxelApp = {
                     
                     if (voxelToDelete && delY >= 0) {
                         if (!changes.has(delKey)) changes.set(delKey, { before: { color: voxelToDelete.color }, after: null });
-                        this.scene.remove(voxelToDelete.mesh);
+                        this.originalVoxelsGroup.remove(voxelToDelete.mesh); // Changed scene.remove to originalVoxelsGroup.remove
                         this.voxels.delete(delKey);
                     }
                 }
@@ -2544,34 +2906,49 @@ const VoxelApp = {
             this.selectedFaces = newFacesToSelect;
             this.updateSelectionVisuals();
             this.addHistoryStep({ type: 'SELECT', before: before, after: new Set(this.selectedFaces) });
+            
+            // FIX: Immediately rebuild rounded preview if enabled after modification
+            if (this.isRoundedPreviewEnabled) {
+                this.rebuildRoundedPreview();
+            }
         }
     },
 
+    // FIX: Targetting function uses the original block meshes for geometry data,
+    // ensuring predictable coordinates and normals for tool operation.
     getRayTargetInfo: function (clientX, clientY) {
         const rect = this.cvs.getBoundingClientRect();
-        const mouse = new THREE.Vector2(((clientX - rect.left) / rect.width) * 2 - 1, -((clientY - rect.top) / rect.height) * 2 + 1);
+        const mouse = new THREE.Vector2(((clientX - rect.left) / rect.width) * 2 - 1, -((clientY - rect.top) / this.cvs.clientHeight) * 2 + 1);
         const raycaster = new THREE.Raycaster();
         raycaster.setFromCamera(mouse, this.cam);
-        const userMeshes = [];
-        this.voxels.forEach(v => { if (v.mesh) userMeshes.push(v.mesh); });
-        const allMeshes = [...userMeshes, this.groundPlaneMesh].filter(m => m && m.visible !== false);
+        
+        // Target meshes are always the individual block meshes for accurate interaction
+        const allMeshes = [...this.originalVoxelsGroup.children, this.groundPlaneMesh].filter(m => m && m.visible !== false);
+        
         if (allMeshes.length === 0) return null;
         const intersects = raycaster.intersectObjects(allMeshes, false);
         if (intersects.length === 0) return null;
         const hit = intersects[0];
         const pos = hit.point.clone();
         let normal;
+        
         if (hit.object.userData && hit.object.userData.isFoundation) {
             normal = new THREE.Vector3(0, 1, 0);
             pos.addScaledVector(normal, 0.5 * this.VS + 0.001);
         } else {
+            // Get the face normal, transform it by the object's world matrix
             normal = hit.face.normal.clone();
             const nMat = new THREE.Matrix3().getNormalMatrix(hit.object.matrixWorld);
             normal.applyNormalMatrix(nMat).normalize();
+
+            // Snap the normal to the nearest major axis
             const ax = Math.abs(normal.x), ay = Math.abs(normal.y), az = Math.abs(normal.z);
             if (ax >= ay && ax >= az) normal.set(Math.sign(normal.x), 0, 0);
             else if (ay >= ax && ay >= az) normal.set(0, Math.sign(normal.y), 0);
             else normal.set(0, 0, Math.sign(normal.z));
+
+            // Offset position OUT of the target voxel along the normal (for ADD mode)
+            // or IN to the target voxel (for PAINT/DELETE mode)
             const offset = (this.currentMode === 'PAINT' || this.currentMode === 'DELETE') ? -(0.5 * this.VS - 0.001) : +(0.5 * this.VS + 0.001);
             pos.addScaledVector(normal, offset);
         }
@@ -2658,9 +3035,14 @@ const VoxelApp = {
             });
             this.addHistoryStep({type: 'MODIFY', changes: changes});
         }
-        this.voxels.forEach(v => {
-            if (v.mesh) this.scene.remove(v.mesh);
+        // Dispose of children in both groups
+        this.originalVoxelsGroup.children.forEach(v => {
+            if (v.geometry) v.geometry.dispose();
+            if (v.material) v.material.dispose();
         });
+        this.originalVoxelsGroup.remove(...this.originalVoxelsGroup.children);
+        this.disposeRoundedPreview();
+        
         this.voxels.clear();
         this.currentModelId = null; // Clear model ID on clear
         this.updateUrlWithModelId();
@@ -2883,6 +3265,8 @@ const VoxelApp = {
             templateImageData: this.templateImageData,
             templateImagePinnedY: this.templateImagePinnedY,
             templateImageAxis: this.templateImageAxis,
+            isRoundedPreviewEnabled: this.isRoundedPreviewEnabled, // NEW: Include rounding state
+            previewRoundnessFactor: this.previewRoundnessFactor,   // NEW: Include rounding state
         };
         const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
         const url = URL.createObjectURL(blob);
@@ -2895,9 +3279,14 @@ const VoxelApp = {
     loadFromData: function(data) {
         try {
             this.clearSelection();
-            this.voxels.forEach(v => {
-                if(v.mesh) this.scene.remove(v.mesh);
+            
+            // Dispose of existing meshes before clearing the map
+            this.originalVoxelsGroup.children.forEach(v => {
+                if (v.geometry) v.geometry.dispose();
+                if (v.material) v.material.dispose();
             });
+            this.originalVoxelsGroup.remove(...this.originalVoxelsGroup.children);
+            this.disposeRoundedPreview();
             this.voxels.clear();
             
             this.GRID = data.gridSize || this.GRID_DEFAULT;
@@ -2905,6 +3294,11 @@ const VoxelApp = {
             this.activeDrawingLevel = data.activeDrawingLevel || { x: 0, y: 0, z: 0 };
             this.templateImageAxis = data.templateImageAxis || 'z';
             
+            // Load rounding state if available
+            this.isRoundedPreviewEnabled = data.isRoundedPreviewEnabled ?? (localStorage.getItem('isRoundedPreviewEnabled') === 'true');
+            this.previewRoundnessFactor = data.previewRoundnessFactor ?? parseFloat(localStorage.getItem('previewRoundnessFactor') || 0.25);
+
+
             this.colorHistory = [];
             if (Array.isArray(data.voxels)) {
                 data.voxels.forEach(v => {
@@ -2952,7 +3346,8 @@ const VoxelApp = {
         event.target.value = '';
     },
     
-    exportSTL: function(scaleUnit = 'mm', upAxis = 'Z') {
+    // MODIFIED: Added isRounded and roundnessFactor parameters
+    exportSTL: function(scaleUnit = 'mm', upAxis = 'Z', isRounded = false) { 
         if (this.voxels.size === 0) { this.showToast('Export Error', 'Scene is empty.', 'warning'); return; }
         this.showToast('Exporting...', 'Generating STL file...', 'info');
         const exporter = new THREE.STLExporter();
@@ -2960,19 +3355,40 @@ const VoxelApp = {
         const exportGroup = new THREE.Group();
         const scale = scaleUnit === 'cm' ? 10 : 1;
         
+        const s = this.VS;
+        const ROUNDNESS_FACTOR = isRounded ? parseFloat(document.getElementById('filletRoundnessSlider').value) : 0;
+
+        const geometriesToMerge = [];
+
         this.voxels.forEach((v,k) => {
             const [x,y,z] = this.parseKey(k);
             if (y < 0) return; 
 
-            const tempGeom = new THREE.BoxGeometry(this.VS, this.VS, this.VS);
-            tempGeom.translate(x * this.VS + 0.5, y * this.VS + 0.5, z * this.VS + 0.5);
+            let tempGeom;
             
-            const tempMesh = new THREE.Mesh(tempGeom); 
-            exportGroup.add(tempMesh);
+            if (isRounded) {
+                // Use Christian's SDF-based rounded geometry
+                const pos = new THREE.Vector3(x, y, z);
+                tempGeom = createRoundedVoxelGeometry(pos, ROUNDNESS_FACTOR, s);
+            } else {
+                // Blocky
+                tempGeom = new THREE.BoxGeometry(s, s, s);
+                tempGeom.translate(x * s + 0.5, y * s + 0.5, z * s + 0.5);
+            }
+            
+            geometriesToMerge.push(tempGeom);
         });
 
-        const mergedGeometry = THREE.BufferGeometryUtils.mergeBufferGeometries(exportGroup.children.map(c => c.geometry), false);
+        if (geometriesToMerge.length === 0) {
+             this.showToast('Export Error', 'No printable voxels found.', 'warning');
+             return;
+        }
+
+        const mergedGeometry = THREE.BufferGeometryUtils.mergeBufferGeometries(geometriesToMerge, false);
         
+        // Cleanup temporary geometries used for merging
+        geometriesToMerge.forEach(g => g.dispose());
+
         const matrix = new THREE.Matrix4().makeScale(scale, scale, scale);
         if (upAxis === 'Z') {
             matrix.multiply(new THREE.Matrix4().makeRotationX(-Math.PI / 2));
@@ -2983,17 +3399,16 @@ const VoxelApp = {
         
         const stlString = exporter.parse(mesh, { binary: true });
         
-        exportGroup.children.forEach(c => c.geometry.dispose());
-        exportGroup.remove(...exportGroup.children);
         mergedGeometry.dispose();
         
         const blob = new Blob([stlString], { type: 'application/octet-stream' });
         const url = URL.createObjectURL(blob);
         const a = document.createElement('a');
-        a.href = url; a.download = 'voxel-model.stl'; a.click();
+        const filename = `voxel-model-${isRounded ? `rounded_${ROUNDNESS_FACTOR.toFixed(2)}` : 'blocky'}.stl`;
+        a.href = url; a.download = filename; a.click();
         URL.revokeObjectURL(url);
 
-        this.showToast('Export Complete', 'Downloaded voxel-model.stl', 'info');
+        this.showToast('Export Complete', `Downloaded ${filename}`, 'info');
     },
 
     animate: function() {
@@ -3022,21 +3437,21 @@ const VoxelApp = {
         }
         this.ren.render(this.scene, this.cam);
     },
+    
+    onModelChanged: function() {
+      if (this.isRoundedPreviewEnabled) {
+        requestAnimationFrame(() => this.rebuildRoundedPreview());
+      }
+    },
 
     rebuildSceneFromVoxels: function () {
-        this.voxels.forEach(v => {
-            if (v.mesh) {
-                this.scene.remove(v.mesh);
-                v.mesh = null;
-            }
+        // Dispose of the original group children
+        this.originalVoxelsGroup.children.forEach(v => {
+            if (v.geometry) v.geometry.dispose();
+            if (v.material) v.material.dispose();
         });
-
-        this.selectionFaceMeshes.forEach(m => {
-            this.scene.remove(m);
-            m.geometry.dispose();
-            m.material.dispose();
-        });
-        this.selectionFaceMeshes.clear();
+        this.originalVoxelsGroup.remove(...this.originalVoxelsGroup.children);
+        this.disposeRoundedPreview(); // Always dispose rounded preview
 
         this.voxels.forEach((voxelData, key) => {
             const [x, y, z] = this.parseKey(key);
@@ -3053,9 +3468,18 @@ const VoxelApp = {
             mesh.receiveShadow = true;
             mesh.userData.isVoxel = true;
             mesh.userData.isFoundation = false;
-            this.scene.add(mesh);
-            voxelData.mesh = mesh;
+            this.originalVoxelsGroup.add(mesh);
+            voxelData.mesh = mesh; // Attach to the original group's mesh
         });
+        
+        // 1. Ensure the correct group is visible
+        this.originalVoxelsGroup.visible = !this.isRoundedPreviewEnabled;
+        this.roundedVoxelsGroup.visible = this.isRoundedPreviewEnabled;
+
+        // 2. Rebuild the rounded preview if enabled
+        if (this.isRoundedPreviewEnabled) {
+            this.rebuildRoundedPreview();
+        }
     },
 
     addHistoryStep: function(action) {
@@ -3082,7 +3506,7 @@ const VoxelApp = {
                     if (change.before === null) {
                         const existingVoxel = this.voxels.get(key);
                         if (existingVoxel) {
-                            this.scene.remove(existingVoxel.mesh);
+                            this.originalVoxelsGroup.remove(existingVoxel.mesh);
                             this.voxels.delete(key);
                         }
                     } else {
@@ -3095,12 +3519,15 @@ const VoxelApp = {
                             voxelMesh.position.set(x * this.VS + 0.5, y * this.VS + 0.5, z * this.VS + 0.5);
                             voxelMesh.castShadow = true;
                             voxelMesh.receiveShadow = true;
-                            this.scene.add(voxelMesh);
+                            this.originalVoxelsGroup.add(voxelMesh);
                             this.voxels.set(key, { color: change.before.color, mesh: voxelMesh });
                         }
                     }
                 });
+                
+                if (this.isRoundedPreviewEnabled) this.rebuildRoundedPreview();
                 break;
+                
             case 'SELECT':
                 this.selectedFaces = new Set(action.before);
                 this.updateSelectionVisuals();
@@ -3108,6 +3535,7 @@ const VoxelApp = {
         }
         this.historyPointer--;
         this.autosaveScene();
+this.onModelChanged();
     },
 
     redo: function() {
@@ -3123,7 +3551,7 @@ const VoxelApp = {
                     if (change.after === null) {
                         const existingVoxel = this.voxels.get(key);
                         if (existingVoxel) {
-                            this.scene.remove(existingVoxel.mesh);
+                            this.originalVoxelsGroup.remove(existingVoxel.mesh);
                             this.voxels.delete(key);
                         }
                     } else {
@@ -3136,18 +3564,22 @@ const VoxelApp = {
                             voxelMesh.position.set(x * this.VS + 0.5, y * this.VS + 0.5, z * this.VS + 0.5);
                             voxelMesh.castShadow = true;
                             voxelMesh.receiveShadow = true;
-                            this.scene.add(voxelMesh);
+                            this.originalVoxelsGroup.add(voxelMesh);
                             this.voxels.set(key, { color: change.after.color, mesh: voxelMesh });
                         }
                     }
                 });
+                
+                if (this.isRoundedPreviewEnabled) this.rebuildRoundedPreview();
                 break;
+                
             case 'SELECT':
                 this.selectedFaces = new Set(action.after);
                 this.updateSelectionVisuals();
                 break;
         }
         this.autosaveScene();
+this.onModelChanged();
     },
     
     cycleDrawingAxis: function() {
@@ -3206,6 +3638,9 @@ const VoxelApp = {
         this.currentDrawingAxis = 'y';
         this.activeDrawingLevel = { x: 0, y: 0, z: 0 };
         this.templateImageAxis = 'z';
+        localStorage.setItem('isRoundedPreviewEnabled', 'false');
+        localStorage.setItem('previewRoundnessFactor', '0.25');
+
         Object.keys(this.controls).forEach(key => localStorage.setItem(key, this.controls[key]));
         localStorage.setItem('voxelEditorGridSize', this.GRID);
         localStorage.setItem('voxelEditorColor', this.currentColor);
@@ -3213,6 +3648,10 @@ const VoxelApp = {
         localStorage.setItem('currentDrawingAxis', this.currentDrawingAxis);
         localStorage.setItem('activeDrawingLevel', JSON.stringify(this.activeDrawingLevel));
         localStorage.setItem('templateImageAxis', this.templateImageAxis);
+        
+        this.isRoundedPreviewEnabled = false;
+        this.previewRoundnessFactor = 0.25;
+
         this.updateAllControlInputs();
         this.clearAllConfirmed();
         this.rebuildHelpers();
@@ -3226,6 +3665,13 @@ const VoxelApp = {
         document.getElementById('color-picker-input').value = this.currentColor;
         document.getElementById('brush-size-slider').value = this.brushSize;
         document.getElementById('brush-size-display').textContent = `${this.brushSize}x${this.brushSize}`;
+        
+        // Update new controls
+        const previewToggle = document.getElementById('roundedPreviewToggle');
+        if (previewToggle) previewToggle.checked = this.isRoundedPreviewEnabled;
+        const previewSlider = document.getElementById('previewRoundnessSlider');
+        if (previewSlider) previewSlider.value = this.previewRoundnessFactor;
+
         if (this.isMobile) {
             document.getElementById('mobile-color-picker').value = this.currentColor;
             document.getElementById('mobile-grid-size-slider').value = this.GRID;
@@ -3249,6 +3695,7 @@ const VoxelApp = {
         this.updateAxisAndLevelUI();
         this.updateImageAxisUI();
         this.updateModeUI();
+        this.updateInAppRoundnessUI(); // Ensure new preview slider UI is updated
     },
 
     addColorToHistory: function(color) {
@@ -3279,6 +3726,7 @@ const VoxelApp = {
         });
     },
     
+
     disposeTemplateImageMesh: function () {
       if (this.templateImageMesh) {
         this.scene.remove(this.templateImageMesh);
@@ -3370,127 +3818,125 @@ const VoxelApp = {
                 break;
         }
     },
-    
-    autosaveScene: function() {
-        if (this.voxels.size === 0 && !this.templateImageData) {
-            localStorage.removeItem('voxelshaper_autosave');
-            return;
-        }
-        try {
-            const data = { 
-                gridSize: this.GRID, 
-                currentDrawingAxis: this.currentDrawingAxis,
-                activeDrawingLevel: this.activeDrawingLevel,
-                voxels: Array.from(this.voxels.entries()).map(([k, v]) => {
-                    const [x, y, z] = this.parseKey(k);
-                    return { x, y, z, color: v.color };
-                }),
-                templateImageData: this.templateImageData,
-                templateImagePinnedY: this.templateImagePinnedY,
-                templateImageAxis: this.templateImageAxis,
-            };
-            localStorage.setItem('voxelshaper_autosave', JSON.stringify(data));
-        } catch (e) {
-            console.error("Autosave failed:", e);
-        }
-    },
+ 
+	autosaveScene: function() {
+		if (this.voxels.size === 0 && !this.templateImageData) {
+			localStorage.removeItem('voxelshaper_autosave');
+			return;
+		}
+		try {
+			const data = { 
+				gridSize: this.GRID, 
+				currentDrawingAxis: this.currentDrawingAxis,
+				activeDrawingLevel: this.activeDrawingLevel,
+				voxels: Array.from(this.voxels.entries()).map(([k, v]) => {
+					const [x, y, z] = this.parseKey(k);
+					return { x, y, z, color: v.color };
+				}),
+				templateImageData: this.templateImageData,
+				templateImagePinnedY: this.templateImagePinnedY,
+				templateImageAxis: this.templateImageAxis,
+			};
+			localStorage.setItem('voxelshaper_autosave', JSON.stringify(data));
+		} catch (e) {
+			console.error("Autosave failed:", e);
+		}
+	},
 
-    loadAutosavedScene: function() {
-        const savedData = localStorage.getItem('voxelshaper_autosave');
-        if (savedData) {
-            try {
-                const data = JSON.parse(savedData);
-                if (this.loadFromData(data)) {
-                    this.showToast('Scene Restored', 'Your last session was loaded.', 'info');
-                }
-            } catch (e) {
-                console.error("Failed to load autosaved scene:", e);
-                localStorage.removeItem('voxelshaper_autosave');
-            }
-        }
-    },
+	loadAutosavedScene: function() {
+		const savedData = localStorage.getItem('voxelshaper_autosave');
+		if (savedData) {
+			try {
+				const data = JSON.parse(savedData);
+				if (this.loadFromData(data)) {
+					this.showToast('Scene Restored', 'Your last session was loaded.', 'info');
+				}
+			} catch (e) {
+				console.error("Failed to load autosaved scene:", e);
+				localStorage.removeItem('voxelshaper_autosave');
+			}
+		}
+	},
 
 
-    // --- NEW: Onboarding Methods ---
-    startOnboarding: function() {
-        trackEvent('onboarding_start');
-        document.getElementById('onboardingModal').showModal();
-    },
+	// --- NEW: Onboarding Methods (Implemented for Christian Heinrich Hohlfeld) ---
+	startOnboarding: function() {
+		trackEvent('onboarding_start');
+		document.getElementById('onboardingModal').showModal();
+	},
 
-    markOnboardingComplete: function() {
-        trackEvent('onboarding_complete', { action: 'start_blank' });
-        localStorage.setItem('voxelshaper_onboarding_complete', 'true');
-        document.getElementById('onboardingModal').close();
-    },
+	markOnboardingComplete: function() {
+		trackEvent('onboarding_complete', { action: 'start_blank' });
+		localStorage.setItem('voxelshaper_onboarding_complete', 'true');
+		document.getElementById('onboardingModal').close();
+	},
 
-    loadSampleProject: function() {
-        trackEvent('onboarding_complete', { action: 'load_sample' });
-        this.loadFromData(this.sampleProjectData);
-        this.markOnboardingComplete();
-        this.showToast('Sample Loaded', 'Explore the sample house project!', 'info');
-    },
+	loadSampleProject: function() {
+		trackEvent('onboarding_complete', { action: 'load_sample' });
+		this.loadFromData(this.sampleProjectData);
+		this.markOnboardingComplete();
+		this.showToast('Sample Loaded', 'Explore the sample house project!', 'info');
+	},
 
-    initVisualHapticLayer: function () {
-      if (!this.containerDiv) return;
-      this.hapticLayer = document.getElementById('haptic-layer');
-      if (!this.hapticLayer) {
-        this.hapticLayer = document.createElement('div');
-        this.hapticLayer.id = 'haptic-layer';
-        this.containerDiv.appendChild(this.hapticLayer);
-      }
-    },
-    
-    fallbackHaptic: function (clientX, clientY, color) {
-      // 1) kleines „Squish“-Feedback auf dem Container
-      try {
-        this.containerDiv.animate(
-          [{ transform: 'scale(1)' }, { transform: 'scale(0.985)' }, { transform: 'scale(1)' }],
-          { duration: 120, easing: 'ease-out' }
-        );
-      } catch {}
+	initVisualHapticLayer: function () {
+	  if (!this.containerDiv) return;
+	  this.hapticLayer = document.getElementById('haptic-layer');
+	  if (!this.hapticLayer) {
+		this.hapticLayer = document.createElement('div');
+		this.hapticLayer.id = 'haptic-layer';
+		this.containerDiv.appendChild(this.hapticLayer);
+	  }
+	},
+	
+	fallbackHaptic: function (clientX, clientY, color) {
+	  // 1) kleines „Squish“-Feedback auf dem Container
+	  try {
+		this.containerDiv.animate(
+		  [{ transform: 'scale(1)' }, { transform: 'scale(0.985)' }, { transform: 'scale(1)' }],
+		  { duration: 120, easing: 'ease-out' }
+		);
+	  } catch {}
 
-      // 2) Ripple an der Touch-Position
-      if (!this.hapticLayer) this.initVisualHapticLayer();
-      if (!this.hapticLayer) return;
+	  // 2) Ripple an der Touch-Position
+	  if (!this.hapticLayer) this.initVisualHapticLayer();
+	  if (!this.hapticLayer) return;
 
-      const rect = this.containerDiv.getBoundingClientRect();
-      const x = clientX - rect.left;
-      const y = clientY - rect.top;
+	  const rect = this.containerDiv.getBoundingClientRect();
+	  const x = clientX - rect.left;
+	  const y = clientY - rect.top;
 
-      const ripple = document.createElement('div');
-      ripple.className = 'haptic-ripple';
+	  const ripple = document.createElement('div');
+	  ripple.className = 'haptic-ripple';
 
-      // Farbwahl: Delete = rot, sonst aktuelle Zeichenfarbe
-      const stroke = color || (this.currentMode === 'DELETE' ? 'rgba(255,0,0,.65)' : this.currentColor || '#ffffff');
-      ripple.style.borderColor = stroke;
+	  // Farbwahl: Delete = rot, sonst aktuelle Zeichenfarbe
+	  const stroke = color || (this.currentMode === 'DELETE' ? 'rgba(255,0,0,.65)' : this.currentColor || '#ffffff');
+	  ripple.style.borderColor = stroke;
 
-      ripple.style.left = `${x}px`;
-      ripple.style.top  = `${y}px`;
+	  ripple.style.left = `${x}px`;
+	  ripple.style.top  = `${y}px`;
 
-      this.hapticLayer.appendChild(ripple);
-      ripple.addEventListener('animationend', () => ripple.remove());
-    },
-    
-    hapticOrVisualAt: function (clientX, clientY) {
-      const isIOS = /iP(ad|hone|od)/.test(navigator.userAgent) ||
-                    (navigator.userAgent.includes('Mac') && 'ontouchend' in document);
+	  this.hapticLayer.appendChild(ripple);
+	  ripple.addEventListener('animationend', () => ripple.remove());
+	},
+	
+	hapticOrVisualAt: function (clientX, clientY) {
+	  const isIOS = /iP(ad|hone|od)/.test(navigator.userAgent) ||
+					(navigator.userAgent.includes('Mac') && 'ontouchend' in document);
 
-      let didVibrate = false;
-      if (!isIOS && document.visibilityState === 'visible' && 'vibrate' in navigator) {
-        if (!navigator.userActivation || navigator.userActivation.isActive) {
-          didVibrate = !!navigator.vibrate(40); // 30–60 ms sind am zuverlässigsten
-        }
-      }
-      if (!didVibrate) this.fallbackHaptic(clientX, clientY);
-      return didVibrate;
-    },
+	  let didVibrate = false;
+	  if (!isIOS && document.visibilityState === 'visible' && 'vibrate' in navigator) {
+		if (!navigator.userActivation || navigator.userActivation.isActive) {
+		  didVibrate = !!navigator.vibrate(40); // 30–60 ms sind am zuverlässigsten
+		}
+	  }
+	  if (!didVibrate) this.fallbackHaptic(clientX, clientY);
+	  return didVibrate;
+	},
 };
 
 document.addEventListener('DOMContentLoaded', () => VoxelApp.init());
 </script>
 
 
-
 </body>
 </html>
-
