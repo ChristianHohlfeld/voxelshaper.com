@@ -1447,7 +1447,12 @@ if (this.isRoundedPreviewEnabled) this.rebuildRoundedPreview();
         window.addEventListener('keydown', (e) => this.onKeyDown(e));
         window.addEventListener('keyup', (e) => this.onKeyUp(e));
         this.cvs.addEventListener('contextmenu', (e) => e.preventDefault());
-        document.addEventListener('pointerlockchange', this.onPointerLockChange.bind(this), false);
+        // After (safe)
+document.addEventListener(
+  'pointerlockchange',
+  (ev) => typeof this.onPointerLockChange === 'function' && this.onPointerLockChange(ev),
+  false
+);
         // Desktop controls
         document.getElementById('grid-size-slider').addEventListener('input', (e) => this.setGridSize(parseInt(e.target.value)));
         document.getElementById('brush-size-slider').addEventListener('input', (e) => this.setBrushSize(parseInt(e.target.value)));
