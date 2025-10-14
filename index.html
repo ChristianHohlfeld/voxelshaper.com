@@ -2208,15 +2208,12 @@ clearSelection: function() {
         }
     },
 
-    onPointerLockChange: function() {
-        if (document.pointerLockElement === this.cvs) {
-            this.mouseState.isRotating = true;
-            this.previewVoxel.visible = false;
-            this.previewBrush.visible = false;
-        } else {
-            this.mouseState.isRotating = false;
-        }
-    },
+onPointerLockChange: function (ev) {
+  const locked = document.pointerLockElement === this.cvs;
+  this.mouseState.isRotating = locked;
+  this.previewVoxel.visible = !locked;
+  this.previewBrush.visible = !locked;
+},
 
     onMouseWheel: function(e) {
         e.preventDefault();
