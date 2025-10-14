@@ -666,37 +666,10 @@
 
 
 <script>
-/**
- * ==================================================================================
- * VoxelShaper Core Application Logic (Christian Heinrich Hohlfeld - Konstanz, Germany)
- * This application is a single-file, three.js-based voxel editor.
- * Mobile touch controls updated by Christian H. Hohlfeld & Gemini in Oct 2025.
- *
- * Major features integrated by Christian H. Hohlfeld:
- * 1. SDF Voxel Rounding Logic (createRoundedVoxelGeometry)
- * 2. Dual Mesh Groups for Blocky (originalVoxelsGroup) vs. Rounded (roundedVoxelsGroup) Previews.
- * 3. In-App UI for toggling Rounded Preview and controlling the Fillet Factor.
- * 4. Export UI/Logic updated to support Rounded Mesh export (3MF and STL).
- * 5. Onboarding Modal implemented.
- * * FIX APPLIED: Selection/Extrude logic modified to target the underlying individual block meshes 
- * (in originalVoxelsGroup) regardless of the visual preview mode, ensuring reliable 
- * face detection for all modification operations.
- * ==================================================================================
- */
-
-// --- START: SDF UTILITY FUNCTIONS (Christian Heinrich Hohlfeld's approach) ---
 
 const VOXEL_SEGMENTS = 10; // Controls smoothness/resolution for the rounded mesh.
 const VOXEL_SIZE_EXPORT = 1.0; 
 
-/**
- * Creates a BufferGeometry for a single rounded voxel (rounded cube/filleted box) at a specific position.
- * This uses the Signed Distance Field (SDF) approximation method to create rounded edges/corners.
- * @param {THREE.Vector3} position - Voxel grid coordinates (x, y, z).
- * @param {number} roundnessFactor - Interpolation factor (0 = Cube, 1 = Max Roundness).
- * @param {number} voxelUnitSize - The size of one voxel unit (VoxelApp.VS).
- * @returns {THREE.BufferGeometry} The rounded geometry.
- */
 function createRoundedVoxelGeometry(position, roundnessFactor, voxelUnitSize) {
     // 1. Setup based on VoxelApp properties
     const s = voxelUnitSize; // Voxel Size
