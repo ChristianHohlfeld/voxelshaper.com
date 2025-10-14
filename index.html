@@ -2450,36 +2450,45 @@ clearSelection: function() {
             z1 -= dz; if (z1 < 0) { z1 += dm; z0 += sz; }
         }
     },
-    
-    handleDragSelection: function (e) {
-        // line selection when locked
-        if (this.isSelectionLocked) {
-            return this.handleLineSelectionDrag(e);
-        }
+   handleDragSelection: function (e) {
+  // Line selection when locked
+  if (this.isSelectionLocked) {
+    return this.handleLineSelectionDrag(e);
+  }
 
-        // if drag started on empty space -> marquee
-        if (this.mouseState.selectionDragStartTarget === null && !this.isMobile) {
-            this.selectVoxelsInMarquee();
-            return true;
-        }
+  // If drag started on empty space -> marquee
+  if (this.mouseState.selectionDragStartTarget === null && !this.isMobile) {
+    if (!this.selectionChange.before) this.selectionChange.before = new Set(this.selectedFaces);
 
-        const currentNormalIndex =
-            this.selectedFaces.size > 0 ? parseInt([...this.selectedFaces][0].split(':')[1], 10) : -1;
+    // Clear current selection unless additive is requested
+    if (!(e.shiftKey || e.ctrlKey || e.metaKey)) {
+      this.selectedFaces.clear();
+      this.updateSelectionVisuals();
+    }
 
-        const target = this.getFaceTarget(e.clientX, e.clientY);
-        if (!target) return false;
+    this.selectVoxelsInMarquee();
+    return true;
+  }
 
-        const targetNormalIndex = parseInt(target.faceKey.split(':')[1], 10);
-        if (currentNormalIndex === -1 || targetNormalIndex === currentNormalIndex) {
-            if (this.selectionNormalIndex == null) this.selectionNormalIndex = targetNormalIndex;
-            if (!this.selectedFaces.has(target.faceKey)) {
-                this.selectedFaces.add(target.faceKey);
-                this.updateSelectionVisuals();
-            }
-            return true;
-        }
-        return false;
-    },
+  // ... keep your existing logic below here (dominant normal, etc.)
+  const currentNormalIndex =
+    this.selectedFaces.size > 0 ? parseInt([...this.selectedFaces][0].split(':')[1], 10) : -1;
+
+  const target = this.getFaceTarget(e.clientX, e.clientY);
+  if (!target) return false;
+
+  const targetNormalIndex = parseInt(target.faceKey.split(':')[1], 10);
+  if (currentNormalIndex === -1 || targetNormalIndex === currentNormalIndex) {
+    if (this.selectionNormalIndex == null) this.selectionNormalIndex = targetNormalIndex;
+    if (!this.selectedFaces.has(target.faceKey)) {
+      this.selectedFaces.add(target.faceKey);
+      this.updateSelectionVisuals();
+    }
+    return true;
+  }
+  return false;
+},
+
     
     handleLineSelectionDrag: function (e) {
         const start = this.mouseState.selectionDragStartTarget;
