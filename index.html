@@ -821,108 +821,109 @@ const VoxelApp3MFExporter = {
     
     tokenFromPaletteIndex: function(i) { return this.tokenForColorNumber(i + 1); },
 
-// Inside your VoxelApp3MFExporter object:
-buildPaintMesh: function (voxels, voxelMM, palette, isRounded = false, roundnessFactor = 0) {
-  const V = [];
-  const T = [];
-  const colorToIdx = new Map(palette.map((c, i) => [c, i]));
-  const s_mm = +voxelMM || 1;
+    // Inside your VoxelApp3MFExporter object:
+    buildPaintMesh: function (voxels, voxelMM, palette, isRounded = false, roundnessFactor = 0) {
+      const V = [];
+      const T = [];
+      const colorToIdx = new Map(palette.map((c, i) => [c, i]));
+      const s_mm = +voxelMM || 1;
+    
+      // BufferGeometryUtils available?
+      const BGU = (THREE && THREE.BufferGeometryUtils) || (typeof BufferGeometryUtils !== 'undefined' ? BufferGeometryUtils : null);
+      if (!BGU) throw new Error('BufferGeometryUtils not found. Load it after three.min.js');
+    
+      if (isRounded) {
+        // --- [FIXED] Neighbor-aware ROUNDED path ---
+        let base = 0;
+        const key = (x,y,z) => `${x},${y},${z}`;
+        const occ = new Set(voxels.map(v => key(v.x, v.y, v.z))); // occupancy for adjacency
+    
+        for (const v of voxels) {
+          const neighbors = {
+            px: occ.has(key(v.x+1, v.y,   v.z  )),
+            nx: occ.has(key(v.x-1, v.y,   v.z  )),
+            py: occ.has(key(v.x,   v.y+1, v.z  )),
+            ny: occ.has(key(v.x,   v.y-1, v.z  )),
+            pz: occ.has(key(v.x,   v.y,   v.z+1)),
+            nz: occ.has(key(v.x,   v.y,   v.z-1)),
+          };
+          
+          const geom = createRoundedVoxelGeometry(new THREE.Vector3(v.x, v.y, v.z), roundnessFactor, 1.0, neighbors);
+          
+          // --- FIX START ---
+          // Convert the indexed geometry to a non-indexed one to ensure correct vertex order.
+          const nonIndexedGeom = geom.toNonIndexed();
+          const positions = nonIndexedGeom.attributes.position.array;
+          // --- FIX END ---
+          
+          const hex = (v.color || '#ffffff').toUpperCase();
+          const idx = colorToIdx.has(hex) ? colorToIdx.get(hex) : 0;
+          const token = this.tokenFromPaletteIndex(idx);
+    
+          for (let i = 0; i < positions.length; i += 9) {
+            const x0 = positions[i+0] * s_mm, y0 = positions[i+1] * s_mm, z0 = positions[i+2] * s_mm;
+            const x1 = positions[i+3] * s_mm, y1 = positions[i+4] * s_mm, z1 = positions[i+5] * s_mm;
+            const x2 = positions[i+6] * s_mm, y2 = positions[i+7] * s_mm, z2 = positions[i+8] * s_mm;
+    
+            V.push(
+              [this.fmt(x0), this.fmt(-z0), this.fmt(y0)],
+              [this.fmt(x1), this.fmt(-z1), this.fmt(y1)],
+              [this.fmt(x2), this.fmt(-z2), this.fmt(y2)]
+            );
+            T.push([base, base + 1, base + 2, token]);
+            base += 3;
+          }
 
-  // BufferGeometryUtils available?
-  const BGU = (THREE && THREE.BufferGeometryUtils) || (typeof BufferGeometryUtils !== 'undefined' ? BufferGeometryUtils : null);
-  if (!BGU) throw new Error('BufferGeometryUtils not found. Load it after three.min.js');
-
-  if (isRounded) {
-    // --- Neighbor-aware ROUNDED path (merge per color for compactness) ---
-    const geomsByColor = new Map();
-    const key = (x,y,z) => `${x},${y},${z}`;
-    const occ = new Set(voxels.map(v => key(v.x, v.y, v.z))); // occupancy for adjacency
-
-    for (const v of voxels) {
-      const neighbors = {
-        px: occ.has(key(v.x+1, v.y,   v.z  )),
-        nx: occ.has(key(v.x-1, v.y,   v.z  )),
-        py: occ.has(key(v.x,   v.y+1, v.z  )),
-        ny: occ.has(key(v.x,   v.y-1, v.z  )),
-        pz: occ.has(key(v.x,   v.y,   v.z+1)),
-        nz: occ.has(key(v.x,   v.y,   v.z-1)),
-      };
-      // Build geometry in unit grid (size 1.0), we’ll scale to mm when reading positions
-      const geom = createRoundedVoxelGeometry(new THREE.Vector3(v.x, v.y, v.z), roundnessFactor, 1.0, neighbors);
-      const hex = (v.color || '#ffffff').toUpperCase();
-      if (!geomsByColor.has(hex)) geomsByColor.set(hex, []);
-      geomsByColor.get(hex).push(geom);
-    }
-
-    let base = 0;
-    for (const [hex, list] of geomsByColor) {
-      const merged = (list.length > 1) ? BGU.mergeBufferGeometries(list, false) : list[0];
-      if (list.length > 1) list.forEach(g => g.dispose());
-
-      const positions = merged.attributes.position.array;
-      const idx = colorToIdx.has(hex) ? colorToIdx.get(hex) : 0;
-      const token = this.tokenFromPaletteIndex(idx);
-
-      for (let i = 0; i < positions.length; i += 9) {
-        const x0 = positions[i+0] * s_mm, y0 = positions[i+1] * s_mm, z0 = positions[i+2] * s_mm;
-        const x1 = positions[i+3] * s_mm, y1 = positions[i+4] * s_mm, z1 = positions[i+5] * s_mm;
-        const x2 = positions[i+6] * s_mm, y2 = positions[i+7] * s_mm, z2 = positions[i+8] * s_mm;
-
-        // VoxelShaper coordinate mapping: (x, -z, y)
-        V.push(
-          [this.fmt(x0), this.fmt(-z0), this.fmt(y0)],
-          [this.fmt(x1), this.fmt(-z1), this.fmt(y1)],
-          [this.fmt(x2), this.fmt(-z2), this.fmt(y2)]
-        );
-        T.push([base, base + 1, base + 2, token]);
-        base += 3;
+          // --- FIX START ---
+          // Dispose both the original and the converted geometries to prevent memory leaks.
+          geom.dispose();
+          nonIndexedGeom.dispose();
+          // --- FIX END ---
+        }
+    
+        return { V, T, palette };
       }
-      merged.dispose();
-    }
-
-    return { V, T, palette };
-  }
-
-  // --- BLOCKY path (unchanged logic, included here fully) ---
-  const CUBE_V = [
-    [0,0,0],[1,0,0],[1,1,0],[0,1,0],
-    [0,0,1],[1,0,1],[1,1,1],[0,1,1]
-  ];
-  const CUBE_T = [
-    [0,2,1],[0,3,2], // bottom
-    [4,5,6],[4,6,7], // top
-    [0,4,7],[0,7,3], // left
-    [1,2,6],[1,6,5], // right
-    [3,7,6],[3,6,2], // front
-    [0,1,5],[0,5,4]  // back
-  ];
-
-  const vertCache = new Map();
-  const getIdx = (vx,vy,vz,colorIdx) => {
-    const k = `${vx},${vy},${vz},${colorIdx}`;
-    if (!vertCache.has(k)) {
-      vertCache.set(k, V.length);
-      V.push([this.fmt(vx*s_mm), this.fmt(-vz*s_mm), this.fmt(vy*s_mm)]);
-    }
-    return vertCache.get(k);
-  };
-
-  for (const v of voxels) {
-    const ci = colorToIdx.has(v.color) ? colorToIdx.get(v.color) : 0;
-    const token = this.tokenFromPaletteIndex(ci);
-    const x=v.x, y=v.y, z=v.z;
-
-    for (const [a,b,c] of CUBE_T) {
-      const va = CUBE_V[a], vb = CUBE_V[b], vc = CUBE_V[c];
-      const ia = getIdx(x+va[0], y+va[1], z+va[2], ci);
-      const ib = getIdx(x+vb[0], y+vb[1], z+vb[2], ci);
-      const ic = getIdx(x+vc[0], y+vc[1], z+vc[2], ci);
-      T.push([ia, ib, ic, token]);
-    }
-  }
-
-  return { V, T, palette };
-},
+    
+      // --- BLOCKY path (unchanged logic) ---
+      const CUBE_V = [
+        [0,0,0],[1,0,0],[1,1,0],[0,1,0],
+        [0,0,1],[1,0,1],[1,1,1],[0,1,1]
+      ];
+      const CUBE_T = [
+        [0,2,1],[0,3,2], // bottom
+        [4,5,6],[4,6,7], // top
+        [0,4,7],[0,7,3], // left
+        [1,2,6],[1,6,5], // right
+        [3,7,6],[3,6,2], // front
+        [0,1,5],[0,5,4]  // back
+      ];
+    
+      const vertCache = new Map();
+      const getIdx = (vx,vy,vz,colorIdx) => {
+        const k = `${vx},${vy},${vz},${colorIdx}`;
+        if (!vertCache.has(k)) {
+          vertCache.set(k, V.length);
+          V.push([this.fmt(vx*s_mm), this.fmt(-vz*s_mm), this.fmt(vy*s_mm)]);
+        }
+        return vertCache.get(k);
+      };
+    
+      for (const v of voxels) {
+        const ci = colorToIdx.has(v.color) ? colorToIdx.get(v.color) : 0;
+        const token = this.tokenFromPaletteIndex(ci);
+        const x=v.x, y=v.y, z=v.z;
+    
+        for (const [a,b,c] of CUBE_T) {
+          const va = CUBE_V[a], vb = CUBE_V[b], vc = CUBE_V[c];
+          const ia = getIdx(x+va[0], y+va[1], z+va[2], ci);
+          const ib = getIdx(x+vb[0], y+vb[1], z+vb[2], ci);
+          const ic = getIdx(x+vc[0], y+vc[1], z+vc[2], ci);
+          T.push([ia, ib, ic, token]);
+        }
+      }
+    
+      return { V, T, palette };
+    },
     
     tinyTriangle: function(z = 0) {
         return {
@@ -1062,7 +1063,6 @@ buildPaintMesh: function (voxels, voxelMM, palette, isRounded = false, roundness
     }
 };
 // --- END: 3MF EXPORTER INTEGRATION ---
-
 
 const VoxelApp = {
     // --- Configuration ---
