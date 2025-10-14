@@ -3048,6 +3048,7 @@ rebuildRoundedPreview: function() {
         this.updateUrlWithModelId();
         localStorage.removeItem('voxelshaper_autosave');
         this.showToast('Project Cleared', '', 'info');
+		this.onModelChanged('clear');
     },
 
     rebuildFoundation: function() {
@@ -3536,6 +3537,7 @@ rebuildRoundedPreview: function() {
         this.historyPointer--;
         this.autosaveScene();
 this.onModelChanged();
+		this.onModelChanged('undo');
     },
 
     redo: function() {
@@ -3580,8 +3582,26 @@ this.onModelChanged();
         }
         this.autosaveScene();
 this.onModelChanged();
+		this.onModelChanged('redo');
     },
-    
+    // State
+roundedPreviewDirty: false,
+_roundedRebuildRAF: null,
+
+onModelChanged(reason = '') {
+  // collapse multiple mutations into one rebuild
+  if (!this.isRoundedPreviewEnabled) return;
+  this.roundedPreviewDirty = true;
+  if (this._roundedRebuildRAF) return;
+  this._roundedRebuildRAF = requestAnimationFrame(() => {
+    this._roundedRebuildRAF = null;
+    if (!this.roundedPreviewDirty) return;
+    this.roundedPreviewDirty = false;
+    try { this.rebuildRoundedPreview(); }
+    catch (e) { console.warn('Rounded rebuild failed (' + reason + '):', e); }
+  });
+},
+
     cycleDrawingAxis: function() {
         const axes = ['y', 'z', 'x'];
         const currentIndex = axes.indexOf(this.currentDrawingAxis);
