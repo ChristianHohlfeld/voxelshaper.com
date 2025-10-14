@@ -1427,9 +1427,12 @@ const VoxelApp = {
 
         this.rebuildHelpers();
         // Ensure initial visibility matches stored state and build the preview once if needed
-        this.originalVoxelsGroup.visible = !this.isRoundedPreviewEnabled;
-        this.roundedVoxelsGroup.visible  =  this.isRoundedPreviewEnabled;
-        if (this.isRoundedPreviewEnabled) this.rebuildRoundedPreview();
+this.roundedVoxelsGroup.visible = this.isRoundedPreviewEnabled;
+this.originalVoxelsGroup.visible = true; // keep raycastable
+this.setOriginalMeshesVisualVisibility(!this.isRoundedPreviewEnabled);
+
+// If preview starts enabled, build it once
+if (this.isRoundedPreviewEnabled) this.rebuildRoundedPreview();
     },
     
     setupEventListeners: function() {
@@ -1597,31 +1600,31 @@ const VoxelApp = {
             roundedLabel.textContent = isRounded ? 'Rounded (Filleted Edges)' : 'Rounded (Smoother Mesh)';
         }
     },
-    
+    // NEW: show/hide the original blocky meshes visually, but keep them raycastable
+setOriginalMeshesVisualVisibility: function(show) {
+  if (!this.originalVoxelsGroup) return;
+  this.originalVoxelsGroup.traverse(o => {
+    if (o.isMesh && o.material) o.material.visible = !!show;
+  });
+},
     toggleRoundedPreview: function(e) {
-        this.isRoundedPreviewEnabled = e ? e.target.checked : !this.isRoundedPreviewEnabled; 
-        localStorage.setItem('isRoundedPreviewEnabled', this.isRoundedPreviewEnabled);
-        
-        // Control visibility of the groups
-        this.originalVoxelsGroup.visible = !this.isRoundedPreviewEnabled;
-        this.roundedVoxelsGroup.visible = this.isRoundedPreviewEnabled;
-        
-        if (this.isRoundedPreviewEnabled) {
-            this.rebuildRoundedPreview();
-        } else {
-            this.disposeRoundedPreview();
-        }
-        this.updateInAppRoundnessUI();
-    },
-    
-    setPreviewRoundnessFactor: function(e) {
-        this.previewRoundnessFactor = parseFloat(e.target.value);
-        localStorage.setItem('previewRoundnessFactor', this.previewRoundnessFactor);
-        this.updateInAppRoundnessUI();
-        if (this.isRoundedPreviewEnabled) {
-            this.rebuildRoundedPreview();
-        }
-    },
+  this.isRoundedPreviewEnabled = e ? e.target.checked : !this.isRoundedPreviewEnabled;
+  localStorage.setItem('isRoundedPreviewEnabled', this.isRoundedPreviewEnabled);
+
+  // Rounded group shows/hides normally
+  this.roundedVoxelsGroup.visible = this.isRoundedPreviewEnabled;
+
+  // Keep original group raycastable but hide its MATERIALS visually if preview is on
+  this.originalVoxelsGroup.visible = true;
+  this.setOriginalMeshesVisualVisibility(!this.isRoundedPreviewEnabled);
+
+  if (this.isRoundedPreviewEnabled) {
+    this.rebuildRoundedPreview();
+  } else {
+    this.disposeRoundedPreview();
+  }
+  this.updateInAppRoundnessUI();
+},
     
     updateInAppRoundnessUI: function() {
         const previewToggle = document.getElementById('roundedPreviewToggle');
@@ -1965,10 +1968,11 @@ handleTapInteraction: function(event) {
         this.cam.quaternion.setFromEuler(this.euler);
     },
 	
-    clearSelection: function() {
+clearSelection: function() {
   if (this.selectedFaces.size === 0) return;
   if (!this.selectionChange.before) this.selectionChange.before = new Set(this.selectedFaces);
   this.selectedFaces.clear();
+  this.selectionNormalIndex = null;
   this.updateSelectionVisuals();
 },
     onPointerUp: function(e) {
@@ -2723,21 +2727,24 @@ handleTapInteraction: function(event) {
         return null;
     },
 
-    // FIX: Always use the original (blocky) voxel meshes for accurate face detection, 
-    // regardless of whether the rounded preview is enabled.
-    getFaceAt: function(clientX, clientY) {
-        const rect = this.cvs.getBoundingClientRect();
-        const mouse = new THREE.Vector2(((clientX - rect.left) / rect.width) * 2 - 1, -((clientY - rect.top) / this.cvs.clientHeight) * 2 + 1);
-        const raycaster = new THREE.Raycaster();
-        raycaster.setFromCamera(mouse, this.cam);
-        
-        // Use only the original blocky meshes for face detection.
-        const allMeshes = [...this.originalVoxelsGroup.children, this.groundPlaneMesh].filter(m => m && m.visible);
+getFaceAt: function(clientX, clientY) {
+  const rect = this.cvs.getBoundingClientRect();
+  const mouse = new THREE.Vector2(
+    ((clientX - rect.left) / rect.width) * 2 - 1,
+    -((clientY - rect.top) / rect.height) * 2 + 1   // <-- use rect.height
+  );
 
-        if (allMeshes.length === 0) return null;
-        const intersects = raycaster.intersectObjects(allMeshes, false);
-        return intersects.length > 0 ? intersects[0] : null;
-    },
+  const raycaster = new THREE.Raycaster();
+  raycaster.setFromCamera(mouse, this.cam);
+
+  // Always raycast against the original blocky meshes + ground, regardless of visual visibility
+  const allMeshes = [...this.originalVoxelsGroup.children, this.groundPlaneMesh];
+  if (allMeshes.length === 0) return null;
+
+  const intersects = raycaster.intersectObjects(allMeshes, false);
+  return intersects.length > 0 ? intersects[0] : null;
+},
+
     
     clearSelection: function() {
         if (this.selectedFaces.size > 0) {
@@ -2793,50 +2800,48 @@ handleTapInteraction: function(event) {
         });
     },
 
-    // FIX: Simplified face target detection based on reliable hits from getFaceAt
-    getFaceTarget: function (clientX, clientY) {
-        const hit = this.getFaceAt(clientX, clientY);
-        if (!hit) return null;
-        let voxelKey = null;
-        let nrm = null;
+getFaceTarget: function(clientX, clientY) {
+  const hit = this.getFaceAt(clientX, clientY);
+  if (!hit) return null;
 
-        if (hit.object === this.groundPlaneMesh || (hit.object.userData && hit.object.userData.isFoundation)) {
-            // --- Foundation Hit ---
-            nrm = new THREE.Vector3(0, 1, 0); // Always +Y for ground plane
-            const worldPos = hit.point.clone();
-            const x = Math.floor(worldPos.x / this.VS);
-            const z = Math.floor(worldPos.z / this.VS);
-            if (x < 0 || x >= this.GRID || z < 0 || z >= this.GRID) return null;
-            voxelKey = this.key(x, -1, z); 
-        } else {
-            // --- Voxel Hit (guaranteed to be an individual block mesh now) ---
-            const voxelData = this.findVoxelDataByMesh(hit.object);
-            if (!voxelData) return null;
-            const basePos = hit.object.position;
-            const x = Math.round(basePos.x / this.VS - 0.5);
-            const y = Math.round(basePos.y / this.VS - 0.5);
-            const z = Math.round(basePos.z / this.VS - 0.5);
-            voxelKey = this.key(x, y, z);
+  // Identify whether we hit the foundation plane
+  const fd = this.findVoxelDataByMesh(hit.object);
+  if (fd && fd.isFoundation) {
+    return { isFoundation: true };
+  }
 
-            // Get the face normal, transform it by the object's world matrix
-            nrm = hit.face.normal.clone();
-            const nMat = new THREE.Matrix3().getNormalMatrix(hit.object.matrixWorld);
-            nrm.applyNormalMatrix(nMat).normalize();
+  // We hit a voxel (original cube mesh)
+  const mesh = hit.object;
 
-            // Snap the normal to the nearest major axis
-            const ax = Math.abs(nrm.x), ay = Math.abs(nrm.y), az = Math.abs(nrm.z);
-            if (ax >= ay && ax >= az) nrm.set(Math.sign(nrm.x), 0, 0);
-            else if (ay >= ax && ay >= az) nrm.set(0, Math.sign(nrm.y), 0);
-            else nrm.set(0, 0, Math.sign(nrm.z));
-        }
+  // Convert the face normal into world space (then normalize)
+  const worldNormal = hit.face.normal.clone()
+    .applyMatrix3(new THREE.Matrix3().getNormalMatrix(mesh.matrixWorld))
+    .normalize();
 
-        const normalIndex = this.getNormalIndex(nrm);
-        return {
-          faceKey: `${voxelKey}:${normalIndex}`,
-          normal: nrm,
-          intersectionPoint: hit.point
-        };
-    },
+  const normalIdx = this.getNormalIndex(worldNormal);
+  if (normalIdx < 0) return null;
+
+  // Compute voxel indices from mesh center (positions are at x*VS + 0.5, etc.)
+  const x = Math.floor(mesh.position.x / this.VS);
+  const y = Math.floor(mesh.position.y / this.VS);
+  const z = Math.floor(mesh.position.z / this.VS);
+
+  // Guard against out-of-range results
+  if (x < 0 || x >= this.GRID || y < -1 || y >= this.GRID || z < 0 || z >= this.GRID) {
+    return null;
+  }
+
+  const voxelKey = this.key(x, y, z);
+  const faceKey  = `${voxelKey}:${normalIdx}`;
+
+  return {
+    isFoundation: false,
+    faceKey,
+    normal: this.getNormalFromIndex(normalIdx).clone(), // axis-aligned vector
+    intersectionPoint: hit.point.clone(),
+    x, y, z
+  };
+},
 
     updateExtrudePreview: function(distance) {
         this.ghostVoxels.forEach(ghost => {
