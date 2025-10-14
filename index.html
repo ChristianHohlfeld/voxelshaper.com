@@ -1703,19 +1703,50 @@ disposeRoundedPreview: function() {
 },
     
 handleTapInteraction: function(event) {
-  if (this.currentMode === 'SELECT') {
-    const target = this.getFaceTarget(event.clientX, event.clientY);
-    // Tap should ONLY affect selection — no extrusion on tap.
-    if (target) {
-      this.handleFaceSelection(event);
+  if (this.currentMode !== 'SELECT') {
+    const targetInfo = this.getRayTargetInfo(this.mouseState.downX, this.mouseState.downY);
+    if (targetInfo) this.modifyVoxel(targetInfo.x, targetInfo.y, targetInfo.z, targetInfo.normal);
+    return;
+  }
+
+  const target = this.getFaceTarget(event.clientX, event.clientY);
+  if (!this.selectionChange.before) this.selectionChange.before = new Set(this.selectedFaces);
+
+  // Empty click/tap → clear
+  if (!target) {
+    this.clearSelection();
+    return;
+  }
+
+  const k = target.faceKey;
+  const isCtrl = !!(event.ctrlKey || event.metaKey);
+  const isShift = !!event.shiftKey;
+
+  if (isCtrl) { // toggle
+    if (this.selectedFaces.has(k)) this.selectedFaces.delete(k);
+    else this.selectedFaces.add(k);
+    this.updateSelectionVisuals();
+    return;
+  }
+
+  if (isShift) { // additive
+    if (!this.selectedFaces.has(k)) {
+      this.selectedFaces.add(k);
+      this.updateSelectionVisuals();
     }
     return;
   }
 
-  // Non-select modes keep their single-tap modify behavior:
-  const targetInfo = this.getRayTargetInfo(this.mouseState.downX, this.mouseState.downY);
-  if (targetInfo) this.modifyVoxel(targetInfo.x, targetInfo.y, targetInfo.z, targetInfo.normal);
+  // default: single-select or deselect by re-click
+  if (this.selectedFaces.size === 1 && this.selectedFaces.has(k)) {
+    this.clearSelection(); // easy deselect by clicking the same face
+  } else {
+    this.selectedFaces.clear();
+    this.selectedFaces.add(k);
+    this.updateSelectionVisuals();
+  }
 },
+
 
     onPointerDown: function (e) {
         if (e.target !== this.cvs) return;
@@ -1933,7 +1964,13 @@ handleTapInteraction: function(event) {
         this.euler.x = Math.max(-Math.PI / 2, Math.min(Math.PI / 2, this.euler.x));
         this.cam.quaternion.setFromEuler(this.euler);
     },
-    
+	
+    clearSelection: function() {
+  if (this.selectedFaces.size === 0) return;
+  if (!this.selectionChange.before) this.selectionChange.before = new Set(this.selectedFaces);
+  this.selectedFaces.clear();
+  this.updateSelectionVisuals();
+},
     onPointerUp: function(e) {
         if (!this.isPointerDown) return;
         
@@ -2191,6 +2228,14 @@ handleTapInteraction: function(event) {
     },
     
     onKeyDown: function(e) {
+		  if (e.key === 'Escape') {
+    if (this.currentMode === 'SELECT' && this.selectedFaces.size > 0) {
+      e.preventDefault();
+      if (!this.selectionChange.before) this.selectionChange.before = new Set(this.selectedFaces);
+      this.clearSelection();
+    }
+    return;
+  }
         if (e.code === 'Space') {
             if (e.target.tagName !== 'INPUT' && e.target.tagName !== 'TEXTAREA' && e.target.tagName !== 'SELECT' && !document.querySelector('dialog[open]')) {
                 e.preventDefault();
