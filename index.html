@@ -1704,9 +1704,9 @@ disposeRoundedPreview: function() {
     this.roundedVoxelsGroup.remove(this.roundedVoxelsGroup.children[0]);
   }
 },
-    
 handleTapInteraction: function(event) {
   if (this.currentMode !== 'SELECT') {
+    // Non-select modes keep their behavior
     const targetInfo = this.getRayTargetInfo(this.mouseState.downX, this.mouseState.downY);
     if (targetInfo) this.modifyVoxel(targetInfo.x, targetInfo.y, targetInfo.z, targetInfo.normal);
     return;
@@ -1715,24 +1715,24 @@ handleTapInteraction: function(event) {
   const target = this.getFaceTarget(event.clientX, event.clientY);
   if (!this.selectionChange.before) this.selectionChange.before = new Set(this.selectedFaces);
 
-  // Empty click/tap → clear
-  if (!target) {
+  // Empty or foundation → clear selection
+  if (!target || target.isFoundation) {
     this.clearSelection();
     return;
   }
 
   const k = target.faceKey;
-  const isCtrl = !!(event.ctrlKey || event.metaKey);
+  const isCtrl  = !!(event.ctrlKey || event.metaKey);
   const isShift = !!event.shiftKey;
 
-  if (isCtrl) { // toggle
+  // CTRL/CMD → toggle; SHIFT → additive
+  if (isCtrl) {
     if (this.selectedFaces.has(k)) this.selectedFaces.delete(k);
     else this.selectedFaces.add(k);
     this.updateSelectionVisuals();
     return;
   }
-
-  if (isShift) { // additive
+  if (isShift) {
     if (!this.selectedFaces.has(k)) {
       this.selectedFaces.add(k);
       this.updateSelectionVisuals();
@@ -1740,9 +1740,9 @@ handleTapInteraction: function(event) {
     return;
   }
 
-  // default: single-select or deselect by re-click
+  // Default: single-select or deselect-by-reclick
   if (this.selectedFaces.size === 1 && this.selectedFaces.has(k)) {
-    this.clearSelection(); // easy deselect by clicking the same face
+    this.clearSelection(); // re-click the same face → deselect
   } else {
     this.selectedFaces.clear();
     this.selectedFaces.add(k);
