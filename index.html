@@ -1,46 +1,10 @@
+<!DOCTYPE html>
 <html lang="en" data-theme="dark">
 <head>
-    <script data-cookieconsent="ignore">
-        window.dataLayer = window.dataLayer || [];
-        function gtag() { dataLayer.push(arguments); }
-        gtag('consent', 'default', {
-            'ad_storage': 'denied',
-            'ad_user_data': 'denied',
-            'ad_personalization': 'denied',
-            'analytics_storage': 'denied',
-            'functionality_storage': 'denied',
-            'personalization_storage': 'denied',
-            'security_storage': 'granted',
-            'wait_for_update': 500
-        });
-        gtag('set', 'ads_data_redaction', true);
-        gtag('set', 'url_passthrough', false);
-    </script>
-
-    <script id="Cookiebot" src="https://consent.cookiebot.com/uc.js" data-cbid="5024458a-2b3f-4feb-9e05-07eedb92b0d1" data-blockingmode="auto" type="text/javascript"></script>
-    <script async src="https://www.googletagmanager.com/gtag/js?id=G-DMNJKVCNBM"></script>
-    <script>
-      window.dataLayer = window.dataLayer || [];
-      function gtag(){dataLayer.push(arguments);}
-      gtag('js', new Date());
-
-      // Die ID des Editors mit IP-Anonymisierung
-      gtag('config', 'G-DMNJKVCNBM', { 'anonymize_ip': true });
-      
-      // Dein Analytics Helper bleibt unverändert
-      function trackEvent(eventName, params = {}) {
-          if (typeof gtag === 'function') {
-              gtag('event', eventName, params);
-          } else {
-              console.log(`Analytics Event (gtag not found): ${eventName}`, params);
-          }
-      }
-    </script>
-
     <meta charset="UTF-8">
-    <title>VoxelShaper - Easy Voxel Editor &amp; CAD for 3D Printing</title>
-    <meta name="description" content="Create, design, and export 3D models for printing with VoxelShaper, the easy-to-use online voxel editor. Perfect for makers, hobbyists, and Bambu Lab users. Supports multicolor 3MF and STL exports.">
-    <meta name="keywords" content="voxel editor, voxel cad, 3d design tool, easy 3d modeling, online voxel art, 3d printing software, bambu lab, maker cad, 3mf export, stl export, ams multicolor, block modeling, hobbyist cad, minecraft style 3d editor">
+    <title>VoxelShaper - Voxel CAD with Polyslice Slicer</title>
+    <meta name="description" content="Create, design, and export 3D models for printing with VoxelShaper, the easy-to-use online voxel editor. Supports STL export and G-Code generation via the integrated Polyslice.js slicer.">
+    <meta name="keywords" content="voxel editor, voxel cad, 3d design tool, easy 3d modeling, online voxel art, 3d printing software, stl export, block modeling, hobbyist cad, minecraft style 3d editor, polyslice, gcode">
     <link rel="canonical" href="https://voxelshaper.com/">
     <meta name="theme-color" content="#0f1117">
 
@@ -49,15 +13,15 @@
 
     <meta property="og:type" content="website">
     <meta property="og:url" content="https://voxelshaper.com/">
-    <meta property="og:title" content="VoxelShaper – Voxel CAD for 3D Printing (Bambu Lab Ready)">
-    <meta property="og:description" content="Simple voxel-based CAD for makers. Minecraft-style models, export as 3MF/STL for Bambu Lab Studio &amp; AMS Multicolor.">
+    <meta property="og:title" content="VoxelShaper – Voxel CAD with Polyslice">
+    <meta property="og:description" content="Simple voxel-based CAD for makers. Exports as STL and features Polyslice integration.">
     <meta property="og:image" content="https://voxelshaper.com/og.png">
     <meta property="og:site_name" content="VoxelShaper">
     <meta property="og:locale" content="en_US">
 
     <meta name="twitter:card" content="summary_large_image">
-    <meta name="twitter:title" content="VoxelShaper – Voxel CAD for 3D Printing (Bambu Lab Ready)">
-    <meta property="og:description" content="Simple voxel-based CAD for makers. Minecraft-style models, export as 3MF/STL for Bambu Lab Studio &amp; AMS Multicolor.">
+    <meta name="twitter:title" content="VoxelShaper – Voxel CAD with Polyslice">
+    <meta property="og:description" content="Simple voxel-based CAD for makers. Exports as STL and features Polyslice integration.">
     <meta name="twitter:image" content="https://voxelshaper.com/og.png">
 
     <script type="application/ld+json">
@@ -69,8 +33,7 @@
           "@id": "https://voxelshaper.com/#org",
           "name": "VoxelShaper",
           "url": "https://voxelshaper.com/",
-          "logo": "https://voxelshaper.com/logo-512.png",
-          "sameAs": []
+          "logo": "https://voxelshaper.com/logo-512.png"
         },
         {
           "@type": "WebApplication",
@@ -80,19 +43,7 @@
           "applicationCategory": "DesignApplication",
           "operatingSystem": "Web",
           "isAccessibleForFree": true,
-          "publisher": { "@id": "https://voxelshaper.com/#org" },
-          "author": {
-            "@type": "Person",
-            "name": "Christian Heinrich Hohlfeld"
-          },
           "copyrightHolder": { "@id": "https://voxelshaper.com/#org" }
-        },
-        {
-          "@type": "WebSite",
-          "@id": "https://voxelshaper.com/#website",
-          "name": "VoxelShaper",
-          "url": "https://voxelshaper.com/",
-          "publisher": { "@id": "https://voxelshaper.com/#org" }
         }
       ]
     }
@@ -103,18 +54,15 @@
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
 
     <style>
-		#CookiebotWidget, .CookiebotWidget { display: none !important; }
-		.Cookiebotwidget-logo {
-            outline: 0px solid #1032CF !important;
-            outline-offset: 1px;
-        }
+        /* ... (General styles retained and adapted) ... */
         :root { --toast-z-index: 9999; }
         html, body {
             overflow: hidden;
             height: 100%;
             margin: 0;
             padding: 0;
-            touch-action: none; /* More aggressive prevention of default touch actions */
+            touch-action: none;
+            font-family: 'Inter', sans-serif;
         }
         #container, #voxelCanvas { 
             touch-action: none;
@@ -210,7 +158,7 @@
             padding-bottom: 0 !important; /* Let the bar float */
         }
         :where(html, body, #container, #voxelCanvas, #controls, #mobile-ui-container,
-                .mobile-bottom-bar, .btn, .dropdown, .menu, .modal, label, span, div) {
+                 .mobile-bottom-bar, .btn, .dropdown, .menu, .modal, label, span, div) {
             -webkit-user-select: none;
             user-select: none;
             -webkit-touch-callout: none;
@@ -228,7 +176,7 @@
           position: absolute;
           inset: 0;
           pointer-events: none;
-          z-index: 40; /* unter Toast (z-50), über Canvas */
+          z-index: 40;
         }
         .haptic-ripple {
           position: absolute;
@@ -241,21 +189,21 @@
           animation: hRipple .35s ease-out forwards;
         }
         @keyframes hRipple {
-          0%   { opacity: .85; transform: translate(-50%, -50%) scale(0.7); }
-          100% { opacity: 0;   transform: translate(-50%, -50%) scale(2.2); }
+          0% { opacity: .85; transform: translate(-50%, -50%) scale(0.7); }
+          100% { opacity: 0; transform: translate(-50%, -50%) scale(2.2); }
         }
     </style>
 </head>
-<body class="bg-base-100 min-h-screen text-base-content flex flex-col">
+<body class="bg-base-100 min-h-screen text-base-content flex flex-col rounded-lg">
 
-<div id="controls" class="hidden md:flex items-center justify-between gap-4 p-2 bg-base-200 border-b border-base-content/20">
+<div id="controls" class="hidden md:flex items-center justify-between gap-4 p-2 bg-base-200 border-b border-base-content/20" style="display: flex;">
     <div class="controls-group">
         <div class="dropdown">
             <label tabindex="0" class="btn btn-sm btn-ghost">File</label>
             <ul tabindex="0" class="dropdown-content z-[1] menu p-2 shadow bg-base-300 rounded-box w-52">
-                <li><a id="saveBtn">Save</a></li>
-                <li><a id="loadBtn">Load</a></li>
-                <li><a id="exportBtn">Export</a></li>
+                <li><a id="saveBtn">Save Local (.json)</a></li>
+                <li><a id="loadBtn">Load Local (.json)</a></li>
+                <li><a id="exportBtn">Export Options</a></li>
                 <div class="divider my-1"></div>
                 <li><a id="loadImageBtn">Load Reference Image</a></li>
                 <li><a id="removeImageBtn" class="hidden">Remove Reference Image</a></li>
@@ -329,18 +277,18 @@
         <div class="divider divider-horizontal"></div>
         <label for="grid-size-slider" class="text-sm whitespace-nowrap">Grid:</label>
         <input type="range" id="grid-size-slider" min="5" max="100" value="10" class="range range-xs w-28">
-        <span id="grid-size-display" class="font-bold text-primary text-sm">10³</span>
+        <span id="grid-size-display" class="font-bold text-primary text-sm">17³</span>
         <label for="color-picker-input" class="btn btn-sm btn-ghost normal-case gap-2">Color
             <input type="color" id="color-picker-input" value="#FFFFFF" class="h-6 w-6 cursor-pointer rounded-full">
         </label>
-        <div id="color-history-palette" class="controls-group gap-1"></div>
+        <div id="color-history-palette" class="controls-group gap-1"><div class="color-swatch" title="#FE7A4D" style="background-color: rgb(254, 122, 77);"></div></div>
         <button id="modeToggle" class="btn btn-sm btn-neutral">Mode</button>
         <span id="current-mode" class="font-bold text-success text-center text-sm whitespace-nowrap">Mode: Select</span>
-        <button id="selectionLockToggle" class="btn btn-sm btn-ghost text-lg"><i class="fas fa-lock"></i></button>
+        <button id="selectionLockToggle" class="btn btn-sm btn-ghost text-lg"><i class="fas fa-unlock"></i></button>
         <div id="brush-controls" class="controls-group">
             <div class="divider divider-horizontal"></div>
             <label for="brush-size-slider" class="text-sm whitespace-nowrap">Brush:</label>
-            <input type="range" id="brush-size-slider" min="1" max="10" value="1" class="range range-xs w-16" disabled>
+            <input type="range" id="brush-size-slider" min="1" max="10" value="1" class="range range-xs w-16" disabled="">
             <span id="brush-size-display" class="font-bold text-sm text-base-content/50">1x1</span>
         </div>
         
@@ -350,12 +298,11 @@
                 <span class="label-text text-sm">Rounded Preview:</span>
                 <input type="checkbox" id="roundedPreviewToggle" class="toggle toggle-accent toggle-sm">
             </label>
-            <div id="preview-slider-group" class="controls-group gap-1 ml-2">
+            <div id="preview-slider-group" class="controls-group gap-1 ml-2" style="opacity: 1;">
                  <input type="range" id="previewRoundnessSlider" min="0.01" max="1.0" value="0.25" step="0.01" class="range range-xs w-16">
-                 <span id="preview-factor-display" class="font-bold text-sm text-accent w-16 text-right">0.25</span>
+                 <span id="preview-factor-display" class="font-bold text-sm text-accent w-16 text-right">0.68</span>
             </div>
         </div>
-
     </div>
 
     <div class="flex-grow"></div>
@@ -372,8 +319,8 @@
             <i class="fas fa-share-alt"></i>
         </button>
 
-        <button id="loginLogoutBtn" class="btn btn-sm btn-info">Login</button>
-        <span id="userIdDisplay" class="font-bold text-info whitespace-nowrap overflow-hidden text-ellipsis max-w-xs flex items-center gap-1"></span>
+        <button id="loginLogoutBtn" class="btn btn-sm btn-info">Logout</button>
+        <span id="userIdDisplay" class="font-bold text-info whitespace-nowrap overflow-hidden text-ellipsis max-w-xs flex items-center gap-1"><span>Chris Field</span></span>
         
     </div>
 </div>
@@ -385,12 +332,10 @@
     <input type="file" id="imageFileInput" accept="image/*" class="hidden">
 </div>
 
-<!-- MOBILE UI CONTAINER (fixed clipping on left/right dropdowns) -->
-<div id="mobile-ui-container">
+<!-- MOBILE UI CONTAINER -->
+<div id="mobile-ui-container" style="display: none;">
   <!-- Undo/Redo overlay -->
-  <div id="mobile-undo-redo-overlay"
-        class="absolute bottom-24 right-4 z-50 flex flex-row gap-2"
-        style="bottom: calc(5.5rem + var(--safe-bottom));">
+  <div id="mobile-undo-redo-overlay" class="absolute bottom-24 right-4 z-50 flex flex-row gap-2" style="bottom: calc(5.5rem + var(--safe-bottom));">
     <button id="mobile-overlay-undo" class="btn btn-circle btn-ghost bg-base-200/80 backdrop-blur-sm shadow-lg">
       <i class="fas fa-undo"></i>
     </button>
@@ -406,23 +351,22 @@
       <label tabindex="0" class="btn btn-ghost rounded-full" aria-label="File Menu">
         <i class="fas fa-folder-open"></i>
       </label>
-      <ul tabindex="0"
-          class="dropdown-content z-[60] menu p-2 shadow bg-base-300 rounded-box w-52 left-0 right-auto">
-        <li><a id="saveBtnMobile">Save</a></li>
-        <li><a id="loadBtnMobile">Load</a></li>
-        <li><a id="exportBtnMobile">Export</a></li>
+      <ul tabindex="0" class="dropdown-content z-[60] menu p-2 shadow bg-base-300 rounded-box w-52 left-0 right-auto">
+        <li><a id="saveBtnMobile">Save Local (.json)</a></li>
+        <li><a id="loadBtnMobile">Load Local (.json)</a></li>
+        <li><a id="exportBtnMobile">Export Options</a></li>
         <li><a id="mobile-share">Share Project</a></li>
         <div class="divider my-1"></div>
         <li><a id="loadImageBtnMobile">Load Reference Image</a></li>
         <li><a id="removeImageBtnMobile" class="hidden">Remove Reference Image</a></li>
         <div class="divider my-1"></div>
-        <li id="mobile-upload-li" class="hidden">
+        <li id="mobile-upload-li" class="">
           <a><button id="mobile-upload" class="w-full text-left">Upload to Hub</button></a>
         </li>
-        <li id="mobile-login-li">
+        <li id="mobile-login-li" class="hidden">
           <a><button id="mobile-login-logout" class="w-full text-left">Login</button></a>
         </li>
-        <li id="mobile-logout-li" class="hidden">
+        <li id="mobile-logout-li" class="">
           <a><button id="mobile-logout" class="w-full text-left text-error">Logout</button></a>
         </li>
       </ul>
@@ -433,8 +377,7 @@
       <label tabindex="0" class="btn btn-ghost rounded-full" aria-label="Edit Menu">
         <i class="fas fa-edit"></i>
       </label>
-      <ul tabindex="0"
-          class="dropdown-content z-[60] menu p-2 shadow bg-base-300 rounded-box w-52">
+      <ul tabindex="0" class="dropdown-content z-[60] menu p-2 shadow bg-base-300 rounded-box w-52">
         <li><a id="mobile-undo"><i class="fas fa-undo mr-2"></i>Undo</a></li>
         <li><a id="mobile-redo"><i class="fas fa-redo mr-2"></i>Redo</a></li>
         <div class="divider my-1"></div>
@@ -447,8 +390,7 @@
       <label tabindex="0" class="btn btn-ghost rounded-full" aria-label="Tools Menu">
         <i class="fas fa-tools"></i>
       </label>
-      <ul tabindex="0"
-          class="dropdown-content z-[60] menu p-2 shadow bg-base-300 rounded-box w-45">
+      <ul tabindex="0" class="dropdown-content z-[60] menu p-2 shadow bg-base-300 rounded-box w-45">
         <li>
           <a id="mobile-cycle-axis" class="flex justify-between">
             <span>Draw Axis</span>
@@ -468,7 +410,7 @@
         <li>
           <a id="mobile-selection-lock-toggle" class="flex justify-between">
             <span>Select Lock</span>
-            <span id="mobile-lock-status-icon"><i class="fas fa-lock"></i></span>
+            <span id="mobile-lock-status-icon"><i class="fas fa-unlock"></i></span>
           </a>
         </li>
         <li><a id="mobile-properties">Grid &amp; Brush Size</a></li>
@@ -477,9 +419,7 @@
       </ul>
     </div>
 
-    <input type="color" id="mobile-color-picker"
-            value="#FFFFFF"
-            class="rounded-full p-1 border-2 border-base-content/50 bg-clip-content">
+    <input type="color" id="mobile-color-picker" value="#FFFFFF" class="rounded-full p-1 border-2 border-base-content/50 bg-clip-content">
 
     <button class="btn btn-ghost rounded-full" id="mobile-mode-toggle" aria-label="Toggle Mode">
       <i id="mobile-mode-icon" class="fas fa-mouse-pointer"></i>
@@ -495,13 +435,13 @@
         <div class="form-control mb-4">
             <label class="label"><span class="label-text font-semibold">Shape Type:</span></label>
             <div class="flex gap-3">
-                <label class="flex items-center"><input type="radio" name="exportShapeType" value="blocky" class="radio radio-primary" checked><span class="ml-2">Blocky (Voxel Cubes)</span></label>
+                <label class="flex items-center"><input type="radio" name="exportShapeType" value="blocky" class="radio radio-primary" checked=""><span class="ml-2">Blocky (Voxel Cubes)</span></label>
                 <label class="flex items-center"><input type="radio" name="exportShapeType" value="rounded" id="roundedExportRadio" class="radio radio-primary"><span class="ml-2">Rounded (Filleted Edges)</span></label>
             </div>
         </div>
 
-        <!-- NEW: Roundness Slider -->
-        <div class="form-control mb-4" id="roundnessSliderGroup">
+        <!-- Roundness Slider -->
+        <div class="form-control mb-4" id="roundnessSliderGroup" style="display: none;">
             <label class="label">
                 <span class="label-text">Fillet Factor: </span>
                 <span id="fillet-factor-display" class="font-bold text-primary">0.25</span>
@@ -511,26 +451,31 @@
         </div>
         
         <div class="form-control mb-4">
-            <label class="label"><span class="label-text">Scale Unit (for 3MF &amp; STL):</span></label>
+            <label class="label"><span class="label-text">Scale Unit (for STL &amp; G-Code):</span></label>
             <div class="flex gap-3">
-                <label class="flex items-center"><input type="radio" name="exportScaleUnit" value="mm" class="radio radio-primary"><span class="ml-2">Millimeters (mm)</span></label>
-                <label class="flex items-center"><input type="radio" name="exportScaleUnit" value="cm" class="radio radio-primary" checked><span class="ml-2">Centimeters (cm)</span></label>
+                <label class="flex items-center"><input type="radio" name="exportScaleUnit" value="mm" class="radio radio-primary" checked><span class="ml-2">Millimeters (mm)</span></label>
+                <label class="flex items-center"><input type="radio" name="exportScaleUnit" value="cm" class="radio radio-primary"><span class="ml-2">Centimeters (cm)</span></label>
             </div>
         </div>
+        
         <div class="form-control mb-4">
             <label class="label"><span class="label-text">Up-Axis (for STL):</span></label>
             <div class="flex gap-3">
                 <label class="flex items-center"><input type="radio" name="exportUpAxis" value="Y" class="radio radio-primary"><span class="ml-2">Y-Up (Standard)</span></label>
-                <label class="flex items-center"><input type="radio" name="exportUpAxis" value="Z" class="radio radio-primary" checked><span class="ml-2">Z-Up (3D Printers)</span></label>
+                <label class="flex items-center"><input type="radio" name="exportUpAxis" value="Z" class="radio radio-primary" checked=""><span class="ml-2">Z-Up (3D Printers)</span></label>
             </div>
         </div>
+
         <div class="modal-action">
-            <button id="exportBambuStudioBtn" class="btn btn-accent">Export for Bambu Lab (3MF)</button>
-            <button id="exportSTLFinalBtn" class="btn btn-primary">Export STL</button>
+            <button id="exportBambuStudioBtn" class="btn btn-accent">Bambu 3MF</button>
+            <button id="exportGCodePolysliceBtn" class="btn btn-success">G-Code</button>
+            <button id="exportSTLFinalBtn" class="btn btn-primary">STL</button>
             <form method="dialog"><button class="btn btn-ghost">Cancel</button></form>
         </div>
     </div>
 </dialog>
+
+<!-- ... (Other modals retained) ... -->
 <dialog id="mobileControlsModal" class="modal">
     <div class="modal-box">
         <h3 class="font-bold text-lg">Control Settings</h3>
@@ -556,7 +501,7 @@
             </div>
             <div>
                 <label for="mobile-brush-size-slider" class="label"><span class="label-text">Brush Size: <span id="mobile-brush-size-display">1x1</span></span></label>
-                <input type="range" id="mobile-brush-size-slider" min="1" max="10" value="1" class="range range-accent" disabled>
+                <input type="range" id="mobile-brush-size-slider" min="1" max="10" value="1" class="range range-accent" disabled="">
             </div>
         </div>
         <div class="modal-action">
@@ -570,9 +515,9 @@
         <form method="dialog" class="flex flex-col gap-4 py-4">
             <input type="text" id="uploadTitle" placeholder="Project Title" class="input input-bordered w-full">
             <textarea id="uploadDescription" placeholder="Description" class="textarea textarea-bordered w-full"></textarea>
-            <select id="uploadCategory" class="select select-bordered w-full"><option disabled selected>Select Category</option></select>
+            <select id="uploadCategory" class="select select-bordered w-full"><option disabled="" selected="">Select Category</option><option value="Toy">Toy</option><option value="Decoration">Decoration</option><option value="Functional">Functional</option><option value="Art">Art</option><option value="General">General</option><option value="Character">Character</option><option value="Vehicle">Vehicle</option><option value="Nature">Nature</option><option value="Architecture">Architecture</option></select>
             <div class="flex gap-4">
-                <label><input type="radio" name="uploadVisibility" value="public" checked class="radio radio-primary mr-1"> Public</label>
+                <label><input type="radio" name="uploadVisibility" value="public" checked="" class="radio radio-primary mr-1"> Public</label>
                 <label><input type="radio" name="uploadVisibility" value="private" class="radio radio-primary mr-1"> Private</label>
             </div>
             <div class="modal-action">
@@ -622,7 +567,6 @@
         </div>
     </div>
 </dialog>
-
 <dialog id="shareModal" class="modal">
     <div class="modal-box">
         <h3 class="font-bold text-lg">Share &amp; Publish Project</h3>
@@ -636,8 +580,6 @@
         </div>
     </div>
 </dialog>
-
-<!-- NEW: Onboarding Modal -->
 <dialog id="onboardingModal" class="modal">
     <div class="modal-box">
         <h3 class="font-bold text-lg">Welcome to VoxelShaper!</h3>
@@ -658,411 +600,520 @@
 
 <div id="toast-container" class="toast toast-top toast-center z-50"></div>
 
+<!-- Core Libraries -->
 <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/build/three.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/exporters/STLExporter.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/utils/BufferGeometryUtils.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/file-saver@2.0.5/dist/FileSaver.min.js"></script>
+<!-- Polyslice Integration -->
+<script src="https://unpkg.com/@jgphilpott/polyslice/dist/index.browser.min.js"></script>
 
 
 <script>
 
-const VOXEL_SEGMENTS = 10; // Controls smoothness/resolution for the rounded mesh.
-const VOXEL_SIZE_EXPORT = 1.0; 
+const VOXEL_SEGMENTS = 10;
+const VOXEL_SIZE_EXPORT = 1.0; 
 
-// Uses your existing global VOXEL_SEGMENTS value
 function createRoundedVoxelGeometry(position, roundnessFactor, voxelUnitSize, neighbors = {}) {
-  const s = voxelUnitSize;
-  const H = s * 0.5;
+  const s = voxelUnitSize;
+  const H = s * 0.5;
 
-  // Clamp fillet so it never eats the cube
-  const R_MAX = 0.45 * H;
-  const R = Math.max(0.001, Math.min(R_MAX, roundnessFactor * R_MAX));
+  // Clamp fillet so it never eats the cube
+  const R_MAX = 0.45 * H;
+  const R = Math.max(0.001, Math.min(R_MAX, roundnessFactor * R_MAX));
 
-  // If a neighbor exists on a side, radius for that side = 0 (keeps shared face flat)
-  const px = neighbors.px ? 0 : R, nx = neighbors.nx ? 0 : R;
-  const py = neighbors.py ? 0 : R, ny = neighbors.ny ? 0 : R;
-  const pz = neighbors.pz ? 0 : R, nz = neighbors.nz ? 0 : R;
+  // If a neighbor exists on a side, radius for that side = 0 (keeps shared face flat)
+  const px = neighbors.px ? 0 : R, nx = neighbors.nx ? 0 : R;
+  const py = neighbors.py ? 0 : R, ny = neighbors.ny ? 0 : R;
+  const pz = neighbors.pz ? 0 : R, nz = neighbors.nz ? 0 : R;
 
-  // Inner core bounds (asymmetric if some sides are blocked)
-  const minX = -H + nx, maxX = H - px;
-  const minY = -H + ny, maxY = H - py;
-  const minZ = -H + nz, maxZ = H - pz;
+  // Inner core bounds (asymmetric if some sides are blocked)
+  const minX = -H + nx, maxX = H - px;
+  const minY = -H + ny, maxY = H - py;
+  const minZ = -H + nz, maxZ = H - pz;
 
-  const geom = new THREE.BoxGeometry(s, s, s, VOXEL_SEGMENTS, VOXEL_SEGMENTS, VOXEL_SEGMENTS);
-  const posAttr = geom.getAttribute('position');
-  const v = new THREE.Vector3();
+  const geom = new THREE.BoxGeometry(s, s, s, VOXEL_SEGMENTS, VOXEL_SEGMENTS, VOXEL_SEGMENTS);
+  const posAttr = geom.getAttribute('position');
+  const v = new THREE.Vector3();
 
-  for (let i = 0; i < posAttr.count; i++) {
-    v.fromBufferAttribute(posAttr, i);
+  for (let i = 0; i < posAttr.count; i++) {
+    v.fromBufferAttribute(posAttr, i);
 
-    // Clamp to inner core
-    const cx = Math.max(minX, Math.min(maxX, v.x));
-    const cy = Math.max(minY, Math.min(maxY, v.y));
-    const cz = Math.max(minZ, Math.min(maxZ, v.z));
+    // Clamp to inner core
+    const cx = Math.max(minX, Math.min(maxX, v.x));
+    const cy = Math.max(minY, Math.min(maxY, v.y));
+    const cz = Math.max(minZ, Math.min(maxZ, v.z));
 
-    // Push outward to fillet radius along exposed directions
-    const dx = v.x - cx, dy = v.y - cy, dz = v.z - cz;
-    const len = Math.hypot(dx, dy, dz);
-    if (len > 1e-8) {
-      const k = R / len;
-      v.set(cx + dx * k, cy + dy * k, cz + dz * k);
-    } else {
-      v.set(cx, cy, cz);
-    }
+    // Push outward to fillet radius along exposed directions
+    const dx = v.x - cx, dy = v.y - cy, dz = v.z - cz;
+    const len = Math.hypot(dx, dy, dz);
+    if (len > 1e-8) {
+      const k = R / len;
+      v.set(cx + dx * k, cy + dy * k, cz + dz * k);
+    } else {
+      v.set(cx, cy, cz);
+    }
 
-    // Translate into world space for grid position
-    v.x += position.x * s + H;
-    v.y += position.y * s + H;
-    v.z += position.z * s + H;
+    // Translate into world space for grid position
+    v.x += position.x * s + H;
+    v.y += position.y * s + H;
+    v.z += position.z * s + H;
 
-    posAttr.setXYZ(i, v.x, v.y, v.z);
-  }
+    posAttr.setXYZ(i, v.x, v.y, v.z);
+  }
 
-  geom.attributes.position.needsUpdate = true;
-  geom.computeVertexNormals();
-  return geom;
+  geom.attributes.position.needsUpdate = true;
+  geom.computeVertexNormals();
+  return geom;
 }
 
 
-// --- START: 3MF EXPORTER INTEGRATION (Updated for Rounding Support) ---
+// --- START: 3MF EXPORTER INTEGRATION (Restored for Bambu Lab/AMS Multi-Color) ---
 const VoxelApp3MFExporter = {
-    exportBambuStudio3MF: async function(voxels, voxelSize, showToast, parseKey, scaleUnit, isRounded = false, roundnessFactor = 0) {
-        if (!voxels || voxels.size === 0) {
-            showToast('Export Error', 'Scene is empty.', 'warning');
-            return;
-        }
-        if (!window.JSZip || !window.saveAs) {
-            showToast('Export Error', 'Required libraries (JSZip, FileSaver) not found.', 'error');
-            return;
-        }
-        showToast('Exporting...', 'Building Bambu Studio Project File...', 'info');
+    exportBambuStudio3MF: async function(voxels, voxelSize, showToast, parseKey, scaleUnit, isRounded = false, roundnessFactor = 0) {
+        if (!voxels || voxels.size === 0) {
+            showToast('Export Error', 'Scene is empty.', 'warning');
+            return;
+        }
+        if (!window.JSZip || !window.saveAs) {
+            showToast('Export Error', 'Required libraries (JSZip, FileSaver) not found.', 'error');
+            return;
+        }
+        showToast('Exporting...', 'Building Multi-Color 3MF Project File...', 'info');
 
-        try {
-            // Get export settings (check the actual state of radio buttons)
-            const shapeType = document.querySelector('input[name="exportShapeType"]:checked').value;
-            isRounded = shapeType === 'rounded';
-            roundnessFactor = isRounded ? parseFloat(document.getElementById('filletRoundnessSlider').value) : 0;
+        try {
+            // Get export settings
+            const shapeType = document.querySelector('input[name="exportShapeType"]:checked').value;
+            isRounded = shapeType === 'rounded';
+            roundnessFactor = isRounded ? parseFloat(document.getElementById('filletRoundnessSlider').value) : 0;
 
-            const voxelArray = Array.from(voxels.entries()).map(([key, data]) => {
-                const [x, y, z] = parseKey(key);
-                if (y < 0) return null;
-                return {x, y, z, color: this.normalizeColor(data.color)};
-            }).filter(v => v !== null);
-            
-            if (voxelArray.length === 0) {
-                showToast('Export Error', 'No voxels to export.', 'warning');
-                return;
-            }
-            
-            const palette = Array.from(new Set(voxelArray.map(v => v.color))).slice(0, 16);
-            const voxelMM = (scaleUnit === 'cm' ? 10 : 1) * voxelSize;
+            const voxelArray = Array.from(voxels.entries()).map(([key, data]) => {
+                const [x, y, z] = parseKey(key);
+                if (y < 0) return null;
+                return {x, y, z, color: this.normalizeColor(data.color)};
+            }).filter(v => v !== null);
+            
+            if (voxelArray.length === 0) {
+                showToast('Export Error', 'No voxels to export.', 'warning');
+                return;
+            }
+            
+            const palette = Array.from(new Set(voxelArray.map(v => v.color))).slice(0, 16); // Limit to 16 colors for AMS/Palette
+            const voxelMM = (scaleUnit === 'cm' ? 10 : 1) * voxelSize;
 
-            // MODIFIED: buildPaintMesh now respects rounding and merging
-            const mainMesh = this.buildPaintMesh(voxelArray, voxelMM, palette, isRounded, roundnessFactor); 
-            const dummies = palette.map((_, i) => this.tinyTriangle(-0.2 - i * 0.05));
-            
-            const { xml: modelXML, ids } = this.build3DModelXML({ mainMesh, dummies });
-            const projectJSON = this.buildProjectSettingsJSON(palette);
-            const modelXMLset = this.buildModelSettingsXML(ids);
-            
-            const contentTypes = this.buildContentTypesXML();
-            const rootRels = this.buildRootRelsXML();
-            const modelRels = this.buildModelRelsXML();
+            const mainMesh = this.buildPaintMesh(voxelArray, voxelMM, palette, isRounded, roundnessFactor); 
+            const dummies = palette.map((_, i) => this.tinyTriangle(-0.2 - i * 0.05));
+            
+            const { xml: modelXML, ids } = this.build3DModelXML({ mainMesh, dummies });
+            const projectJSON = this.buildProjectSettingsJSON(palette);
+            const modelXMLset = this.buildModelSettingsXML(ids);
+            
+            const contentTypes = this.buildContentTypesXML();
+            const rootRels = this.buildRootRelsXML();
+            const modelRels = this.buildModelRelsXML();
 
-            const zip = new JSZip();
-            zip.file("[Content_Types].xml", contentTypes);
-            zip.folder("_rels").file(".rels", rootRels);
-            zip.folder("3D").file("3dmodel.model", modelXML);
-            zip.folder("3D").folder("_rels").file("3dmodel.model.rels", modelRels);
+            const zip = new JSZip();
+            zip.file("[Content_Types].xml", contentTypes);
+            zip.folder("_rels").file(".rels", rootRels);
+            zip.folder("3D").file("3dmodel.model", modelXML);
+            zip.folder("3D").folder("_rels").file("3dmodel.model.rels", modelRels);
 
-            const metadata = zip.folder("Metadata");
-            const bigThumb = this.dataURLtoUint8Array(this.makeThumb('plate_1', 600, 600));
-            const smallThumb = this.dataURLtoUint8Array(this.makeThumb('plate_1_small', 300, 300));
-            metadata.file("plate_1.png", bigThumb, {binary:true});
-            metadata.file("plate_1_small.png", smallThumb, {binary:true});
-            metadata.file("project_settings.config", projectJSON);
-            metadata.file("model_settings.config",  modelXMLset);
+            const metadata = zip.folder("Metadata");
+            const bigThumb = this.dataURLtoUint8Array(this.makeThumb('plate_1', 600, 600));
+            const smallThumb = this.dataURLtoUint8Array(this.makeThumb('plate_1_small', 300, 300));
+            metadata.file("plate_1.png", bigThumb, {binary:true});
+            metadata.file("plate_1_small.png", smallThumb, {binary:true});
+            metadata.file("project_settings.config", projectJSON);
+            metadata.file("model_settings.config",  modelXMLset);
 
-            const blob = await zip.generateAsync({type:"blob", compression:"DEFLATE", compressionOptions:{level:6}});
-            
-            const filename = isRounded ? `VoxelShaper_rounded_${roundnessFactor.toFixed(2)}.3mf` : "VoxelShaper_blocky.3mf";
-            saveAs(blob, filename);
-            
-            showToast('Export Complete', `${filename} saved!`, 'success');
-        } catch(err) {
-            console.error("3MF Export Error by Christian Hohlfeld:", err);
-            showToast('Export Error', err.message, 'error');
-            trackEvent('error', { context: '3mf_export', message: err.message });
-        }
-    },
-    
-    esc: (s) => String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/"/g,'&quot;'),
-    pad2: (n) => String(n).padStart(2,'0'),
-    ymd: (d=new Date()) => `${d.getFullYear()}-${VoxelApp3MFExporter.pad2(d.getMonth()+1)}-${VoxelApp3MFExporter.pad2(d.getDate())}`,
-    fmt: (n) => Number.isInteger(n)? String(n) : Number(n).toFixed(7).replace(/\.?0+$/,''),
+            const blob = await zip.generateAsync({type:"blob", compression:"DEFLATE", compressionOptions:{level:6}});
+            
+            const filename = isRounded ? `VoxelShaper_rounded_${roundnessFactor.toFixed(2)}.3mf` : "VoxelShaper_blocky.3mf";
+            saveAs(blob, filename);
+            
+            showToast('Export Complete', `${filename} saved!`, 'success');
+        } catch(err) {
+            console.error("3MF Export Error:", err);
+            showToast('Export Error', err.message, 'error');
+        }
+    },
+    
+    esc: (s) => String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/"/g,'&quot;'),
+    pad2: (n) => String(n).padStart(2,'0'),
+    ymd: (d=new Date()) => `${d.getFullYear()}-${VoxelApp3MFExporter.pad2(d.getMonth()+1)}-${VoxelApp3MFExporter.pad2(d.getDate())}`,
+    fmt: (n) => Number.isInteger(n)? String(n) : Number(n).toFixed(7).replace(/\.?0+$/,''),
 
-    normalizeColor: function(c) {
-        if(!c) return '#FFFFFFFF';
-        let s = String(c).trim();
-        if(/^0x/i.test(s)) s = '#' + s.slice(2);
-        if(!s.startsWith('#')) s = '#' + s;
-        if(/^#([0-9a-f]{3})$/i.test(s)){ s = '#'+s[1]+s[1]+s[2]+s[2]+s[3]+s[3]; }
-        if(/^#([0-9a-f]{6})$/i.test(s)) s = s + 'FF';
-        if(!/^#([0-9a-f]{8})$/i.test(s)) return '#FFFFFFFF';
-        return s.toUpperCase();
-    },
-    
-    tokenForColorNumber: function(n) {
-        if (n <= 1) return "0";
-        if (n === 2) return "8";
-        return ((n-3).toString(16).toUpperCase() + "C");
-    },
-    
-    tokenFromPaletteIndex: function(i) { return this.tokenForColorNumber(i + 1); },
+    normalizeColor: function(c) {
+        if(!c) return '#FFFFFFFF';
+        let s = String(c).trim();
+        if(/^0x/i.test(s)) s = '#' + s.slice(2);
+        if(!s.startsWith('#')) s = '#' + s;
+        if(/^#([0-9a-f]{3})$/i.test(s)){ s = '#'+s[1]+s[1]+s[2]+s[2]+s[3]+s[3]; }
+        if(/^#([0-9a-f]{6})$/i.test(s)) s = s + 'FF';
+        if(!/^#([0-9a-f]{8})$/i.test(s)) return '#FFFFFFFF';
+        return s.toUpperCase();
+    },
+    tokenForColorNumber: function(n) {
+        if (n <= 1) return "0";
+        if (n === 2) return "8";
+        return ((n-3).toString(16).toUpperCase() + "C");
+    },
+    
+    tokenFromPaletteIndex: function(i) { return this.tokenForColorNumber(i + 1); },
 
-    // Inside your VoxelApp3MFExporter object:
-    buildPaintMesh: function (voxels, voxelMM, palette, isRounded = false, roundnessFactor = 0) {
-      const V = [];
-      const T = [];
-      const colorToIdx = new Map(palette.map((c, i) => [c, i]));
-      const s_mm = +voxelMM || 1;
-    
-      // BufferGeometryUtils available?
-      const BGU = (THREE && THREE.BufferGeometryUtils) || (typeof BufferGeometryUtils !== 'undefined' ? BufferGeometryUtils : null);
-      if (!BGU) throw new Error('BufferGeometryUtils not found. Load it after three.min.js');
-    
-      if (isRounded) {
-        // --- [FIXED] Neighbor-aware ROUNDED path ---
-        let base = 0;
-        const key = (x,y,z) => `${x},${y},${z}`;
-        const occ = new Set(voxels.map(v => key(v.x, v.y, v.z))); // occupancy for adjacency
-    
-        for (const v of voxels) {
-          const neighbors = {
-            px: occ.has(key(v.x+1, v.y,   v.z  )),
-            nx: occ.has(key(v.x-1, v.y,   v.z  )),
-            py: occ.has(key(v.x,   v.y+1, v.z  )),
-            ny: occ.has(key(v.x,   v.y-1, v.z  )),
-            pz: occ.has(key(v.x,   v.y,   v.z+1)),
-            nz: occ.has(key(v.x,   v.y,   v.z-1)),
-          };
-          
-          const geom = createRoundedVoxelGeometry(new THREE.Vector3(v.x, v.y, v.z), roundnessFactor, 1.0, neighbors);
-          
-          // --- FIX START ---
-          // Convert the indexed geometry to a non-indexed one to ensure correct vertex order.
-          const nonIndexedGeom = geom.toNonIndexed();
-          const positions = nonIndexedGeom.attributes.position.array;
-          // --- FIX END ---
-          
-          const hex = (v.color || '#ffffff').toUpperCase();
-          const idx = colorToIdx.has(hex) ? colorToIdx.get(hex) : 0;
-          const token = this.tokenFromPaletteIndex(idx);
-    
-          for (let i = 0; i < positions.length; i += 9) {
-            const x0 = positions[i+0] * s_mm, y0 = positions[i+1] * s_mm, z0 = positions[i+2] * s_mm;
-            const x1 = positions[i+3] * s_mm, y1 = positions[i+4] * s_mm, z1 = positions[i+5] * s_mm;
-            const x2 = positions[i+6] * s_mm, y2 = positions[i+7] * s_mm, z2 = positions[i+8] * s_mm;
-    
-            V.push(
-              [this.fmt(x0), this.fmt(-z0), this.fmt(y0)],
-              [this.fmt(x1), this.fmt(-z1), this.fmt(y1)],
-              [this.fmt(x2), this.fmt(-z2), this.fmt(y2)]
-            );
-            T.push([base, base + 1, base + 2, token]);
-            base += 3;
-          }
+    buildPaintMesh: function (voxels, voxelMM, palette, isRounded = false, roundnessFactor = 0) {
+  const V = [];            // final unique vertices as [xStr,yStr,zStr]
+  const T = [];            // final triangles as [i0,i1,i2, paintToken]
+  const colorToIdx = new Map(palette.map((c, i) => [String(c).toUpperCase(), i]));
+  const s_mm = +voxelMM || 1;
 
-          // --- FIX START ---
-          // Dispose both the original and the converted geometries to prevent memory leaks.
-          geom.dispose();
-          nonIndexedGeom.dispose();
-          // --- FIX END ---
-        }
-    
-        return { V, T, palette };
-      }
-    
-      // --- BLOCKY path (unchanged logic) ---
-      const CUBE_V = [
-        [0,0,0],[1,0,0],[1,1,0],[0,1,0],
-        [0,0,1],[1,0,1],[1,1,1],[0,1,1]
-      ];
-      const CUBE_T = [
-        [0,2,1],[0,3,2], // bottom
-        [4,5,6],[4,6,7], // top
-        [0,4,7],[0,7,3], // left
-        [1,2,6],[1,6,5], // right
-        [3,7,6],[3,6,2], // front
-        [0,1,5],[0,5,4]  // back
-      ];
-    
-      const vertCache = new Map();
-      const getIdx = (vx,vy,vz,colorIdx) => {
-        const k = `${vx},${vy},${vz},${colorIdx}`;
-        if (!vertCache.has(k)) {
-          vertCache.set(k, V.length);
-          V.push([this.fmt(vx*s_mm), this.fmt(-vz*s_mm), this.fmt(vy*s_mm)]);
-        }
-        return vertCache.get(k);
-      };
-    
-      for (const v of voxels) {
-        const ci = colorToIdx.has(v.color) ? colorToIdx.get(v.color) : 0;
-        const token = this.tokenFromPaletteIndex(ci);
-        const x=v.x, y=v.y, z=v.z;
-    
-        for (const [a,b,c] of CUBE_T) {
-          const va = CUBE_V[a], vb = CUBE_V[b], vc = CUBE_V[c];
-          const ia = getIdx(x+va[0], y+va[1], z+va[2], ci);
-          const ib = getIdx(x+vb[0], y+vb[1], z+vb[2], ci);
-          const ic = getIdx(x+vc[0], y+vc[1], z+vc[2], ci);
-          T.push([ia, ib, ic, token]);
-        }
-      }
-    
-      return { V, T, palette };
-    },
-    
-    tinyTriangle: function(z = 0) {
-        return {
-            V: [[0,0,z],[0.1,0,z],[0,0.1,z]].map(([x,y,z]) => [this.fmt(x), this.fmt(y), this.fmt(z)]),
-            T: [[0,1,2]],
-        };
-    },
+  // occupancy for neighbor checks
+  const occKey = (x,y,z) => `${x},${y},${z}`;
+  const occ = new Set(voxels.map(v => occKey(v.x, v.y, v.z)));
+  const has = (x,y,z) => occ.has(occKey(x,y,z));
 
-    build3DModelXML: function({mainMesh, dummies, title='VoxelShaper Model', buildXYZ=[125,125,0]}) {
-        const today = this.ymd();
-        const [bx,by,bz] = buildXYZ.map(n=>+n||0);
-
-        let nextId = 1;
-        const mainId = nextId++;
-        const dummyIds = dummies.map(()=>nextId++);
-        const wrapperId = nextId++;
-
-        let xml = `<?xml version="1.0" encoding="UTF-8"?>\n`;
-        xml += `<model unit="millimeter" xml:lang="en-US" xmlns="http://schemas.microsoft.com/3dmanufacturing/core/2015/02" xmlns:BambuStudio="http://schemas.bambulab.com/package/2021">\n`;
-        xml +=  ` <metadata name="Application">BambuStudio-02.02.02.56</metadata>\n <metadata name="BambuStudio:3mfVersion">1</metadata>\n`;
-        xml +=  ` <metadata name="CreationDate">${today}</metadata>\n <metadata name="Thumbnail_Middle">/Metadata/plate_1.png</metadata>\n`;
-        xml +=  ` <metadata name="Thumbnail_Small">/Metadata/plate_1_small.png</metadata>\n <metadata name="Title">${this.esc(title)}</metadata>\n`;
-
-        const tokenMap = {};
-        mainMesh.palette.forEach((hex, i) => { tokenMap[this.tokenFromPaletteIndex(i)] = hex; });
-        xml +=  ` <metadata name="BambuStudio:PaintTokenARGB">${this.esc(JSON.stringify(tokenMap))}</metadata>\n`;
-        xml +=  ` <resources>\n`;
-        
-        xml +=   `<object id="${mainId}" type="model" name="PaintedMesh">\n  <mesh>\n   <vertices>\n`;
-        for (const [x,y,z] of mainMesh.V) { xml +=      `    <vertex x="${x}" y="${y}" z="${z}"/>\n`; }
-        xml +=   `</vertices>\n   <triangles>\n`;
-        for (const [v1,v2,v3,pc] of mainMesh.T) { xml +=      `    <triangle v1="${v1}" v2="${v2}" v3="${v3}" paint_color="${pc}"/>\n`; }
-        xml +=   `</triangles>\n  </mesh>\n </object>\n`;
-
-        dummies.forEach((d, i) => {
-            const id = dummyIds[i];
-            xml +=   `<object id="${id}" type="model" name="ColorSlot_${i+1}">\n  <mesh>\n   <vertices>\n`;
-            d.V.forEach(([x,y,z]) => { xml +=      `    <vertex x="${x}" y="${y}" z="${z}"/>\n`; });
-            xml +=   `</vertices>\n   <triangles>\n`;
-            d.T.forEach(([a,b,c]) => { xml +=      `    <triangle v1="${a}" v2="${b}" v3="${c}"/>\n`; });
-            xml +=   `</triangles>\n  </mesh>\n </object>\n`;
-        });
-
-        xml +=   `<object id="${wrapperId}" type="model">\n  <components>\n`;
-        xml +=      `<component objectid="${mainId}" transform="1 0 0 0 1 0 0 0 1 0 0 0"/>\n`;
-        xml +=   `</components>\n </object>\n </resources>\n <build>\n`;
-        
-        let minX = Infinity, minY = Infinity, minZ = Infinity;
-        let maxX = -Infinity, maxY = -Infinity;
-        mainMesh.V.forEach(([x,y,z]) => {
-            minX = Math.min(minX, x); maxX = Math.max(maxX, x);
-            minY = Math.min(minY, y); maxY = Math.max(maxY, y);
-            minZ = Math.min(minZ, z);
-        });
-        const final_bx = bx - (minX + (maxX-minX)/2);
-        const final_by = by - (minY + (maxY-minY)/2);
-        const final_bz = bz - minZ;
-        
-        xml +=   `<item objectid="${wrapperId}" transform="1 0 0 0 1 0 0 0 1 ${this.fmt(final_bx)} ${this.fmt(final_by)} ${this.fmt(final_bz)}" printable="1"/>\n`;
-        dummies.forEach((_, i) => {
-            xml +=   `<item objectid="${dummyIds[i]}" transform="1 0 0 0 1 0 0 0 1 ${this.fmt(final_bx)} ${this.fmt(final_by)} ${this.fmt(final_bz)}" printable="0"/>\n`;
-        });
-        xml +=  `</build>\n</model>\n`;
-        
-        return {xml, ids:{mainId, wrapperId, dummyIds}};
-    },
-    
-    buildProjectSettingsJSON: function(palette){
-        const cols = palette.map(c=>c.slice(0,7));
-        const n = Math.min(cols.length, 16);
-        const arr = v => Array.from({length:n}, ()=>v);
-        const PRINTER_PRESET_NAME = "VoxelShaper Custom Printer";
-        const niceNames = cols.map(c => `VoxelShaper PLA ${c}`);
-        const j = {
-            "version": "02.02.02.56",
-            "printer_settings_id": PRINTER_PRESET_NAME,
-            "plate_name": ["1"],
-            "plates": [0],
-            "bed_type": "Textured PEI Plate",
-            "curr_bed_type": "Textured PEI Plate",
-            "plate_model_index": [[0]],
-            "filament_settings_id":  niceNames,
-            "filament_name":         niceNames,
-            "filament_display_name": niceNames,
-            "filament_colour": cols,
-            "filament_color":  cols,
-            "filament_vendor": arr("Generic"),
-            "filament_type":   arr("PLA"),
-            "filament_diameter": arr("1.75"),
-            "filament_ids": cols.map((_,i)=>`GEN-PLA-${i+1}`),
-            "filament_is_support": arr("0"),
-            "filament_printable":  arr("3"),
-            "filament_map_mode": "Manual",
-            "filament_map": Array.from({length:n}, (_,i)=> String(i+1)),
-            "nozzle_diameter": ["0.4"],
-            "selected_plate_index": 0,
-            "project_location_type": "local"
-        };
-        return JSON.stringify(j);
-    },
-
-    buildModelSettingsXML: function(ids) {
-        let x = `<?xml version="1.0" encoding="UTF-8"?>\n<config version="02.02.02.56">\n <global>\n  <object_include exclude-non-stl="0"/>\n  <object_split split="1"/>\n </global>\n <objects>\n`;
-        x +=   `<object id="${ids.mainId}">\n  <metadata key="extruder" value="1"/>\n </object>\n`;
-        ids.dummyIds.forEach((oid, i) => {
-            x +=   `<object id="${oid}">\n  <metadata key="extruder" value="${i+2}"/>\n </object>\n`;
-        });
-        x +=  `</objects>\n</config>\n`;
-        return x;
-    },
-
-    buildContentTypesXML: () => `<?xml version="1.0" encoding="UTF-8"?><Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types"><Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/><Default Extension="png" ContentType="image/png"/><Default Extension="json" ContentType="application/json"/><Default Extension="config" ContentType="text/xml"/><Default Extension="xml" ContentType="application/xml"/><Default Extension="model" ContentType="application/vnd.ms-package.3dmanufacturing-3dmodel+xml"/></Types>`,
-    buildRootRelsXML: () => `<?xml version="1.0" encoding="UTF-8"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rel0" Type="http://schemas.microsoft.com/3dmanufacturing/2013/01/3dmodel" Target="/3D/3dmodel.model"/></Relationships>`,
-    buildModelRelsXML: () => `<?xml version="1.0" encoding="UTF-8"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rThumb1" Type="http://schemas.openxmlformats.org/package/2006/relationships/metadata/thumbnail" Target="/Metadata/plate_1.png"/><Relationship Id="rThumb2" Type="http://schemas.openxmlformats.org/package/2006/relationships/metadata/thumbnail" Target="/Metadata/plate_1_small.png"/></Relationships>`,    
-    dataURLtoUint8Array: function(dataURL) {
-        const base64 = dataURL.split(',')[1];
-        const binary = atob(base64);
-        const len = binary.length;
-        const bytes = new Uint8Array(len);
-        for (let i = 0; i < len; i++) bytes[i] = binary.charCodeAt(i);
-        return bytes;
-    },
-
-    makeThumb: function(label="plate_1", w=600, h=600) {
-        const c = document.createElement('canvas');
-        c.width = w; c.height = h;
-        const ctx = c.getContext('2d');
-        const g = ctx.createLinearGradient(0,0,w,h);
-        g.addColorStop(0,'#191a1f'); g.addColorStop(0.5,'#3b3f46'); g.addColorStop(1,'#0e0f12');
-        ctx.fillStyle = g; ctx.fillRect(0,0,w,h);
-        ctx.fillStyle = '#ffffff';
-        ctx.globalAlpha = 0.9;
-        ctx.font = `${Math.floor(w*0.08)}px system-ui,Arial,sans-serif`;
-        ctx.textAlign='center'; ctx.textBaseline='middle';
-        ctx.fillText(label, w/2, h/2);
-        return c.toDataURL('image/png');
+  // global vertex map (after 3MF transform + scale) so triangles share indices
+  const vertMap = new Map(); // key -> index
+  const q = n => Math.round(n * 1e6) / 1e6; // snap to tolerate fp noise
+  const getIdx = (x, y, z) => {
+    const k = `${q(x)},${q(y)},${q(z)}`;
+    if (!vertMap.has(k)) {
+      V.push([this.fmt(x), this.fmt(y), this.fmt(z)]);
+      vertMap.set(k, V.length - 1);
     }
+    return vertMap.get(k);
+  };
+
+  const pushTriIdx = (i0,i1,i2, token) => {
+    // skip degenerate/near-collinear
+    const x0 = parseFloat(V[i0][0]), y0 = parseFloat(V[i0][1]), z0 = parseFloat(V[i0][2]);
+    const x1 = parseFloat(V[i1][0]), y1 = parseFloat(V[i1][1]), z1 = parseFloat(V[i1][2]);
+    const x2 = parseFloat(V[i2][0]), y2 = parseFloat(V[i2][1]), z2 = parseFloat(V[i2][2]);
+    const ux = x1-x0, uy = y1-y0, uz = z1-z0;
+    const vx = x2-x0, vy = y2-y0, vz = z2-z0;
+    const cx = uy*vz - uz*vy, cy = uz*vx - ux*vz, cz = ux*vy - uy*vx;
+    const area2 = cx*cx + cy*cy + cz*cz;
+    if (area2 < 1e-18) return;
+    T.push([i0, i1, i2, token]);
+  };
+
+  const tokenFromColor = (hex) => this.tokenFromPaletteIndex(colorToIdx.get(hex) ?? 0);
+
+  if (isRounded) {
+    const BGU = (THREE && THREE.BufferGeometryUtils) || (typeof BufferGeometryUtils !== 'undefined' ? BufferGeometryUtils : null);
+    if (!BGU) throw new Error('BufferGeometryUtils not found. Load it after three.min.js');
+
+    const isOn = (val, target) => Math.abs(val - target) <= 1e-5;
+
+    const p0 = new THREE.Vector3();
+    const p1 = new THREE.Vector3();
+    const p2 = new THREE.Vector3();
+
+    for (const v of voxels) {
+      if (v.y < 0) continue;
+
+      const neighbors = {
+        px: has(v.x+1, v.y,   v.z  ),
+        nx: has(v.x-1, v.y,   v.z  ),
+        py: has(v.x,   v.y+1, v.z  ),
+        ny: has(v.x,   v.y-1, v.z  ),
+        pz: has(v.x,   v.y,   v.z+1),
+        nz: has(v.x,   v.y,   v.z-1),
+      };
+
+      // build rounded (indexed), then ensure shared vertices
+      const gRaw = createRoundedVoxelGeometry(
+        new THREE.Vector3(v.x, v.y, v.z),
+        roundnessFactor,
+        1.0,
+        neighbors
+      );
+      const geom = BGU.mergeVertices(gRaw, 1e-6);
+      gRaw.dispose();
+
+      const pos = geom.getAttribute('position');
+      const idx = geom.index ? geom.index.array : [...Array(pos.count).keys()];
+      const minX = v.x,     maxX = v.x + 1.0;
+      const minY = v.y,     maxY = v.y + 1.0;
+      const minZ = v.z,     maxZ = v.z + 1.0;
+      const token = tokenFromColor((v.color || '#FFFFFF').toUpperCase());
+
+      for (let i = 0; i < idx.length; i += 3) {
+        p0.fromBufferAttribute(pos, idx[i+0]);
+        p1.fromBufferAttribute(pos, idx[i+1]);
+        p2.fromBufferAttribute(pos, idx[i+2]);
+
+        // cull interior-plane tris if neighbor present
+        const onPX = isOn(p0.x, maxX) && isOn(p1.x, maxX) && isOn(p2.x, maxX);
+        const onNX = isOn(p0.x, minX) && isOn(p1.x, minX) && isOn(p2.x, minX);
+        const onPY = isOn(p0.y, maxY) && isOn(p1.y, maxY) && isOn(p2.y, maxY);
+        const onNY = isOn(p0.y, minY) && isOn(p1.y, minY) && isOn(p2.y, minY);
+        const onPZ = isOn(p0.z, maxZ) && isOn(p1.z, maxZ) && isOn(p2.z, maxZ);
+        const onNZ = isOn(p0.z, minZ) && isOn(p1.z, minZ) && isOn(p2.z, minZ);
+        if ((neighbors.px && onPX) || (neighbors.nx && onNX) ||
+            (neighbors.py && onPY) || (neighbors.ny && onNY) ||
+            (neighbors.pz && onPZ) || (neighbors.nz && onNZ)) {
+          continue;
+        }
+
+        // 3MF coords + scale: (x, -z, y) * s_mm
+        const i0 = getIdx(p0.x*s_mm, -p0.z*s_mm, p0.y*s_mm);
+        const i1 = getIdx(p1.x*s_mm, -p1.z*s_mm, p1.y*s_mm);
+        const i2 = getIdx(p2.x*s_mm, -p2.z*s_mm, p2.y*s_mm);
+        pushTriIdx(i0,i1,i2, token);
+      }
+
+      geom.dispose();
+    }
+
+    return { V, T, palette };
+  }
+
+  // --- BLOCKY (no interior faces, shared vertices) ---
+  const addQuad = (a,b,c,d, token) => { // two CCW tris on the face
+    const i0 = getIdx(a.x*s_mm, -a.z*s_mm, a.y*s_mm);
+    const i1 = getIdx(b.x*s_mm, -b.z*s_mm, b.y*s_mm);
+    const i2 = getIdx(c.x*s_mm, -c.z*s_mm, c.y*s_mm);
+    const i3 = getIdx(d.x*s_mm, -d.z*s_mm, d.y*s_mm);
+    pushTriIdx(i0,i1,i2, token);
+    pushTriIdx(i0,i2,i3, token);
+  };
+
+  for (const v of voxels) {
+    if (v.y < 0) continue;
+    const x=v.x, y=v.y, z=v.z;
+    const token = tokenFromColor((v.color || '#FFFFFF').toUpperCase());
+
+    const P = {
+      p000: {x:x+0, y:y+0, z:z+0},
+      p100: {x:x+1, y:y+0, z:z+0},
+      p110: {x:x+1, y:y+1, z:z+0},
+      p010: {x:x+0, y:y+1, z:z+0},
+      p001: {x:x+0, y:y+0, z:z+1},
+      p101: {x:x+1, y:y+0, z:z+1},
+      p111: {x:x+1, y:y+1, z:z+1},
+      p011: {x:x+0, y:y+1, z:z+1},
+    };
+
+    if (!has(x,   y,   z-1)) addQuad(P.p000, P.p010, P.p110, P.p100, token); // -Z
+    if (!has(x,   y,   z+1)) addQuad(P.p001, P.p101, P.p111, P.p011, token); // +Z
+    if (!has(x-1, y,   z  )) addQuad(P.p000, P.p001, P.p011, P.p010, token); // -X
+    if (!has(x+1, y,   z  )) addQuad(P.p100, P.p110, P.p111, P.p101, token); // +X
+    if (!has(x,   y+1, z  )) addQuad(P.p010, P.p011, P.p111, P.p110, token); // +Y
+    if (!has(x,   y-1, z  )) addQuad(P.p000, P.p100, P.p101, P.p001, token); // -Y
+  }
+
+  return { V, T, palette };
+},
+
+    
+    tinyTriangle: function(z = 0) {
+        return {
+            // X, -Z, Y axis swap
+            V: [[0,0,z],[0.1,0,z],[0,0.1,z]].map(([x,y,z]) => [this.fmt(x), this.fmt(-z), this.fmt(y)]),
+            T: [[0,1,2]],
+        };
+    },
+
+    build3DModelXML: function({mainMesh, dummies, title='VoxelShaper Model', buildXYZ=[125,125,0]}) {
+        const today = this.ymd();
+        const [bx,by,bz] = buildXYZ.map(n=>+n||0);
+
+        let nextId = 1;
+        const mainId = nextId++;
+        const dummyIds = dummies.map(()=>nextId++);
+        const wrapperId = nextId++;
+
+        let xml = `<?xml version="1.0" encoding="UTF-8"?>\n`;
+        xml += `<model unit="millimeter" xml:lang="en-US" xmlns="http://schemas.microsoft.com/3dmanufacturing/core/2015/02" xmlns:BambuStudio="http://schemas.bambulab.com/package/2021">\n`;
+        xml +=  ` <metadata name="Application">BambuStudio-02.02.02.56</metadata>\n <metadata name="BambuStudio:3mfVersion">1</metadata>\n`;
+        xml +=  ` <metadata name="CreationDate">${today}</metadata>\n <metadata name="Thumbnail_Middle">/Metadata/plate_1.png</metadata>\n`;
+        xml +=  ` <metadata name="Thumbnail_Small">/Metadata/plate_1_small.png</metadata>\n <metadata name="Title">${this.esc(title)}</metadata>\n`;
+
+        const tokenMap = {};
+        mainMesh.palette.forEach((hex, i) => { tokenMap[this.tokenFromPaletteIndex(i)] = hex; });
+        xml +=  ` <metadata name="BambuStudio:PaintTokenARGB">${this.esc(JSON.stringify(tokenMap))}</metadata>\n`;
+        xml +=  ` <resources>\n`;
+        
+        xml +=   `<object id="${mainId}" type="model" name="PaintedMesh">\n  <mesh>\n   <vertices>\n`;
+        for (const [x,y,z] of mainMesh.V) { xml +=      `    <vertex x="${x}" y="${y}" z="${z}"/>\n`; }
+        xml +=   `</vertices>\n   <triangles>\n`;
+        for (const [v1,v2,v3,pc] of mainMesh.T) { xml +=      `    <triangle v1="${v1}" v2="${v2}" v3="${v3}" paint_color="${pc}"/>\n`; }
+        xml +=   `</triangles>\n  </mesh>\n </object>\n`;
+
+        dummies.forEach((d, i) => {
+            const id = dummyIds[i];
+            xml +=   `<object id="${id}" type="model" name="ColorSlot_${i+1}">\n  <mesh>\n   <vertices>\n`;
+            d.V.forEach(([x,y,z]) => { xml +=      `    <vertex x="${x}" y="${y}" z="${z}"/>\n`; });
+            xml +=   `</vertices>\n   <triangles>\n`;
+            d.T.forEach(([a,b,c]) => { xml +=      `    <triangle v1="${a}" v2="${b}" v3="${c}"/>\n`; });
+            xml +=   `</triangles>\n  </mesh>\n </object>\n`;
+        });
+
+        xml +=   `<object id="${wrapperId}" type="model">\n  <components>\n`;
+        xml +=      `<component objectid="${mainId}" transform="1 0 0 0 1 0 0 0 1 0 0 0"/>\n`;
+        xml +=   `</components>\n </object>\n </resources>\n <build>\n`;
+        
+        let minX = Infinity, minY = Infinity, minZ = Infinity;
+        let maxX = -Infinity, maxY = -Infinity;
+        mainMesh.V.forEach(([x,y,z]) => {
+            minX = Math.min(minX, x); maxX = Math.max(maxX, x);
+            minY = Math.min(minY, y); maxY = Math.max(maxY, y);
+            minZ = Math.min(minZ, z);
+        });
+        // Calculate center offset (assuming Bambu's plate is 256x256, center 128)
+        const PLATE_CENTER = 128;
+        const final_bx = PLATE_CENTER - (minX + (maxX-minX)/2);
+        const final_by = PLATE_CENTER - (minY + (maxY-minY)/2);
+        const final_bz = 0 - minZ; // Place on the bed (Z=0)
+        
+        xml +=   `<item objectid="${wrapperId}" transform="1 0 0 0 1 0 0 0 1 ${this.fmt(final_bx)} ${this.fmt(final_by)} ${this.fmt(final_bz)}" printable="1"/>\n`;
+        dummies.forEach((_, i) => {
+            xml +=   `<item objectid="${dummyIds[i]}" transform="1 0 0 0 1 0 0 0 1 ${this.fmt(final_bx)} ${this.fmt(final_by)} ${this.fmt(final_bz)}" printable="0"/>\n`;
+        });
+        xml +=  `</build>\n</model>\n`;
+        
+        return {xml, ids:{mainId, wrapperId, dummyIds}};
+    },
+    
+    buildProjectSettingsJSON: function(palette){
+        const cols = palette.map(c=>c.slice(0,7));
+        const n = Math.min(cols.length, 16);
+        const arr = v => Array.from({length:n}, ()=>v);
+        const PRINTER_PRESET_NAME = "VoxelShaper Custom Printer";
+        const niceNames = cols.map(c => `VoxelShaper PLA ${c}`);
+        const j = {
+            "version": "02.02.02.56",
+            "printer_settings_id": PRINTER_PRESET_NAME,
+            "plate_name": ["1"],
+            "plates": [0],
+            "bed_type": "Textured PEI Plate",
+            "curr_bed_type": "Textured PEI Plate",
+            "plate_model_index": [[0]],
+            "filament_settings_id":  niceNames,
+            "filament_name":         niceNames,
+            "filament_display_name": niceNames,
+            "filament_colour": cols,
+            "filament_color":  cols,
+            "filament_vendor": arr("Generic"),
+            "filament_type":   arr("PLA"),
+            "filament_diameter": arr("1.75"),
+            "filament_ids": cols.map((_,i)=>`GEN-PLA-${i+1}`),
+            "filament_is_support": arr("0"),
+            "filament_printable":  arr("3"),
+            "filament_map_mode": "Manual",
+            "filament_map": Array.from({length:n}, (_,i)=> String(i+1)),
+            "nozzle_diameter": ["0.4"],
+            "selected_plate_index": 0,
+            "project_location_type": "local"
+        };
+        return JSON.stringify(j);
+    },
+
+    buildModelSettingsXML: function(ids) {
+        let x = `<?xml version="1.0" encoding="UTF-8"?>\n<config version="02.02.02.56">\n <global>\n  <object_include exclude-non-stl="0"/>\n  <object_split split="1"/>\n </global>\n <objects>\n`;
+        x +=   `<object id="${ids.mainId}">\n  <metadata key="extruder" value="1"/>\n </object>\n`;
+        ids.dummyIds.forEach((oid, i) => {
+            x +=   `<object id="${oid}">\n  <metadata key="extruder" value="${i+2}"/>\n </object>\n`;
+        });
+        x +=  `</objects>\n</config>\n`;
+        return x;
+    },
+
+    buildContentTypesXML: () => `<?xml version="1.0" encoding="UTF-8"?><Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types"><Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/><Default Extension="png" ContentType="image/png"/><Default Extension="json" ContentType="application/json"/><Default Extension="config" ContentType="text/xml"/><Default Extension="xml" ContentType="application/xml"/><Default Extension="model" ContentType="application/vnd.ms-package.3dmanufacturing-3dmodel+xml"/></Types>`,
+    buildRootRelsXML: () => `<?xml version="1.0" encoding="UTF-8"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rel0" Type="http://schemas.microsoft.com/3dmanufacturing/2013/01/3dmodel" Target="/3D/3dmodel.model"/></Relationships>`,
+    buildModelRelsXML: () => `<?xml version="1.0" encoding="UTF-8"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rThumb1" Type="http://schemas.openxmlformats.org/package/2006/relationships/metadata/thumbnail" Target="/Metadata/plate_1.png"/><Relationship Id="rThumb2" Type="http://schemas.openxmlformats.org/package/2006/relationships/metadata/thumbnail" Target="/Metadata/plate_1_small.png"/></Relationships>`,    
+    dataURLtoUint8Array: function(dataURL) {
+        const base64 = dataURL.split(',')[1];
+        const binary = atob(base64);
+        const len = binary.length;
+        const bytes = new Uint8Array(len);
+        for (let i = 0; i < len; i++) bytes[i] = binary.charCodeAt(i);
+        return bytes;
+    },
+
+    makeThumb: function(label="plate_1", w=600, h=600) {
+        const c = document.createElement('canvas');
+        c.width = w; c.height = h;
+        const ctx = c.getContext('2d');
+        const g = ctx.createLinearGradient(0,0,w,h);
+        g.addColorStop(0,'#191a1f'); g.addColorStop(0.5,'#3b3f46'); g.addColorStop(1,'#0e0f12');
+        ctx.fillStyle = g; ctx.fillRect(0,0,w,h);
+        ctx.fillStyle = '#ffffff';
+        ctx.globalAlpha = 0.9;
+        ctx.font = `${Math.floor(w*0.08)}px system-ui,Arial,sans-serif`;
+        ctx.textAlign='center'; ctx.textBaseline='middle';
+        ctx.fillText(label, w/2, h/2);
+        return c.toDataURL('image/png');
+    }
 };
 // --- END: 3MF EXPORTER INTEGRATION ---
+
+
+// --- START: POLYSLICE G-CODE INTEGRATION ---
+const PolysliceWrapper = {
+    // Polyslice is exposed as a global variable by the CDN script
+    slicer: null,
+
+    // Default Polyslice options for FDM printing
+    defaultOptions: {
+        // Printer/Material settings
+        nozzleTemperature: 210, // °C
+        bedTemperature: 60, // °C
+        filamentDiameter: 1.75, // mm
+        layerHeight: 0.2, // mm
+        nozzleDiameter: 0.4, // mm
+
+        // Speed settings (mm/min)
+        travelSpeed: 4500,
+        printSpeed: 1800,
+        retractSpeed: 3600,
+        retractLength: 0.8, // mm
+        
+        // Structure
+        numPerimeters: 2,
+        fillDensity: 0.2, // 20%
+        skirtLoops: 2,
+        
+        // Printer dimensions (optional, for checking bounds)
+        bedSizeX: 235,
+        bedSizeY: 235,
+        maxZ: 250,
+    },
+
+    init: function() {
+        if (typeof Polyslice === 'undefined') {
+            VoxelApp.showToast('Slicer Error', 'Polyslice library not found. Cannot enable G-Code export.', 'error', 3000);
+            return false;
+        }
+        this.slicer = new Polyslice(this.defaultOptions);
+        return true;
+    },
+
+    // Generates G-Code from the merged mesh of the model
+    generateGCode: async function(mergedMesh, scaleFactor, layerHeight) {
+        if (!this.slicer && !this.init()) return null;
+        if (!mergedMesh) return null;
+
+        VoxelApp.showToast('Slicing...', `Starting slice at layer height ${layerHeight}mm.`, 'info');
+
+        // Scale the mesh before slicing
+        const scaleMatrix = new THREE.Matrix4().makeScale(scaleFactor, scaleFactor, scaleFactor);
+        const scaledMesh = mergedMesh.clone();
+        scaledMesh.geometry.applyMatrix4(scaleMatrix);
+
+        // Polyslice works directly with the THREE.Mesh object
+        // For the purposes of Polyslice's default behavior, we assume Z-up and correct scaling is applied here.
+        const gcode = await this.slicer.slice(scaledMesh, { layerHeight: layerHeight });
+
+        scaledMesh.geometry.dispose(); // Clean up scaled mesh geometry
+
+        return gcode;
+    }
+};
+// --- END: POLYSLICE G-CODE INTEGRATION ---
+
 
 const VoxelApp = {
     // --- Configuration ---
@@ -1074,7 +1125,7 @@ const VoxelApp = {
     PINCH_ZOOM_MULT: 50,
     DRAG_THRESHOLD: 5,
     MAX_HISTORY_SIZE: 50,
-    LONG_PRESS_DURATION: 250, // ms
+    LONG_PRESS_DURATION: 250,
     BACKEND_URL: "https://api.voxelshaper.com",
     HUB_URL: "https://hub.voxelshaper.com",
     // --- State ---
@@ -1111,13 +1162,12 @@ const VoxelApp = {
     activeDrawingLevel: { x: 0, y: 0, z: 0 },
     activePointers: new Map(),
     isPointerDown: false,
-    currentModelId: null, // Track current model ID for sharing
+    currentModelId: null,
     hapticLayer: null,
-    // NEW ROUNDING STATE
     isRoundedPreviewEnabled: localStorage.getItem('isRoundedPreviewEnabled') === 'true',
     previewRoundnessFactor: parseFloat(localStorage.getItem('previewRoundnessFactor') || 0.25),
-    originalVoxelsGroup: null, // Holds the meshes when preview is OFF (Blocky)
-    roundedVoxelsGroup: null, // Holds the merged mesh when preview is ON (Rounded)
+    originalVoxelsGroup: null,
+    roundedVoxelsGroup: null,
     mouseState: {
         isRotating: false, isPanning: false, isModifying: false, isDragging: false, isExtruding: false,
         lastX: 0, lastY: 0, downX: 0, downY: 0,
@@ -1183,6 +1233,18 @@ const VoxelApp = {
         }
         return this.materialCache.get(color);
     },
+clearSelection: function () {
+  if (!this.selectedFaces || this.selectedFaces.size === 0) return;
+  this.selectedFaces.clear();
+  this.selectionNormalIndex = null;
+  this.updateSelectionVisuals && this.updateSelectionVisuals();
+},
+
+isEmptyAt: function (x, y) {
+  const hit = this.getFaceTarget(x, y);
+  // treat “no hit” or the bed plane as empty
+  return !hit || (hit.object && hit.object.userData && hit.object.userData.isFoundation);
+},
 
     computeMobileMode: function () {
         return window.matchMedia('(pointer: coarse)').matches || navigator.maxTouchPoints > 0;
@@ -1194,10 +1256,10 @@ const VoxelApp = {
         const mobileWrap = document.getElementById('mobile-ui-container');
         if (mobile) {
             if (desktopBar) desktopBar.style.display = 'none';
-            if (mobileWrap)  mobileWrap.style.display  = 'block';
+            if (mobileWrap) mobileWrap.style.display = 'block';
         } else {
             if (desktopBar) desktopBar.style.display = 'flex';
-            if (mobileWrap)  mobileWrap.style.display  = 'none';
+            if (mobileWrap) mobileWrap.style.display = 'none';
         }
         document.body.classList.toggle('has-mobile-bar', this.isMobile);
     },
@@ -1213,6 +1275,9 @@ const VoxelApp = {
         this.setupEventListeners();
         this.initVisualHapticLayer();
         
+        // Initialize Polyslice
+        PolysliceWrapper.init();
+
         const urlParams = new URLSearchParams(window.location.search);
         
         // Onboarding logic
@@ -1229,7 +1294,7 @@ const VoxelApp = {
         this.authCheckAndInit();
         this.handleResize();
         this.animate();
-        console.log("VoxelShaper Initialized (Refactored by Christian Heinrich Hohlfeld)");
+        console.log("VoxelShaper Initialized (Polyslice Ready)");
     },
     
     request: async function(endpoint, options = {}) {
@@ -1272,7 +1337,6 @@ const VoxelApp = {
                 const user = await this.request('/api/user/me');
                 this.user = user;
                 this.updateLoginStateUI();
-                trackEvent('login_success', { user_id: this.user.id, method: 'oauth' });
                 this.showToast('Login Successful', 'You are now logged in via OAuth!', 'info');
             } catch (e) {
                 console.error("OAuth redirect user fetch failed:", e);
@@ -1299,7 +1363,7 @@ const VoxelApp = {
             }
         }
         await this.handleOAuthRedirect();
-        const urlParams  = new URLSearchParams(window.location.search || '');
+        const urlParams = new URLSearchParams(window.location.search || '');
         const hashParams = new URLSearchParams((window.location.hash || '').slice(1));
         const magicLinkToken = urlParams.get('token') || hashParams.get('token');
         if (!this.user && magicLinkToken) {
@@ -1311,7 +1375,6 @@ const VoxelApp = {
                 });
                 this.user = response.user;
                 this.updateLoginStateUI();
-                trackEvent('login_success', { user_id: this.user.id, method: 'magic_link' });
                 this.showToast('Login Successful', 'You are now logged in!', 'info');
             } catch (e) {
                 this.showToast('Login Error', e.message, 'error');
@@ -1328,7 +1391,7 @@ const VoxelApp = {
                 this.user = user;
                 this.updateLoginStateUI();
             } catch (e) {
-                // This is a normal case for non-logged-in users, so no toast.
+                // This is a normal case for non-logged-in users.
             }
         }
         const urlModelId = urlParams.get('modelId');
@@ -1428,7 +1491,7 @@ const VoxelApp = {
         this.rebuildHelpers();
         // Ensure initial visibility matches stored state and build the preview once if needed
         this.originalVoxelsGroup.visible = !this.isRoundedPreviewEnabled;
-        this.roundedVoxelsGroup.visible  =  this.isRoundedPreviewEnabled;
+        this.roundedVoxelsGroup.visible = this.isRoundedPreviewEnabled;
         if (this.isRoundedPreviewEnabled) this.rebuildRoundedPreview();
     },
     
@@ -1473,11 +1536,32 @@ const VoxelApp = {
         document.getElementById('undoBtn').addEventListener('click', () => this.undo());
         document.getElementById('redoBtn').addEventListener('click', () => this.redo());
 
-        // Export Modal Controls (Updated)
+// Click/tap empty space anywhere → deselect (SELECT mode only)
+this.containerDiv.addEventListener('pointerdown', (e) => {
+  if (this.currentMode !== 'SELECT') return;
+  if (document.querySelector('dialog[open]')) return;
+  if (['INPUT','TEXTAREA','SELECT'].includes(e.target.tagName)) return;
+  if (this.isEmptyAt(e.clientX, e.clientY)) this.clearSelection();
+}, true);
+
+// ESC or T → deselect (desktop)
+window.addEventListener('keydown', (e) => {
+  if (document.querySelector('dialog[open]')) return;
+  if (['INPUT','TEXTAREA','SELECT'].includes(e.target.tagName)) return;
+  if (e.key === 'Escape' || e.key.toLowerCase() === 't') this.clearSelection();
+});
+
+        // Export Modal Controls (Updated for Polyslice and 3MF)
         document.getElementById('exportBambuStudioBtn').addEventListener('click', () => {
-            trackEvent('export', { format: '3mf_bambu', voxel_count: this.voxels.size });
             const scaleUnit = document.querySelector('input[name="exportScaleUnit"]:checked').value;
-            VoxelApp3MFExporter.exportBambuStudio3MF(this.voxels, this.VS, this.showToast, this.parseKey, scaleUnit);
+            VoxelApp3MFExporter.exportBambuStudio3MF(this.voxels, this.VS, this.showToast.bind(this), this.parseKey.bind(this), scaleUnit);
+            document.getElementById('exportOptionsModal').close();
+        });
+        document.getElementById('exportGCodePolysliceBtn').addEventListener('click', () => {
+            const scaleUnit = document.querySelector('input[name="exportScaleUnit"]:checked').value;
+            const shapeType = document.querySelector('input[name="exportShapeType"]:checked').value;
+            const isRounded = shapeType === 'rounded';
+            this.exportGCodePolyslice(scaleUnit, isRounded);
             document.getElementById('exportOptionsModal').close();
         });
 
@@ -1487,7 +1571,6 @@ const VoxelApp = {
             const shapeType = document.querySelector('input[name="exportShapeType"]:checked').value;
             const isRounded = shapeType === 'rounded';
             
-            trackEvent('export', { format: isRounded ? 'stl_rounded' : 'stl_blocky', voxel_count: this.voxels.size });
             this.exportSTL(scaleUnit, upAxis, isRounded);
             document.getElementById('exportOptionsModal').close();
         });
@@ -1604,7 +1687,7 @@ const VoxelApp = {
         
         // Control visibility of the groups
         this.originalVoxelsGroup.visible = !this.isRoundedPreviewEnabled;
-        this.roundedVoxelsGroup.visible = this.isRoundedPreviewEnabled;
+        this.roundedVoxelsGroup.visible  =  this.isRoundedPreviewEnabled;
         
         if (this.isRoundedPreviewEnabled) {
             this.rebuildRoundedPreview();
@@ -1640,82 +1723,83 @@ const VoxelApp = {
         if (display) display.textContent = this.previewRoundnessFactor.toFixed(2);
     },
     
-// 3) VoxelApp.rebuildRoundedPreview(...) (neighbor-aware + merged, using your bit-packed keys)
-rebuildRoundedPreview: function() {
-  this.disposeRoundedPreview();
-  if (!this.roundedVoxelsGroup) {
-    this.roundedVoxelsGroup = new THREE.Group();
-    this.scene.add(this.roundedVoxelsGroup);
-  }
-  if (this.voxels.size === 0) return;
+    rebuildRoundedPreview: function() {
+      this.disposeRoundedPreview();
+      if (!this.roundedVoxelsGroup) {
+        this.roundedVoxelsGroup = new THREE.Group();
+        this.scene.add(this.roundedVoxelsGroup);
+      }
+      if (this.voxels.size === 0) return;
 
-  const geomsByColor = new Map();
-  const has = (x,y,z) => this.voxels.has(this.key(x,y,z)); // <-- uses your bit-packed key()
+      const geomsByColor = new Map();
+      const has = (x,y,z) => this.voxels.has(this.key(x,y,z));
 
-  this.voxels.forEach((v, packedKey) => {
-    const [x, y, z] = this.parseKey(packedKey);
-    if (y < 0) return; // skip foundation/bed
+      this.voxels.forEach((v, packedKey) => {
+        const [x, y, z] = this.parseKey(packedKey);
+        if (y < 0) return; // skip foundation/bed
 
-    const neighbors = {
-      px: has(x+1,y,z), nx: has(x-1,y,z),
-      py: has(x,y+1,z), ny: has(x,y-1,z),
-      pz: has(x,y,z+1), nz: has(x,y,z-1),
-    };
+        const neighbors = {
+          px: has(x+1,y,z), nx: has(x-1,y,z),
+          py: has(x,y+1,z), ny: has(x,y-1,z),
+          pz: has(x,y,z+1), nz: has(x,y,z-1),
+        };
 
-    const pos  = new THREE.Vector3(x, y, z);
-    const geom = createRoundedVoxelGeometry(pos, this.previewRoundnessFactor, this.VS, neighbors);
+        const pos  = new THREE.Vector3(x, y, z);
+        const geom = createRoundedVoxelGeometry(pos, this.previewRoundnessFactor, this.VS, neighbors);
 
-    const hex = (v.color || '#ffffff').toUpperCase();
-    if (!geomsByColor.has(hex)) geomsByColor.set(hex, []);
-    geomsByColor.get(hex).push(geom);
-  });
+        const hex = (v.color || '#ffffff').toUpperCase();
+        if (!geomsByColor.has(hex)) geomsByColor.set(hex, []);
+        geomsByColor.get(hex).push(geom);
+      });
 
-  const BGU = (THREE && THREE.BufferGeometryUtils) || (typeof BufferGeometryUtils !== 'undefined' ? BufferGeometryUtils : null);
-  if (!BGU) throw new Error('BufferGeometryUtils not found. Load it after three.min.js');
+      const BGU = (THREE && THREE.BufferGeometryUtils) || (typeof BufferGeometryUtils !== 'undefined' ? BufferGeometryUtils : null);
+      if (!BGU) {
+          this.showToast('Error', 'BufferGeometryUtils not found for rounding.', 'error');
+          return;
+      }
 
-  for (const [hex, list] of geomsByColor) {
-    const merged = (list.length > 1) ? BGU.mergeBufferGeometries(list, false) : list[0];
-    if (list.length > 1) list.forEach(g => g.dispose());
+      for (const [hex, list] of geomsByColor) {
+        const merged = (list.length > 1) ? BGU.mergeBufferGeometries(list, false) : list[0];
+        if (list.length > 1) list.forEach(g => g.dispose());
 
-    const mesh = new THREE.Mesh(merged, this.getMaterial(hex));
-    mesh.castShadow = true;
-    mesh.receiveShadow = true;
-    this.roundedVoxelsGroup.add(mesh);
-  }
-},
+        const mesh = new THREE.Mesh(merged, this.getMaterial(hex));
+        mesh.castShadow = true;
+        mesh.receiveShadow = true;
+        this.roundedVoxelsGroup.add(mesh);
+      }
+    },
 
-// 3b) VoxelApp.disposeRoundedPreview(...) (fixed + safe)
-disposeRoundedPreview: function() {
-  if (!this.roundedVoxelsGroup) return;
+    disposeRoundedPreview: function() {
+      if (!this.roundedVoxelsGroup) return;
 
-  // dispose geometries/materials
-  this.roundedVoxelsGroup.traverse(obj => {
-    if (obj.isMesh) {
-      if (obj.geometry) obj.geometry.dispose();
-      if (obj.material && obj.material.dispose) obj.material.dispose();
-    }
-  });
+      // dispose geometries/materials
+      this.roundedVoxelsGroup.traverse(obj => {
+        if (obj.isMesh) {
+          if (obj.geometry) obj.geometry.dispose();
+          if (obj.material && obj.material.dispose) obj.material.dispose();
+        }
+      });
 
-  // remove children cleanly
-  while (this.roundedVoxelsGroup.children.length) {
-    this.roundedVoxelsGroup.remove(this.roundedVoxelsGroup.children[0]);
-  }
-},
+      // remove children cleanly
+      while (this.roundedVoxelsGroup.children.length) {
+        this.roundedVoxelsGroup.remove(this.roundedVoxelsGroup.children[0]);
+      }
+    },
     
-handleTapInteraction: function(event) {
-  if (this.currentMode === 'SELECT') {
-    const target = this.getFaceTarget(event.clientX, event.clientY);
-    // Tap should ONLY affect selection — no extrusion on tap.
-    if (target) {
-      this.handleFaceSelection(event);
-    }
-    return;
-  }
+    handleTapInteraction: function(event) {
+      if (this.currentMode === 'SELECT') {
+        const target = this.getFaceTarget(event.clientX, event.clientY);
+        // Tap should ONLY affect selection — no extrusion on tap.
+        if (target) {
+          this.handleFaceSelection(event);
+        }
+        return;
+      }
 
-  // Non-select modes keep their single-tap modify behavior:
-  const targetInfo = this.getRayTargetInfo(this.mouseState.downX, this.mouseState.downY);
-  if (targetInfo) this.modifyVoxel(targetInfo.x, targetInfo.y, targetInfo.z, targetInfo.normal);
-},
+      // Non-select modes keep their single-tap modify behavior:
+      const targetInfo = this.getRayTargetInfo(this.mouseState.downX, this.mouseState.downY);
+      if (targetInfo) this.modifyVoxel(targetInfo.x, targetInfo.y, targetInfo.z, targetInfo.normal);
+    },
 
     onPointerDown: function (e) {
         if (e.target !== this.cvs) return;
@@ -1822,110 +1906,110 @@ handleTapInteraction: function(event) {
         // --- Mobile Logic ---
         if (this.isMobile) {
              if (!this.mouseState.isDragging && dist > this.DRAG_THRESHOLD) { // First frame of drag
-                this.mouseState.isDragging = true;
-                this.touchState.isThreeFingerUndoCandidate = false;
+                 this.mouseState.isDragging = true;
+                 this.touchState.isThreeFingerUndoCandidate = false;
 
-                if (this.touchState.longPressTimeout) {
-                    clearTimeout(this.touchState.longPressTimeout);
-                    this.touchState.longPressTimeout = null;
-                }
-                if (this.activePointers.size === 1 && !this.touchState.isInteracting) {
-                    this.touchState.isLookAround = true;
-                }
-            }
+                 if (this.touchState.longPressTimeout) {
+                     clearTimeout(this.touchState.longPressTimeout);
+                     this.touchState.longPressTimeout = null;
+                 }
+                 if (this.activePointers.size === 1 && !this.touchState.isInteracting) {
+                     this.touchState.isLookAround = true;
+                 }
+             }
 
-            if (this.touchState.isInteracting) {
-                const targetInfo = this.getRayTargetInfo(e.clientX, e.clientY);
-                this.updateToolPreview(targetInfo);
-                if (this.mouseState.isExtruding) {
-                    const raycaster = new THREE.Raycaster();
-                    const mouse = new THREE.Vector2(((e.clientX - this.cvs.getBoundingClientRect().left) / this.cvs.clientWidth) * 2 - 1, -((e.clientY - this.cvs.getBoundingClientRect().top) / this.cvs.clientHeight) * 2 + 1);
-                    raycaster.setFromCamera(mouse, this.cam);
-                    const intersection = new THREE.Vector3();
-                    if (raycaster.ray.intersectPlane(this.mouseState.drawingPlane, intersection)) {
-                        const dragVector = intersection.clone().sub(this.mouseState.dragStartPoint);
-                        const extrusionDistance = dragVector.dot(this.mouseState.extrudeNormal);
-                        const voxelDistance = Math.round(extrusionDistance / this.VS);
-                        this.updateExtrudePreview(voxelDistance);
-                    }
-                } else if (this.currentMode === 'SELECT') {
-                    this.handleDragSelection(e);
-                } else {
-                    if (targetInfo) {
-                        const coords = {x: targetInfo.x, y: targetInfo.y, z: targetInfo.z};
-                        if (!this.mouseState.lastActionCoords || coords.x !== this.mouseState.lastActionCoords.x || coords.y !== this.mouseState.lastActionCoords.y || coords.z !== this.mouseState.lastActionCoords.z) {
-                            this.drawVoxelLine(this.mouseState.lastActionCoords || coords, coords, this.mouseState.lastActionNormal || targetInfo.normal);
-                            this.mouseState.lastActionCoords = coords;
-                            this.mouseState.lastActionNormal = targetInfo.normal;
-                        }
-                    }
-                }
-            } else if (this.activePointers.size === 2) {
-                const pointers = Array.from(this.activePointers.values());
-                const newDist = Math.hypot(pointers[0].x - pointers[1].x, pointers[0].y - pointers[1].y);
-                const center = { x: (pointers[0].x + pointers[1].x) / 2, y: (pointers[0].y + pointers[1].y) / 2 };
-                if (!this.touchState.lastPinchDist) this.touchState.lastPinchDist = newDist;
-                let zoomDelta = (this.touchState.lastPinchDist - newDist) * this.PINCH_ZOOM_MULT * 0.001;
-                if (this.controls.invertZoom) zoomDelta *= -1;
-                this.cam.position.addScaledVector(this.cam.getWorldDirection(new THREE.Vector3()), zoomDelta);
-                this.touchState.lastPinchDist = newDist;
+             if (this.touchState.isInteracting) {
+                 const targetInfo = this.getRayTargetInfo(e.clientX, e.clientY);
+                 this.updateToolPreview(targetInfo);
+                 if (this.mouseState.isExtruding) {
+                     const raycaster = new THREE.Raycaster();
+                     const mouse = new THREE.Vector2(((e.clientX - this.cvs.getBoundingClientRect().left) / this.cvs.clientWidth) * 2 - 1, -((e.clientY - this.cvs.getBoundingClientRect().top) / this.cvs.clientHeight) * 2 + 1);
+                     raycaster.setFromCamera(mouse, this.cam);
+                     const intersection = new THREE.Vector3();
+                     if (raycaster.ray.intersectPlane(this.mouseState.drawingPlane, intersection)) {
+                         const dragVector = intersection.clone().sub(this.mouseState.dragStartPoint);
+                         const extrusionDistance = dragVector.dot(this.mouseState.extrudeNormal);
+                         const voxelDistance = Math.round(extrusionDistance / this.VS);
+                         this.updateExtrudePreview(voxelDistance);
+                     }
+                 } else if (this.currentMode === 'SELECT') {
+                     this.handleDragSelection(e);
+                 } else {
+                     if (targetInfo) {
+                         const coords = {x: targetInfo.x, y: targetInfo.y, z: targetInfo.z};
+                         if (!this.mouseState.lastActionCoords || coords.x !== this.mouseState.lastActionCoords.x || coords.y !== this.mouseState.lastActionCoords.y || coords.z !== this.mouseState.lastActionCoords.z) {
+                             this.drawVoxelLine(this.mouseState.lastActionCoords || coords, coords, this.mouseState.lastActionNormal || targetInfo.normal);
+                             this.mouseState.lastActionCoords = coords;
+                             this.mouseState.lastActionNormal = targetInfo.normal;
+                         }
+                     }
+                 }
+             } else if (this.activePointers.size === 2) {
+                 const pointers = Array.from(this.activePointers.values());
+                 const newDist = Math.hypot(pointers[0].x - pointers[1].x, pointers[0].y - pointers[1].y);
+                 const center = { x: (pointers[0].x + pointers[1].x) / 2, y: (pointers[0].y + pointers[1].y) / 2 };
+                 if (!this.touchState.lastPinchDist) this.touchState.lastPinchDist = newDist;
+                 let zoomDelta = (this.touchState.lastPinchDist - newDist) * this.PINCH_ZOOM_MULT * 0.001;
+                 if (this.controls.invertZoom) zoomDelta *= -1;
+                 this.cam.position.addScaledVector(this.cam.getWorldDirection(new THREE.Vector3()), zoomDelta);
+                 this.touchState.lastPinchDist = newDist;
 
-                if (this.touchState.lastPinchCenter) {
-                    const deltaX = center.x - this.touchState.lastPinchCenter.x;
-                    const deltaY = center.y - this.touchState.lastPinchCenter.y;
-                    const strafeX = this.controls.invertStrafeX ? deltaX : -deltaX;
-                    const strafeY = this.controls.invertStrafeY ? -deltaY : deltaY;
-                    const pan = new THREE.Vector3(strafeX * this.PAN_SPEED, strafeY * this.PAN_SPEED, 0);
-                    pan.applyQuaternion(this.cam.quaternion);
-                    this.cam.position.add(pan);
-                }
-                this.touchState.lastPinchCenter = center;
-            } else if (this.touchState.isLookAround) { // Single-finger drag for look
-                const deltaX = e.clientX - this.mouseState.lastX;
-                const deltaY = e.clientY - this.mouseState.lastY;
-                this.euler.y -= (this.controls.invertLookX ? -deltaX : deltaX) * this.ROTATE_SPEED * this.MOBILE_ROTATE_SPEED_MULT;
-                this.euler.x -= (this.controls.invertLookY ? -deltaY : deltaY) * this.ROTATE_SPEED * this.MOBILE_ROTATE_SPEED_MULT;
-            }
-            
-            this.activePointers.set(e.pointerId, { x: e.clientX, y: e.clientY });
+                 if (this.touchState.lastPinchCenter) {
+                     const deltaX = center.x - this.touchState.lastPinchCenter.x;
+                     const deltaY = center.y - this.touchState.lastPinchCenter.y;
+                     const strafeX = this.controls.invertStrafeX ? deltaX : -deltaX;
+                     const strafeY = this.controls.invertStrafeY ? -deltaY : deltaY;
+                     const pan = new THREE.Vector3(strafeX * this.PAN_SPEED, strafeY * this.PAN_SPEED, 0);
+                     pan.applyQuaternion(this.cam.quaternion);
+                     this.cam.position.add(pan);
+                 }
+                 this.touchState.lastPinchCenter = center;
+             } else if (this.touchState.isLookAround) { // Single-finger drag for look
+                 const deltaX = e.clientX - this.mouseState.lastX;
+                 const deltaY = e.clientY - this.mouseState.lastY;
+                 this.euler.y -= (this.controls.invertLookX ? -deltaX : deltaX) * this.ROTATE_SPEED * this.MOBILE_ROTATE_SPEED_MULT;
+                 this.euler.x -= (this.controls.invertLookY ? -deltaY : deltaY) * this.ROTATE_SPEED * this.MOBILE_ROTATE_SPEED_MULT;
+             }
+             
+             this.activePointers.set(e.pointerId, { x: e.clientX, y: e.clientY });
 
         } else { // --- Desktop Logic ---
              if (!this.mouseState.isDragging && dist > this.DRAG_THRESHOLD) {
-                this.mouseState.isDragging = true;
+                 this.mouseState.isDragging = true;
              }
              const targetInfo = this.getRayTargetInfo(e.clientX, e.clientY);
              this.updateToolPreview(targetInfo);
-            if (this.mouseState.isExtruding) {
+             if (this.mouseState.isExtruding) {
                  const raycaster = new THREE.Raycaster();
-                const mouse = new THREE.Vector2(((e.clientX - this.cvs.getBoundingClientRect().left) / this.cvs.clientWidth) * 2 - 1, -((e.clientY - this.cvs.getBoundingClientRect().top) / this.cvs.clientHeight) * 2 + 1);
-                raycaster.setFromCamera(mouse, this.cam);
-                const intersection = new THREE.Vector3();
-                if (raycaster.ray.intersectPlane(this.mouseState.drawingPlane, intersection)) {
-                    const dragVector = intersection.clone().sub(this.mouseState.dragStartPoint);
-                    const extrusionDistance = dragVector.dot(this.mouseState.extrudeNormal);
-                    const voxelDistance = Math.round(extrusionDistance / this.VS);
-                    this.updateExtrudePreview(voxelDistance);
-                }
-            } else if (this.mouseState.isDragging && this.mouseState.isModifying) {
-                if (this.currentMode === 'SELECT') {
-                    this.handleDragSelection(e);
-                } else {
-                    if (targetInfo) {
-                        const coords = {x: targetInfo.x, y: targetInfo.y, z: targetInfo.z};
-                        if (!this.mouseState.lastActionCoords || coords.x !== this.mouseState.lastActionCoords.x || coords.y !== this.mouseState.lastActionCoords.y || coords.z !== this.mouseState.lastActionCoords.z) {
-                            this.drawVoxelLine(this.mouseState.lastActionCoords || coords, coords, this.mouseState.lastActionNormal || targetInfo.normal);
-                            this.mouseState.lastActionCoords = coords;
-                            this.mouseState.lastActionNormal = targetInfo.normal;
-                        }
-                    }
-                }
-            } else if (this.mouseState.isPanning) {
-                const deltaX = e.clientX - this.mouseState.lastX;
-                const deltaY = e.clientY - this.mouseState.lastY;
-                const pan = new THREE.Vector3(-deltaX * this.PAN_SPEED, deltaY * this.PAN_SPEED, 0);
-                pan.applyQuaternion(this.cam.quaternion);
-                this.cam.position.add(pan);
-            }
+                 const mouse = new THREE.Vector2(((e.clientX - this.cvs.getBoundingClientRect().left) / this.cvs.clientWidth) * 2 - 1, -((e.clientY - this.cvs.getBoundingClientRect().top) / this.cvs.clientHeight) * 2 + 1);
+                 raycaster.setFromCamera(mouse, this.cam);
+                 const intersection = new THREE.Vector3();
+                 if (raycaster.ray.intersectPlane(this.mouseState.drawingPlane, intersection)) {
+                     const dragVector = intersection.clone().sub(this.mouseState.dragStartPoint);
+                     const extrusionDistance = dragVector.dot(this.mouseState.extrudeNormal);
+                     const voxelDistance = Math.round(extrusionDistance / this.VS);
+                     this.updateExtrudePreview(voxelDistance);
+                 }
+             } else if (this.mouseState.isDragging && this.mouseState.isModifying) {
+                 if (this.currentMode === 'SELECT') {
+                     this.handleDragSelection(e);
+                 } else {
+                     if (targetInfo) {
+                         const coords = {x: targetInfo.x, y: targetInfo.y, z: targetInfo.z};
+                         if (!this.mouseState.lastActionCoords || coords.x !== this.mouseState.lastActionCoords.x || coords.y !== this.mouseState.lastActionCoords.y || coords.z !== this.mouseState.lastActionCoords.z) {
+                             this.drawVoxelLine(this.mouseState.lastActionCoords || coords, coords, this.mouseState.lastActionNormal || targetInfo.normal);
+                             this.mouseState.lastActionCoords = coords;
+                             this.mouseState.lastActionNormal = targetInfo.normal;
+                         }
+                     }
+                 }
+             } else if (this.mouseState.isPanning) {
+                 const deltaX = e.clientX - this.mouseState.lastX;
+                 const deltaY = e.clientY - this.mouseState.lastY;
+                 const pan = new THREE.Vector3(-deltaX * this.PAN_SPEED, deltaY * this.PAN_SPEED, 0);
+                 pan.applyQuaternion(this.cam.quaternion);
+                 this.cam.position.add(pan);
+             }
         }
         
         this.mouseState.lastX = e.clientX;
@@ -1957,7 +2041,6 @@ handleTapInteraction: function(event) {
 
         if (this.mouseState.isExtruding) {
             const distance = this.ghostVoxels.size > 0 ? (this.ghostVoxels.get(this.ghostVoxels.keys().next().value).distance || 0) : 0;
-            if (distance !== 0) trackEvent('extrude', { distance: distance, method: 'drag' });
             this.updateExtrudePreview(0);
             if (distance !== 0) this.extrudeSelectedFaces(distance);
             this.onModelChanged(); // NEW: Trigger model change event
@@ -2059,7 +2142,6 @@ handleTapInteraction: function(event) {
         }
         const link = `${window.location.origin}${window.location.pathname}?modelId=${this.currentModelId}`;
         navigator.clipboard.writeText(link).then(() => {
-            trackEvent('share', { method: 'copy_link', model_id: this.currentModelId });
             this.showToast('Link Copied', 'The shareable link has been copied to your clipboard.', 'info');
         }).catch(err => {
             console.error('Failed to copy share link: ', err);
@@ -2108,7 +2190,6 @@ handleTapInteraction: function(event) {
             });
             this.currentModelId = response.public_id;
             this.updateUrlWithModelId();
-            trackEvent('upload_hub', { model_id: this.currentModelId, visibility: hubDocument.visibility });
             this.showToast('Upload Successful!', `Project saved. Share link updated.`, 'success');
         } catch (error) {
             this.showToast('Upload Failed', error.message, 'error');
@@ -2198,16 +2279,16 @@ handleTapInteraction: function(event) {
             }
             return;
         }
-         if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'z') {
-            e.preventDefault();
-            this.undo();
-            return;
-        }       
+          if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'z') {
+              e.preventDefault();
+              this.undo();
+              return;
+            }        
         if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'y') {
             e.preventDefault();
             this.redo();
             return;
-        }  
+        }      
         if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 's') {
             e.preventDefault();
             this.saveJSON();
@@ -2283,11 +2364,11 @@ handleTapInteraction: function(event) {
         const oldMode = this.currentMode;
         if (oldMode === 'SELECT') {
              if (this.selectedFaces.size > 0) {
-                const before = new Set(this.selectedFaces);
-                this.selectedFaces.clear();
-                this.updateSelectionVisuals();
-                this.addHistoryStep({ type: 'SELECT', before, after: new Set(this.selectedFaces) });
-            }
+                 const before = new Set(this.selectedFaces);
+                 this.selectedFaces.clear();
+                 this.updateSelectionVisuals();
+                 this.addHistoryStep({ type: 'SELECT', before, after: new Set(this.selectedFaces) });
+             }
         }
         const modeKeys = Object.keys(this.Modes);
         const currentIndex = modeKeys.indexOf(this.currentMode);
@@ -2357,7 +2438,7 @@ handleTapInteraction: function(event) {
                 break;
             case 'DELETE':
                 if (existingVoxel) {
-                    this.originalVoxelsGroup.remove(existingVoxel.mesh); // Changed to use original group
+                    this.originalVoxelsGroup.remove(existingVoxel.mesh);
                     this.voxels.delete(k);
                     modified = true;
                 }
@@ -2368,7 +2449,7 @@ handleTapInteraction: function(event) {
                     mesh.position.set(x * this.VS + 0.5, y * this.VS + 0.5, z * this.VS + 0.5);
                     mesh.castShadow = true;
                     mesh.receiveShadow = true;
-                    this.originalVoxelsGroup.add(mesh); // Changed to use original group
+                    this.originalVoxelsGroup.add(mesh);
                     this.voxels.set(k, { color: this.currentColor, mesh: mesh });
                     modified = true;
                     this.addColorToHistory(this.currentColor);
@@ -2450,7 +2531,6 @@ handleTapInteraction: function(event) {
             cx = x; cy = y; cz = z;
         } else {
             // Fallback: We are outside the grid, so raycast to an infinite plane
-            // defined by the starting face to determine virtual coordinates.
             const startNormal = this.getNormalFromIndex(startNormalIdx);
             
             // The plane passes through the center of the starting voxel's face
@@ -2488,7 +2568,7 @@ handleTapInteraction: function(event) {
             allowedAxes = ['y', 'z'];
         } else if (startNormalIdx === 2 || startNormalIdx === 3) { // ±Y face -> move in X/Z
             allowedAxes = ['x', 'z'];
-        } else {                                                   // ±Z face -> move in X/Y
+        } else {                                                     // ±Z face -> move in X/Y
             allowedAxes = ['x', 'y'];
         }
 
@@ -2609,48 +2689,83 @@ handleTapInteraction: function(event) {
         this.updateSelectionVisuals();
     },
 
-    handleFaceSelection: function (event) {
-        if (this.mouseState.isDragging && !this.isMobile) return;
-        const target = this.getFaceTarget(event.clientX, event.clientY);
-        if (!target) {
-            if (!event.ctrlKey && !event.shiftKey) {
-                this.selectedFaces.clear();
-                this.selectionNormalIndex = null;
-                this.updateSelectionVisuals();
-            } return;
-        }
-        const faceKey = target.faceKey;
-        const targetNormalIndex = parseInt(faceKey.split(':')[1], 10);
-        const isAdd = event.ctrlKey || event.shiftKey;
-        const currentNormalIndex = this.selectionNormalIndex ?? (this.selectedFaces.size > 0 ? parseInt(this.selectedFaces.values().next().value.split(':')[1], 10) : null);
-        if (!isAdd) {
-            this.selectedFaces.clear();
-            this.selectedFaces.add(faceKey);
-            this.selectionNormalIndex = targetNormalIndex;
-            this.updateSelectionVisuals();
-            return;
-        }
-        if (this.selectedFaces.has(faceKey)) {
-            this.selectedFaces.delete(faceKey);
-            if (this.selectedFaces.size === 0) this.selectionNormalIndex = null;
-            this.updateSelectionVisuals();
-            return;
-        }
-        if (currentNormalIndex === null || currentNormalIndex === targetNormalIndex) {
-            this.selectedFaces.add(faceKey);
-            this.selectionNormalIndex = targetNormalIndex;
-            this.updateSelectionVisuals();
-            return;
-        }
-        if (this.AUTO_RESET_ORIENTATION_ON_MISMATCH) {
-            this.selectedFaces = new Set([...this.selectedFaces].filter(k => parseInt(k.split(':')[1], 10) === targetNormalIndex));
-            this.selectedFaces.add(faceKey);
-            this.selectionNormalIndex = targetNormalIndex;
-            this.updateSelectionVisuals();
-        } else {
-            this.showToast('Selection limited', 'All faces in a group must share the same orientation.', 'warning');
-        }
-    },
+  handleFaceSelection: function (event) {
+  // On desktop, ignore while actively dragging the marquee
+  if (this.mouseState.isDragging && !this.isMobile) return;
+
+  const target = this.getFaceTarget(event.clientX, event.clientY);
+  const clickedBed = !!(target && target.faceKey && this.isBedFace(target.faceKey));
+  const isAdd = event.ctrlKey || event.shiftKey;
+
+  // Clear only when truly hitting background (no target),
+  // or if user explicitly asks to clear while clicking the bed (Alt+click).
+  if ((!target || (clickedBed && event.altKey)) && !isAdd) {
+    this.selectedFaces.clear();
+    this.selectionNormalIndex = null;
+    this.updateSelectionVisuals();
+    return;
+  }
+
+  if (!target) return; // nothing to do (modifier held or no target)
+
+  const faceKey = target.faceKey; // "<voxelKey>:<normalIndex>"
+  const targetNormalIndex = parseInt(faceKey.split(':')[1], 10);
+
+  // Current group orientation (if any)
+  const first = this.selectedFaces.size > 0 ? this.selectedFaces.values().next().value : null;
+  const currentNormalIndex = (this.selectionNormalIndex != null)
+    ? this.selectionNormalIndex
+    : (first ? parseInt(first.split(':')[1], 10) : null);
+
+  // Quick toggle-off: clicking an already-selected single face with no modifiers clears
+  if (!isAdd && this.selectedFaces.has(faceKey) && this.selectedFaces.size === 1) {
+    this.selectedFaces.clear();
+    this.selectionNormalIndex = null;
+    this.updateSelectionVisuals();
+    return;
+  }
+
+  if (!isAdd) {
+    this.selectedFaces.clear();
+    this.selectedFaces.add(faceKey);
+    this.selectionNormalIndex = targetNormalIndex;
+    this.updateSelectionVisuals();
+    return;
+  }
+
+  // Add/remove with Ctrl/Shift
+  if (this.selectedFaces.has(faceKey)) {
+    this.selectedFaces.delete(faceKey);
+    if (this.selectedFaces.size === 0) this.selectionNormalIndex = null;
+    this.updateSelectionVisuals();
+    return;
+  }
+
+  if (currentNormalIndex === null || currentNormalIndex === targetNormalIndex) {
+    this.selectedFaces.add(faceKey);
+    this.selectionNormalIndex = targetNormalIndex;
+    this.updateSelectionVisuals();
+    return;
+  }
+
+  if (this.AUTO_RESET_ORIENTATION_ON_MISMATCH) {
+    // Reset to the new orientation and add
+    this.selectedFaces = new Set(
+      [...this.selectedFaces].filter(k => parseInt(k.split(':')[1], 10) === targetNormalIndex)
+    );
+    this.selectedFaces.add(faceKey);
+    this.selectionNormalIndex = targetNormalIndex;
+    this.updateSelectionVisuals();
+  } else {
+    this.showToast('Selection limited', 'All faces in a group must share orientation. (Tip: press Esc to clear.)', 'info', 1200);
+  }
+},
+isBedFace: function(faceKey) {
+  const [packed] = faceKey.split(':');
+  const [, y] = this.parseKey(parseInt(packed, 10));
+  return y < 0;
+},
+
 
     getNormalIndex: function(normal) {
         if (Math.abs(normal.x) > 0.5) return normal.x > 0 ? 0 : 1;
@@ -2678,8 +2793,6 @@ handleTapInteraction: function(event) {
         return null;
     },
 
-    // FIX: Always use the original (blocky) voxel meshes for accurate face detection, 
-    // regardless of whether the rounded preview is enabled.
     getFaceAt: function(clientX, clientY) {
         const rect = this.cvs.getBoundingClientRect();
         const mouse = new THREE.Vector2(((clientX - rect.left) / rect.width) * 2 - 1, -((clientY - rect.top) / this.cvs.clientHeight) * 2 + 1);
@@ -2718,7 +2831,7 @@ handleTapInteraction: function(event) {
             if (this.selectionFaceMeshes.has(faceKey)) return;
             const [voxelKeyStr, normalIndexStr] = faceKey.split(':');
             const voxelKey = parseInt(voxelKeyStr, 10);
-            const normal   = this.getNormalFromIndex(parseInt(normalIndexStr, 10));
+            const normal   = this.getNormalFromIndex(parseInt(normalIndexStr, 10));
             const voxelData = this.voxels.get(voxelKey);
             const isFoundation = !voxelData;
             
@@ -2748,7 +2861,6 @@ handleTapInteraction: function(event) {
         });
     },
 
-    // FIX: Simplified face target detection based on reliable hits from getFaceAt
     getFaceTarget: function (clientX, clientY) {
         const hit = this.getFaceAt(clientX, clientY);
         if (!hit) return null;
@@ -2875,7 +2987,7 @@ handleTapInteraction: function(event) {
                     const newMesh = new THREE.Mesh(this.sharedBoxGeometry, this.getMaterial(extrudeColor));
                     newMesh.position.set(newX * this.VS + 0.5, newY * this.VS + 0.5, newZ * this.VS + 0.5);
                     newMesh.castShadow = true; newMesh.receiveShadow = true;
-                    this.originalVoxelsGroup.add(newMesh); // Changed scene.add to originalVoxelsGroup.add
+                    this.originalVoxelsGroup.add(newMesh);
                     this.voxels.set(newKey, { color: extrudeColor, mesh: newMesh });
                     changes.get(newKey).after = { color: extrudeColor };
                     this.addColorToHistory(extrudeColor);
@@ -2886,11 +2998,12 @@ handleTapInteraction: function(event) {
                 for (let i = 0; i < distanceAbs; i++) {
                     const delX = x + cutDirection.x * i, delY = y + cutDirection.y * i, delZ = z + cutDirection.z * i; 
                     const delKey = this.key(delX, delY, delZ);
+                    
                     const voxelToDelete = this.voxels.get(delKey);
                     
                     if (voxelToDelete && delY >= 0) {
                         if (!changes.has(delKey)) changes.set(delKey, { before: { color: voxelToDelete.color }, after: null });
-                        this.originalVoxelsGroup.remove(voxelToDelete.mesh); // Changed scene.remove to originalVoxelsGroup.remove
+                        this.originalVoxelsGroup.remove(voxelToDelete.mesh);
                         this.voxels.delete(delKey);
                     }
                 }
@@ -2917,8 +3030,6 @@ handleTapInteraction: function(event) {
         }
     },
 
-    // FIX: Targetting function uses the original block meshes for geometry data,
-    // ensuring predictable coordinates and normals for tool operation.
     getRayTargetInfo: function (clientX, clientY) {
         const rect = this.cvs.getBoundingClientRect();
         const mouse = new THREE.Vector2(((clientX - rect.left) / rect.width) * 2 - 1, -((clientY - rect.top) / this.cvs.clientHeight) * 2 + 1);
@@ -2961,7 +3072,6 @@ handleTapInteraction: function(event) {
         return { x, y, z, normal, intersectionPoint: hit.point.clone() };
     },
 
-    
     updateToolPreview: function(targetInfo) {
         this.previewVoxel.visible = false;
         this.previewBrush.visible = false;
@@ -3051,7 +3161,7 @@ handleTapInteraction: function(event) {
         this.updateUrlWithModelId();
         localStorage.removeItem('voxelshaper_autosave');
         this.showToast('Project Cleared', '', 'info');
-		this.onModelChanged('clear');
+        this.onModelChanged('clear');
     },
 
     rebuildFoundation: function() {
@@ -3127,9 +3237,9 @@ handleTapInteraction: function(event) {
         const uploadLi = document.getElementById('mobile-upload-li');
         if (uploadLi) uploadLi.classList.toggle('hidden', !isLoggedIn);
         document.getElementById('mobile-login-logout').textContent = isLoggedIn ? 'Logout' : 'Login';
-        const loginLi  = document.getElementById('mobile-login-li');
+        const loginLi = document.getElementById('mobile-login-li');
         const logoutLi = document.getElementById('mobile-logout-li');
-        if (loginLi)  loginLi.classList.toggle('hidden',  isLoggedIn);
+        if (loginLi) loginLi.classList.toggle('hidden', isLoggedIn);
         if (logoutLi) logoutLi.classList.toggle('hidden', !isLoggedIn);
         const userIdDisplay = document.getElementById('userIdDisplay');
         userIdDisplay.replaceChildren();
@@ -3160,11 +3270,11 @@ handleTapInteraction: function(event) {
         strong.textContent = title;
         wrap.appendChild(strong);
         if(message) {
-             const br = document.createElement('br');
-             const span = document.createElement('span');
-             span.textContent = message;
-             wrap.appendChild(br);
-             wrap.appendChild(span);
+            const br = document.createElement('br');
+            const span = document.createElement('span');
+            span.textContent = message;
+            wrap.appendChild(br);
+            wrap.appendChild(span);
         }
         toast.appendChild(wrap);
         container.appendChild(toast);
@@ -3173,7 +3283,6 @@ handleTapInteraction: function(event) {
 
     loginLogout: async function() {
         if (this.user) {
-            trackEvent('logout');
             try {
                 await this.request('/auth/logout', { method: 'POST' });
                 this.user = null;
@@ -3189,7 +3298,6 @@ handleTapInteraction: function(event) {
     },
     
     signInWithProvider: function(providerName) {
-        trackEvent('login_start', { method: providerName });
         try {
             if (this.voxels.size > 0) {
                 const data = { 
@@ -3231,7 +3339,6 @@ handleTapInteraction: function(event) {
             this.showToast('Error', 'Please accept the Terms of Service.', 'error');
             return;
         }
-        trackEvent('login_start', { method: 'magic_link' });
         try {
             await this.request('/auth/magic-link', {
                 method: 'POST',
@@ -3257,7 +3364,6 @@ handleTapInteraction: function(event) {
     },
 
     saveJSON: function() {
-        trackEvent('save_project');
         const data = { 
             gridSize: this.GRID, 
             currentDrawingAxis: this.currentDrawingAxis,
@@ -3333,7 +3439,6 @@ handleTapInteraction: function(event) {
     },
 
     loadJSON: function(event) {
-        trackEvent('load_project');
         const file = event.target.files[0]; if (!file) return;
         const reader = new FileReader();
         reader.onload = (e) => {
@@ -3350,72 +3455,146 @@ handleTapInteraction: function(event) {
         event.target.value = '';
     },
     
-// 4) VoxelApp.exportSTL(...) (neighbor-aware rounding; uses bit-packed keys)
-exportSTL: function(scaleUnit = 'mm', upAxis = 'Z', isRounded = false) {
-  if (this.voxels.size === 0) {
-    this.showToast('Export Error', 'Scene is empty.', 'warning');
-    return;
-  }
-  this.showToast('Exporting...', 'Generating STL file...', 'info');
+    // --- EXPORT FUNCTIONS ---
+    
+    /**
+     * Builds the complete merged mesh for the model based on rounding options.
+     * @param {boolean} isRounded - Whether to generate a rounded (filleted) mesh.
+     * @returns {THREE.Mesh|null} The merged mesh or null if empty.
+     */
+    buildMergedMesh: function(isRounded) {
+        if (this.voxels.size === 0) return null;
+        this.showToast('Building Mesh', `Combining ${this.voxels.size} voxels...`, 'info');
 
-  const exporter = new THREE.STLExporter();
-  const scale = (scaleUnit === 'cm') ? 10 : 1;
-  const s = this.VS;
-  const H = s * 0.5;
-  const ROUNDNESS = isRounded ? parseFloat(document.getElementById('filletRoundnessSlider').value) : 0;
+        const geoms = [];
+        const s = this.VS;
+        const H = s * 0.5;
+        const ROUNDNESS = isRounded ? parseFloat(document.getElementById('filletRoundnessSlider').value) : 0;
+        const has = (x,y,z) => this.voxels.has(this.key(x,y,z));
 
-  const geoms = [];
-  const has = (x,y,z) => this.voxels.has(this.key(x,y,z));
+        this.voxels.forEach((v, packedKey) => {
+            const [x, y, z] = this.parseKey(packedKey);
+            if (y < 0) return;
 
-  this.voxels.forEach((v, packedKey) => {
-    const [x, y, z] = this.parseKey(packedKey);
-    if (y < 0) return; // skip foundation/bed
+            let g;
+            if (isRounded) {
+                const neighbors = {
+                    px: has(x+1,y,z), nx: has(x-1,y,z),
+                    py: has(x,y+1,z), ny: has(x,y-1,z),
+                    pz: has(x,y,z+1), nz: has(x,y,z-1),
+                };
+                g = createRoundedVoxelGeometry(new THREE.Vector3(x,y,z), ROUNDNESS, s, neighbors);
+            } else {
+                g = new THREE.BoxGeometry(s, s, s);
+                g.translate(x * s + H, y * s + H, z * s + H);
+            }
+            geoms.push(g);
+        });
 
-    let g;
-    if (isRounded) {
-      const neighbors = {
-        px: has(x+1,y,z), nx: has(x-1,y,z),
-        py: has(x,y+1,z), ny: has(x,y-1,z),
-        pz: has(x,y,z+1), nz: has(x,y,z-1),
-      };
-      g = createRoundedVoxelGeometry(new THREE.Vector3(x,y,z), ROUNDNESS, s, neighbors);
-    } else {
-      g = new THREE.BoxGeometry(s, s, s);
-      g.translate(x * s + H, y * s + H, z * s + H);
-    }
-    geoms.push(g);
-  });
+        if (geoms.length === 0) return null;
 
-  if (geoms.length === 0) {
-    this.showToast('Export Error', 'No printable voxels found.', 'warning');
-    return;
-  }
+        const BGU = (THREE && THREE.BufferGeometryUtils) || (typeof BufferGeometryUtils !== 'undefined' ? BufferGeometryUtils : null);
+        if (!BGU) {
+            this.showToast('Error', 'BufferGeometryUtils not found for export.', 'error');
+            geoms.forEach(g => g.dispose());
+            return null;
+        }
 
-  const BGU = (THREE && THREE.BufferGeometryUtils) || (typeof BufferGeometryUtils !== 'undefined' ? BufferGeometryUtils : null);
-  if (!BGU) throw new Error('BufferGeometryUtils not found. Load it after three.min.js');
+        const merged = BGU.mergeBufferGeometries(geoms, false);
+        geoms.forEach(g => g.dispose());
+        
+        const mesh = new THREE.Mesh(merged);
+        mesh.updateMatrixWorld(true);
+        return mesh;
+    },
 
-  const merged = BGU.mergeBufferGeometries(geoms, false);
-  geoms.forEach(g => g.dispose());
+    exportSTL: function(scaleUnit = 'mm', upAxis = 'Z', isRounded = false) {
+        if (this.voxels.size === 0) {
+            this.showToast('Export Error', 'Scene is empty.', 'warning');
+            return;
+        }
+        this.showToast('Exporting...', 'Generating STL file...', 'info');
 
-  // Scale + axis correction
-  const m = new THREE.Matrix4().makeScale(scale, scale, scale);
-  if (upAxis === 'Z') m.multiply(new THREE.Matrix4().makeRotationX(-Math.PI / 2));
-  merged.applyMatrix4(m);
+        const mergedMesh = this.buildMergedMesh(isRounded);
+        if (!mergedMesh) return;
+        
+        const exporter = new THREE.STLExporter();
+        const scale = (scaleUnit === 'cm') ? 10 : 1;
+        
+        // Scale + axis correction
+        const m = new THREE.Matrix4().makeScale(scale, scale, scale);
+        if (upAxis === 'Z') m.multiply(new THREE.Matrix4().makeRotationX(-Math.PI / 2));
+        
+        mergedMesh.geometry.applyMatrix4(m);
+        mergedMesh.updateMatrixWorld(true);
 
-  const mesh = new THREE.Mesh(merged);
-  const stlData = exporter.parse(mesh, { binary: true });
-  merged.dispose();
+        const stlData = exporter.parse(mergedMesh, { binary: true });
+        
+        mergedMesh.geometry.dispose();
 
-  const blob = new Blob([stlData], { type: 'application/octet-stream' });
-  const url = URL.createObjectURL(blob);
-  const filename = `voxel-model-${isRounded ? `rounded_${ROUNDNESS.toFixed(2)}` : 'blocky'}.stl`;
+        const blob = new Blob([stlData], { type: 'application/octet-stream' });
+        const url = URL.createObjectURL(blob);
+        const filename = `voxel-model-${isRounded ? `rounded_${parseFloat(document.getElementById('filletRoundnessSlider').value).toFixed(2)}` : 'blocky'}.stl`;
 
-  const a = document.createElement('a');
-  a.href = url; a.download = filename; a.click();
-  URL.revokeObjectURL(url);
+        const a = document.createElement('a');
+        a.href = url; a.download = filename; a.click();
+        URL.revokeObjectURL(url);
 
-  this.showToast('Export Complete', `Downloaded ${filename}`, 'info');
-},
+        this.showToast('Export Complete', `Downloaded ${filename}`, 'success');
+    },
+
+    exportGCodePolyslice: async function(scaleUnit = 'mm', isRounded = false) {
+        if (this.voxels.size === 0) {
+            this.showToast('Export Error', 'Scene is empty.', 'warning');
+            return;
+        }
+        if (!PolysliceWrapper.slicer) {
+             this.showToast('Slicer Error', 'Polyslice failed to initialize. Cannot generate G-Code.', 'error');
+             return;
+        }
+        
+        // Polyslice requires geometry to be centered/zeroed for slicing, 
+        // so we must build the mesh first.
+        const mergedMesh = this.buildMergedMesh(isRounded);
+        if (!mergedMesh) return;
+
+        const scaleFactor = (scaleUnit === 'cm') ? 10 : 1;
+        
+        // Polyslice assumes Z-Up, which is correct for 3D printing.
+        // We will pass the merged mesh and let Polyslice handle the slicing process.
+        
+        try {
+            // Note: Polyslice slices based on the mesh's current position/rotation/scale.
+            // We scale it using a simple matrix application before slicing.
+            const gcode = await PolysliceWrapper.generateGCode(
+                mergedMesh, 
+                scaleFactor, 
+                PolysliceWrapper.defaultOptions.layerHeight // Use slicer default
+            );
+
+            if (gcode) {
+                const blob = new Blob([gcode], { type: 'text/plain' });
+                const url = URL.createObjectURL(blob);
+                const filename = `voxel-print-${isRounded ? `rounded` : 'blocky'}.gcode`;
+
+                const a = document.createElement('a');
+                a.href = url; a.download = filename; a.click();
+                URL.revokeObjectURL(url);
+
+                this.showToast('Slicing Complete', `G-Code for ${filename} downloaded!`, 'success', 3000);
+            } else {
+                this.showToast('Slicing Failed', 'Polyslice returned no G-Code. Check your model.', 'error', 3000);
+            }
+        } catch (e) {
+            console.error('Polyslice G-Code Generation Error:', e);
+            this.showToast('Slicing Error', `Failed to generate G-Code: ${e.message}`, 'error', 5000);
+        } finally {
+            // Clean up the mesh built specifically for slicing
+            if (mergedMesh) {
+                mergedMesh.geometry.dispose();
+            }
+        }
+    },
 
 
     animate: function() {
@@ -3445,10 +3624,22 @@ exportSTL: function(scaleUnit = 'mm', upAxis = 'Z', isRounded = false) {
         this.ren.render(this.scene, this.cam);
     },
     
-    onModelChanged: function() {
-      if (this.isRoundedPreviewEnabled) {
-        requestAnimationFrame(() => this.rebuildRoundedPreview());
-      }
+    // State
+    roundedPreviewDirty: false,
+    _roundedRebuildRAF: null,
+
+    onModelChanged(reason = '') {
+      // collapse multiple mutations into one rebuild
+      if (!this.isRoundedPreviewEnabled) return;
+      this.roundedPreviewDirty = true;
+      if (this._roundedRebuildRAF) return;
+      this._roundedRebuildRAF = requestAnimationFrame(() => {
+        this._roundedRebuildRAF = null;
+        if (!this.roundedPreviewDirty) return;
+        this.roundedPreviewDirty = false;
+        try { this.rebuildRoundedPreview(); }
+        catch (e) { console.warn('Rounded rebuild failed (' + reason + '):', e); }
+      });
     },
 
     rebuildSceneFromVoxels: function () {
@@ -3542,8 +3733,7 @@ exportSTL: function(scaleUnit = 'mm', upAxis = 'Z', isRounded = false) {
         }
         this.historyPointer--;
         this.autosaveScene();
-this.onModelChanged();
-		this.onModelChanged('undo');
+        this.onModelChanged('undo');
     },
 
     redo: function() {
@@ -3587,27 +3777,9 @@ this.onModelChanged();
                 break;
         }
         this.autosaveScene();
-this.onModelChanged();
-		this.onModelChanged('redo');
+        this.onModelChanged('redo');
     },
-    // State
-roundedPreviewDirty: false,
-_roundedRebuildRAF: null,
-
-onModelChanged(reason = '') {
-  // collapse multiple mutations into one rebuild
-  if (!this.isRoundedPreviewEnabled) return;
-  this.roundedPreviewDirty = true;
-  if (this._roundedRebuildRAF) return;
-  this._roundedRebuildRAF = requestAnimationFrame(() => {
-    this._roundedRebuildRAF = null;
-    if (!this.roundedPreviewDirty) return;
-    this.roundedPreviewDirty = false;
-    try { this.rebuildRoundedPreview(); }
-    catch (e) { console.warn('Rounded rebuild failed (' + reason + '):', e); }
-  });
-},
-
+    
     cycleDrawingAxis: function() {
         const axes = ['y', 'z', 'x'];
         const currentIndex = axes.indexOf(this.currentDrawingAxis);
@@ -3845,124 +4017,119 @@ onModelChanged(reason = '') {
         }
     },
  
-	autosaveScene: function() {
-		if (this.voxels.size === 0 && !this.templateImageData) {
-			localStorage.removeItem('voxelshaper_autosave');
-			return;
-		}
-		try {
-			const data = { 
-				gridSize: this.GRID, 
-				currentDrawingAxis: this.currentDrawingAxis,
-				activeDrawingLevel: this.activeDrawingLevel,
-				voxels: Array.from(this.voxels.entries()).map(([k, v]) => {
-					const [x, y, z] = this.parseKey(k);
-					return { x, y, z, color: v.color };
-				}),
-				templateImageData: this.templateImageData,
-				templateImagePinnedY: this.templateImagePinnedY,
-				templateImageAxis: this.templateImageAxis,
-			};
-			localStorage.setItem('voxelshaper_autosave', JSON.stringify(data));
-		} catch (e) {
-			console.error("Autosave failed:", e);
-		}
-	},
+    autosaveScene: function() {
+        if (this.voxels.size === 0 && !this.templateImageData) {
+            localStorage.removeItem('voxelshaper_autosave');
+            return;
+        }
+        try {
+            const data = { 
+                gridSize: this.GRID, 
+                currentDrawingAxis: this.currentDrawingAxis,
+                activeDrawingLevel: this.activeDrawingLevel,
+                voxels: Array.from(this.voxels.entries()).map(([k, v]) => {
+                    const [x, y, z] = this.parseKey(k);
+                    return { x, y, z, color: v.color };
+                }),
+                templateImageData: this.templateImageData,
+                templateImagePinnedY: this.templateImagePinnedY,
+                templateImageAxis: this.templateImageAxis,
+            };
+            localStorage.setItem('voxelshaper_autosave', JSON.stringify(data));
+        } catch (e) {
+            console.error("Autosave failed:", e);
+        }
+    },
 
-	loadAutosavedScene: function() {
-		const savedData = localStorage.getItem('voxelshaper_autosave');
-		if (savedData) {
-			try {
-				const data = JSON.parse(savedData);
-				if (this.loadFromData(data)) {
-					this.showToast('Scene Restored', 'Your last session was loaded.', 'info');
-				}
-			} catch (e) {
-				console.error("Failed to load autosaved scene:", e);
-				localStorage.removeItem('voxelshaper_autosave');
-			}
-		}
-	},
+    loadAutosavedScene: function() {
+        const savedData = localStorage.getItem('voxelshaper_autosave');
+        if (savedData) {
+            try {
+                const data = JSON.parse(savedData);
+                if (this.loadFromData(data)) {
+                    this.showToast('Scene Restored', 'Your last session was loaded.', 'info');
+                }
+            } catch (e) {
+                console.error("Failed to load autosaved scene:", e);
+                localStorage.removeItem('voxelshaper_autosave');
+            }
+        }
+    },
 
 
-	// --- NEW: Onboarding Methods (Implemented for Christian Heinrich Hohlfeld) ---
-	startOnboarding: function() {
-		trackEvent('onboarding_start');
-		document.getElementById('onboardingModal').showModal();
-	},
+    // --- NEW: Onboarding Methods ---
+    startOnboarding: function() {
+        document.getElementById('onboardingModal').showModal();
+    },
 
-	markOnboardingComplete: function() {
-		trackEvent('onboarding_complete', { action: 'start_blank' });
-		localStorage.setItem('voxelshaper_onboarding_complete', 'true');
-		document.getElementById('onboardingModal').close();
-	},
+    markOnboardingComplete: function() {
+        localStorage.setItem('voxelshaper_onboarding_complete', 'true');
+        document.getElementById('onboardingModal').close();
+    },
 
-	loadSampleProject: function() {
-		trackEvent('onboarding_complete', { action: 'load_sample' });
-		this.loadFromData(this.sampleProjectData);
-		this.markOnboardingComplete();
-		this.showToast('Sample Loaded', 'Explore the sample house project!', 'info');
-	},
+    loadSampleProject: function() {
+        this.loadFromData(this.sampleProjectData);
+        this.markOnboardingComplete();
+        this.showToast('Sample Loaded', 'Explore the sample house project!', 'info');
+    },
 
-	initVisualHapticLayer: function () {
-	  if (!this.containerDiv) return;
-	  this.hapticLayer = document.getElementById('haptic-layer');
-	  if (!this.hapticLayer) {
-		this.hapticLayer = document.createElement('div');
-		this.hapticLayer.id = 'haptic-layer';
-		this.containerDiv.appendChild(this.hapticLayer);
-	  }
-	},
-	
-	fallbackHaptic: function (clientX, clientY, color) {
-	  // 1) kleines „Squish“-Feedback auf dem Container
-	  try {
-		this.containerDiv.animate(
-		  [{ transform: 'scale(1)' }, { transform: 'scale(0.985)' }, { transform: 'scale(1)' }],
-		  { duration: 120, easing: 'ease-out' }
-		);
-	  } catch {}
+    initVisualHapticLayer: function () {
+      if (!this.containerDiv) return;
+      this.hapticLayer = document.getElementById('haptic-layer');
+      if (!this.hapticLayer) {
+        this.hapticLayer = document.createElement('div');
+        this.hapticLayer.id = 'haptic-layer';
+        this.containerDiv.appendChild(this.hapticLayer);
+      }
+    },
+    
+    fallbackHaptic: function (clientX, clientY, color) {
+      // 1) small visual feedback
+      try {
+        this.containerDiv.animate(
+          [{ transform: 'scale(1)' }, { transform: 'scale(0.985)' }, { transform: 'scale(1)' }],
+          { duration: 120, easing: 'ease-out' }
+        );
+      } catch {}
 
-	  // 2) Ripple an der Touch-Position
-	  if (!this.hapticLayer) this.initVisualHapticLayer();
-	  if (!this.hapticLayer) return;
+      // 2) Ripple at the touch position
+      if (!this.hapticLayer) this.initVisualHapticLayer();
+      if (!this.hapticLayer) return;
 
-	  const rect = this.containerDiv.getBoundingClientRect();
-	  const x = clientX - rect.left;
-	  const y = clientY - rect.top;
+      const rect = this.containerDiv.getBoundingClientRect();
+      const x = clientX - rect.left;
+      const y = clientY - rect.top;
 
-	  const ripple = document.createElement('div');
-	  ripple.className = 'haptic-ripple';
+      const ripple = document.createElement('div');
+      ripple.className = 'haptic-ripple';
 
-	  // Farbwahl: Delete = rot, sonst aktuelle Zeichenfarbe
-	  const stroke = color || (this.currentMode === 'DELETE' ? 'rgba(255,0,0,.65)' : this.currentColor || '#ffffff');
-	  ripple.style.borderColor = stroke;
+      // Color selection: Delete = red, otherwise current drawing color
+      const stroke = color || (this.currentMode === 'DELETE' ? 'rgba(255,0,0,.65)' : this.currentColor || '#ffffff');
+      ripple.style.borderColor = stroke;
 
-	  ripple.style.left = `${x}px`;
-	  ripple.style.top  = `${y}px`;
+      ripple.style.left = `${x}px`;
+      ripple.style.top  = `${y}px`;
 
-	  this.hapticLayer.appendChild(ripple);
-	  ripple.addEventListener('animationend', () => ripple.remove());
-	},
-	
-	hapticOrVisualAt: function (clientX, clientY) {
-	  const isIOS = /iP(ad|hone|od)/.test(navigator.userAgent) ||
-					(navigator.userAgent.includes('Mac') && 'ontouchend' in document);
+      this.hapticLayer.appendChild(ripple);
+      ripple.addEventListener('animationend', () => ripple.remove());
+    },
+    
+    hapticOrVisualAt: function (clientX, clientY) {
+      const isIOS = /iP(ad|hone|od)/.test(navigator.userAgent) ||
+                    (navigator.userAgent.includes('Mac') && 'ontouchend' in document);
 
-	  let didVibrate = false;
-	  if (!isIOS && document.visibilityState === 'visible' && 'vibrate' in navigator) {
-		if (!navigator.userActivation || navigator.userActivation.isActive) {
-		  didVibrate = !!navigator.vibrate(40); // 30–60 ms sind am zuverlässigsten
-		}
-	  }
-	  if (!didVibrate) this.fallbackHaptic(clientX, clientY);
-	  return didVibrate;
-	},
+      let didVibrate = false;
+      if (!isIOS && document.visibilityState === 'visible' && 'vibrate' in navigator) {
+        if (!navigator.userActivation || navigator.userActivation.isActive) {
+          didVibrate = !!navigator.vibrate(40);
+        }
+      }
+      if (!didVibrate) this.fallbackHaptic(clientX, clientY);
+      return didVibrate;
+    },
 };
 
 document.addEventListener('DOMContentLoaded', () => VoxelApp.init());
 </script>
-
-
 </body>
 </html>
