@@ -123,11 +123,22 @@
             cursor: pointer;
             border: 2px solid #555;
         }
-        /* Style for the new rounded preview slider group */
-        #in-app-rounded-controls {
+        /* Style for the new preview slider group */
+        #in-app-rounded-controls, #in-app-brick-controls {
             transition: all 0.2s ease-in-out;
-            max-width: 15rem; /* Ensure it stays compact on desktop */
+            max-width: 15rem;
         }
+        /* MODIFIED: Reduced the width of the ranges in the top menu */
+        #grid-size-slider, #fly-speed-slider {
+            width: 4rem; /* w-16 */
+        }
+        #previewRoundnessSlider {
+             width: 3rem; /* w-12 */
+        }
+        #preview-slider-group .text-right {
+             width: 3rem; /* w-12 */
+        }
+        
         .marquee {
             position: absolute;
             border: 1px dashed #ffff00;
@@ -276,7 +287,7 @@
         </div>
         <div class="divider divider-horizontal"></div>
         <label for="grid-size-slider" class="text-sm whitespace-nowrap">Grid:</label>
-        <input type="range" id="grid-size-slider" min="5" max="100" value="10" class="range range-xs w-28">
+        <input type="range" id="grid-size-slider" min="5" max="100" value="10" class="range range-xs w-16">
         <span id="grid-size-display" class="font-bold text-primary text-sm">17³</span>
         <label for="color-picker-input" class="btn btn-sm btn-ghost normal-case gap-2">Color
             <input type="color" id="color-picker-input" value="#FFFFFF" class="h-6 w-6 cursor-pointer rounded-full">
@@ -292,15 +303,23 @@
             <span id="brush-size-display" class="font-bold text-sm text-base-content/50">1x1</span>
         </div>
         
+        <!-- NEW IN-APP BRICK PREVIEW CONTROLS (ADDED) -->
+        <div id="in-app-brick-controls" class="controls-group border border-base-300 rounded-lg p-1">
+            <label for="brickPreviewToggle" class="label cursor-pointer gap-2">
+                <span class="label-text text-sm">Brick:</span>
+                <input type="checkbox" id="brickPreviewToggle" class="toggle toggle-secondary toggle-sm">
+            </label>
+        </div>
+        
         <!-- NEW IN-APP ROUNDED PREVIEW CONTROLS -->
         <div id="in-app-rounded-controls" class="controls-group border border-base-300 rounded-lg p-1">
             <label for="roundedPreviewToggle" class="label cursor-pointer gap-2">
-                <span class="label-text text-sm">Rounded Preview:</span>
+                <span class="label-text text-sm">Rounded:</span>
                 <input type="checkbox" id="roundedPreviewToggle" class="toggle toggle-accent toggle-sm">
             </label>
             <div id="preview-slider-group" class="controls-group gap-1 ml-2" style="opacity: 1;">
-                 <input type="range" id="previewRoundnessSlider" min="0.01" max="1.0" value="0.25" step="0.01" class="range range-xs w-16">
-                 <span id="preview-factor-display" class="font-bold text-sm text-accent w-16 text-right">0.68</span>
+                 <input type="range" id="previewRoundnessSlider" min="0.01" max="1.0" value="0.25" step="0.01" class="range range-xs w-12">
+                 <span id="preview-factor-display" class="font-bold text-sm text-accent w-12 text-right">0.68</span>
             </div>
         </div>
     </div>
@@ -309,7 +328,7 @@
 
     <div class="controls-group justify-end">
         <label for="fly-speed-slider" class="text-sm whitespace-nowrap">Fly Speed:</label>
-        <input type="range" id="fly-speed-slider" min="0.01" max="1" value="0.1" step="0.01" class="range range-xs w-28">
+        <input type="range" id="fly-speed-slider" min="0.01" max="1" value="0.1" step="0.01" class="range range-xs w-16">
         <span id="fly-speed-display" class="font-bold text-primary text-sm">0.10</span>
         <div class="divider divider-horizontal"></div>
         
@@ -431,16 +450,26 @@
     <div class="modal-box">
         <h3 class="font-bold text-lg">Export Options</h3>
         
-        <!-- Shape Type Selection -->
+        <!-- Shape Type Selection (Combined Blocky, Rounded, Brick) -->
         <div class="form-control mb-4">
             <label class="label"><span class="label-text font-semibold">Shape Type:</span></label>
-            <div class="flex gap-3">
-                <label class="flex items-center"><input type="radio" name="exportShapeType" value="blocky" class="radio radio-primary" checked=""><span class="ml-2">Blocky (Voxel Cubes)</span></label>
-                <label class="flex items-center"><input type="radio" name="exportShapeType" value="rounded" id="roundedExportRadio" class="radio radio-primary"><span class="ml-2">Rounded (Filleted Edges)</span></label>
+            <div class="flex gap-3 flex-wrap">
+                <label class="flex items-center">
+                    <input type="radio" name="exportShapeTypeCombined" value="blocky" id="blockyExportRadio" class="radio radio-primary" checked="">
+                    <span class="ml-2">Blocky (Cubes)</span>
+                </label>
+                <label class="flex items-center">
+                    <input type="radio" name="exportShapeTypeCombined" value="rounded" id="roundedExportRadioCombined" class="radio radio-primary">
+                    <span class="ml-2">Rounded (Fillets)</span>
+                </label>
+                <label class="flex items-center">
+                    <input type="radio" name="exportShapeTypeCombined" value="brick" id="brickExportRadioCombined" class="radio radio-secondary">
+                    <span class="ml-2">Bricks (Building Blocks)</span>
+                </label>
             </div>
         </div>
 
-        <!-- Roundness Slider -->
+        <!-- Roundness Slider (Only visible if Rounded is selected) -->
         <div class="form-control mb-4" id="roundnessSliderGroup" style="display: none;">
             <label class="label">
                 <span class="label-text">Fillet Factor: </span>
@@ -449,6 +478,8 @@
             <input type="range" id="filletRoundnessSlider" min="0.01" max="1.0" value="0.25" step="0.01" class="range range-xs range-primary">
             <p class="text-xs text-gray-400 mt-1">Factor $1.00$ = Max Roundness (half voxel unit).</p>
         </div>
+        
+        <div class="divider my-1"></div>
         
         <div class="form-control mb-4">
             <label class="label"><span class="label-text">Scale Unit (for STL &amp; G-Code):</span></label>
@@ -668,10 +699,109 @@ function createRoundedVoxelGeometry(position, roundnessFactor, voxelUnitSize, ne
   return geom;
 }
 
+// --- START: BRICK GEOMETRY DEFINITION (ADDED) ---
+const BRICK_STUD_HEIGHT = 0.1875; // 3/16 (approx 1.8mm scaled to 9.6mm body=1.0)
+const BRICK_STUD_DIAMETER = 0.49; // 4.8mm scaled to 8.0mm width=1.0
+const BRICK_WALL_THICKNESS = 0.2; // 1.6mm scaled to 8.0mm width=1.0
+
+let defaultVoxelGeometry = null;
+let brickVoxelGeometry = null;
+let ACTUAL_BRICK_HEIGHT = 1;
+let BRICK_BOTTOM_Y_OFFSET = 0;
+
+/**
+ * Erstellt eine Geometrie für einen Baustein mit einem quadratischen Noppen oben
+ * und einer passenden quadratischen Aussparung unten.
+ * @param {number} unitSize - Die gewünschte Seitenlänge des Bausteinkörpers (z.B. VS).
+ * @returns {THREE.BufferGeometry} Eine zusammengeführte BufferGeometry, die den Baustein darstellt.
+ */
+function createBrickGeometry(unitSize) {
+    const geometries = [];
+    const printTolerance_mm = 0.05;
+
+    // Standard dimensions (using nominal LEGO ratios for visual shape)
+    const brick_width_mm = 8.0; 
+    const brick_body_height_mm = 9.6; 
+    const stud_height_mm = 1.8;
+    const stud_diameter_mm = 4.8;
+    const outer_wall_thickness_mm = 1.6;
+
+    // Calculate scaling factors to make the BODY unitSize x unitSize x unitSize
+    const scaleX = unitSize / brick_width_mm;
+    const scaleY = unitSize / brick_body_height_mm; 
+    const scaleZ = unitSize / brick_width_mm; 
+
+    // Apply scaling factors to nominal dimensions
+    const scaled_brick_width = brick_width_mm * scaleX; 
+    const scaled_brick_body_height = brick_body_height_mm * scaleY; 
+    const scaled_stud_height = stud_height_mm * scaleY; 
+    const scaled_stud_diameter = stud_diameter_mm * scaleX; 
+    const scaled_outer_wall_thickness = outer_wall_thickness_mm * scaleX; 
+    const scaled_print_tolerance = printTolerance_mm * scaleX; 
+
+    const halfScaledWidth = scaled_brick_width / 2;
+    const innerSpan = scaled_brick_width - 2 * scaled_outer_wall_thickness;
+
+    // 1. Outer Walls (main body)
+    const outerWallHeight = scaled_brick_body_height;
+    const outerWallYPos = outerWallHeight / 2;
+
+    // Front and back walls
+    geometries.push(new THREE.BoxGeometry(innerSpan, outerWallHeight, scaled_outer_wall_thickness).translate(0, outerWallYPos, halfScaledWidth - scaled_outer_wall_thickness / 2));
+    geometries.push(new THREE.BoxGeometry(innerSpan, outerWallHeight, scaled_outer_wall_thickness).translate(0, outerWallYPos, -halfScaledWidth + scaled_outer_wall_thickness / 2));
+
+    // Left and right walls (cover full width to include corners)
+    geometries.push(new THREE.BoxGeometry(scaled_outer_wall_thickness, outerWallHeight, scaled_brick_width).translate(-halfScaledWidth + scaled_outer_wall_thickness / 2, outerWallYPos, 0));
+    geometries.push(new THREE.BoxGeometry(scaled_outer_wall_thickness, outerWallHeight, scaled_brick_width).translate(halfScaledWidth - scaled_outer_wall_thickness / 2, outerWallYPos, 0));
+
+    // 3. Square Stud (Top)
+    const studYPos = scaled_brick_body_height + scaled_stud_height / 2;
+    const squareStudGeo = new THREE.BoxGeometry(scaled_stud_diameter, scaled_stud_height, scaled_stud_diameter);
+    squareStudGeo.translate(0, studYPos, 0);
+    geometries.push(squareStudGeo);
+
+    // 4. Square Anti-Stud Recess (Bottom)
+    const scaledAntiStudHeight = scaled_brick_body_height;
+    let holeInnerSide = scaled_stud_diameter + 2 * scaled_print_tolerance;
+
+    let cornerPillarSide = (innerSpan - holeInnerSide) / 2;
+    const minPillarThickness = 0.02 * scaleX; // Use scaleX for min thickness
+    if (cornerPillarSide < minPillarThickness) {
+        cornerPillarSide = minPillarThickness;
+        holeInnerSide = innerSpan - 2 * minPillarThickness;
+    }
+
+    const halfHoleInnerSide = holeInnerSide / 2;
+    const halfCornerPillarSide = cornerPillarSide / 2;
+
+    // Center point for pillars, relative to the 1x1 base box.
+    const posCenter = halfScaledWidth - scaled_outer_wall_thickness;
+    const xPosPillar = halfHoleInnerSide + halfCornerPillarSide;
+    const zPosPillar = halfHoleInnerSide + halfCornerPillarSide;
+
+
+    // Four corner pillars for the anti-stud recess
+    geometries.push(new THREE.BoxGeometry(cornerPillarSide, scaledAntiStudHeight, cornerPillarSide).translate(xPosPillar, scaledAntiStudHeight / 2, zPosPillar));
+    geometries.push(new THREE.BoxGeometry(cornerPillarSide, scaledAntiStudHeight, cornerPillarSide).translate(-xPosPillar, scaledAntiStudHeight / 2, zPosPillar));
+    geometries.push(new THREE.BoxGeometry(cornerPillarSide, scaledAntiStudHeight, cornerPillarSide).translate(xPosPillar, scaledAntiStudHeight / 2, -zPosPillar));
+    geometries.push(new THREE.BoxGeometry(cornerPillarSide, scaledAntiStudHeight, cornerPillarSide).translate(-xPosPillar, scaledAntiStudHeight / 2, -zPosPillar));
+
+    const mergedGeometry = THREE.BufferGeometryUtils.mergeBufferGeometries(geometries);
+    mergedGeometry.computeVertexNormals();
+
+    // Ensure the very bottom of the brick (minY) is at Y=0
+    mergedGeometry.computeBoundingBox();
+    const minY = mergedGeometry.boundingBox.min.y;
+    mergedGeometry.translate(0, -minY, 0);
+
+    return mergedGeometry;
+}
+// --- END: BRICK GEOMETRY DEFINITION (ADDED) ---
+
 
 // --- START: 3MF EXPORTER INTEGRATION (Restored for Bambu Lab/AMS Multi-Color) ---
 const VoxelApp3MFExporter = {
-    exportBambuStudio3MF: async function(voxels, voxelSize, showToast, parseKey, scaleUnit, isRounded = false, roundnessFactor = 0) {
+    exportBambuStudio3MF: async function(voxels, voxelSize, showToast, parseKey, scaleUnit) { // MODIFIED SIGNATURE
         if (!voxels || voxels.size === 0) {
             showToast('Export Error', 'Scene is empty.', 'warning');
             return;
@@ -684,9 +814,10 @@ const VoxelApp3MFExporter = {
 
         try {
             // Get export settings
-            const shapeType = document.querySelector('input[name="exportShapeType"]:checked').value;
-            isRounded = shapeType === 'rounded';
-            roundnessFactor = isRounded ? parseFloat(document.getElementById('filletRoundnessSlider').value) : 0;
+            const shapeType = document.querySelector('input[name="exportShapeTypeCombined"]:checked').value; // MODIFIED NAME
+            const isRounded = shapeType === 'rounded';
+            const isBrick = shapeType === 'brick'; // MODIFIED CHECK
+            const roundnessFactor = isRounded ? parseFloat(document.getElementById('filletRoundnessSlider').value) : 0;
 
             const voxelArray = Array.from(voxels.entries()).map(([key, data]) => {
                 const [x, y, z] = parseKey(key);
@@ -702,7 +833,8 @@ const VoxelApp3MFExporter = {
             const palette = Array.from(new Set(voxelArray.map(v => v.color))).slice(0, 16); // Limit to 16 colors for AMS/Palette
             const voxelMM = (scaleUnit === 'cm' ? 10 : 1) * voxelSize;
 
-            const mainMesh = this.buildPaintMesh(voxelArray, voxelMM, palette, isRounded, roundnessFactor); 
+            // MODIFIED buildPaintMesh call
+            const mainMesh = this.buildPaintMesh(voxelArray, voxelMM, palette, isRounded, isBrick, roundnessFactor); 
             const dummies = palette.map((_, i) => this.tinyTriangle(-0.2 - i * 0.05));
             
             const { xml: modelXML, ids } = this.build3DModelXML({ mainMesh, dummies });
@@ -729,7 +861,11 @@ const VoxelApp3MFExporter = {
 
             const blob = await zip.generateAsync({type:"blob", compression:"DEFLATE", compressionOptions:{level:6}});
             
-            const filename = isRounded ? `VoxelShaper_rounded_${roundnessFactor.toFixed(2)}.3mf` : "VoxelShaper_blocky.3mf";
+            // MODIFIED FILENAME
+            let filename = "VoxelShaper_blocky.3mf";
+            if (isBrick) filename = `VoxelShaper_brick.3mf`;
+            else if (isRounded) filename = `VoxelShaper_rounded_${roundnessFactor.toFixed(2)}.3mf`;
+            
             saveAs(blob, filename);
             
             showToast('Export Complete', `${filename} saved!`, 'success');
@@ -762,150 +898,202 @@ const VoxelApp3MFExporter = {
     
     tokenFromPaletteIndex: function(i) { return this.tokenForColorNumber(i + 1); },
 
-    buildPaintMesh: function (voxels, voxelMM, palette, isRounded = false, roundnessFactor = 0) {
-  const V = [];            // final unique vertices as [xStr,yStr,zStr]
-  const T = [];            // final triangles as [i0,i1,i2, paintToken]
-  const colorToIdx = new Map(palette.map((c, i) => [String(c).toUpperCase(), i]));
-  const s_mm = +voxelMM || 1;
+    buildPaintMesh: function (voxels, voxelMM, palette, isRounded = false, isBrick = false, roundnessFactor = 0) { // MODIFIED SIGNATURE
+        const V = [];            // final unique vertices as [xStr,yStr,zStr]
+        const T = [];            // final triangles as [i0,i1,i2, paintToken]
+        const colorToIdx = new Map(palette.map((c, i) => [String(c).toUpperCase(), i]));
+        const s_mm = +voxelMM || 1;
+        const HALF = VoxelApp.VS * 0.5;
 
-  // occupancy for neighbor checks
-  const occKey = (x,y,z) => `${x},${y},${z}`;
-  const occ = new Set(voxels.map(v => occKey(v.x, v.y, v.z)));
-  const has = (x,y,z) => occ.has(occKey(x,y,z));
+        // occupancy for neighbor checks
+        const occKey = (x,y,z) => `${x},${y},${z}`;
+        const occ = new Set(voxels.map(v => occKey(v.x, v.y, v.z)));
+        const has = (x,y,z) => occ.has(occKey(x,y,z));
 
-  // global vertex map (after 3MF transform + scale) so triangles share indices
-  const vertMap = new Map(); // key -> index
-  const q = n => Math.round(n * 1e6) / 1e6; // snap to tolerate fp noise
-  const getIdx = (x, y, z) => {
-    const k = `${q(x)},${q(y)},${q(z)}`;
-    if (!vertMap.has(k)) {
-      V.push([this.fmt(x), this.fmt(y), this.fmt(z)]);
-      vertMap.set(k, V.length - 1);
-    }
-    return vertMap.get(k);
-  };
+        // global vertex map (after 3MF transform + scale) so triangles share indices
+        const vertMap = new Map(); // key -> index
+        const q = n => Math.round(n * 1e6) / 1e6; // snap to tolerate fp noise
+        const getIdx = (x, y, z) => {
+            const k = `${q(x)},${q(y)},${q(z)}`;
+            if (!vertMap.has(k)) {
+                V.push([this.fmt(x), this.fmt(y), this.fmt(z)]);
+                vertMap.set(k, V.length - 1);
+            }
+            return vertMap.get(k);
+        };
 
-  const pushTriIdx = (i0,i1,i2, token) => {
-    // skip degenerate/near-collinear
-    const x0 = parseFloat(V[i0][0]), y0 = parseFloat(V[i0][1]), z0 = parseFloat(V[i0][2]);
-    const x1 = parseFloat(V[i1][0]), y1 = parseFloat(V[i1][1]), z1 = parseFloat(V[i1][2]);
-    const x2 = parseFloat(V[i2][0]), y2 = parseFloat(V[i2][1]), z2 = parseFloat(V[i2][2]);
-    const ux = x1-x0, uy = y1-y0, uz = z1-z0;
-    const vx = x2-x0, vy = y2-y0, vz = z2-z0;
-    const cx = uy*vz - uz*vy, cy = uz*vx - ux*vz, cz = ux*vy - uy*vx;
-    const area2 = cx*cx + cy*cy + cz*cz;
-    if (area2 < 1e-18) return;
-    T.push([i0, i1, i2, token]);
-  };
+        const pushTriIdx = (i0,i1,i2, token) => { // skip degenerate/near-collinear
+            const x0 = parseFloat(V[i0][0]), y0 = parseFloat(V[i0][1]), z0 = parseFloat(V[i0][2]);
+            const x1 = parseFloat(V[i1][0]), y1 = parseFloat(V[i1][1]), z1 = parseFloat(V[i1][2]);
+            const x2 = parseFloat(V[i2][0]), y2 = parseFloat(V[i2][1]), z2 = parseFloat(V[i2][2]);
+            const ux = x1-x0, uy = y1-y0, uz = z1-z0;
+            const vx = x2-x0, vy = y2-y0, vz = z2-z0;
+            const cx = uy*vz - uz*vy, cy = uz*vx - ux*vz, cz = ux*vy - uy*vx;
+            const area2 = cx*cx + cy*cy + cz*cz;
+            if (area2 < 1e-18) return;
+            T.push([i0, i1, i2, token]);
+        };
 
-  const tokenFromColor = (hex) => this.tokenFromPaletteIndex(colorToIdx.get(hex) ?? 0);
+        const tokenFromColor = (hex) => this.tokenFromPaletteIndex(colorToIdx.get(hex) ?? 0);
 
-  if (isRounded) {
-    const BGU = (THREE && THREE.BufferGeometryUtils) || (typeof BufferGeometryUtils !== 'undefined' ? BufferGeometryUtils : null);
-    if (!BGU) throw new Error('BufferGeometryUtils not found. Load it after three.min.js');
+        if (isRounded && !isBrick) { // Rounded Voxel Logic (Existing)
+            const BGU = (THREE && THREE.BufferGeometryUtils) || (typeof BufferGeometryUtils !== 'undefined' ? BufferGeometryUtils : null);
+            if (!BGU) throw new Error('BufferGeometryUtils not found. Load it after three.min.js');
 
-    const isOn = (val, target) => Math.abs(val - target) <= 1e-5;
+            const isOn = (val, target) => Math.abs(val - target) <= 1e-5;
 
-    const p0 = new THREE.Vector3();
-    const p1 = new THREE.Vector3();
-    const p2 = new THREE.Vector3();
+            const p0 = new THREE.Vector3();
+            const p1 = new THREE.Vector3();
+            const p2 = new THREE.Vector3();
 
-    for (const v of voxels) {
-      if (v.y < 0) continue;
+            for (const v of voxels) {
+                if (v.y < 0) continue;
 
-      const neighbors = {
-        px: has(v.x+1, v.y,   v.z  ),
-        nx: has(v.x-1, v.y,   v.z  ),
-        py: has(v.x,   v.y+1, v.z  ),
-        ny: has(v.x,   v.y-1, v.z  ),
-        pz: has(v.x,   v.y,   v.z+1),
-        nz: has(v.x,   v.y,   v.z-1),
-      };
+                const neighbors = {
+                    px: has(v.x+1, v.y,   v.z  ),
+                    nx: has(v.x-1, v.y,   v.z  ),
+                    py: has(v.x,   v.y+1, v.z  ),
+                    ny: has(v.x,   v.y-1, v.z  ),
+                    pz: has(v.x,   v.y,   v.z+1),
+                    nz: has(v.x,   v.y,   v.z-1),
+                };
 
-      // build rounded (indexed), then ensure shared vertices
-      const gRaw = createRoundedVoxelGeometry(
-        new THREE.Vector3(v.x, v.y, v.z),
-        roundnessFactor,
-        1.0,
-        neighbors
-      );
-      const geom = BGU.mergeVertices(gRaw, 1e-6);
-      gRaw.dispose();
+                const gRaw = createRoundedVoxelGeometry(
+                    new THREE.Vector3(v.x, v.y, v.z),
+                    roundnessFactor,
+                    1.0,
+                    neighbors
+                );
+                const geom = BGU.mergeVertices(gRaw, 1e-6);
+                gRaw.dispose();
 
-      const pos = geom.getAttribute('position');
-      const idx = geom.index ? geom.index.array : [...Array(pos.count).keys()];
-      const minX = v.x,     maxX = v.x + 1.0;
-      const minY = v.y,     maxY = v.y + 1.0;
-      const minZ = v.z,     maxZ = v.z + 1.0;
-      const token = tokenFromColor((v.color || '#FFFFFF').toUpperCase());
+                const pos = geom.getAttribute('position');
+                const idx = geom.index ? geom.index.array : [...Array(pos.count).keys()];
+                const minX = v.x,     maxX = v.x + 1.0;
+                const minY = v.y,     maxY = v.y + 1.0;
+                const minZ = v.z,     maxZ = v.z + 1.0;
+                const token = tokenFromColor((v.color || '#FFFFFF').toUpperCase());
 
-      for (let i = 0; i < idx.length; i += 3) {
-        p0.fromBufferAttribute(pos, idx[i+0]);
-        p1.fromBufferAttribute(pos, idx[i+1]);
-        p2.fromBufferAttribute(pos, idx[i+2]);
+                for (let i = 0; i < idx.length; i += 3) {
+                    p0.fromBufferAttribute(pos, idx[i+0]);
+                    p1.fromBufferAttribute(pos, idx[i+1]);
+                    p2.fromBufferAttribute(pos, idx[i+2]);
 
-        // cull interior-plane tris if neighbor present
-        const onPX = isOn(p0.x, maxX) && isOn(p1.x, maxX) && isOn(p2.x, maxX);
-        const onNX = isOn(p0.x, minX) && isOn(p1.x, minX) && isOn(p2.x, minX);
-        const onPY = isOn(p0.y, maxY) && isOn(p1.y, maxY) && isOn(p2.y, maxY);
-        const onNY = isOn(p0.y, minY) && isOn(p1.y, minY) && isOn(p2.y, minY);
-        const onPZ = isOn(p0.z, maxZ) && isOn(p1.z, maxZ) && isOn(p2.z, maxZ);
-        const onNZ = isOn(p0.z, minZ) && isOn(p1.z, minZ) && isOn(p2.z, minZ);
-        if ((neighbors.px && onPX) || (neighbors.nx && onNX) ||
-            (neighbors.py && onPY) || (neighbors.ny && onNY) ||
-            (neighbors.pz && onPZ) || (neighbors.nz && onNZ)) {
-          continue;
-        }
+                    // cull interior-plane tris if neighbor present
+                    const onPX = isOn(p0.x, maxX) && isOn(p1.x, maxX) && isOn(p2.x, maxX);
+                    const onNX = isOn(p0.x, minX) && isOn(p1.x, minX) && isOn(p2.x, minX);
+                    const onPY = isOn(p0.y, maxY) && isOn(p1.y, maxY) && isOn(p2.y, maxY);
+                    const onNY = isOn(p0.y, minY) && isOn(p1.y, minY) && isOn(p2.y, minY);
+                    const onPZ = isOn(p0.z, maxZ) && isOn(p1.z, maxZ) && isOn(p2.z, maxZ);
+                    const onNZ = isOn(p0.z, minZ) && isOn(p1.z, minZ) && isOn(p2.z, minZ);
+                    if ((neighbors.px && onPX) || (neighbors.nx && onNX) ||
+                        (neighbors.py && onPY) || (neighbors.ny && onNY) ||
+                        (neighbors.pz && onPZ) || (neighbors.nz && onNZ)) {
+                        continue;
+                    }
 
-        // 3MF coords + scale: (x, -z, y) * s_mm
-        const i0 = getIdx(p0.x*s_mm, -p0.z*s_mm, p0.y*s_mm);
-        const i1 = getIdx(p1.x*s_mm, -p1.z*s_mm, p1.y*s_mm);
-        const i2 = getIdx(p2.x*s_mm, -p2.z*s_mm, p2.y*s_mm);
-        pushTriIdx(i0,i1,i2, token);
-      }
+                    // 3MF coords + scale: (x, -z, y) * s_mm
+                    const i0 = getIdx(p0.x*s_mm, -p0.z*s_mm, p0.y*s_mm);
+                    const i1 = getIdx(p1.x*s_mm, -p1.z*s_mm, p1.y*s_mm);
+                    const i2 = getIdx(p2.x*s_mm, -p2.z*s_mm, p2.y*s_mm);
+                    pushTriIdx(i0,i1,i2, token);
+                }
 
-      geom.dispose();
-    }
+                geom.dispose();
+            }
 
-    return { V, T, palette };
-  }
+            return { V, T, palette };
+        }
+        
+        // --- NEW: BRICK GEOMETRY LOGIC ---
+        if (isBrick) {
+            const BGU = (THREE && THREE.BufferGeometryUtils) || (typeof BufferGeometryUtils !== 'undefined' ? BufferGeometryUtils : null);
+            if (!BGU) throw new Error('BufferGeometryUtils not found. Load it after three.min.js');
 
-  // --- BLOCKY (no interior faces, shared vertices) ---
-  const addQuad = (a,b,c,d, token) => { // two CCW tris on the face
-    const i0 = getIdx(a.x*s_mm, -a.z*s_mm, a.y*s_mm);
-    const i1 = getIdx(b.x*s_mm, -b.z*s_mm, b.y*s_mm);
-    const i2 = getIdx(c.x*s_mm, -c.z*s_mm, c.y*s_mm);
-    const i3 = getIdx(d.x*s_mm, -d.z*s_mm, d.y*s_mm);
-    pushTriIdx(i0,i1,i2, token);
-    pushTriIdx(i0,i2,i3, token);
-  };
+            const brickGeom = createBrickGeometry(1.0); // Use 1.0 unit size
+            
+            // Fallback: Group geometry by color, and process faces/vertices for each color group.
+            const geomsByColor = new Map();
+            const tokenFromColor = (hex) => this.tokenFromPaletteIndex(colorToIdx.get(hex) ?? 0);
 
-  for (const v of voxels) {
-    if (v.y < 0) continue;
-    const x=v.x, y=v.y, z=v.z;
-    const token = tokenFromColor((v.color || '#FFFFFF').toUpperCase());
+            for (const v of voxels) {
+                const hex = (v.color || '#FFFFFF').toUpperCase();
+                const token = tokenFromColor(hex);
+                
+                const gSingle = brickGeom.clone();
+                // Position the BRICK's base (Y=0) at the grid's Y coordinate (v.y * 1.0)
+                gSingle.translate(v.x + HALF, v.y, v.z + HALF);
+                
+                if (!geomsByColor.has(token)) geomsByColor.set(token, []);
+                geomsByColor.get(token).push(gSingle);
+            }
+            
+            // Merge all bricks of the same color
+            for (const [token, list] of geomsByColor) {
+                const mergedColorGeom = BGU.mergeBufferGeometries(list, true);
+                list.forEach(g => g.dispose());
+                
+                // For Brick, we must merge vertices to ensure a single watertight shell per color group.
+                const geom = BGU.mergeVertices(mergedColorGeom, 1e-6);
+                mergedColorGeom.dispose();
+                
+                const pos = geom.getAttribute('position');
+                const idx = geom.index ? geom.index.array : [...Array(pos.count).keys()];
 
-    const P = {
-      p000: {x:x+0, y:y+0, z:z+0},
-      p100: {x:x+1, y:y+0, z:z+0},
-      p110: {x:x+1, y:y+1, z:z+0},
-      p010: {x:x+0, y:y+1, z:z+0},
-      p001: {x:x+0, y:y+0, z:z+1},
-      p101: {x:x+1, y:y+0, z:z+1},
-      p111: {x:x+1, y:y+1, z:z+1},
-      p011: {x:x+0, y:y+1, z:z+1},
-    };
+                for (let i = 0; i < idx.length; i += 3) {
+                    // Convert world space coordinates to 3MF coords + scale: (x, -z, y) * s_mm
+                    const p0 = new THREE.Vector3().fromBufferAttribute(pos, idx[i+0]);
+                    const p1 = new THREE.Vector3().fromBufferAttribute(pos, idx[i+1]);
+                    const p2 = new THREE.Vector3().fromBufferAttribute(pos, idx[i+2]);
+                    
+                    const i0 = getIdx(p0.x * s_mm, -p0.z * s_mm, p0.y * s_mm);
+                    const i1 = getIdx(p1.x * s_mm, -p1.z * s_mm, p1.y * s_mm);
+                    const i2 = getIdx(p2.x * s_mm, -p2.z * s_mm, p2.y * s_mm);
+                    pushTriIdx(i0, i1, i2, token);
+                }
+                geom.dispose();
+            }
+            brickGeom.dispose(); // Dispose the template geometry
+            
+            return { V, T, palette };
+        }
+        
+        // --- BLOCKY (no interior faces, shared vertices) --- (Existing Fallback)
+        const addQuad = (a,b,c,d, token) => { // two CCW tris on the face
+            const i0 = getIdx(a.x*s_mm, -a.z*s_mm, a.y*s_mm);
+            const i1 = getIdx(b.x*s_mm, -b.z*s_mm, b.y*s_mm);
+            const i2 = getIdx(c.x*s_mm, -c.z*s_mm, c.y*s_mm);
+            const i3 = getIdx(d.x*s_mm, -d.z*s_mm, d.y*s_mm);
+            pushTriIdx(i0,i1,i2, token);
+            pushTriIdx(i0,i2,i3, token);
+        };
 
-    if (!has(x,   y,   z-1)) addQuad(P.p000, P.p010, P.p110, P.p100, token); // -Z
-    if (!has(x,   y,   z+1)) addQuad(P.p001, P.p101, P.p111, P.p011, token); // +Z
-    if (!has(x-1, y,   z  )) addQuad(P.p000, P.p001, P.p011, P.p010, token); // -X
-    if (!has(x+1, y,   z  )) addQuad(P.p100, P.p110, P.p111, P.p101, token); // +X
-    if (!has(x,   y+1, z  )) addQuad(P.p010, P.p011, P.p111, P.p110, token); // +Y
-    if (!has(x,   y-1, z  )) addQuad(P.p000, P.p100, P.p101, P.p001, token); // -Y
-  }
+        for (const v of voxels) {
+            if (v.y < 0) continue;
+            const x=v.x, y=v.y, z=v.z;
+            const token = tokenFromColor((v.color || '#FFFFFF').toUpperCase());
 
-  return { V, T, palette };
-},
+            const P = {
+                p000: {x:x+0, y:y+0, z:z+0},
+                p100: {x:x+1, y:y+0, z:z+0},
+                p110: {x:x+1, y:y+1, z:z+0},
+                p010: {x:x+0, y:y+1, z:z+0},
+                p001: {x:x+0, y:y+0, z:z+1},
+                p101: {x:x+1, y:y+0, z:z+1},
+                p111: {x:x+1, y:y+1, z:z+1},
+                p011: {x:x+0, y:y+1, z:z+1},
+            };
+
+            if (!has(x,   y,   z-1)) addQuad(P.p000, P.p010, P.p110, P.p100, token); // -Z
+            if (!has(x,   y,   z+1)) addQuad(P.p001, P.p101, P.p111, P.p011, token); // +Z
+            if (!has(x-1, y,   z  )) addQuad(P.p000, P.p001, P.p011, P.p010, token); // -X
+            if (!has(x+1, y,   z  )) addQuad(P.p100, P.p110, P.p111, P.p101, token); // +X
+            if (!has(x,   y+1, z  )) addQuad(P.p010, P.p011, P.p111, P.p110, token); // +Y
+            if (!has(x,   y-1, z  )) addQuad(P.p000, P.p100, P.p101, P.p001, token); // -Y
+        }
+
+        return { V, T, palette };
+    },
 
     
     tinyTriangle: function(z = 0) {
@@ -988,9 +1176,9 @@ const VoxelApp3MFExporter = {
             "printer_settings_id": PRINTER_PRESET_NAME,
             "plate_name": ["1"],
             "plates": [0],
+            "plate_model_index": [[0]],
             "bed_type": "Textured PEI Plate",
             "curr_bed_type": "Textured PEI Plate",
-            "plate_model_index": [[0]],
             "filament_settings_id":  niceNames,
             "filament_name":         niceNames,
             "filament_display_name": niceNames,
@@ -1053,502 +1241,528 @@ const VoxelApp3MFExporter = {
 
 // --- START: POLYSLICE G-CODE INTEGRATION ---
 const PolysliceWrapper = {
-    // Polyslice is exposed as a global variable by the CDN script
-    slicer: null,
+    // Polyslice is exposed as a global variable by the CDN script
+    slicer: null,
 
-    // Default Polyslice options for FDM printing
-    defaultOptions: {
-        // Printer/Material settings
-        nozzleTemperature: 210, // °C
-        bedTemperature: 60, // °C
-        filamentDiameter: 1.75, // mm
-        layerHeight: 0.2, // mm
-        nozzleDiameter: 0.4, // mm
+    // Default Polyslice options for FDM printing
+    defaultOptions: {
+        // Printer/Material settings
+        nozzleTemperature: 210, // °C
+        bedTemperature: 60, // °C
+        filamentDiameter: 1.75, // mm
+        layerHeight: 0.2, // mm
+        nozzleDiameter: 0.4, // mm
 
-        // Speed settings (mm/min)
-        travelSpeed: 4500,
-        printSpeed: 1800,
-        retractSpeed: 3600,
-        retractLength: 0.8, // mm
-        
-        // Structure
-        numPerimeters: 2,
-        fillDensity: 0.2, // 20%
-        skirtLoops: 2,
-        
-        // Printer dimensions (optional, for checking bounds)
-        bedSizeX: 235,
-        bedSizeY: 235,
-        maxZ: 250,
-    },
+        // Speed settings (mm/min)
+        travelSpeed: 4500,
+        printSpeed: 1800,
+        retractSpeed: 3600,
+        retractLength: 0.8, // mm
+        
+        // Structure
+        numPerimeters: 2,
+        fillDensity: 0.2, // 20%
+        skirtLoops: 2,
+        
+        // Printer dimensions (optional, for checking bounds)
+        bedSizeX: 235,
+        bedSizeY: 235,
+        maxZ: 250,
+    },
 
-    init: function() {
-        if (typeof Polyslice === 'undefined') {
-            VoxelApp.showToast('Slicer Error', 'Polyslice library not found. Cannot enable G-Code export.', 'error', 3000);
-            return false;
-        }
-        this.slicer = new Polyslice(this.defaultOptions);
-        return true;
-    },
+    init: function() {
+        if (typeof Polyslice === 'undefined') {
+            VoxelApp.showToast('Slicer Error', 'Polyslice library not found. Cannot enable G-Code export.', 'error', 3000);
+            return false;
+        }
+        this.slicer = new Polyslice(this.defaultOptions);
+        return true;
+    },
 
-    // Generates G-Code from the merged mesh of the model
-    generateGCode: async function(mergedMesh, scaleFactor, layerHeight) {
-        if (!this.slicer && !this.init()) return null;
-        if (!mergedMesh) return null;
+    // Generates G-Code from the merged mesh of the model
+    generateGCode: async function(mergedMesh, scaleFactor, layerHeight) {
+        if (!this.slicer && !this.init()) return null;
+        if (!mergedMesh) return null;
 
-        VoxelApp.showToast('Slicing...', `Starting slice at layer height ${layerHeight}mm.`, 'info');
+        VoxelApp.showToast('Slicing...', `Starting slice at layer height ${layerHeight}mm.`, 'info');
 
-        // Scale the mesh before slicing
-        const scaleMatrix = new THREE.Matrix4().makeScale(scaleFactor, scaleFactor, scaleFactor);
-        const scaledMesh = mergedMesh.clone();
-        scaledMesh.geometry.applyMatrix4(scaleMatrix);
+        // Scale the mesh before slicing
+        const scaleMatrix = new THREE.Matrix4().makeScale(scaleFactor, scaleFactor, scaleFactor);
+        const scaledMesh = mergedMesh.clone();
+        scaledMesh.geometry.applyMatrix4(scaleMatrix);
 
-        // Polyslice works directly with the THREE.Mesh object
-        // For the purposes of Polyslice's default behavior, we assume Z-up and correct scaling is applied here.
-        const gcode = await this.slicer.slice(scaledMesh, { layerHeight: layerHeight });
+        // Polyslice works directly with the THREE.Mesh object
+        // For the purposes of Polyslice's default behavior, we assume Z-up and correct scaling is applied here.
+        const gcode = await this.slicer.slice(scaledMesh, { layerHeight: layerHeight });
 
-        scaledMesh.geometry.dispose(); // Clean up scaled mesh geometry
+        scaledMesh.geometry.dispose(); // Clean up scaled mesh geometry
 
-        return gcode;
-    }
+        return gcode;
+    }
 };
 // --- END: POLYSLICE G-CODE INTEGRATION ---
 
 
 const VoxelApp = {
-    // --- Configuration ---
-    VS: 1,
-    GRID_DEFAULT: 10,
-    ROTATE_SPEED: 0.003,
-    MOBILE_ROTATE_SPEED_MULT: 1.5,
-    PAN_SPEED: 0.05,
-    PINCH_ZOOM_MULT: 50,
-    DRAG_THRESHOLD: 5,
-    MAX_HISTORY_SIZE: 50,
-    LONG_PRESS_DURATION: 250,
-    BACKEND_URL: "https://api.voxelshaper.com",
-    HUB_URL: "https://hub.voxelshaper.com",
-    // --- State ---
-    scene: null, cam: null, ren: null, gridHelper: null, boxHelper: null,
-    sharedBoxGeometry: null,
-    materialCache: new Map(),
-    euler: null, voxels: new Map(), 
-    groundPlaneMesh: null,
-    cvs: null, containerDiv: null,
-    currentColor: '#ffffff',
-    GRID: 10,
-    flySpeed: 0.1, 
-    currentMode: 'SELECT',
-    brushSize: 1,
-    isMobile: false,
-    history: [],
-    historyPointer: -1,
-    colorHistory: [],
-    selectionChange: { before: null },
-    currentStroke: null,
-    templateImageMesh: null,
-    templateImageData: null,
-    templateImagePinnedY: null,
-    templateImageAxis: 'z',
-    selectedFaces: new Set(),
-    selectionFaceMeshes: new Map(),
-    isSelectionLocked: false,
-    selectionNormalIndex: null, 
-    AUTO_RESET_ORIENTATION_ON_MISMATCH: false,
-    ghostVoxels: new Map(),
-    previewBrush: null,
-    previewVoxel: null,
-    currentDrawingAxis: 'y',
-    activeDrawingLevel: { x: 0, y: 0, z: 0 },
-    activePointers: new Map(),
-    isPointerDown: false,
-    currentModelId: null,
-    hapticLayer: null,
-    isRoundedPreviewEnabled: localStorage.getItem('isRoundedPreviewEnabled') === 'true',
-    previewRoundnessFactor: parseFloat(localStorage.getItem('previewRoundnessFactor') || 0.25),
-    originalVoxelsGroup: null,
-    roundedVoxelsGroup: null,
-    mouseState: {
-        isRotating: false, isPanning: false, isModifying: false, isDragging: false, isExtruding: false,
-        lastX: 0, lastY: 0, downX: 0, downY: 0,
-        lastActionCoords: null,
-        lastActionNormal: null,
-        mouseMovementX: 0, mouseMovementY: 0,
-        drawingPlane: new THREE.Plane(),
-        dragStartPoint: new THREE.Vector3(),
-        extrudeNormal: null,
-        selectionAxisLock: null,
-        selectionDragStartTarget: null,
-    },
-    touchState: {
-        longPressTimeout: null,
-        isInteracting: false,
-        isLookAround: false,
-        isThreeFingerUndoCandidate: false,
-        lastPinchDist: null,
-        lastPinchCenter: null,
-    },
-    controls: {
-        invertLookX: false, invertLookY: false, invertZoom: true,
-        invertStrafeX: false, invertStrafeY: false,
-    },
-    user: null,
-    token: null,
-    Modes: {
-        SELECT: { name: 'Select', icon: 'fas fa-mouse-pointer' },
-        PAINT: { name: 'Paint', icon: 'fas fa-paint-brush' },
-        DELETE: { name: 'Delete', icon: 'fas fa-trash' },
-    },
-    keyboard: {},
-    
-    sampleProjectData: {
-        gridSize: 10,
-        voxels: [
-            { x: 3, y: 0, z: 3, color: '#8B4513' }, { x: 4, y: 0, z: 3, color: '#8B4513' }, { x: 5, y: 0, z: 3, color: '#8B4513' },
-            { x: 3, y: 0, z: 4, color: '#8B4513' }, { x: 4, y: 0, z: 4, color: '#8B4513' }, { x: 5, y: 0, z: 4, color: '#8B4513' },
-            { x: 3, y: 0, z: 5, color: '#8B4513' }, { x: 4, y: 0, z: 5, color: '#8B4513' }, { x: 5, y: 0, z: 5, color: '#8B4513' },
-            { x: 3, y: 1, z: 3, color: '#D2B48C' }, { x: 5, y: 1, z: 3, color: '#D2B48C' }, { x: 3, y: 1, z: 4, color: '#D2B48C' },
-            { x: 5, y: 1, z: 4, color: '#D2B48C' }, { x: 3, y: 1, z: 5, color: '#D2B48C' }, { x: 4, y: 1, z: 5, color: '#D2B48C' },
-            { x: 5, y: 1, z: 5, color: '#D2B48C' }, { x: 3, y: 2, z: 3, color: '#D2B48C' }, { x: 5, y: 2, z: 3, color: '#D2B48C' },
-            { x: 3, y: 2, z: 4, color: '#D2B48C' }, { x: 5, y: 2, z: 4, color: '#D2B48C' }, { x: 3, y: 2, z: 5, color: '#D2B48C' },
-            { x: 4, y: 2, z: 5, color: '#D2B48C' }, { x: 5, y: 2, z: 5, color: '#D2B48C' }, { x: 2, y: 3, z: 2, color: '#A52A2A' },
-            { x: 3, y: 3, z: 2, color: '#A52A2A' }, { x: 4, y: 3, z: 2, color: '#A52A2A' }, { x: 5, y: 3, z: 2, color: '#A52A2A' },
-            { x: 6, y: 3, z: 2, color: '#A52A2A' }, { x: 2, y: 3, z: 3, color: '#A52A2A' }, { x: 6, y: 3, z: 3, color: '#A52A2A' },
-            { x: 2, y: 3, z: 4, color: '#A52A2A' }, { x: 6, y: 3, z: 4, color: '#A52A2A' }, { x: 2, y: 3, z: 5, color: '#A52A2A' },
-            { x: 6, y: 3, z: 5, color: '#A52A2A' }, { x: 2, y: 3, z: 6, color: '#A52A2A' }, { x: 3, y: 3, z: 6, color: '#A52A2A' },
-            { x: 4, y: 3, z: 6, color: '#A52A2A' }, { x: 5, y: 3, z: 6, color: '#A52A2A' }, { x: 6, y: 3, z: 6, color: '#A52A2A' },
-            { x: 3, y: 4, z: 3, color: '#A52A2A' }, { x: 4, y: 4, z: 3, color: '#A52A2A' }, { x: 5, y: 4, z: 3, color: '#A52A2A' },
-            { x: 3, y: 4, z: 4, color: '#A52A2A' }, { x: 4, y: 4, z: 4, color: '#A52A2A' }, { x: 5, y: 4, z: 4, color: '#A52A2A' },
-            { x: 3, y: 4, z: 5, color: '#A52A2A' }, { x: 4, y: 4, z: 5, color: '#A52A2A' }, { x: 5, y: 4, z: 5, color: '#A52A2A' },
-        ]
-    },
-    
-    key: (x, y, z) => (x | ((y + 1) << 10) | (z << 20)) >>> 0,
-    parseKey: (k) => [k & 1023, ((k >> 10) & 1023) - 1, (k >> 20) & 1023],
+    // --- Configuration ---
+    VS: 1,
+    GRID_DEFAULT: 10,
+    ROTATE_SPEED: 0.003,
+    MOBILE_ROTATE_SPEED_MULT: 1.5,
+    PAN_SPEED: 0.05,
+    PINCH_ZOOM_MULT: 50,
+    DRAG_THRESHOLD: 5,
+    MAX_HISTORY_SIZE: 50,
+    LONG_PRESS_DURATION: 250,
+    BACKEND_URL: "https://api.voxelshaper.com",
+    HUB_URL: "https://hub.voxelshaper.com",
+    // --- State ---
+    scene: null, cam: null, ren: null, gridHelper: null, boxHelper: null,
+    sharedBoxGeometry: null,
+    materialCache: new Map(),
+    euler: null, voxels: new Map(), 
+    groundPlaneMesh: null,
+    cvs: null, containerDiv: null,
+    currentColor: '#ffffff',
+    GRID: 10,
+    flySpeed: 0.1, 
+    currentMode: 'SELECT',
+    brushSize: 1,
+    isMobile: false,
+    history: [],
+    historyPointer: -1,
+    colorHistory: [],
+    selectionChange: { before: null },
+    currentStroke: null,
+    templateImageMesh: null,
+    templateImageData: null,
+    templateImagePinnedY: null,
+    templateImageAxis: 'z',
+    selectedFaces: new Set(),
+    selectionFaceMeshes: new Map(),
+    isSelectionLocked: false,
+    selectionNormalIndex: null, 
+    AUTO_RESET_ORIENTATION_ON_MISMATCH: false,
+    ghostVoxels: new Map(),
+    previewBrush: null,
+    previewVoxel: null,
+    currentDrawingAxis: 'y',
+    activeDrawingLevel: { x: 0, y: 0, z: 0 },
+    activePointers: new Map(),
+    isPointerDown: false,
+    currentModelId: null,
+    hapticLayer: null,
+    
+    // MODIFIED STATE FOR PREVIEWS
+    isRoundedPreviewEnabled: localStorage.getItem('isRoundedPreviewEnabled') === 'true',
+    previewRoundnessFactor: parseFloat(localStorage.getItem('previewRoundnessFactor') || 0.25),
+    isBrickPreviewEnabled: localStorage.getItem('isBrickPreviewEnabled') === 'true', // ADDED
+    originalVoxelsGroup: null,
+    roundedVoxelsGroup: null,
+    brickVoxelsGroup: null, // ADDED
+    
+    mouseState: {
+        isRotating: false, isPanning: false, isModifying: false, isDragging: false, isExtruding: false,
+        lastX: 0, lastY: 0, downX: 0, downY: 0,
+        lastActionCoords: null,
+        lastActionNormal: null,
+        mouseMovementX: 0, mouseMovementY: 0,
+        drawingPlane: new THREE.Plane(),
+        dragStartPoint: new THREE.Vector3(),
+        extrudeNormal: null,
+        selectionAxisLock: null,
+        selectionDragStartTarget: null,
+    },
+    touchState: {
+        longPressTimeout: null,
+        isInteracting: false,
+        isLookAround: false,
+        isThreeFingerUndoCandidate: false,
+        lastPinchDist: null,
+        lastPinchCenter: null,
+    },
+    controls: {
+        invertLookX: false, invertLookY: false, invertZoom: true,
+        invertStrafeX: false, invertStrafeY: false,
+    },
+    user: null,
+    token: null,
+    Modes: {
+        SELECT: { name: 'Select', icon: 'fas fa-mouse-pointer' },
+        PAINT: { name: 'Paint', icon: 'fas fa-paint-brush' },
+        DELETE: { name: 'Delete', icon: 'fas fa-trash' },
+    },
+    keyboard: {},
+    
+    sampleProjectData: {
+        gridSize: 10,
+        voxels: [
+            { x: 3, y: 0, z: 3, color: '#8B4513' }, { x: 4, y: 0, z: 3, color: '#8B4513' }, { x: 5, y: 0, z: 3, color: '#8B4513' },
+            { x: 3, y: 0, z: 4, color: '#8B4513' }, { x: 4, y: 0, z: 4, color: '#8B4513' }, { x: 5, y: 0, z: 4, color: '#8B4513' },
+            { x: 3, y: 0, z: 5, color: '#8B4513' }, { x: 4, y: 0, z: 5, color: '#8B4513' }, { x: 5, y: 0, z: 5, color: '#8B4513' },
+            { x: 3, y: 1, z: 3, color: '#D2B48C' }, { x: 5, y: 1, z: 3, color: '#D2B48C' }, { x: 3, y: 1, z: 4, color: '#D2B48C' },
+            { x: 5, y: 1, z: 4, color: '#D2B48C' }, { x: 3, y: 1, z: 5, color: '#D2B48C' }, { x: 4, y: 1, z: 5, color: '#D2B48C' },
+            { x: 5, y: 1, z: 5, color: '#D2B48C' }, { x: 3, y: 2, z: 3, color: '#D2B48C' }, { x: 5, y: 2, z: 3, color: '#D2B48C' },
+            { x: 3, y: 2, z: 4, color: '#D2B48C' }, { x: 5, y: 2, z: 4, color: '#D2B48C' }, { x: 3, y: 2, z: 5, color: '#D2B48C' },
+            { x: 4, y: 2, z: 5, color: '#D2B48C' }, { x: 5, y: 2, z: 5, color: '#D2B48C' }, { x: 2, y: 3, z: 2, color: '#A52A2A' },
+            { x: 3, y: 3, z: 2, color: '#A52A2A' }, { x: 4, y: 3, z: 2, color: '#A52A2A' }, { x: 5, y: 3, z: 2, color: '#A52A2A' },
+            { x: 6, y: 3, z: 2, color: '#A52A2A' }, { x: 2, y: 3, z: 3, color: '#A52A2A' }, { x: 6, y: 3, z: 3, color: '#A52A2A' },
+            { x: 2, y: 3, z: 4, color: '#A52A2A' }, { x: 6, y: 3, z: 4, color: '#A52A2A' }, { x: 2, y: 3, z: 5, color: '#A52A2A' },
+            { x: 6, y: 3, z: 5, color: '#A52A2A' }, { x: 2, y: 3, z: 6, color: '#A52A2A' }, { x: 3, y: 3, z: 6, color: '#A52A2A' },
+            { x: 4, y: 3, z: 6, color: '#A52A2A' }, { x: 5, y: 3, z: 6, color: '#A52A2A' }, { x: 6, y: 3, z: 6, color: '#A52A2A' },
+            { x: 3, y: 4, z: 3, color: '#A52A2A' }, { x: 4, y: 4, z: 3, color: '#A52A2A' }, { x: 5, y: 4, z: 3, color: '#A52A2A' },
+            { x: 3, y: 4, z: 4, color: '#A52A2A' }, { x: 4, y: 4, z: 4, color: '#A52A2A' }, { x: 5, y: 4, z: 4, color: '#A52A2A' },
+            { x: 3, y: 4, z: 5, color: '#A52A2A' }, { x: 4, y: 4, z: 5, color: '#A52A2A' }, { x: 5, y: 4, z: 5, color: '#A52A2A' },
+        ]
+    },
+    
+    key: (x, y, z) => (x | ((y + 1) << 10) | (z << 20)) >>> 0,
+    parseKey: (k) => [k & 1023, ((k >> 10) & 1023) - 1, (k >> 20) & 1023],
 
-    getMaterial: function(color) {
-        if (!this.materialCache.has(color)) {
-            const mat = new THREE.MeshLambertMaterial({ color: color });
-            this.materialCache.set(color, mat);
-        }
-        return this.materialCache.get(color);
-    },
+    getMaterial: function(color) {
+        if (!this.materialCache.has(color)) {
+            const mat = new THREE.MeshLambertMaterial({ color: color });
+            this.materialCache.set(color, mat);
+        }
+        return this.materialCache.get(color);
+    },
 clearSelection: function () {
-  if (!this.selectedFaces || this.selectedFaces.size === 0) return;
-  this.selectedFaces.clear();
-  this.selectionNormalIndex = null;
-  this.updateSelectionVisuals && this.updateSelectionVisuals();
+  if (!this.selectedFaces || this.selectedFaces.size === 0) return;
+  this.selectedFaces.clear();
+  this.selectionNormalIndex = null;
+  this.updateSelectionVisuals && this.updateSelectionVisuals();
 },
 
 isEmptyAt: function (x, y) {
-  const hit = this.getFaceTarget(x, y);
-  // treat “no hit” or the bed plane as empty
-  return !hit || (hit.object && hit.object.userData && hit.object.userData.isFoundation);
+  const hit = this.getFaceTarget(x, y);
+  // treat “no hit” or the bed plane as empty
+  return !hit || (hit.object && hit.object.userData && hit.object.userData.isFoundation);
 },
 
-    computeMobileMode: function () {
-        return window.matchMedia('(pointer: coarse)').matches || navigator.maxTouchPoints > 0;
-    },
-    applyUIMode: function () {
-        const mobile = this.computeMobileMode();
-        this.isMobile = mobile;
-        const desktopBar = document.getElementById('controls');
-        const mobileWrap = document.getElementById('mobile-ui-container');
-        if (mobile) {
-            if (desktopBar) desktopBar.style.display = 'none';
-            if (mobileWrap) mobileWrap.style.display = 'block';
-        } else {
-            if (desktopBar) desktopBar.style.display = 'flex';
-            if (mobileWrap) mobileWrap.style.display = 'none';
-        }
-        document.body.classList.toggle('has-mobile-bar', this.isMobile);
-    },
+    computeMobileMode: function () {
+        return window.matchMedia('(pointer: coarse)').matches || navigator.maxTouchPoints > 0;
+    },
+    applyUIMode: function () {
+        const mobile = this.computeMobileMode();
+        this.isMobile = mobile;
+        const desktopBar = document.getElementById('controls');
+        const mobileWrap = document.getElementById('mobile-ui-container');
+        if (mobile) {
+            if (desktopBar) desktopBar.style.display = 'none';
+            if (mobileWrap) mobileWrap.style.display = 'block';
+        } else {
+            if (desktopBar) desktopBar.style.display = 'flex';
+            if (mobileWrap) mobileWrap.style.display = 'none';
+        }
+        document.body.classList.toggle('has-mobile-bar', this.isMobile);
+    },
 
-    init: function() {
-        this.setupDOM();
-        if (typeof this.keyboard === 'undefined' || this.keyboard === null) {
-            this.keyboard = {};
-        }
-        this.applyUIMode();
-        this.setupThree();
-        this.rebuildFoundation();
-        this.setupEventListeners();
-        this.initVisualHapticLayer();
-        
-        // Initialize Polyslice
-        PolysliceWrapper.init();
+    init: function() {
+        this.setupDOM();
+        if (typeof this.keyboard === 'undefined' || this.keyboard === null) {
+            this.keyboard = {};
+        }
+        this.applyUIMode();
+        this.setupBrickGeometry(); // ADDED
+        this.setupThree();
+        this.rebuildFoundation();
+        this.setupEventListeners();
+        this.initVisualHapticLayer();
+        
+        // Initialize Polyslice
+        PolysliceWrapper.init();
 
-        const urlParams = new URLSearchParams(window.location.search);
-        
-        // Onboarding logic
-        const onboardingComplete = localStorage.getItem('voxelshaper_onboarding_complete') === 'true';
-        if (!onboardingComplete && !urlParams.has('modelId')) {
-            this.startOnboarding();
-        } else if (!urlParams.has('modelId') && !window.location.hash.includes('#oauth_success')) {
-            this.loadAutosavedScene(); 
-        }
+        const urlParams = new URLSearchParams(window.location.search);
+        
+        // Onboarding logic
+        const onboardingComplete = localStorage.getItem('voxelshaper_onboarding_complete') === 'true';
+        if (!onboardingComplete && !urlParams.has('modelId')) {
+            this.startOnboarding();
+        } else if (!urlParams.has('modelId') && !window.location.hash.includes('#oauth_success')) {
+            this.loadAutosavedScene(); 
+        }
 
-        this.updateModeUI();
-        this.renderColorHistory();
-        this.updateImageAxisUI();
-        this.authCheckAndInit();
-        this.handleResize();
-        this.animate();
-        console.log("VoxelShaper Initialized (Polyslice Ready)");
-    },
-    
-    request: async function(endpoint, options = {}) {
-        const url = `${this.BACKEND_URL}${endpoint}`;
-        const mergedOptions = {
-            credentials: 'include',
-            ...options,
-            headers: { ...(options.headers || {}) }
-        };
-        const method = (mergedOptions.method || 'GET').toUpperCase();
-        if (['POST', 'PUT', 'DELETE', 'PATCH'].includes(method)) {
-            try {
-                const csrfResponse = await fetch(`${this.BACKEND_URL}/auth/csrf`, { credentials: 'include' });
-                if (!csrfResponse.ok) throw new Error(`CSRF token fetch failed with status ${csrfResponse.status}`);
-                const { token } = await csrfResponse.json();
-                mergedOptions.headers['X-CSRF-Token'] = token;
-            } catch (csrfError) {
-                console.error("CSRF Token fetch error:", csrfError);
-                this.showToast('Security Error', 'Could not verify your session. Please refresh and try again.', 'error');
-                throw csrfError;
-            }
-        }
-        const response = await fetch(url, mergedOptions);
-        const contentType = response.headers.get('content-type');
-        const isJson = contentType && contentType.includes('application/json');
-        let data;
-        if (response.status !== 204) {
-            data = isJson ? await response.json() : await response.text();
-        }
-        if (!response.ok) {
-            const errorMessage = isJson ? (data.error || JSON.stringify(data)) : data;
-            throw new Error(errorMessage || `Request to ${endpoint} failed with status ${response.status}`);
-        }
-        return data;
-    },
+        this.updateModeUI();
+        this.renderColorHistory();
+        this.updateImageAxisUI();
+        this.authCheckAndInit();
+        this.handleResize();
+        this.animate();
+        console.log("VoxelShaper Initialized (Polyslice Ready)");
+    },
+    
+    request: async function(endpoint, options = {}) {
+        const url = `${this.BACKEND_URL}${endpoint}`;
+        const mergedOptions = {
+            credentials: 'include',
+            ...options,
+            headers: { ...(options.headers || {}) }
+        };
+        const method = (mergedOptions.method || 'GET').toUpperCase();
+        if (['POST', 'PUT', 'DELETE', 'PATCH'].includes(method)) {
+            try {
+                const csrfResponse = await fetch(`${this.BACKEND_URL}/auth/csrf`, { credentials: 'include' });
+                if (!csrfResponse.ok) throw new Error(`CSRF token fetch failed with status ${csrfResponse.status}`);
+                const { token } = await csrfResponse.json();
+                mergedOptions.headers['X-CSRF-Token'] = token;
+            } catch (csrfError) {
+                console.error("CSRF Token fetch error:", csrfError);
+                this.showToast('Security Error', 'Could not verify your session. Please refresh and try again.', 'error');
+                throw csrfError;
+            }
+        }
+        const response = await fetch(url, mergedOptions);
+        const contentType = response.headers.get('content-type');
+        const isJson = contentType && contentType.includes('application/json');
+        let data;
+        if (response.status !== 204) {
+            data = isJson ? await response.json() : await response.text();
+        }
+        if (!response.ok) {
+            const errorMessage = isJson ? (data.error || JSON.stringify(data)) : data;
+            throw new Error(errorMessage || `Request to ${endpoint} failed with status ${response.status}`);
+        }
+        return data;
+    },
 
-    handleOAuthRedirect: async function() {
-        if (window.location.hash.includes('#oauth_success')) {
-            try {
-                const user = await this.request('/api/user/me');
-                this.user = user;
-                this.updateLoginStateUI();
-                this.showToast('Login Successful', 'You are now logged in via OAuth!', 'info');
-            } catch (e) {
-                console.error("OAuth redirect user fetch failed:", e);
-                this.showToast('Login Error', 'Failed to retrieve user data after OAuth.', 'error');
-            } finally {
-                // Restore original URL from state if it exists
-                const originalUrl = new URLSearchParams(window.location.hash.substring(1)).get('state') || window.location.pathname;
-                window.history.replaceState({}, document.title, originalUrl);
-            }
-        }
-    },
-    authCheckAndInit: async function() {
-        const unsavedData = sessionStorage.getItem('unsavedVoxelData');
-        if (unsavedData) {
-            try {
-                const data = JSON.parse(unsavedData);
-                this.loadFromData(data);
-                this.showToast('Progress Restored', 'Your work has been successfully restored.', 'info');
-            } catch (e) {
-                console.error("Failed to restore work from session storage:", e);
-                this.showToast('Error', 'Could not restore your previous work.', 'error');
-            } finally {
-                sessionStorage.removeItem('unsavedVoxelData');
-            }
-        }
-        await this.handleOAuthRedirect();
-        const urlParams = new URLSearchParams(window.location.search || '');
-        const hashParams = new URLSearchParams((window.location.hash || '').slice(1));
-        const magicLinkToken = urlParams.get('token') || hashParams.get('token');
-        if (!this.user && magicLinkToken) {
-            try {
-                const response = await this.request('/auth/magic-link', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ token: magicLinkToken })
-                });
-                this.user = response.user;
-                this.updateLoginStateUI();
-                this.showToast('Login Successful', 'You are now logged in!', 'info');
-            } catch (e) {
-                this.showToast('Login Error', e.message, 'error');
-            } finally {
-                const clean = new URL(window.location.href);
-                clean.searchParams.delete('token');
-                clean.hash = '';
-                window.history.replaceState({}, document.title, clean.toString());
-            }
-        }
-        if (!this.user) {
-            try {
-                const user = await this.request('/api/user/me');
-                this.user = user;
-                this.updateLoginStateUI();
-            } catch (e) {
-                // This is a normal case for non-logged-in users.
-            }
-        }
-        const urlModelId = urlParams.get('modelId');
-        if (urlModelId) {
-            await this.loadProjectFromModelId(urlModelId);
-        }
-    },
-    
-    setupDOM: function() {
-        this.cvs = document.getElementById('voxelCanvas');
-        this.containerDiv = document.getElementById('container');
-        this.marqueeElement = document.getElementById('marquee');
-        this.hapticLayer = document.getElementById('haptic-layer');
+    handleOAuthRedirect: async function() {
+        if (window.location.hash.includes('#oauth_success')) {
+            try {
+                const user = await this.request('/api/user/me');
+                this.user = user;
+                this.updateLoginStateUI();
+                this.showToast('Login Successful', 'You are now logged in via OAuth!', 'info');
+            } catch (e) {
+                console.error("OAuth redirect user fetch failed:", e);
+                this.showToast('Login Error', 'Failed to retrieve user data after OAuth.', 'error');
+            } finally {
+                // Restore original URL from state if it exists
+                const originalUrl = new URLSearchParams(window.location.hash.substring(1)).get('state') || window.location.pathname;
+                window.history.replaceState({}, document.title, originalUrl);
+            }
+        }
+    },
+    authCheckAndInit: async function() {
+        const unsavedData = sessionStorage.getItem('unsavedVoxelData');
+        if (unsavedData) {
+            try {
+                const data = JSON.parse(unsavedData);
+                this.loadFromData(data);
+                this.showToast('Progress Restored', 'Your work has been successfully restored.', 'info');
+            } catch (e) {
+                console.error("Failed to restore work from session storage:", e);
+                this.showToast('Error', 'Could not restore your previous work.', 'error');
+            } finally {
+                sessionStorage.removeItem('unsavedVoxelData');
+            }
+        }
+        await this.handleOAuthRedirect();
+        const urlParams = new URLSearchParams(window.location.search || '');
+        const hashParams = new URLSearchParams((window.location.hash || '').slice(1));
+        const magicLinkToken = urlParams.get('token') || hashParams.get('token');
+        if (!this.user && magicLinkToken) {
+            try {
+                const response = await this.request('/auth/magic-link', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ token: magicLinkToken })
+                });
+                this.user = response.user;
+                this.updateLoginStateUI();
+                this.showToast('Login Successful', 'You are now logged in!', 'info');
+            } catch (e) {
+                this.showToast('Login Error', e.message, 'error');
+            } finally {
+                const clean = new URL(window.location.href);
+                clean.searchParams.delete('token');
+                clean.hash = '';
+                window.history.replaceState({}, document.title, clean.toString());
+            }
+        }
+        if (!this.user) {
+            try {
+                const user = await this.request('/api/user/me');
+                this.user = user;
+                this.updateLoginStateUI();
+            } catch (e) {
+                // This is a normal case for non-logged-in users.
+            }
+        }
+        const urlModelId = urlParams.get('modelId');
+        if (urlModelId) {
+            await this.loadProjectFromModelId(urlModelId);
+        }
+    },
+    
+    setupDOM: function() {
+        this.cvs = document.getElementById('voxelCanvas');
+        this.containerDiv = document.getElementById('container');
+        this.marqueeElement = document.getElementById('marquee');
+        this.hapticLayer = document.getElementById('haptic-layer');
 
-        const categories = ["Toy", "Decoration", "Functional", "Art", "General", "Character", "Vehicle", "Nature", "Architecture"];
-        const categorySelect = document.getElementById('uploadCategory');
-        categories.forEach(cat => {
-            const opt = document.createElement('option');
-            opt.value = cat;
-            opt.textContent = cat;
-            categorySelect.appendChild(opt);
-        });
-        this.GRID = parseInt(localStorage.getItem('voxelEditorGridSize') || this.GRID_DEFAULT);
-        this.currentColor = localStorage.getItem('voxelEditorColor') || '#ffffff';
-        this.flySpeed = parseFloat(localStorage.getItem('voxelEditorFlySpeed') || 0.1);
-        this.brushSize = parseInt(localStorage.getItem('voxelEditorBrushSize') || 1);
-        this.colorHistory = JSON.parse(localStorage.getItem('voxelColorHistory')) || [];
-        this.isSelectionLocked = localStorage.getItem('isSelectionLocked') === 'true';
-        
-        // START NEW STATE INITIALIZATION
-        this.isRoundedPreviewEnabled = localStorage.getItem('isRoundedPreviewEnabled') === 'true';
-        this.previewRoundnessFactor = parseFloat(localStorage.getItem('previewRoundnessFactor') || 0.25);
-        // END NEW STATE INITIALIZATION
-        
-        this.controls.invertLookX = localStorage.getItem('invertLookX') === 'true';
-        this.controls.invertLookY = localStorage.getItem('invertLookY') === 'true';
-        this.controls.invertZoom = localStorage.getItem('invertZoom') !== 'false';
-        this.controls.invertStrafeX = localStorage.getItem('invertStrafeX') === 'true';
-        this.controls.invertStrafeY = localStorage.getItem('invertStrafeY') === 'true';
-        this.currentDrawingAxis = localStorage.getItem('currentDrawingAxis') || 'y';
-        this.activeDrawingLevel = JSON.parse(localStorage.getItem('activeDrawingLevel')) || { x: 0, y: 0, z: 0 };
-        this.templateImageAxis = localStorage.getItem('templateImageAxis') || 'z';
-        const agbChecked = localStorage.getItem('agbCheckbox');
-        const newsletterChecked = localStorage.getItem('newsletterCheckbox');
-        if (agbChecked !== null) {
-            document.getElementById('agbCheckbox').checked = agbChecked === 'true';
-        }
-        document.getElementById('newsletterCheckbox').checked = newsletterChecked ? (newsletterChecked === 'true') && !this.computeMobileMode() : false;
-        this.updateAllControlInputs();
-    },
+        const categories = ["Toy", "Decoration", "Functional", "Art", "General", "Character", "Vehicle", "Nature", "Architecture"];
+        const categorySelect = document.getElementById('uploadCategory');
+        categories.forEach(cat => {
+            const opt = document.createElement('option');
+            opt.value = cat;
+            opt.textContent = cat;
+            categorySelect.appendChild(opt);
+        });
+        this.GRID = parseInt(localStorage.getItem('voxelEditorGridSize') || this.GRID_DEFAULT);
+        this.currentColor = localStorage.getItem('voxelEditorColor') || '#ffffff';
+        this.flySpeed = parseFloat(localStorage.getItem('voxelEditorFlySpeed') || 0.1);
+        this.brushSize = parseInt(localStorage.getItem('voxelEditorBrushSize') || 1);
+        this.colorHistory = JSON.parse(localStorage.getItem('voxelColorHistory')) || [];
+        this.isSelectionLocked = localStorage.getItem('isSelectionLocked') === 'true';
+        
+        // START NEW STATE INITIALIZATION
+        this.isRoundedPreviewEnabled = localStorage.getItem('isRoundedPreviewEnabled') === 'true';
+        this.previewRoundnessFactor = parseFloat(localStorage.getItem('previewRoundnessFactor') || 0.25);
+        this.isBrickPreviewEnabled = localStorage.getItem('isBrickPreviewEnabled') === 'true'; // ADDED
+        // END NEW STATE INITIALIZATION
+        
+        this.controls.invertLookX = localStorage.getItem('invertLookX') === 'true';
+        this.controls.invertLookY = localStorage.getItem('invertLookY') === 'true';
+        this.controls.invertZoom = localStorage.getItem('invertZoom') !== 'false';
+        this.controls.invertStrafeX = localStorage.getItem('invertStrafeX') === 'true';
+        this.controls.invertStrafeY = localStorage.getItem('invertStrafeY') === 'true';
+        this.currentDrawingAxis = localStorage.getItem('currentDrawingAxis') || 'y';
+        this.activeDrawingLevel = JSON.parse(localStorage.getItem('activeDrawingLevel')) || { x: 0, y: 0, z: 0 };
+        this.templateImageAxis = localStorage.getItem('templateImageAxis') || 'z';
+        const agbChecked = localStorage.getItem('agbCheckbox');
+        const newsletterChecked = localStorage.getItem('newsletterCheckbox');
+        if (agbChecked !== null) {
+            document.getElementById('agbCheckbox').checked = agbChecked === 'true';
+        }
+        document.getElementById('newsletterCheckbox').checked = newsletterChecked ? (newsletterChecked === 'true') && !this.computeMobileMode() : false;
+        this.updateAllControlInputs();
+    },
+    
+    // NEW: setupBrickGeometry Method
+    setupBrickGeometry: function() {
+        defaultVoxelGeometry = new THREE.BoxGeometry(this.VS, this.VS, this.VS);
+        brickVoxelGeometry = createBrickGeometry(this.VS);
+        
+        // Ensure the shared box geometry is the plain one for most operations (e.g. selection plane mesh, preview voxel mesh default)
+        this.sharedBoxGeometry = defaultVoxelGeometry;
+        
+        brickVoxelGeometry.computeBoundingBox();
+        ACTUAL_BRICK_HEIGHT = brickVoxelGeometry.boundingBox.max.y;
+        BRICK_BOTTOM_Y_OFFSET = -brickVoxelGeometry.boundingBox.min.y;
+    },
 
-    setupThree: function() {
-        this.sharedBoxGeometry = new THREE.BoxGeometry(this.VS, this.VS, this.VS);
-        
-        this.scene = new THREE.Scene();
-        this.scene.background = new THREE.Color(0x282c34);
-        
-        // NEW: Separate groups for blocky/rounded rendering
-        this.originalVoxelsGroup = new THREE.Group();
-        this.roundedVoxelsGroup = new THREE.Group();
-        this.scene.add(this.originalVoxelsGroup);
-        this.scene.add(this.roundedVoxelsGroup);
-        
-        this.cam = new THREE.PerspectiveCamera(75, this.containerDiv.clientWidth / this.containerDiv.clientHeight, 0.1, 1000);
-        this.euler = new THREE.Euler(0, 0, 0, 'YXZ');
-        this.resetCamera();
-        this.ren = new THREE.WebGLRenderer({ canvas: this.cvs, antialias: true });
-        this.ren.shadowMap.enabled = true;
-        this.ren.shadowMap.type = THREE.PCFSoftShadowMap;
-        this.scene.add(new THREE.AmbientLight(0x606060));
-        const dirLight = new THREE.DirectionalLight(0xffffff, 0.5);
-        dirLight.position.set(10, 20, 15);
-        dirLight.castShadow = true;
-        this.scene.add(dirLight);
-        this.scene.add(new THREE.HemisphereLight(0xffffff, 0x444444, 0.2));
-        
-        this.previewVoxel = new THREE.Mesh(
-            this.sharedBoxGeometry,
-            new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.5, depthTest: false })
-        );
-        this.previewVoxel.visible = false;
-        this.scene.add(this.previewVoxel);
-        
-        this.previewBrush = new THREE.Group();
-        this.scene.add(this.previewBrush);
+    setupThree: function() {
+        this.scene = new THREE.Scene();
+        this.scene.background = new THREE.Color(0x282c34);
+        
+        // NEW: Separate groups for blocky/rounded/brick rendering
+        this.originalVoxelsGroup = new THREE.Group();
+        this.roundedVoxelsGroup = new THREE.Group();
+        this.brickVoxelsGroup = new THREE.Group(); // ADDED
+        
+        this.scene.add(this.originalVoxelsGroup);
+        this.scene.add(this.roundedVoxelsGroup);
+        this.scene.add(this.brickVoxelsGroup); // ADDED
+        
+        this.cam = new THREE.PerspectiveCamera(75, this.containerDiv.clientWidth / this.containerDiv.clientHeight, 0.1, 1000);
+        this.euler = new THREE.Euler(0, 0, 0, 'YXZ');
+        this.resetCamera();
+        this.ren = new THREE.WebGLRenderer({ canvas: this.cvs, antialias: true });
+        this.ren.shadowMap.enabled = true;
+        this.ren.shadowMap.type = THREE.PCFSoftShadowMap;
+        this.scene.add(new THREE.AmbientLight(0x606060));
+        const dirLight = new THREE.DirectionalLight(0xffffff, 0.5);
+        dirLight.position.set(10, 20, 15);
+        dirLight.castShadow = true;
+        this.scene.add(dirLight);
+        this.scene.add(new THREE.HemisphereLight(0xffffff, 0x444444, 0.2));
+        
+        // Use the default cube geometry for preview, but adjust in updateSingleVoxelPreview if brick is enabled
+        this.previewVoxel = new THREE.Mesh(
+            this.sharedBoxGeometry, 
+            new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.5, depthTest: false })
+        );
+        this.previewVoxel.visible = false;
+        this.scene.add(this.previewVoxel);
+        
+        this.previewBrush = new THREE.Group();
+        this.scene.add(this.previewBrush);
 
-        const groundSize = this.GRID * this.VS * 2;
-        const groundGeometry = new THREE.PlaneGeometry(groundSize, groundSize);
-        const groundMaterial = new THREE.MeshBasicMaterial({ color: 0x2a2e37, transparent: true, opacity: 0.01, side: THREE.DoubleSide, visible: false }); 
-        this.groundPlaneMesh = new THREE.Mesh(groundGeometry, groundMaterial);
-        
-        this.groundPlaneMesh.rotation.x = -Math.PI / 2;
-        this.groundPlaneMesh.position.set(this.GRID * this.VS / 2, 0, this.GRID * this.VS / 2);
-        this.groundPlaneMesh.userData.isFoundation = true;
-        this.scene.add(this.groundPlaneMesh);
+        const groundSize = this.GRID * this.VS * 2;
+        const groundGeometry = new THREE.PlaneGeometry(groundSize, groundSize);
+        const groundMaterial = new THREE.MeshBasicMaterial({ color: 0x2a2e37, transparent: true, opacity: 0.01, side: THREE.DoubleSide, visible: false }); 
+        this.groundPlaneMesh = new THREE.Mesh(groundGeometry, groundMaterial);
+        
+        this.groundPlaneMesh.rotation.x = -Math.PI / 2;
+        this.groundPlaneMesh.position.set(this.GRID * this.VS / 2, 0, this.GRID * this.VS / 2);
+        this.groundPlaneMesh.userData.isFoundation = true;
+        this.scene.add(this.groundPlaneMesh);
 
-        this.rebuildHelpers();
-        // Ensure initial visibility matches stored state and build the preview once if needed
-        this.originalVoxelsGroup.visible = !this.isRoundedPreviewEnabled;
-        this.roundedVoxelsGroup.visible = this.isRoundedPreviewEnabled;
-        if (this.isRoundedPreviewEnabled) this.rebuildRoundedPreview();
-    },
-    
-    setupEventListeners: function() {
-        window.addEventListener('resize', () => this.handleResize());
-        window.addEventListener('orientationchange', () => this.handleResize());
-        this.containerDiv.addEventListener('pointerdown', (e) => this.onPointerDown(e));
-        this.containerDiv.addEventListener('pointermove', (e) => this.onPointerMove(e));
-        window.addEventListener('pointerup', (e) => this.onPointerUp(e));
-        this.containerDiv.addEventListener('pointerleave', (e) => this.onPointerUp(e));
-        this.containerDiv.addEventListener('pointercancel', (e) => this.onPointerUp(e));
-        this.containerDiv.addEventListener('wheel', (e) => this.onMouseWheel(e), { passive: false });
-        window.addEventListener('keydown', (e) => this.onKeyDown(e));
-        window.addEventListener('keyup', (e) => this.onKeyUp(e));
-        this.cvs.addEventListener('contextmenu', (e) => e.preventDefault());
-        document.addEventListener('pointerlockchange', this.onPointerLockChange.bind(this), false);
-        // Desktop controls
-        document.getElementById('grid-size-slider').addEventListener('input', (e) => this.setGridSize(parseInt(e.target.value)));
-        document.getElementById('brush-size-slider').addEventListener('input', (e) => this.setBrushSize(parseInt(e.target.value)));
-        document.getElementById('fly-speed-slider').addEventListener('input', (e) => this.setFlySpeed(parseFloat(e.target.value)));
-        document.getElementById('color-picker-input').addEventListener('input', (e) => this.setColor(e.target.value));
-        document.getElementById('modeToggle').addEventListener('click', () => this.cycleMode());
-        document.getElementById('selectionLockToggle').addEventListener('click', () => this.toggleSelectionLock());
-        document.getElementById('clearBtn').addEventListener('click', () => document.getElementById('clearConfirmationModal').showModal());
-        document.getElementById('saveBtn').addEventListener('click', () => this.saveJSON());
-        document.getElementById('loadBtn').addEventListener('click', () => document.getElementById('fileInput').click());
-        document.getElementById('exportBtn').addEventListener('click', () => document.getElementById('exportOptionsModal').showModal());
-        document.getElementById('fileInput').addEventListener('change', (e) => this.loadJSON(e));
-        document.getElementById('loadImageBtn').addEventListener('click', () => this.loadImageTemplate());
-        document.getElementById('removeImageBtn').addEventListener('click', () => this.removeImageTemplate());
-        document.getElementById('imageFileInput').addEventListener('change', (e) => this.handleImageFileSelect(e));
-        document.getElementById('cycleAxisBtn').addEventListener('click', () => this.cycleDrawingAxis());
-        document.getElementById('levelUpBtn').addEventListener('click', () => this.moveDrawingLevel(1));
-        document.getElementById('levelDownBtn').addEventListener('click', () => this.moveDrawingLevel(-1));
-        document.getElementById('invertLookX').addEventListener('change', (e) => this.setControl('invertLookX', e.target.checked));
-        document.getElementById('invertLookY').addEventListener('change', (e) => this.setControl('invertLookY', e.target.checked));
-        document.getElementById('invertZoom').addEventListener('change', (e) => this.setControl('invertZoom', e.target.checked));
-        document.getElementById('invertStrafeX').addEventListener('change', (e) => this.setControl('invertStrafeX', e.target.checked));
-        document.getElementById('invertStrafeY').addEventListener('change', (e) => this.setControl('invertStrafeY', e.target.checked));
-        document.getElementById('resetDefaultsBtn').addEventListener('click', () => this.resetToDefaults());
-        document.getElementById('resetCameraBtn').addEventListener('click', () => this.resetCamera());
-        document.getElementById('undoBtn').addEventListener('click', () => this.undo());
-        document.getElementById('redoBtn').addEventListener('click', () => this.redo());
+        this.rebuildHelpers();
+        
+        // Ensure initial visibility matches stored state
+        this.originalVoxelsGroup.visible = !this.isRoundedPreviewEnabled && !this.isBrickPreviewEnabled;
+        this.roundedVoxelsGroup.visible = this.isRoundedPreviewEnabled && !this.isBrickPreviewEnabled;
+        this.brickVoxelsGroup.visible = this.isBrickPreviewEnabled; // ADDED
+        
+        if (this.isRoundedPreviewEnabled) this.rebuildRoundedPreview();
+        if (this.isBrickPreviewEnabled) this.rebuildBrickPreview(); // ADDED
+    },
+    
+    setupEventListeners: function() {
+        window.addEventListener('resize', () => this.handleResize());
+        window.addEventListener('orientationchange', () => this.handleResize());
+        this.containerDiv.addEventListener('pointerdown', (e) => this.onPointerDown(e));
+        this.containerDiv.addEventListener('pointermove', (e) => this.onPointerMove(e));
+        window.addEventListener('pointerup', (e) => this.onPointerUp(e));
+        this.containerDiv.addEventListener('pointerleave', (e) => this.onPointerUp(e));
+        this.containerDiv.addEventListener('pointercancel', (e) => this.onPointerUp(e));
+        this.containerDiv.addEventListener('wheel', (e) => this.onMouseWheel(e), { passive: false });
+        window.addEventListener('keydown', (e) => this.onKeyDown(e));
+        window.addEventListener('keyup', (e) => this.onKeyUp(e));
+        this.cvs.addEventListener('contextmenu', (e) => e.preventDefault());
+        document.addEventListener('pointerlockchange', this.onPointerLockChange.bind(this), false);
+        // Desktop controls
+        document.getElementById('grid-size-slider').addEventListener('input', (e) => this.setGridSize(parseInt(e.target.value)));
+        document.getElementById('brush-size-slider').addEventListener('input', (e) => this.setBrushSize(parseInt(e.target.value)));
+        document.getElementById('fly-speed-slider').addEventListener('input', (e) => this.setFlySpeed(parseFloat(e.target.value)));
+        document.getElementById('color-picker-input').addEventListener('input', (e) => this.setColor(e.target.value));
+        document.getElementById('modeToggle').addEventListener('click', () => this.cycleMode());
+        document.getElementById('selectionLockToggle').addEventListener('click', () => this.toggleSelectionLock());
+        document.getElementById('clearBtn').addEventListener('click', () => document.getElementById('clearConfirmationModal').showModal());
+        document.getElementById('saveBtn').addEventListener('click', () => this.saveJSON());
+        document.getElementById('loadBtn').addEventListener('click', () => document.getElementById('fileInput').click());
+        document.getElementById('exportBtn').addEventListener('click', () => document.getElementById('exportOptionsModal').showModal());
+        document.getElementById('fileInput').addEventListener('change', (e) => this.loadJSON(e));
+        document.getElementById('loadImageBtn').addEventListener('click', () => this.loadImageTemplate());
+        document.getElementById('removeImageBtn').addEventListener('click', () => this.removeImageTemplate());
+        document.getElementById('imageFileInput').addEventListener('change', (e) => this.handleImageFileSelect(e));
+        document.getElementById('cycleAxisBtn').addEventListener('click', () => this.cycleDrawingAxis());
+        document.getElementById('levelUpBtn').addEventListener('click', () => this.moveDrawingLevel(1));
+        document.getElementById('levelDownBtn').addEventListener('click', () => this.moveDrawingLevel(-1));
+        document.getElementById('invertLookX').addEventListener('change', (e) => this.setControl('invertLookX', e.target.checked));
+        document.getElementById('invertLookY').addEventListener('change', (e) => this.setControl('invertLookY', e.target.checked));
+        document.getElementById('invertZoom').addEventListener('change', (e) => this.setControl('invertZoom', e.target.checked));
+        document.getElementById('invertStrafeX').addEventListener('change', (e) => this.setControl('invertStrafeX', e.target.checked));
+        document.getElementById('invertStrafeY').addEventListener('change', (e) => this.setControl('invertStrafeY', e.target.checked));
+        document.getElementById('resetDefaultsBtn').addEventListener('click', () => this.resetToDefaults());
+        document.getElementById('resetCameraBtn').addEventListener('click', () => this.resetCamera());
+        document.getElementById('undoBtn').addEventListener('click', () => this.undo());
+        document.getElementById('redoBtn').addEventListener('click', () => this.redo());
 
 // Click/tap empty space anywhere → deselect (SELECT mode only)
 this.containerDiv.addEventListener('pointerdown', (e) => {
-  if (this.currentMode !== 'SELECT') return;
-  if (document.querySelector('dialog[open]')) return;
-  if (['INPUT','TEXTAREA','SELECT'].includes(e.target.tagName)) return;
-  if (this.isEmptyAt(e.clientX, e.clientY)) this.clearSelection();
+  if (this.currentMode !== 'SELECT') return;
+  if (document.querySelector('dialog[open]')) return;
+  if (['INPUT','TEXTAREA','SELECT'].includes(e.target.tagName)) return;
+  if (this.isEmptyAt(e.clientX, e.clientY)) this.clearSelection();
 }, true);
 
 // ESC or T → deselect (desktop)
 window.addEventListener('keydown', (e) => {
-  if (document.querySelector('dialog[open]')) return;
-  if (['INPUT','TEXTAREA','SELECT'].includes(e.target.tagName)) return;
-  if (e.key === 'Escape' || e.key.toLowerCase() === 't') this.clearSelection();
+  if (document.querySelector('dialog[open]')) return;
+  if (['INPUT','TEXTAREA','SELECT'].includes(e.target.tagName)) return;
+  if (e.key === 'Escape' || e.key.toLowerCase() === 't') this.clearSelection();
 });
 
         // Export Modal Controls (Updated for Polyslice and 3MF)
@@ -1559,7 +1773,7 @@ window.addEventListener('keydown', (e) => {
         });
         document.getElementById('exportGCodePolysliceBtn').addEventListener('click', () => {
             const scaleUnit = document.querySelector('input[name="exportScaleUnit"]:checked').value;
-            const shapeType = document.querySelector('input[name="exportShapeType"]:checked').value;
+            const shapeType = document.querySelector('input[name="exportShapeTypeCombined"]:checked').value; // MODIFIED NAME
             const isRounded = shapeType === 'rounded';
             this.exportGCodePolyslice(scaleUnit, isRounded);
             document.getElementById('exportOptionsModal').close();
@@ -1568,14 +1782,19 @@ window.addEventListener('keydown', (e) => {
         document.getElementById('exportSTLFinalBtn').addEventListener('click', () => {
             const scaleUnit = document.querySelector('input[name="exportScaleUnit"]:checked').value;
             const upAxis = document.querySelector('input[name="exportUpAxis"]:checked').value;
-            const shapeType = document.querySelector('input[name="exportShapeType"]:checked').value;
+            const shapeType = document.querySelector('input[name="exportShapeTypeCombined"]:checked').value; // MODIFIED NAME
             const isRounded = shapeType === 'rounded';
             
             this.exportSTL(scaleUnit, upAxis, isRounded);
             document.getElementById('exportOptionsModal').close();
         });
         
-        document.getElementById('roundedExportRadio').addEventListener('change', this.updateExportRoundnessUI.bind(this));
+        // Use a single listener group for the combined radio buttons
+        const combinedShapeRadios = document.querySelectorAll('input[name="exportShapeTypeCombined"]');
+        combinedShapeRadios.forEach(radio => {
+            radio.addEventListener('change', this.updateExportRoundnessUI.bind(this));
+        });
+        
         document.getElementById('filletRoundnessSlider').addEventListener('input', this.updateExportRoundnessUI.bind(this));
 
         // NEW: In-App Preview Controls
@@ -1584,6 +1803,10 @@ window.addEventListener('keydown', (e) => {
         
         if (previewToggle) previewToggle.addEventListener('change', this.toggleRoundedPreview.bind(this));
         if (previewSlider) previewSlider.addEventListener('input', this.setPreviewRoundnessFactor.bind(this));
+        
+        // NEW: Brick Preview Toggle
+        const brickToggle = document.getElementById('brickPreviewToggle');
+        if (brickToggle) brickToggle.addEventListener('change', this.toggleBrickPreview.bind(this)); // ADDED
 
 
         // Mobile controls
@@ -1656,45 +1879,141 @@ window.addEventListener('keydown', (e) => {
         // Initial UI updates
         this.updateExportRoundnessUI();
         this.updateInAppRoundnessUI();
+        this.updateBrickPreviewUI(); // ADDED
         // Onboarding listeners
         document.getElementById('loadSampleProjectBtn').addEventListener('click', () => this.loadSampleProject());
         document.getElementById('startBlankBtn').addEventListener('click', () => this.markOnboardingComplete());
     },
     
     updateExportRoundnessUI: function() {
-        const isRounded = document.getElementById('roundedExportRadio').checked;
+        const selectedShape = document.querySelector('input[name="exportShapeTypeCombined"]:checked').value;
+        const isRounded = selectedShape === 'rounded';
+        const isBrick = selectedShape === 'brick';
+
         const sliderGroup = document.getElementById('roundnessSliderGroup');
         const slider = document.getElementById('filletRoundnessSlider');
         const display = document.getElementById('fillet-factor-display');
 
         if (sliderGroup) {
+            // Show slider only if Rounded is selected
             sliderGroup.style.display = isRounded ? 'block' : 'none';
         }
         if (display && slider) {
             display.textContent = parseFloat(slider.value).toFixed(2);
         }
-        
-        // Update export radio label text
-        const roundedLabel = document.querySelector('label[for="roundedExportRadio"] span');
-        if (roundedLabel) {
-            roundedLabel.textContent = isRounded ? 'Rounded (Filleted Edges)' : 'Rounded (Smoother Mesh)';
-        }
     },
     
+    // NEW: Brick Preview Methods
+    toggleBrickPreview: function(e) {
+        this.isBrickPreviewEnabled = e ? e.target.checked : !this.isBrickPreviewEnabled; 
+        localStorage.setItem('isBrickPreviewEnabled', this.isBrickPreviewEnabled);
+        
+        this.updatePreviewVisibility();
+    },
+
+    rebuildBrickPreview: function() {
+        this.disposeBrickPreview();
+        if (!this.brickVoxelsGroup) {
+            this.brickVoxelsGroup = new THREE.Group();
+            this.scene.add(this.brickVoxelsGroup);
+        }
+        if (this.voxels.size === 0) return;
+
+        this.voxels.forEach((v, packedKey) => {
+            const [x, y, z] = this.parseKey(packedKey);
+            if (y < 0) return; 
+
+            // Clone the shared brick geometry (which is centered at its base at Y=0)
+            const geom = brickVoxelGeometry.clone(); 
+            
+            const mesh = new THREE.Mesh(geom, this.getMaterial(v.color));
+            
+            // Set position based on the brick geometry's local Y=0 (its base)
+            mesh.position.set(x * this.VS + 0.5, y * this.VS, z * this.VS + 0.5);
+            
+            mesh.castShadow = true;
+            mesh.receiveShadow = true;
+            this.brickVoxelsGroup.add(mesh);
+        });
+        
+        this.updateBrickPreviewUI();
+    },
+
+    disposeBrickPreview: function() {
+        if (!this.brickVoxelsGroup) return;
+
+        this.brickVoxelsGroup.traverse(obj => {
+            if (obj.isMesh) {
+                if (obj.geometry) obj.geometry.dispose();
+                if (obj.material && obj.material.dispose) obj.material.dispose();
+            }
+        });
+
+        while (this.brickVoxelsGroup.children.length) {
+            this.brickVoxelsGroup.remove(this.brickVoxelsGroup.children[0]);
+        }
+    },
+
+    updateBrickPreviewUI: function() {
+        const brickToggle = document.getElementById('brickPreviewToggle');
+        if (brickToggle) brickToggle.checked = this.isBrickPreviewEnabled;
+    },
+    
+    // MODIFIED: Centralized Visibility Update
+    updatePreviewVisibility: function() {
+        const isBrick = this.isBrickPreviewEnabled;
+        const isRounded = this.isRoundedPreviewEnabled;
+        
+        // Visibility logic
+        this.originalVoxelsGroup.visible = !isRounded && !isBrick;
+        this.roundedVoxelsGroup.visible = isRounded && !isBrick;
+        this.brickVoxelsGroup.visible = isBrick;
+        
+        // Rebuild/dispose as needed
+        if (isBrick) {
+            this.isRoundedPreviewEnabled = false; // Disable rounded if brick is enabled
+            this.disposeRoundedPreview();
+            this.rebuildBrickPreview();
+        } else if (isRounded) {
+            this.disposeBrickPreview();
+            this.rebuildRoundedPreview();
+        } else {
+            this.disposeRoundedPreview();
+            this.disposeBrickPreview();
+            this.rebuildSceneFromVoxels(); // Fallback to original blocky meshes
+        }
+        
+        // Disable preview controls based on active mode
+        const previewToggle = document.getElementById('roundedPreviewToggle');
+        const previewSliderGroup = document.getElementById('preview-slider-group');
+        const brickToggle = document.getElementById('brickPreviewToggle');
+
+        if (previewToggle) {
+             previewToggle.checked = this.isRoundedPreviewEnabled;
+             previewToggle.disabled = isBrick;
+        }
+        if (previewSliderGroup) {
+            previewSliderGroup.style.opacity = (this.isRoundedPreviewEnabled && !isBrick) ? '1' : '0.5';
+            document.getElementById('previewRoundnessSlider').disabled = !this.isRoundedPreviewEnabled || isBrick;
+        }
+        if (brickToggle) {
+            brickToggle.checked = this.isBrickPreviewEnabled;
+            // The logic above ensures that if brick is ON, rounded is OFF and disabled.
+        }
+        
+        this.updateBrickPreviewUI();
+        this.updateExportRoundnessUI(); // Ensure export modal buttons reflect state
+    },
+
     toggleRoundedPreview: function(e) {
         this.isRoundedPreviewEnabled = e ? e.target.checked : !this.isRoundedPreviewEnabled; 
         localStorage.setItem('isRoundedPreviewEnabled', this.isRoundedPreviewEnabled);
         
-        // Control visibility of the groups
-        this.originalVoxelsGroup.visible = !this.isRoundedPreviewEnabled;
-        this.roundedVoxelsGroup.visible  =  this.isRoundedPreviewEnabled;
-        
         if (this.isRoundedPreviewEnabled) {
-            this.rebuildRoundedPreview();
-        } else {
-            this.disposeRoundedPreview();
+            this.isBrickPreviewEnabled = false; // Disable brick if rounded is enabled
+            localStorage.setItem('isBrickPreviewEnabled', 'false');
         }
-        this.updateInAppRoundnessUI();
+        this.updatePreviewVisibility();
     },
     
     setPreviewRoundnessFactor: function(e) {
@@ -1702,7 +2021,7 @@ window.addEventListener('keydown', (e) => {
         localStorage.setItem('previewRoundnessFactor', this.previewRoundnessFactor);
         this.updateInAppRoundnessUI();
         if (this.isRoundedPreviewEnabled) {
-            this.rebuildRoundedPreview();
+            this.onModelChanged('roundness_slider');
         }
     },
     
@@ -1712,11 +2031,16 @@ window.addEventListener('keydown', (e) => {
         const display = document.getElementById('preview-factor-display');
         const sliderGroup = document.getElementById('preview-slider-group');
 
-        if (previewToggle) previewToggle.checked = this.isRoundedPreviewEnabled;
+        const isBrick = this.isBrickPreviewEnabled;
+        
+        if (previewToggle) {
+            previewToggle.checked = this.isRoundedPreviewEnabled;
+            previewToggle.disabled = isBrick;
+        }
         
         if (sliderGroup && previewSlider) {
-            sliderGroup.style.opacity = this.isRoundedPreviewEnabled ? '1' : '0.5';
-            previewSlider.disabled = !this.isRoundedPreviewEnabled;
+            sliderGroup.style.opacity = (this.isRoundedPreviewEnabled && !isBrick) ? '1' : '0.5';
+            previewSlider.disabled = !this.isRoundedPreviewEnabled || isBrick;
         }
 
         if (previewSlider) previewSlider.value = this.previewRoundnessFactor;
@@ -2689,222 +3013,228 @@ window.addEventListener('keydown', (e) => {
         this.updateSelectionVisuals();
     },
 
-  handleFaceSelection: function (event) {
-  // On desktop, ignore while actively dragging the marquee
-  if (this.mouseState.isDragging && !this.isMobile) return;
+  handleFaceSelection: function (event) {
+  // On desktop, ignore while actively dragging the marquee
+  if (this.mouseState.isDragging && !this.isMobile) return;
 
-  const target = this.getFaceTarget(event.clientX, event.clientY);
-  const clickedBed = !!(target && target.faceKey && this.isBedFace(target.faceKey));
-  const isAdd = event.ctrlKey || event.shiftKey;
+  const target = this.getFaceTarget(event.clientX, event.clientY);
+  const clickedBed = !!(target && target.faceKey && this.isBedFace(target.faceKey));
+  const isAdd = event.ctrlKey || event.shiftKey;
 
-  // Clear only when truly hitting background (no target),
-  // or if user explicitly asks to clear while clicking the bed (Alt+click).
-  if ((!target || (clickedBed && event.altKey)) && !isAdd) {
-    this.selectedFaces.clear();
-    this.selectionNormalIndex = null;
-    this.updateSelectionVisuals();
-    return;
-  }
+  // Clear only when truly hitting background (no target),
+  // or if user explicitly asks to clear while clicking the bed (Alt+click).
+  if ((!target || (clickedBed && event.altKey)) && !isAdd) {
+    this.selectedFaces.clear();
+    this.selectionNormalIndex = null;
+    this.updateSelectionVisuals();
+    return;
+  }
 
-  if (!target) return; // nothing to do (modifier held or no target)
+  if (!target) return; // nothing to do (modifier held or no target)
 
-  const faceKey = target.faceKey; // "<voxelKey>:<normalIndex>"
-  const targetNormalIndex = parseInt(faceKey.split(':')[1], 10);
+  const faceKey = target.faceKey; // "<voxelKey>:<normalIndex>"
+  const targetNormalIndex = parseInt(faceKey.split(':')[1], 10);
 
-  // Current group orientation (if any)
-  const first = this.selectedFaces.size > 0 ? this.selectedFaces.values().next().value : null;
-  const currentNormalIndex = (this.selectionNormalIndex != null)
-    ? this.selectionNormalIndex
-    : (first ? parseInt(first.split(':')[1], 10) : null);
+  // Current group orientation (if any)
+  const first = this.selectedFaces.size > 0 ? this.selectedFaces.values().next().value : null;
+  const currentNormalIndex = (this.selectionNormalIndex != null)
+    ? this.selectionNormalIndex
+    : (first ? parseInt(first.split(':')[1], 10) : null);
 
-  // Quick toggle-off: clicking an already-selected single face with no modifiers clears
-  if (!isAdd && this.selectedFaces.has(faceKey) && this.selectedFaces.size === 1) {
-    this.selectedFaces.clear();
-    this.selectionNormalIndex = null;
-    this.updateSelectionVisuals();
-    return;
-  }
+  // Quick toggle-off: clicking an already-selected single face with no modifiers clears
+  if (!isAdd && this.selectedFaces.has(faceKey) && this.selectedFaces.size === 1) {
+    this.selectedFaces.clear();
+    this.selectionNormalIndex = null;
+    this.updateSelectionVisuals();
+    return;
+  }
 
-  if (!isAdd) {
-    this.selectedFaces.clear();
-    this.selectedFaces.add(faceKey);
-    this.selectionNormalIndex = targetNormalIndex;
-    this.updateSelectionVisuals();
-    return;
-  }
+  if (!isAdd) {
+    this.selectedFaces.clear();
+    this.selectedFaces.add(faceKey);
+    this.selectionNormalIndex = targetNormalIndex;
+    this.updateSelectionVisuals();
+    return;
+  }
 
-  // Add/remove with Ctrl/Shift
-  if (this.selectedFaces.has(faceKey)) {
-    this.selectedFaces.delete(faceKey);
-    if (this.selectedFaces.size === 0) this.selectionNormalIndex = null;
-    this.updateSelectionVisuals();
-    return;
-  }
+  // Add/remove with Ctrl/Shift
+  if (this.selectedFaces.has(faceKey)) {
+    this.selectedFaces.delete(faceKey);
+    if (this.selectedFaces.size === 0) this.selectionNormalIndex = null;
+    this.updateSelectionVisuals();
+    return;
+  }
 
-  if (currentNormalIndex === null || currentNormalIndex === targetNormalIndex) {
-    this.selectedFaces.add(faceKey);
-    this.selectionNormalIndex = targetNormalIndex;
-    this.updateSelectionVisuals();
-    return;
-  }
+  if (currentNormalIndex === null || currentNormalIndex === targetNormalIndex) {
+    this.selectedFaces.add(faceKey);
+    this.selectionNormalIndex = targetNormalIndex;
+    this.updateSelectionVisuals();
+    return;
+  }
 
-  if (this.AUTO_RESET_ORIENTATION_ON_MISMATCH) {
-    // Reset to the new orientation and add
-    this.selectedFaces = new Set(
-      [...this.selectedFaces].filter(k => parseInt(k.split(':')[1], 10) === targetNormalIndex)
-    );
-    this.selectedFaces.add(faceKey);
-    this.selectionNormalIndex = targetNormalIndex;
-    this.updateSelectionVisuals();
-  } else {
-    this.showToast('Selection limited', 'All faces in a group must share orientation. (Tip: press Esc to clear.)', 'info', 1200);
-  }
+  if (this.AUTO_RESET_ORIENTATION_ON_MISMATCH) {
+    // Reset to the new orientation and add
+    this.selectedFaces = new Set(
+      [...this.selectedFaces].filter(k => parseInt(k.split(':')[1], 10) === targetNormalIndex)
+    );
+    this.selectedFaces.add(faceKey);
+    this.selectionNormalIndex = targetNormalIndex;
+    this.updateSelectionVisuals();
+  } else {
+    this.showToast('Selection limited', 'All faces in a group must share orientation. (Tip: press Esc to clear.)', 'info', 1200);
+  }
 },
 isBedFace: function(faceKey) {
-  const [packed] = faceKey.split(':');
-  const [, y] = this.parseKey(parseInt(packed, 10));
-  return y < 0;
+  const [packed] = faceKey.split(':');
+  const [, y] = this.parseKey(parseInt(packed, 10));
+  return y < 0;
 },
 
 
-    getNormalIndex: function(normal) {
-        if (Math.abs(normal.x) > 0.5) return normal.x > 0 ? 0 : 1;
-        if (Math.abs(normal.y) > 0.5) return normal.y > 0 ? 2 : 3;
-        if (Math.abs(normal.z) > 0.5) return normal.z > 0 ? 4 : 5;
-        return -1;
-    },
+    getNormalIndex: function(normal) {
+        if (Math.abs(normal.x) > 0.5) return normal.x > 0 ? 0 : 1;
+        if (Math.abs(normal.y) > 0.5) return normal.y > 0 ? 2 : 3;
+        if (Math.abs(normal.z) > 0.5) return normal.z > 0 ? 4 : 5;
+        return -1;
+    },
 
-    getNormalFromIndex: function(index) {
-        const normals = [
-            new THREE.Vector3(1, 0, 0), new THREE.Vector3(-1, 0, 0),
-            new THREE.Vector3(0, 1, 0), new THREE.Vector3(0, -1, 0),
-            new THREE.Vector3(0, 0, 1), new THREE.Vector3(0, 0, -1),
-        ];
-        return normals[index];
-    },
+    getNormalFromIndex: function(index) {
+        const normals = [
+            new THREE.Vector3(1, 0, 0), new THREE.Vector3(-1, 0, 0),
+            new THREE.Vector3(0, 1, 0), new THREE.Vector3(0, -1, 0),
+            new THREE.Vector3(0, 0, 1), new THREE.Vector3(0, 0, -1),
+        ];
+        return normals[index];
+    },
 
-    findVoxelDataByMesh: function(mesh) {
-        if (mesh.userData.isFoundation) {
-            return { mesh: this.groundPlaneMesh, isFoundation: true };
-        }
-        for (const voxelData of this.voxels.values()) {
-            if (voxelData.mesh === mesh) return voxelData;
-        }
-        return null;
-    },
+    findVoxelDataByMesh: function(mesh) {
+        if (mesh.userData.isFoundation) {
+            return { mesh: this.groundPlaneMesh, isFoundation: true };
+        }
+        for (const voxelData of this.voxels.values()) {
+            if (voxelData.mesh === mesh) return voxelData;
+        }
+        return null;
+    },
 
-    getFaceAt: function(clientX, clientY) {
-        const rect = this.cvs.getBoundingClientRect();
-        const mouse = new THREE.Vector2(((clientX - rect.left) / rect.width) * 2 - 1, -((clientY - rect.top) / this.cvs.clientHeight) * 2 + 1);
-        const raycaster = new THREE.Raycaster();
-        raycaster.setFromCamera(mouse, this.cam);
-        
-        // Use only the original blocky meshes for face detection.
-        const allMeshes = [...this.originalVoxelsGroup.children, this.groundPlaneMesh].filter(m => m && m.visible);
+    getFaceAt: function(clientX, clientY) {
+        const rect = this.cvs.getBoundingClientRect();
+        const mouse = new THREE.Vector2(((clientX - rect.left) / rect.width) * 2 - 1, -((clientY - rect.top) / this.cvs.clientHeight) * 2 + 1);
+        const raycaster = new THREE.Raycaster();
+        raycaster.setFromCamera(mouse, this.cam);
+        
+        // Use only the original blocky meshes for face detection.
+        const allMeshes = [...this.originalVoxelsGroup.children, this.groundPlaneMesh].filter(m => m && m.visible);
 
-        if (allMeshes.length === 0) return null;
-        const intersects = raycaster.intersectObjects(allMeshes, false);
-        return intersects.length > 0 ? intersects[0] : null;
-    },
-    
-    clearSelection: function() {
-        if (this.selectedFaces.size > 0) {
-            const before = new Set(this.selectedFaces);
-            this.selectedFaces.clear();
-            this.selectionNormalIndex = null;
-            this.updateSelectionVisuals();
-            this.addHistoryStep({ type: 'SELECT', before, after: new Set() });
-        }
-    },
+        if (allMeshes.length === 0) return null;
+        const intersects = raycaster.intersectObjects(allMeshes, false);
+        return intersects.length > 0 ? intersects[0] : null;
+    },
+    
+    clearSelection: function() {
+        if (this.selectedFaces.size > 0) {
+            const before = new Set(this.selectedFaces);
+            this.selectedFaces.clear();
+            this.selectionNormalIndex = null;
+            this.updateSelectionVisuals();
+            this.addHistoryStep({ type: 'SELECT', before, after: new Set() });
+        }
+    },
 
 
-    updateSelectionVisuals: function () {
-        this.selectionFaceMeshes.forEach((mesh, key) => {
-            if (!this.selectedFaces.has(key)) {
-                this.scene.remove(mesh);
-                mesh.geometry.dispose();
-                mesh.material.dispose();
-                this.selectionFaceMeshes.delete(key);
-            }
-        });
-        this.selectedFaces.forEach(faceKey => {
-            if (this.selectionFaceMeshes.has(faceKey)) return;
-            const [voxelKeyStr, normalIndexStr] = faceKey.split(':');
-            const voxelKey = parseInt(voxelKeyStr, 10);
-            const normal   = this.getNormalFromIndex(parseInt(normalIndexStr, 10));
-            const voxelData = this.voxels.get(voxelKey);
-            const isFoundation = !voxelData;
-            
-            const [x, y, z] = this.parseKey(voxelKey);
-            
-            let basePos;
-            if (voxelData && voxelData.mesh) {
-                // If voxel exists, use its position (only in the original group)
-                basePos = voxelData.mesh.position;
-            } else if (isFoundation && y === -1) {
-                // If it's foundation, calculate base position
-                basePos = new THREE.Vector3(x * this.VS + 0.5, y * this.VS + 0.5, z * this.VS + 0.5);
-            } else { return; }
-            
-            const plane = new THREE.Mesh(
-              new THREE.PlaneGeometry(this.VS, this.VS),
-              new THREE.MeshBasicMaterial({ color: 0xffff00, transparent: true, opacity: 0.6, side: THREE.DoubleSide })
-            );
-            plane.position.set(
-              basePos.x + normal.x * 0.501,
-              basePos.y + normal.y * 0.501,
-              basePos.z + normal.z * 0.501
-            );
-            plane.lookAt(plane.position.clone().add(normal));
-            this.scene.add(plane);
-            this.selectionFaceMeshes.set(faceKey, plane);
-        });
-    },
+    updateSelectionVisuals: function () {
+        this.selectionFaceMeshes.forEach((mesh, key) => {
+            if (!this.selectedFaces.has(key)) {
+                this.scene.remove(mesh);
+                mesh.geometry.dispose();
+                mesh.material.dispose();
+                this.selectionFaceMeshes.delete(key);
+            }
+        });
+        this.selectedFaces.forEach(faceKey => {
+            if (this.selectionFaceMeshes.has(faceKey)) return;
+            const [voxelKeyStr, normalIndexStr] = faceKey.split(':');
+            const voxelKey = parseInt(voxelKeyStr, 10);
+            const normal   = this.getNormalFromIndex(parseInt(normalIndexStr, 10));
+            const voxelData = this.voxels.get(voxelKey);
+            const isFoundation = !voxelData;
+            
+            const [x, y, z] = this.parseKey(voxelKey);
+            
+            let basePos;
+            if (voxelData && voxelData.mesh) {
+                // If voxel exists, use its position (only in the original group)
+                basePos = voxelData.mesh.position;
+            } else if (isFoundation && y === -1) {
+                // If it's foundation, calculate base position
+                basePos = new THREE.Vector3(x * this.VS + 0.5, y * this.VS + 0.5, z * this.VS + 0.5);
+            } else { return; }
+            
+            const plane = new THREE.Mesh(
+              new THREE.PlaneGeometry(this.VS, this.VS),
+              new THREE.MeshBasicMaterial({ color: 0xffff00, transparent: true, opacity: 0.6, side: THREE.DoubleSide })
+            );
+            plane.position.set(
+              basePos.x + normal.x * 0.501,
+              basePos.y + normal.y * 0.501,
+              basePos.z + normal.z * 0.501
+            );
+            plane.lookAt(plane.position.clone().add(normal));
+            this.scene.add(plane);
+            this.selectionFaceMeshes.set(faceKey, plane);
+        });
+    },
 
-    getFaceTarget: function (clientX, clientY) {
-        const hit = this.getFaceAt(clientX, clientY);
-        if (!hit) return null;
-        let voxelKey = null;
-        let nrm = null;
+    getFaceTarget: function (clientX, clientY) {
+        const hit = this.getFaceAt(clientX, clientY);
+        if (!hit) return null;
+        let voxelKey = null;
+        let nrm = null;
 
-        if (hit.object === this.groundPlaneMesh || (hit.object.userData && hit.object.userData.isFoundation)) {
-            // --- Foundation Hit ---
-            nrm = new THREE.Vector3(0, 1, 0); // Always +Y for ground plane
-            const worldPos = hit.point.clone();
-            const x = Math.floor(worldPos.x / this.VS);
-            const z = Math.floor(worldPos.z / this.VS);
-            if (x < 0 || x >= this.GRID || z < 0 || z >= this.GRID) return null;
-            voxelKey = this.key(x, -1, z); 
-        } else {
-            // --- Voxel Hit (guaranteed to be an individual block mesh now) ---
-            const voxelData = this.findVoxelDataByMesh(hit.object);
-            if (!voxelData) return null;
-            const basePos = hit.object.position;
-            const x = Math.round(basePos.x / this.VS - 0.5);
-            const y = Math.round(basePos.y / this.VS - 0.5);
-            const z = Math.round(basePos.z / this.VS - 0.5);
-            voxelKey = this.key(x, y, z);
+        if (hit.object === this.groundPlaneMesh || (hit.object.userData && hit.object.userData.isFoundation)) {
+            // --- Foundation Hit ---
+            nrm = new THREE.Vector3(0, 1, 0); // Always +Y for ground plane
+            const worldPos = hit.point.clone();
+            const x = Math.floor(worldPos.x / this.VS);
+            const z = Math.floor(worldPos.z / this.VS);
+            if (x < 0 || x >= this.GRID || z < 0 || z >= this.GRID) return null;
+            voxelKey = this.key(x, -1, z); 
+        } else {
+            // --- Voxel Hit (guaranteed to be an individual block mesh now) ---
+            const voxelData = this.findVoxelDataByMesh(hit.object);
+            if (!voxelData) return null;
+            const basePos = hit.object.position;
+            const x = Math.round(basePos.x / this.VS - 0.5);
+            const y = Math.round(basePos.y / this.VS - 0.5);
+            const z = Math.round(basePos.z / this.VS - 0.5);
+            voxelKey = this.key(x, y, z);
 
-            // Get the face normal, transform it by the object's world matrix
-            nrm = hit.face.normal.clone();
-            const nMat = new THREE.Matrix3().getNormalMatrix(hit.object.matrixWorld);
-            nrm.applyNormalMatrix(nMat).normalize();
+            // Get the face normal, transform it by the object's world matrix
+            nrm = hit.face.normal.clone();
+            const nMat = new THREE.Matrix3().getNormalMatrix(hit.object.matrixWorld);
+            nrm.applyNormalMatrix(nMat).normalize();
 
-            // Snap the normal to the nearest major axis
-            const ax = Math.abs(nrm.x), ay = Math.abs(nrm.y), az = Math.abs(nrm.z);
-            if (ax >= ay && ax >= az) nrm.set(Math.sign(nrm.x), 0, 0);
-            else if (ay >= ax && ay >= az) nrm.set(0, Math.sign(nrm.y), 0);
-            else nrm.set(0, 0, Math.sign(nrm.z));
-        }
+            // Snap the normal to the nearest major axis
+            const ax = Math.abs(nrm.x), ay = Math.abs(nrm.y), az = Math.abs(nrm.z);
+            if (ax >= ay && ax >= az) nrm.set(Math.sign(nrm.x), 0, 0);
+            else if (ay >= ax && ay >= az) nrm.set(0, Math.sign(nrm.y), 0);
+            else nrm.set(0, 0, Math.sign(nrm.z));
 
-        const normalIndex = this.getNormalIndex(nrm);
-        return {
-          faceKey: `${voxelKey}:${normalIndex}`,
-          normal: nrm,
-          intersectionPoint: hit.point
-        };
-    },
+            // Offset position OUT of the target voxel along the normal (for ADD mode)
+            // or IN to the target voxel (for PAINT/DELETE mode)
+            const offset = (this.currentMode === 'PAINT' || this.currentMode === 'DELETE') ? -(0.5 * this.VS - 0.001) : +(0.5 * this.VS + 0.001);
+            pos.addScaledVector(normal, offset);
+        }
 
+        const normalIndex = this.getNormalIndex(nrm);
+        return {
+          faceKey: `${voxelKey}:${normalIndex}`,
+          normal: nrm,
+          intersectionPoint: hit.point
+        };
+    },
+
+   
     updateExtrudePreview: function(distance) {
         this.ghostVoxels.forEach(ghost => {
             this.scene.remove(ghost.mesh);
@@ -3023,10 +3353,8 @@ isBedFace: function(faceKey) {
             this.updateSelectionVisuals();
             this.addHistoryStep({ type: 'SELECT', before: before, after: new Set(this.selectedFaces) });
             
-            // FIX: Immediately rebuild rounded preview if enabled after modification
-            if (this.isRoundedPreviewEnabled) {
-                this.rebuildRoundedPreview();
-            }
+            // FIX: Immediately rebuild rounded/brick preview if enabled after modification
+            this.updatePreviewVisibility(); 
         }
     },
 
@@ -3105,6 +3433,10 @@ isBedFace: function(faceKey) {
         const previewColor = isDelete ? 0xff0000 : this.currentColor;
         const opacity = isDelete ? 0.4 : 0.5;
         const previewMat = new THREE.MeshBasicMaterial({ color: previewColor, transparent: true, opacity: opacity, depthTest: false });
+
+        const isBrick = this.isBrickPreviewEnabled; // ADDED
+        const previewGeom = isBrick ? brickVoxelGeometry : this.sharedBoxGeometry; // ADDED
+
         for (let i = 0; i < size; i++) {
             for (let j = 0; j < size; j++) {
                 const brushCoords = { ...coords };
@@ -3114,8 +3446,15 @@ isBedFace: function(faceKey) {
                 if (brushCoords.x >= 0 && brushCoords.x < this.GRID && brushCoords.y >= 0 && brushCoords.y < this.GRID && brushCoords.z >= 0 && brushCoords.z < this.GRID) {
                     if ((this.currentMode === 'PAINT' || this.currentMode === 'DELETE') && !this.voxels.has(this.key(brushCoords.x, brushCoords.y, brushCoords.z))) continue;
                     
-                    const previewMesh = new THREE.Mesh(this.sharedBoxGeometry, previewMat);
-                    previewMesh.position.set(brushCoords.x * this.VS + 0.5, brushCoords.y * this.VS + 0.5, brushCoords.z * this.VS + 0.5);
+                    const previewMesh = new THREE.Mesh(previewGeom, previewMat); // MODIFIED GEOM
+                    
+                    // NEW: Set position based on geometry type
+                    if (isBrick) {
+                        previewMesh.position.set(brushCoords.x * this.VS + 0.5, brushCoords.y * this.VS, brushCoords.z * this.VS + 0.5);
+                    } else {
+                        previewMesh.position.set(brushCoords.x * this.VS + 0.5, brushCoords.y * this.VS + 0.5, brushCoords.z * this.VS + 0.5);
+                    }
+                    
                     this.previewBrush.add(previewMesh);
                 }
             }
@@ -3126,7 +3465,19 @@ isBedFace: function(faceKey) {
     
     updateSingleVoxelPreview: function(coords) {
         if (coords.x >= 0 && coords.x < this.GRID && coords.y >= 0 && coords.y < this.GRID && coords.z >= 0 && coords.z < this.GRID) {
-            this.previewVoxel.position.set(coords.x * this.VS + 0.5, coords.y * this.VS + 0.5, coords.z * this.VS + 0.5);
+            
+            const isBrick = this.isBrickPreviewEnabled; // NEW
+            
+            // NEW: Set geometry
+            this.previewVoxel.geometry = isBrick ? brickVoxelGeometry : this.sharedBoxGeometry;
+
+            // NEW: Set position based on geometry type
+            if (isBrick) {
+                this.previewVoxel.position.set(coords.x * this.VS + 0.5, coords.y * this.VS, coords.z * this.VS + 0.5);
+            } else {
+                this.previewVoxel.position.set(coords.x * this.VS + 0.5, coords.y * this.VS + 0.5, coords.z * this.VS + 0.5);
+            }
+            
             const isDelete = this.currentMode === 'DELETE';
             this.previewVoxel.material.opacity = isDelete ? 0.4 : 0.5;
             const previewColor = isDelete ? 0xff0000 : this.currentColor;
@@ -3148,13 +3499,14 @@ isBedFace: function(faceKey) {
             });
             this.addHistoryStep({type: 'MODIFY', changes: changes});
         }
-        // Dispose of children in both groups
+        // Dispose of children in all groups
         this.originalVoxelsGroup.children.forEach(v => {
             if (v.geometry) v.geometry.dispose();
             if (v.material) v.material.dispose();
         });
         this.originalVoxelsGroup.remove(...this.originalVoxelsGroup.children);
         this.disposeRoundedPreview();
+        this.disposeBrickPreview(); // ADDED
         
         this.voxels.clear();
         this.currentModelId = null; // Clear model ID on clear
@@ -3207,7 +3559,7 @@ isBedFace: function(faceKey) {
         this.cam.lookAt(size / 2, size / 2, size / 2);
         if (this.euler) this.euler.setFromQuaternion(this.cam.quaternion, 'YXZ');
     },
-    
+     
     updateModeUI: function() {
         const modeInfo = this.Modes[this.currentMode];
         document.getElementById('current-mode').textContent = `Mode: ${modeInfo.name}`;
@@ -3377,6 +3729,7 @@ isBedFace: function(faceKey) {
             templateImageAxis: this.templateImageAxis,
             isRoundedPreviewEnabled: this.isRoundedPreviewEnabled, // NEW: Include rounding state
             previewRoundnessFactor: this.previewRoundnessFactor,   // NEW: Include rounding state
+            isBrickPreviewEnabled: this.isBrickPreviewEnabled,     // NEW: Include brick state
         };
         const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
         const url = URL.createObjectURL(blob);
@@ -3397,6 +3750,7 @@ isBedFace: function(faceKey) {
             });
             this.originalVoxelsGroup.remove(...this.originalVoxelsGroup.children);
             this.disposeRoundedPreview();
+            this.disposeBrickPreview(); // ADDED
             this.voxels.clear();
             
             this.GRID = data.gridSize || this.GRID_DEFAULT;
@@ -3404,9 +3758,15 @@ isBedFace: function(faceKey) {
             this.activeDrawingLevel = data.activeDrawingLevel || { x: 0, y: 0, z: 0 };
             this.templateImageAxis = data.templateImageAxis || 'z';
             
-            // Load rounding state if available
+            // Load rounding and brick state
             this.isRoundedPreviewEnabled = data.isRoundedPreviewEnabled ?? (localStorage.getItem('isRoundedPreviewEnabled') === 'true');
             this.previewRoundnessFactor = data.previewRoundnessFactor ?? parseFloat(localStorage.getItem('previewRoundnessFactor') || 0.25);
+            this.isBrickPreviewEnabled = data.isBrickPreviewEnabled ?? (localStorage.getItem('isBrickPreviewEnabled') === 'true'); // ADDED
+
+            // Ensure mutual exclusivity
+            if (this.isBrickPreviewEnabled) {
+                this.isRoundedPreviewEnabled = false;
+            }
 
 
             this.colorHistory = [];
@@ -3458,7 +3818,7 @@ isBedFace: function(faceKey) {
     // --- EXPORT FUNCTIONS ---
     
     /**
-     * Builds the complete merged mesh for the model based on rounding options.
+     * Builds the complete merged mesh for the model based on rounding and brick options.
      * @param {boolean} isRounded - Whether to generate a rounded (filleted) mesh.
      * @returns {THREE.Mesh|null} The merged mesh or null if empty.
      */
@@ -3471,20 +3831,27 @@ isBedFace: function(faceKey) {
         const H = s * 0.5;
         const ROUNDNESS = isRounded ? parseFloat(document.getElementById('filletRoundnessSlider').value) : 0;
         const has = (x,y,z) => this.voxels.has(this.key(x,y,z));
+        
+        const isBrick = document.querySelector('input[name="exportBrickType"]:checked').value === 'on'; // ADDED
 
         this.voxels.forEach((v, packedKey) => {
             const [x, y, z] = this.parseKey(packedKey);
             if (y < 0) return;
 
             let g;
-            if (isRounded) {
+            if (isBrick) {
+                // Clone and translate the brick geometry
+                g = brickVoxelGeometry.clone();
+                // Position the BRICK's base (Y=0) at the grid's Y coordinate (y * s)
+                g.translate(x * s + H, y * s, z * s + H);
+            } else if (isRounded) {
                 const neighbors = {
                     px: has(x+1,y,z), nx: has(x-1,y,z),
                     py: has(x,y+1,z), ny: has(x,y-1,z),
                     pz: has(x,y,z+1), nz: has(x,y,z-1),
                 };
                 g = createRoundedVoxelGeometry(new THREE.Vector3(x,y,z), ROUNDNESS, s, neighbors);
-            } else {
+            } else { // Standard blocky
                 g = new THREE.BoxGeometry(s, s, s);
                 g.translate(x * s + H, y * s + H, z * s + H);
             }
@@ -3514,8 +3881,13 @@ isBedFace: function(faceKey) {
             return;
         }
         this.showToast('Exporting...', 'Generating STL file...', 'info');
+        
+        const isBrick = document.querySelector('input[name="exportBrickType"]:checked').value === 'on'; // ADDED
 
-        const mergedMesh = this.buildMergedMesh(isRounded);
+        // If Brick is ON, ignore Rounded setting for STL naming/logic consistency
+        const useRounded = isRounded && !isBrick; 
+
+        const mergedMesh = this.buildMergedMesh(useRounded);
         if (!mergedMesh) return;
         
         const exporter = new THREE.STLExporter();
@@ -3533,9 +3905,16 @@ isBedFace: function(faceKey) {
         mergedMesh.geometry.dispose();
 
         const blob = new Blob([stlData], { type: 'application/octet-stream' });
+        
+        // MODIFIED FILENAME LOGIC
+        let filename = 'voxel-model-blocky.stl';
+        if (isBrick) {
+             filename = 'voxel-model-brick.stl';
+        } else if (useRounded) {
+             filename = `voxel-model-rounded_${parseFloat(document.getElementById('filletRoundnessSlider').value).toFixed(2)}.stl`;
+        }
+        
         const url = URL.createObjectURL(blob);
-        const filename = `voxel-model-${isRounded ? `rounded_${parseFloat(document.getElementById('filletRoundnessSlider').value).toFixed(2)}` : 'blocky'}.stl`;
-
         const a = document.createElement('a');
         a.href = url; a.download = filename; a.click();
         URL.revokeObjectURL(url);
@@ -3553,19 +3932,17 @@ isBedFace: function(faceKey) {
              return;
         }
         
+        const isBrick = document.querySelector('input[name="exportBrickType"]:checked').value === 'on'; // ADDED
+        const useRounded = isRounded && !isBrick; // Only rounded if not brick
+
         // Polyslice requires geometry to be centered/zeroed for slicing, 
         // so we must build the mesh first.
-        const mergedMesh = this.buildMergedMesh(isRounded);
+        const mergedMesh = this.buildMergedMesh(useRounded);
         if (!mergedMesh) return;
 
         const scaleFactor = (scaleUnit === 'cm') ? 10 : 1;
         
-        // Polyslice assumes Z-Up, which is correct for 3D printing.
-        // We will pass the merged mesh and let Polyslice handle the slicing process.
-        
         try {
-            // Note: Polyslice slices based on the mesh's current position/rotation/scale.
-            // We scale it using a simple matrix application before slicing.
             const gcode = await PolysliceWrapper.generateGCode(
                 mergedMesh, 
                 scaleFactor, 
@@ -3575,7 +3952,14 @@ isBedFace: function(faceKey) {
             if (gcode) {
                 const blob = new Blob([gcode], { type: 'text/plain' });
                 const url = URL.createObjectURL(blob);
-                const filename = `voxel-print-${isRounded ? `rounded` : 'blocky'}.gcode`;
+                
+                // MODIFIED FILENAME LOGIC
+                let filename = 'voxel-print-blocky.gcode';
+                if (isBrick) {
+                    filename = 'voxel-print-brick.gcode';
+                } else if (useRounded) {
+                    filename = 'voxel-print-rounded.gcode';
+                }
 
                 const a = document.createElement('a');
                 a.href = url; a.download = filename; a.click();
@@ -3627,19 +4011,35 @@ isBedFace: function(faceKey) {
     // State
     roundedPreviewDirty: false,
     _roundedRebuildRAF: null,
+    brickPreviewDirty: false,
+    _brickRebuildRAF: null,
 
     onModelChanged(reason = '') {
-      // collapse multiple mutations into one rebuild
-      if (!this.isRoundedPreviewEnabled) return;
-      this.roundedPreviewDirty = true;
-      if (this._roundedRebuildRAF) return;
-      this._roundedRebuildRAF = requestAnimationFrame(() => {
-        this._roundedRebuildRAF = null;
-        if (!this.roundedPreviewDirty) return;
-        this.roundedPreviewDirty = false;
-        try { this.rebuildRoundedPreview(); }
-        catch (e) { console.warn('Rounded rebuild failed (' + reason + '):', e); }
-      });
+      // Rebuild Rounded Preview
+      if (this.isRoundedPreviewEnabled) {
+          this.roundedPreviewDirty = true;
+          if (this._roundedRebuildRAF) return;
+          this._roundedRebuildRAF = requestAnimationFrame(() => {
+            this._roundedRebuildRAF = null;
+            if (!this.roundedPreviewDirty) return;
+            this.roundedPreviewDirty = false;
+            try { this.rebuildRoundedPreview(); }
+            catch (e) { console.warn('Rounded rebuild failed (' + reason + '):', e); }
+          });
+      }
+      
+      // Rebuild Brick Preview
+      if (this.isBrickPreviewEnabled) {
+          this.brickPreviewDirty = true;
+          if (this._brickRebuildRAF) return;
+          this._brickRebuildRAF = requestAnimationFrame(() => {
+            this._brickRebuildRAF = null;
+            if (!this.brickPreviewDirty) return;
+            this.brickPreviewDirty = false;
+            try { this.rebuildBrickPreview(); }
+            catch (e) { console.warn('Brick rebuild failed (' + reason + '):', e); }
+          });
+      }
     },
 
     rebuildSceneFromVoxels: function () {
@@ -3650,7 +4050,9 @@ isBedFace: function(faceKey) {
         });
         this.originalVoxelsGroup.remove(...this.originalVoxelsGroup.children);
         this.disposeRoundedPreview(); // Always dispose rounded preview
-
+        this.disposeBrickPreview();  // ADDED
+        
+        // Use the shared plain cube geometry for the base rendering group
         this.voxels.forEach((voxelData, key) => {
             const [x, y, z] = this.parseKey(key);
             
@@ -3661,6 +4063,7 @@ isBedFace: function(faceKey) {
                 this.getMaterial(voxelData.color)
             );
             
+            // Plain cube is centered at 0.5
             mesh.position.set(x * this.VS + 0.5, y * this.VS + 0.5, z * this.VS + 0.5);
             mesh.castShadow = true;
             mesh.receiveShadow = true;
@@ -3671,12 +4074,15 @@ isBedFace: function(faceKey) {
         });
         
         // 1. Ensure the correct group is visible
-        this.originalVoxelsGroup.visible = !this.isRoundedPreviewEnabled;
-        this.roundedVoxelsGroup.visible = this.isRoundedPreviewEnabled;
+        this.originalVoxelsGroup.visible = !this.isRoundedPreviewEnabled && !this.isBrickPreviewEnabled;
+        this.roundedVoxelsGroup.visible = this.isRoundedPreviewEnabled && !this.isBrickPreviewEnabled;
+        this.brickVoxelsGroup.visible = this.isBrickPreviewEnabled;
 
-        // 2. Rebuild the rounded preview if enabled
+        // 2. Rebuild the previews if enabled
         if (this.isRoundedPreviewEnabled) {
             this.rebuildRoundedPreview();
+        } else if (this.isBrickPreviewEnabled) { // ADDED
+            this.rebuildBrickPreview();
         }
     },
 
@@ -3723,7 +4129,7 @@ isBedFace: function(faceKey) {
                     }
                 });
                 
-                if (this.isRoundedPreviewEnabled) this.rebuildRoundedPreview();
+                this.updatePreviewVisibility(); // MODIFIED
                 break;
                 
             case 'SELECT':
@@ -3768,7 +4174,7 @@ isBedFace: function(faceKey) {
                     }
                 });
                 
-                if (this.isRoundedPreviewEnabled) this.rebuildRoundedPreview();
+                this.updatePreviewVisibility(); // MODIFIED
                 break;
                 
             case 'SELECT':
@@ -3838,6 +4244,7 @@ isBedFace: function(faceKey) {
         this.templateImageAxis = 'z';
         localStorage.setItem('isRoundedPreviewEnabled', 'false');
         localStorage.setItem('previewRoundnessFactor', '0.25');
+        localStorage.setItem('isBrickPreviewEnabled', 'false'); // ADDED
 
         Object.keys(this.controls).forEach(key => localStorage.setItem(key, this.controls[key]));
         localStorage.setItem('voxelEditorGridSize', this.GRID);
@@ -3848,6 +4255,7 @@ isBedFace: function(faceKey) {
         localStorage.setItem('templateImageAxis', this.templateImageAxis);
         
         this.isRoundedPreviewEnabled = false;
+        this.isBrickPreviewEnabled = false; // ADDED
         this.previewRoundnessFactor = 0.25;
 
         this.updateAllControlInputs();
@@ -3869,6 +4277,8 @@ isBedFace: function(faceKey) {
         if (previewToggle) previewToggle.checked = this.isRoundedPreviewEnabled;
         const previewSlider = document.getElementById('previewRoundnessSlider');
         if (previewSlider) previewSlider.value = this.previewRoundnessFactor;
+        const brickToggle = document.getElementById('brickPreviewToggle');
+        if (brickToggle) brickToggle.checked = this.isBrickPreviewEnabled; // ADDED
 
         if (this.isMobile) {
             document.getElementById('mobile-color-picker').value = this.currentColor;
@@ -4034,6 +4444,9 @@ isBedFace: function(faceKey) {
                 templateImageData: this.templateImageData,
                 templateImagePinnedY: this.templateImagePinnedY,
                 templateImageAxis: this.templateImageAxis,
+                isRoundedPreviewEnabled: this.isRoundedPreviewEnabled,
+                previewRoundnessFactor: this.previewRoundnessFactor,
+                isBrickPreviewEnabled: this.isBrickPreviewEnabled, // ADDED
             };
             localStorage.setItem('voxelshaper_autosave', JSON.stringify(data));
         } catch (e) {
@@ -4131,5 +4544,4 @@ isBedFace: function(faceKey) {
 
 document.addEventListener('DOMContentLoaded', () => VoxelApp.init());
 </script>
-</body>
-</html>
+</body></html>
