@@ -3185,54 +3185,96 @@ isBedFace: function(faceKey) {
         });
     },
 
-    getFaceTarget: function (clientX, clientY) {
-        const hit = this.getFaceAt(clientX, clientY);
-        if (!hit) return null;
-        let voxelKey = null;
-        let nrm = null;
+  getFaceTarget: function (clientX, clientY) {
+  // --- prerequisites it uses from VoxelApp ---
+  // this.cvs, this.cam, this.scene, this.originalVoxelsGroup, this.groundPlaneMesh,
+  // this.VS, this.GRID, this.key(x,y,z), this.getNormalIndex(Vector3)
 
-        if (hit.object === this.groundPlaneMesh || (hit.object.userData && hit.object.userData.isFoundation)) {
-            // --- Foundation Hit ---
-            nrm = new THREE.Vector3(0, 1, 0); // Always +Y for ground plane
-            const worldPos = hit.point.clone();
-            const x = Math.floor(worldPos.x / this.VS);
-            const z = Math.floor(worldPos.z / this.VS);
-            if (x < 0 || x >= this.GRID || z < 0 || z >= this.GRID) return null;
-            voxelKey = this.key(x, -1, z); 
-        } else {
-            // --- Voxel Hit (guaranteed to be an individual block mesh now) ---
-            const voxelData = this.findVoxelDataByMesh(hit.object);
-            if (!voxelData) return null;
-            const basePos = hit.object.position;
-            const x = Math.round(basePos.x / this.VS - 0.5);
-            const y = Math.round(basePos.y / this.VS - 0.5);
-            const z = Math.round(basePos.z / this.VS - 0.5);
-            voxelKey = this.key(x, y, z);
+  // Make sure we have a raycaster
+  if (!this.raycaster) this.raycaster = new THREE.Raycaster();
 
-            // Get the face normal, transform it by the object's world matrix
-            nrm = hit.face.normal.clone();
-            const nMat = new THREE.Matrix3().getNormalMatrix(hit.object.matrixWorld);
-            nrm.applyNormalMatrix(nMat).normalize();
+  // Mouse → NDC
+  const rect = this.cvs.getBoundingClientRect();
+  const mouse = new THREE.Vector2(
+    ((clientX - rect.left) / this.cvs.clientWidth) * 2 - 1,
+    -((clientY - rect.top) / this.cvs.clientHeight) * 2 + 1
+  );
+  this.raycaster.setFromCamera(mouse, this.cam);
 
-            // Snap the normal to the nearest major axis
-            const ax = Math.abs(nrm.x), ay = Math.abs(nrm.y), az = Math.abs(nrm.z);
-            if (ax >= ay && ax >= az) nrm.set(Math.sign(nrm.x), 0, 0);
-            else if (ay >= ax && ay >= az) nrm.set(0, Math.sign(nrm.y), 0);
-            else nrm.set(0, 0, Math.sign(nrm.z));
+  // Build pick target list (prefer original voxel meshes + bed)
+  let targets = [];
+  if (this.originalVoxelsGroup && this.originalVoxelsGroup.children?.length) {
+    targets = targets.concat(this.originalVoxelsGroup.children);
+  } else if (this.scene) {
+    // fallback: whole scene (will still filter previews below)
+    targets = targets.concat(this.scene.children);
+  }
+  if (this.groundPlaneMesh) targets.push(this.groundPlaneMesh);
 
-            // Offset position OUT of the target voxel along the normal (for ADD mode)
-            // or IN to the target voxel (for PAINT/DELETE mode)
-            const offset = (this.currentMode === 'PAINT' || this.currentMode === 'DELETE') ? -(0.5 * this.VS - 0.001) : +(0.5 * this.VS + 0.001);
-            pos.addScaledVector(normal, offset);
-        }
+  // Never pick preview/aux objects
+  targets = targets.filter(o => o && o.visible && !o.userData?.isPreview && !o.userData?.skipPick);
 
-        const normalIndex = this.getNormalIndex(nrm);
-        return {
-          faceKey: `${voxelKey}:${normalIndex}`,
-          normal: nrm,
-          intersectionPoint: hit.point
-        };
-    },
+  const hits = this.raycaster.intersectObjects(targets, true);
+  if (!hits.length) return null;
+  const hit = hits[0];
+
+  // If we hit the bed/foundation, return a synthetic face on top of y=-1
+  if (hit.object === this.groundPlaneMesh || hit.object.userData?.isFoundation) {
+    const x = Math.floor(hit.point.x / this.VS);
+    const z = Math.floor(hit.point.z / this.VS);
+    if (x < 0 || x >= this.GRID || z < 0 || z >= this.GRID) return null;
+
+    const normal = new THREE.Vector3(0, 1, 0);
+    const faceKey = `${this.key(x, -1, z)}:${this.getNormalIndex(normal)}`;
+    return { object: hit.object, point: hit.point.clone(), normal, faceKey };
+  }
+
+  // Determine voxel indices of the clicked cube
+  let vx, vy, vz;
+  if (Number.isInteger(hit.object.userData?.vx) &&
+      Number.isInteger(hit.object.userData?.vy) &&
+      Number.isInteger(hit.object.userData?.vz)) {
+    // Preferred: stored on the mesh
+    vx = hit.object.userData.vx;
+    vy = hit.object.userData.vy;
+    vz = hit.object.userData.vz;
+  } else {
+    // Fallback: derive from world position assuming cube centers are at (x+0.5,y+0.5,z+0.5)*VS
+    const worldPos = new THREE.Vector3().setFromMatrixPosition(hit.object.matrixWorld);
+    vx = Math.round(worldPos.x / this.VS - 0.5);
+    vy = Math.round(worldPos.y / this.VS - 0.5);
+    vz = Math.round(worldPos.z / this.VS - 0.5);
+  }
+  const voxelKey = this.key(vx, vy, vz);
+
+  // Figure out the face normal (robust for indexed/non-indexed geo)
+  let n = hit.face?.normal ? hit.face.normal.clone() : null;
+  if (!n) {
+    const geom = hit.object.geometry;
+    const posAttr = geom.getAttribute('position');   // <-- fixes "pos is not defined"
+    const indexArr = geom.index ? geom.index.array : null;
+    const tri = hit.faceIndex * 3;
+    const a = indexArr ? indexArr[tri]   : tri;
+    const b = indexArr ? indexArr[tri+1] : tri+1;
+    const c = indexArr ? indexArr[tri+2] : tri+2;
+    const va = new THREE.Vector3().fromBufferAttribute(posAttr, a);
+    const vb = new THREE.Vector3().fromBufferAttribute(posAttr, b);
+    const vc = new THREE.Vector3().fromBufferAttribute(posAttr, c);
+    n = vb.clone().sub(va).cross(vc.clone().sub(va)).normalize();
+  }
+
+  // Transform normal to world space and snap to principal axis
+  const nMat = new THREE.Matrix3().getNormalMatrix(hit.object.matrixWorld);
+  n.applyNormalMatrix(nMat).normalize();
+  const ax = Math.abs(n.x), ay = Math.abs(n.y), az = Math.abs(n.z);
+  if (ax >= ay && ax >= az) n.set(Math.sign(n.x), 0, 0);
+  else if (ay >= ax && ay >= az) n.set(0, Math.sign(n.y), 0);
+  else n.set(0, 0, Math.sign(n.z));
+
+  const faceKey = `${voxelKey}:${this.getNormalIndex(n)}`;
+  return { object: hit.object, point: hit.point.clone(), normal: n, faceKey };
+},
+
 
    
     updateExtrudePreview: function(distance) {
