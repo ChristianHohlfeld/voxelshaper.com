@@ -2162,7 +2162,7 @@ onPointerDown: function (e) {
           const target = this.getFaceTarget(this.mouseState.downX, this.mouseState.downY);
           this.mouseState.selectionDragStartTarget = target;
 
-          // No valid face under finger → just enter interaction without extrusion
+          // Still nothing? then don't extrude, but do nothing crashy either.
           if (!target) {
             this.mouseState.isExtruding = false;
             return;
@@ -2170,7 +2170,6 @@ onPointerDown: function (e) {
 
           // Seed a single-face selection if it's not selected yet
           if (!this.selectedFaces || !this.selectedFaces.has(target.faceKey)) {
-            // Use existing selection routine so visuals/history stay consistent
             const fakeEvt = {
               clientX: this.mouseState.downX,
               clientY: this.mouseState.downY,
@@ -2190,7 +2189,7 @@ onPointerDown: function (e) {
             if (this.cam && this.cam.getWorldDirection) this.cam.getWorldDirection(viewN);
             viewN.negate();
 
-            // Safe coplanar anchor: prefer intersectionPoint, fall back to face center offset by normal
+            // Safe coplanar anchor: prefer intersectionPoint; otherwise face center offset by normal
             const anchor =
               (target.intersectionPoint && target.intersectionPoint.clone()) ||
               new THREE.Vector3(
@@ -2264,8 +2263,6 @@ onPointerDown: function (e) {
     this.cvs.requestPointerLock();
   }
 },
-
-    
     onPointerUp: function(e) {
         if (!this.isPointerDown) return;
         
@@ -3108,96 +3105,139 @@ isBedFace: function(faceKey) {
             this.selectionFaceMeshes.set(faceKey, plane);
         });
     },
+getFaceTarget: function (clientX, clientY) {
+  // Lazily create shared raycaster + scratch vectors
+  if (!this._raycaster) this._raycaster = new THREE.Raycaster();
+  if (!this._ndc) this._ndc = new THREE.Vector2();
 
-  getFaceTarget: function (clientX, clientY) {
-  // --- prerequisites it uses from VoxelApp ---
-  // this.cvs, this.cam, this.scene, this.originalVoxelsGroup, this.groundPlaneMesh,
-  // this.VS, this.GRID, this.key(x,y,z), this.getNormalIndex(Vector3)
-
-  // Make sure we have a raycaster
-  if (!this.raycaster) this.raycaster = new THREE.Raycaster();
-
-  // Mouse → NDC
   const rect = this.cvs.getBoundingClientRect();
-  const mouse = new THREE.Vector2(
-    ((clientX - rect.left) / this.cvs.clientWidth) * 2 - 1,
-    -((clientY - rect.top) / this.cvs.clientHeight) * 2 + 1
-  );
-  this.raycaster.setFromCamera(mouse, this.cam);
+  this._ndc.x = ((clientX - rect.left) / rect.width) * 2 - 1;
+  this._ndc.y = -((clientY - rect.top) / rect.height) * 2 + 1;
 
-  // Build pick target list (prefer original voxel meshes + bed)
-  let targets = [];
-  if (this.originalVoxelsGroup && this.originalVoxelsGroup.children?.length) {
-    targets = targets.concat(this.originalVoxelsGroup.children);
-  } else if (this.scene) {
-    // fallback: whole scene (will still filter previews below)
-    targets = targets.concat(this.scene.children);
-  }
-  if (this.groundPlaneMesh) targets.push(this.groundPlaneMesh);
+  this._raycaster.setFromCamera(this._ndc, this.cam);
 
-  // Never pick preview/aux objects
-  targets = targets.filter(o => o && o.visible && !o.userData?.isPreview && !o.userData?.skipPick);
+  // 1) Try real geometry (blocky / rounded / brick preview), whichever is visible
+  const pickRoots = [];
+  if (this.originalVoxelsGroup && this.originalVoxelsGroup.visible) pickRoots.push(this.originalVoxelsGroup);
+  if (this.roundedVoxelsGroup  && this.roundedVoxelsGroup.visible)  pickRoots.push(this.roundedVoxelsGroup);
+  if (this.brickVoxelsGroup    && this.brickVoxelsGroup.visible)    pickRoots.push(this.brickVoxelsGroup);
 
-  const hits = this.raycaster.intersectObjects(targets, true);
-  if (!hits.length) return null;
-  const hit = hits[0];
+  if (pickRoots.length) {
+    const hits = this._raycaster.intersectObjects(pickRoots, true);
+    if (hits.length) {
+      const hit = hits[0];
 
-  // If we hit the bed/foundation, return a synthetic face on top of y=-1
-  if (hit.object === this.groundPlaneMesh || hit.object.userData?.isFoundation) {
-    const x = Math.floor(hit.point.x / this.VS);
-    const z = Math.floor(hit.point.z / this.VS);
-    if (x < 0 || x >= this.GRID || z < 0 || z >= this.GRID) return null;
+      // World-space point and world-space face normal
+      const p = hit.point.clone();
+      const n = hit.face
+        ? hit.face.normal.clone().transformDirection(hit.object.matrixWorld)
+        : new THREE.Vector3(0, 1, 0);
 
-    const normal = new THREE.Vector3(0, 1, 0);
-    const faceKey = `${this.key(x, -1, z)}:${this.getNormalIndex(normal)}`;
-    return { object: hit.object, point: hit.point.clone(), normal, faceKey };
-  }
+      // Snap normal to principal axis
+      const ax = Math.abs(n.x), ay = Math.abs(n.y), az = Math.abs(n.z);
+      const normal = (ax > ay && ax > az)
+        ? new THREE.Vector3(Math.sign(n.x), 0, 0)
+        : (ay > ax && ay > az)
+          ? new THREE.Vector3(0, Math.sign(n.y), 0)
+          : new THREE.Vector3(0, 0, Math.sign(n.z));
 
-  // Determine voxel indices of the clicked cube
-  let vx, vy, vz;
-  if (Number.isInteger(hit.object.userData?.vx) &&
-      Number.isInteger(hit.object.userData?.vy) &&
-      Number.isInteger(hit.object.userData?.vz)) {
-    // Preferred: stored on the mesh
-    vx = hit.object.userData.vx;
-    vy = hit.object.userData.vy;
-    vz = hit.object.userData.vz;
-  } else {
-    // Fallback: derive from world position assuming cube centers are at (x+0.5,y+0.5,z+0.5)*VS
-    const worldPos = new THREE.Vector3().setFromMatrixPosition(hit.object.matrixWorld);
-    vx = Math.round(worldPos.x / this.VS - 0.5);
-    vy = Math.round(worldPos.y / this.VS - 0.5);
-    vz = Math.round(worldPos.z / this.VS - 0.5);
-  }
-  const voxelKey = this.key(vx, vy, vz);
+      // Derive voxel indices from world coords
+      let vx = Math.floor(p.x / this.VS);
+      let vy = Math.floor(p.y / this.VS);
+      let vz = Math.floor(p.z / this.VS);
 
-  // Figure out the face normal (robust for indexed/non-indexed geo)
-  let n = hit.face?.normal ? hit.face.normal.clone() : null;
-  if (!n) {
-    const geom = hit.object.geometry;
-    const posAttr = geom.getAttribute('position');   // <-- fixes "pos is not defined"
-    const indexArr = geom.index ? geom.index.array : null;
-    const tri = hit.faceIndex * 3;
-    const a = indexArr ? indexArr[tri]   : tri;
-    const b = indexArr ? indexArr[tri+1] : tri+1;
-    const c = indexArr ? indexArr[tri+2] : tri+2;
-    const va = new THREE.Vector3().fromBufferAttribute(posAttr, a);
-    const vb = new THREE.Vector3().fromBufferAttribute(posAttr, b);
-    const vc = new THREE.Vector3().fromBufferAttribute(posAttr, c);
-    n = vb.clone().sub(va).cross(vc.clone().sub(va)).normalize();
+      // Clamp to grid
+      vx = Math.max(0, Math.min(this.GRID - 1, vx));
+      vy = Math.max(0, Math.min(this.GRID - 1, vy));
+      vz = Math.max(0, Math.min(this.GRID - 1, vz));
+
+      // Face index mapping: +X 0, -X 1, +Y 2, -Y 3, +Z 4, -Z 5
+      const normalIdx =
+        normal.x > 0 ? 0 :
+        normal.x < 0 ? 1 :
+        normal.y > 0 ? 2 :
+        normal.y < 0 ? 3 :
+        normal.z > 0 ? 4 : 5;
+
+      const faceKey = `${vx},${vy},${vz}:${normalIdx}`;
+
+      return {
+        x: vx, y: vy, z: vz,
+        normal,
+        faceKey,
+        intersectionPoint: p
+      };
+    }
   }
 
-  // Transform normal to world space and snap to principal axis
-  const nMat = new THREE.Matrix3().getNormalMatrix(hit.object.matrixWorld);
-  n.applyNormalMatrix(nMat).normalize();
-  const ax = Math.abs(n.x), ay = Math.abs(n.y), az = Math.abs(n.z);
-  if (ax >= ay && ax >= az) n.set(Math.sign(n.x), 0, 0);
-  else if (ay >= ax && ay >= az) n.set(0, Math.sign(n.y), 0);
-  else n.set(0, 0, Math.sign(n.z));
+  // 2) Nothing real hit → intersect current drawing plane to synthesize a face
+  // Build plane from currentDrawingAxis + activeDrawingLevel
+  const plane = new THREE.Plane();
+  let planePoint = new THREE.Vector3();
+  let planeNormal = new THREE.Vector3();
 
-  const faceKey = `${voxelKey}:${this.getNormalIndex(n)}`;
-  return { object: hit.object, point: hit.point.clone(), normal: n, faceKey };
+  const L = this.VS; // world units per cell
+
+  if (this.currentDrawingAxis === 'y') {
+    planeNormal.set(0, 1, 0);
+    planePoint.set(0, this.activeDrawingLevel.y * L, 0);
+  } else if (this.currentDrawingAxis === 'x') {
+    planeNormal.set(1, 0, 0);
+    planePoint.set(this.activeDrawingLevel.x * L, 0, 0);
+  } else { // 'z'
+    planeNormal.set(0, 0, 1);
+    planePoint.set(0, 0, this.activeDrawingLevel.z * L);
+  }
+
+  plane.setFromNormalAndCoplanarPoint(planeNormal, planePoint);
+
+  const p = new THREE.Vector3();
+  if (!this._raycaster.ray.intersectPlane(plane, p)) {
+    return null; // ray parallel or pointing away
+  }
+
+  // Convert intersection to voxel indices on that plane
+  let vx, vy, vz, normalIdx;
+
+  if (this.currentDrawingAxis === 'y') {
+    vx = Math.floor(p.x / L);
+    vy = Math.max(0, Math.min(this.GRID - 1, this.activeDrawingLevel.y)); // locked to plane level
+    vz = Math.floor(p.z / L);
+    normalIdx = 2; // +Y
+  } else if (this.currentDrawingAxis === 'x') {
+    vx = Math.max(0, Math.min(this.GRID - 1, this.activeDrawingLevel.x));
+    vy = Math.floor(p.y / L);
+    vz = Math.floor(p.z / L);
+    normalIdx = 0; // +X
+  } else { // 'z'
+    vx = Math.floor(p.x / L);
+    vy = Math.floor(p.y / L);
+    vz = Math.max(0, Math.min(this.GRID - 1, this.activeDrawingLevel.z));
+    normalIdx = 4; // +Z
+  }
+
+  // Clamp to grid bounds
+  vx = Math.max(0, Math.min(this.GRID - 1, vx));
+  vy = Math.max(0, Math.min(this.GRID - 1, vy));
+  vz = Math.max(0, Math.min(this.GRID - 1, vz));
+
+  const faceKey = `${vx},${vy},${vz}:${normalIdx}`;
+  const normal =
+    normalIdx === 0 ? new THREE.Vector3( 1, 0, 0) :
+    normalIdx === 1 ? new THREE.Vector3(-1, 0, 0) :
+    normalIdx === 2 ? new THREE.Vector3( 0, 1, 0) :
+    normalIdx === 3 ? new THREE.Vector3( 0,-1, 0) :
+    normalIdx === 4 ? new THREE.Vector3( 0, 0, 1) :
+                      new THREE.Vector3( 0, 0,-1);
+
+  return {
+    x: vx, y: vy, z: vz,
+    normal,
+    faceKey,
+    intersectionPoint: p
+  };
 },
+
 
 
    
