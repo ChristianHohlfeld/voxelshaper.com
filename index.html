@@ -2124,130 +2124,147 @@ window.addEventListener('keydown', (e) => {
       const targetInfo = this.getRayTargetInfo(this.mouseState.downX, this.mouseState.downY);
       if (targetInfo) this.modifyVoxel(targetInfo.x, targetInfo.y, targetInfo.z, targetInfo.normal);
     },
+onPointerDown: function (e) {
+  if (e.target !== this.cvs) return;
+  e.preventDefault();
 
-   onPointerDown: function (e) {
-    if (e.target !== this.cvs) return;
-    e.preventDefault();
+  // Close any open dropdowns on canvas touch
+  if (document.activeElement && document.activeElement.blur) {
+    document.activeElement.blur();
+  }
 
-    // Close any open dropdowns on canvas touch
-    if (document.activeElement && document.activeElement.blur) {
-        document.activeElement.blur();
-    }
+  this.currentStroke = new Map();
+  this.isPointerDown = true;
+  this.activePointers.set(e.pointerId, { x: e.clientX, y: e.clientY });
 
-    this.currentStroke = new Map();
-    this.isPointerDown = true;
-    this.activePointers.set(e.pointerId, { x: e.clientX, y: e.clientY });
+  if (this.isMobile && this.activePointers.size >= 2 && this.touchState.longPressTimeout) {
+    clearTimeout(this.touchState.longPressTimeout);
+    this.touchState.longPressTimeout = null;
+  }
 
-    if (this.isMobile && this.activePointers.size >= 2 && this.touchState.longPressTimeout) {
-        clearTimeout(this.touchState.longPressTimeout);
-        this.touchState.longPressTimeout = null;
-    }
+  this.mouseState.downX = e.clientX;
+  this.mouseState.downY = e.clientY;
+  this.mouseState.lastX = e.clientX;
+  this.mouseState.lastY = e.clientY;
 
-    this.mouseState.downX = e.clientX;
-    this.mouseState.downY = e.clientY;
-    this.mouseState.lastX = e.clientX;
-    this.mouseState.lastY = e.clientY;
+  // --- Mobile logic ---
+  if (this.isMobile) {
+    if (this.activePointers.size === 1) {
+      this.touchState.longPressTimeout = setTimeout(() => {
+        // start interaction on long-press
+        if (this.hapticOrVisualAt) this.hapticOrVisualAt(this.mouseState.downX, this.mouseState.downY);
+        this.touchState.isInteracting = true;
+        this.touchState.isLookAround = false;
 
-    // --- Mobile Logic ---
-    if (this.isMobile) {
-        if (this.activePointers.size === 1) {
-            this.touchState.longPressTimeout = setTimeout(() => {
-                this.hapticOrVisualAt(this.mouseState.downX, this.mouseState.downY);
-                this.touchState.isInteracting = true;
-                this.touchState.isLookAround = false;
+        if (this.currentMode === 'SELECT') {
+          this.selectionChange.before = new Set(this.selectedFaces);
 
-                if (this.currentMode === 'SELECT') {
-                    this.selectionChange.before = new Set(this.selectedFaces);
+          const target = this.getFaceTarget(this.mouseState.downX, this.mouseState.downY);
+          this.mouseState.selectionDragStartTarget = target;
 
-                    const target = this.getFaceTarget(this.mouseState.downX, this.mouseState.downY);
-                    this.mouseState.selectionDragStartTarget = target;
-
-                    // Only begin extrusion when we have a valid face target AND the face is selected with uniform orientation
-                    if (target && this.selectedFaces && this.selectedFaces.has(target.faceKey)) {
-                        const startNormalIdx = parseInt(target.faceKey.split(':')[1], 10);
-                        const sameOrientation = [...this.selectedFaces].every(k => parseInt(k.split(':')[1], 10) === startNormalIdx);
-                        if (sameOrientation) {
-                            // Build view normal
-                            const viewN = new THREE.Vector3();
-                            if (this.cam && this.cam.getWorldDirection) this.cam.getWorldDirection(viewN);
-                            viewN.negate();
-
-                            // Safe anchor for the plane: prefer the raycast intersectionPoint; otherwise synthesize a center on the face
-                            const anchor = (target.intersectionPoint && target.intersectionPoint.clone()) ||
-                                new THREE.Vector3(
-                                    (target.x + 0.5) * this.VS,
-                                    (target.y + 0.5) * this.VS,
-                                    (target.z + 0.5) * this.VS
-                                ).add(target.normal.clone().multiplyScalar(0.5 * this.VS));
-
-                            this.mouseState.isExtruding = true;
-                            this.mouseState.extrudeNormal = target.normal.clone();
-                            this.mouseState.drawingPlane.setFromNormalAndCoplanarPoint(viewN, anchor);
-                            this.mouseState.dragStartPoint.copy(anchor);
-                        } else {
-                            this.mouseState.isExtruding = false;
-                        }
-                    } else {
-                        // No valid target under pointer → do not begin extrusion
-                        this.mouseState.isExtruding = false;
-                    }
-                } else {
-                    this.mouseState.isModifying = true;
-                }
-            }, this.LONG_PRESS_DURATION);
-        } else if (this.activePointers.size === 3) {
-            this.touchState.isThreeFingerUndoCandidate = true;
-        } else {
-            this.touchState.isThreeFingerUndoCandidate = false;
-        }
-        return;
-    }
-
-    // --- Desktop Logic ---
-    this.mouseState.isModifying = (e.button === 0);
-    this.mouseState.isPanning   = (e.button === 1);
-
-    if (this.mouseState.isModifying && this.currentMode === 'SELECT') {
-        this.selectionChange.before = new Set(this.selectedFaces);
-
-        const target = this.getFaceTarget(e.clientX, e.clientY);
-        this.mouseState.selectionDragStartTarget = target;
-
-        if (target && this.selectedFaces && this.selectedFaces.has(target.faceKey)) {
-            const startNormalIdx = parseInt(target.faceKey.split(':')[1], 10);
-            const sameOrientation = [...this.selectedFaces]
-                .every(k => parseInt(k.split(':')[1], 10) === startNormalIdx);
-
-            if (sameOrientation) {
-                // Build view normal
-                const viewN = new THREE.Vector3();
-                if (this.cam && this.cam.getWorldDirection) this.cam.getWorldDirection(viewN);
-                viewN.negate();
-
-                // Safe anchor for the plane
-                const anchor = (target.intersectionPoint && target.intersectionPoint.clone()) ||
-                    new THREE.Vector3(
-                        (target.x + 0.5) * this.VS,
-                        (target.y + 0.5) * this.VS,
-                        (target.z + 0.5) * this.VS
-                    ).add(target.normal.clone().multiplyScalar(0.5 * this.VS));
-
-                this.mouseState.isExtruding = true;
-                this.mouseState.extrudeNormal = target.normal.clone();
-                this.mouseState.drawingPlane.setFromNormalAndCoplanarPoint(viewN, anchor);
-                this.mouseState.dragStartPoint.copy(anchor);
-            } else {
-                this.mouseState.isExtruding = false;
-            }
-        } else {
-            // No valid target → do not begin extrusion
+          // No valid face under finger → just enter interaction without extrusion
+          if (!target) {
             this.mouseState.isExtruding = false;
+            return;
+          }
+
+          // Seed a single-face selection if it's not selected yet
+          if (!this.selectedFaces || !this.selectedFaces.has(target.faceKey)) {
+            // Use existing selection routine so visuals/history stay consistent
+            const fakeEvt = {
+              clientX: this.mouseState.downX,
+              clientY: this.mouseState.downY,
+              preventDefault: () => {},
+              stopPropagation: () => {}
+            };
+            if (this.handleFaceSelection) this.handleFaceSelection(fakeEvt);
+          }
+
+          // After seeding, decide if we can enter extrusion (must be uniform orientation)
+          const normalIdx = parseInt(target.faceKey.split(':')[1], 10);
+          const sameOrientation = [...this.selectedFaces].every(k => parseInt(k.split(':')[1], 10) === normalIdx);
+
+          if (sameOrientation) {
+            // Build a stable view normal
+            const viewN = new THREE.Vector3();
+            if (this.cam && this.cam.getWorldDirection) this.cam.getWorldDirection(viewN);
+            viewN.negate();
+
+            // Safe coplanar anchor: prefer intersectionPoint, fall back to face center offset by normal
+            const anchor =
+              (target.intersectionPoint && target.intersectionPoint.clone()) ||
+              new THREE.Vector3(
+                (target.x + 0.5) * this.VS,
+                (target.y + 0.5) * this.VS,
+                (target.z + 0.5) * this.VS
+              ).add(target.normal.clone().multiplyScalar(0.5 * this.VS));
+
+            this.mouseState.isExtruding = true;
+            this.mouseState.extrudeNormal = target.normal.clone();
+            this.mouseState.drawingPlane.setFromNormalAndCoplanarPoint(viewN, anchor);
+            this.mouseState.dragStartPoint.copy(anchor);
+          } else {
+            // Not a uniform selection → drag will expand selection, not extrude
+            this.mouseState.isExtruding = false;
+          }
+        } else {
+          // PAINT/DELETE begin modifying on long-press
+          this.mouseState.isModifying = true;
         }
-    } else if (e.button === 2) {
-        this.cvs.focus();
-        this.cvs.requestPointerLock();
+      }, this.LONG_PRESS_DURATION);
+    } else if (this.activePointers.size === 3) {
+      this.touchState.isThreeFingerUndoCandidate = true;
+    } else {
+      this.touchState.isThreeFingerUndoCandidate = false;
     }
+    return; // mobile end
+  }
+
+  // --- Desktop logic ---
+  this.mouseState.isModifying = (e.button === 0);
+  this.mouseState.isPanning   = (e.button === 1);
+
+  if (this.mouseState.isModifying && this.currentMode === 'SELECT') {
+    this.selectionChange.before = new Set(this.selectedFaces);
+
+    const target = this.getFaceTarget(e.clientX, e.clientY);
+    this.mouseState.selectionDragStartTarget = target;
+
+    if (target && this.selectedFaces && this.selectedFaces.has(target.faceKey)) {
+      const startNormalIdx = parseInt(target.faceKey.split(':')[1], 10);
+      const sameOrientation = [...this.selectedFaces]
+        .every(k => parseInt(k.split(':')[1], 10) === startNormalIdx);
+
+      if (sameOrientation) {
+        const viewN = new THREE.Vector3();
+        if (this.cam && this.cam.getWorldDirection) this.cam.getWorldDirection(viewN);
+        viewN.negate();
+
+        const anchor =
+          (target.intersectionPoint && target.intersectionPoint.clone()) ||
+          new THREE.Vector3(
+            (target.x + 0.5) * this.VS,
+            (target.y + 0.5) * this.VS,
+            (target.z + 0.5) * this.VS
+          ).add(target.normal.clone().multiplyScalar(0.5 * this.VS));
+
+        this.mouseState.isExtruding = true;
+        this.mouseState.extrudeNormal = target.normal.clone();
+        this.mouseState.drawingPlane.setFromNormalAndCoplanarPoint(viewN, anchor);
+        this.mouseState.dragStartPoint.copy(anchor);
+      } else {
+        this.mouseState.isExtruding = false;
+      }
+    } else {
+      // Not clicking an already selected face → start selection drag instead of extrusion
+      this.mouseState.isExtruding = false;
+    }
+  } else if (e.button === 2) {
+    this.cvs.focus();
+    this.cvs.requestPointerLock();
+  }
 },
+
     
     onPointerUp: function(e) {
         if (!this.isPointerDown) return;
