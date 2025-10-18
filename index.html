@@ -2263,6 +2263,182 @@ onPointerDown: function (e) {
     this.cvs.requestPointerLock();
   }
 },
+    onPointerMove: function (e) {
+    if (!this.isPointerDown) return;
+    
+    e.preventDefault();
+    const rect = this.cvs.getBoundingClientRect();
+
+    // --- Multi-touch (Desktop/Mobile) ---
+    if (this.activePointers.size >= 2) {
+        let p1 = null, p2 = null;
+        const pointers = Array.from(this.activePointers.values());
+        if (pointers.length >= 2) {
+            p1 = pointers[0];
+            p2 = pointers[1];
+        }
+
+        if (p1 && p2) {
+            const dx = e.clientX - this.mouseState.lastX;
+            const dy = e.clientY - this.mouseState.lastY;
+
+            const dist = Math.hypot(p1.x - p2.x, p1.y - p2.y);
+            const center = { x: (p1.x + p2.x) / 2, y: (p1.y + p2.y) / 2 };
+
+            if (this.touchState.lastPinchDist !== null) {
+                const pinchDelta = dist - this.touchState.lastPinchDist;
+                const centerDeltaX = center.x - this.touchState.lastPinchCenter.x;
+                const centerDeltaY = center.y - this.touchState.lastPinchCenter.y;
+                
+                // Zoom
+                let zoomAmount = pinchDelta * 0.1 * this.PINCH_ZOOM_MULT;
+                if (this.controls.invertZoom) zoomAmount *= -1;
+                this.cam.position.addScaledVector(this.cam.getWorldDirection(new THREE.Vector3()), zoomAmount);
+
+                // Pan (Strafe)
+                const panX = (this.controls.invertStrafeX ? -1 : 1) * centerDeltaX * this.PAN_SPEED * 0.5;
+                const panY = (this.controls.invertStrafeY ? -1 : 1) * centerDeltaY * this.PAN_SPEED * 0.5;
+                const worldPan = new THREE.Vector3(panX, panY, 0).applyQuaternion(this.cam.quaternion);
+                this.cam.position.add(worldPan);
+
+                this.mouseState.isPanning = true;
+                this.mouseState.isDragging = true;
+
+                // Stop long-press/extrusion detection
+                this.touchState.isInteracting = false;
+                clearTimeout(this.touchState.longPressTimeout);
+                this.touchState.longPressTimeout = null;
+            }
+
+            this.touchState.lastPinchDist = dist;
+            this.touchState.lastPinchCenter = center;
+        }
+
+        // Update active pointer position for the current event
+        this.activePointers.set(e.pointerId, { x: e.clientX, y: e.clientY });
+        this.mouseState.lastX = e.clientX;
+        this.mouseState.lastY = e.clientY;
+        return;
+    }
+
+    // --- Single-touch/Single-mouse drag (Desktop/Mobile) ---
+    const dx = e.clientX - this.mouseState.lastX;
+    const dy = e.clientY - this.mouseState.lastY;
+    this.mouseState.mouseMovementX += dx;
+    this.mouseState.mouseMovementY += dy;
+    
+    const totalDist = Math.hypot(e.clientX - this.mouseState.downX, e.clientY - this.mouseState.downY);
+    const startedDragging = totalDist > this.DRAG_THRESHOLD;
+
+    if (startedDragging && this.touchState.longPressTimeout) {
+        // If a significant move happens before the timeout, cancel long-press
+        clearTimeout(this.touchState.longPressTimeout);
+        this.touchState.longPressTimeout = null;
+    }
+
+    this.mouseState.isDragging = startedDragging;
+    
+    // 1. Mobile Interaction (Long Press Active)
+    if (this.isMobile && this.touchState.isInteracting && this.activePointers.size === 1) {
+        
+        // --- EXTRUSION (SELECT Mode, Uniform Faces Selected) ---
+        if (this.currentMode === 'SELECT' && this.mouseState.isExtruding) {
+            
+            const raycaster = new THREE.Raycaster();
+            const mouse = new THREE.Vector2(((e.clientX - rect.left) / rect.width) * 2 - 1, -((e.clientY - rect.top) / rect.height) * 2 + 1);
+            raycaster.setFromCamera(mouse, this.cam);
+            
+            const intersectionPoint = new THREE.Vector3();
+
+            if (raycaster.ray.intersectPlane(this.mouseState.drawingPlane, intersectionPoint)) {
+                const distVector = intersectionPoint.clone().sub(this.mouseState.dragStartPoint);
+                const distance = Math.round(distVector.dot(this.mouseState.extrudeNormal) / this.VS);
+                this.updateExtrudePreview(distance);
+            }
+            // Stop processing after extrusion logic
+            this.mouseState.lastX = e.clientX;
+            this.mouseState.lastY = e.clientY;
+            return;
+        } 
+        
+        // --- SELECTION DRAG (SELECT Mode, Not Extruding or Non-Uniform) ---
+        else if (this.currentMode === 'SELECT' && startedDragging) {
+            this.handleLineSelectionDrag(e);
+            this.mouseState.lastX = e.clientX;
+            this.mouseState.lastY = e.clientY;
+            return;
+        }
+
+        // --- PAINT/DELETE DRAG (Modifying Mode) ---
+        else if (this.mouseState.isModifying && startedDragging) {
+            const targetInfo = this.getRayTargetInfo(e.clientX, e.clientY);
+            if (targetInfo) {
+                if (this.mouseState.lastActionCoords) {
+                    this.drawVoxelLine(this.mouseState.lastActionCoords, targetInfo, targetInfo.normal);
+                } else {
+                    // Start of the drag stroke
+                    this.modifyVoxel(targetInfo.x, targetInfo.y, targetInfo.z, targetInfo.normal);
+                }
+                this.mouseState.lastActionCoords = { x: targetInfo.x, y: targetInfo.y, z: targetInfo.z };
+            }
+            this.mouseState.lastX = e.clientX;
+            this.mouseState.lastY = e.clientY;
+            return;
+        }
+        
+    }
+    
+    // 2. Default Look Around / Pan (Desktop or Mobile if long-press didn't activate)
+    
+    // If pointer lock is active (Desktop Right-Click or Mobile Fly Mode)
+    if (document.pointerLockElement === this.cvs) {
+        // Rotation is handled in the animate loop via mouseMovementX/Y
+    }
+    // Desktop Pan (Middle-Click)
+    else if (this.mouseState.isPanning) {
+        const panX = (this.controls.invertStrafeX ? -1 : 1) * dx * this.PAN_SPEED;
+        const panY = (this.controls.invertStrafeY ? -1 : 1) * dy * this.PAN_SPEED;
+        const worldPan = new THREE.Vector3(panX, panY, 0).applyQuaternion(this.cam.quaternion);
+        this.cam.position.add(worldPan);
+    }
+    // Desktop Rotation (Right-Click alternative / Lookaround Fallback) or Mobile Rotation
+    else if (!this.isMobile || (this.isMobile && startedDragging && !this.touchState.isInteracting)) {
+        // If not in pointer lock, treat mouse movement as orbit rotation
+        const factor = this.isMobile ? this.MOBILE_ROTATE_SPEED_MULT : 1;
+        this.euler.y -= dx * this.ROTATE_SPEED * factor;
+        this.euler.x -= dy * this.ROTATE_SPEED * factor;
+        this.euler.x = Math.max(-Math.PI / 2, Math.min(Math.PI / 2, this.euler.x));
+        this.cam.quaternion.setFromEuler(this.euler);
+        this.mouseState.isRotating = true;
+    }
+    
+    // 3. Desktop Marquee Selection (Left-Click Drag on empty space)
+    if (!this.isMobile && this.currentMode === 'SELECT' && this.mouseState.isModifying && !this.mouseState.isExtruding && startedDragging && this.mouseState.selectionDragStartTarget === null) {
+        this.marqueeElement.style.display = 'block';
+        const startX = this.mouseState.downX;
+        const startY = this.mouseState.downY;
+        this.marqueeElement.style.left = `${Math.min(startX, e.clientX) - rect.left}px`;
+        this.marqueeElement.style.top = `${Math.min(startY, e.clientY) - rect.top}px`;
+        this.marqueeElement.style.width = `${Math.abs(e.clientX - startX)}px`;
+        this.marqueeElement.style.height = `${Math.abs(e.clientY - startY)}px`;
+    } else {
+        this.marqueeElement.style.display = 'none';
+    }
+
+    // 4. Update Tool Preview (Only if not rotating, panning, or extruding)
+    if (!this.mouseState.isRotating && !this.mouseState.isPanning && !this.mouseState.isExtruding) {
+        const targetInfo = this.getRayTargetInfo(e.clientX, e.clientY);
+        this.updateToolPreview(targetInfo);
+    } else {
+        this.previewVoxel.visible = false;
+        this.previewBrush.visible = false;
+    }
+    
+    // Update last position and active pointer
+    this.mouseState.lastX = e.clientX;
+    this.mouseState.lastY = e.clientY;
+    this.activePointers.set(e.pointerId, { x: e.clientX, y: e.clientY });
+},
     onPointerUp: function(e) {
         if (!this.isPointerDown) return;
         
