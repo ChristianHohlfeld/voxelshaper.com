@@ -1434,10 +1434,10 @@ clearSelection: function () {
 },
 
 isEmptyAt: function (x, y) {
-  const hit = this.getFaceTarget(x, y);
-  // treat “no hit” or the bed plane as empty
-  return !hit || (hit.object && hit.object.userData && hit.object.userData.isFoundation);
-},
+  const hit = this.getFaceTarget(x, y);
+  return !hit; // ← don't special-case the foundation as empty
+}
+
 
     computeMobileMode: function () {
         return window.matchMedia('(pointer: coarse)').matches || navigator.maxTouchPoints > 0;
