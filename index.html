@@ -629,396 +629,441 @@
 
 <script>
 
-
-const VOXEL_SEGMENTS = 8;
-const VOXEL_SIZE_EXPORT = 1.0; 
+const VOXEL_SEGMENTS = 10;
+const VOXEL_SIZE_EXPORT = 1.0; 
 
 function createRoundedVoxelGeometry(position, roundnessFactor, voxelUnitSize, neighbors = {}) {
-    const s = voxelUnitSize;
-    const H = s * 0.5;
+  const s = voxelUnitSize;
+  const H = s * 0.5;
 
-    // Limit radius to prevent corner collapse
-    const R_MAX = 0.48 * H; 
-    const R = Math.max(0.001, Math.min(R_MAX, roundnessFactor * R_MAX));
+  // Clamp fillet so it never eats the cube
+  const R_MAX = 0.45 * H;
+  const R = Math.max(0.001, Math.min(R_MAX, roundnessFactor * R_MAX));
 
-    // Neighbor check: Force radius to 0 on shared sides for seamless joining
-    const px = neighbors.px ? 0 : R;
-    const nx = neighbors.nx ? 0 : R;
-    const py = neighbors.py ? 0 : R;
-    const ny = neighbors.ny ? 0 : R;
-    const pz = neighbors.pz ? 0 : R;
-    const nz = neighbors.nz ? 0 : R;
+  // If a neighbor exists on a side, radius for that side = 0 (keeps shared face flat)
+  const px = neighbors.px ? 0 : R, nx = neighbors.nx ? 0 : R;
+  const py = neighbors.py ? 0 : R, ny = neighbors.ny ? 0 : R;
+  const pz = neighbors.pz ? 0 : R, nz = neighbors.nz ? 0 : R;
 
-    // Inner core bounding box
-    const minX = -H + nx, maxX = H - px;
-    const minY = -H + ny, maxY = H - py;
-    const minZ = -H + nz, maxZ = H - pz;
+  // Inner core bounds (asymmetric if some sides are blocked)
+  const minX = -H + nx, maxX = H - px;
+  const minY = -H + ny, maxY = H - py;
+  const minZ = -H + nz, maxZ = H - pz;
 
-    const geom = new THREE.BoxGeometry(s, s, s, VOXEL_SEGMENTS, VOXEL_SEGMENTS, VOXEL_SEGMENTS);
-    const posAttr = geom.getAttribute('position');
-    const v = new THREE.Vector3();
+  const geom = new THREE.BoxGeometry(s, s, s, VOXEL_SEGMENTS, VOXEL_SEGMENTS, VOXEL_SEGMENTS);
+  const posAttr = geom.getAttribute('position');
+  const v = new THREE.Vector3();
 
-    for (let i = 0; i < posAttr.count; i++) {
-        v.fromBufferAttribute(posAttr, i);
+  for (let i = 0; i < posAttr.count; i++) {
+    v.fromBufferAttribute(posAttr, i);
 
-        // 1. Clamp to inner core
-        const cx = Math.max(minX, Math.min(maxX, v.x));
-        const cy = Math.max(minY, Math.min(maxY, v.y));
-        const cz = Math.max(minZ, Math.min(maxZ, v.z));
+    // Clamp to inner core
+    const cx = Math.max(minX, Math.min(maxX, v.x));
+    const cy = Math.max(minY, Math.min(maxY, v.y));
+    const cz = Math.max(minZ, Math.min(maxZ, v.z));
 
-        // 2. Project outward for roundness
-        const dx = v.x - cx;
-        const dy = v.y - cy;
-        const dz = v.z - cz;
-        const distSq = dx*dx + dy*dy + dz*dz;
+    // Push outward to fillet radius along exposed directions
+    const dx = v.x - cx, dy = v.y - cy, dz = v.z - cz;
+    const len = Math.hypot(dx, dy, dz);
+    if (len > 1e-8) {
+      const k = R / len;
+      v.set(cx + dx * k, cy + dy * k, cz + dz * k);
+    } else {
+      v.set(cx, cy, cz);
+    }
 
-        if (distSq > 1e-9) {
-            const len = Math.sqrt(distSq);
-            const k = R / len;
-            v.set(cx + dx * k, cy + dy * k, cz + dz * k);
-        } else {
-            v.set(cx, cy, cz);
-        }
+    // Translate into world space for grid position
+    v.x += position.x * s + H;
+    v.y += position.y * s + H;
+    v.z += position.z * s + H;
 
-        // 3. Translate to World Position
-        v.x += position.x * s + H;
-        v.y += position.y * s + H;
-        v.z += position.z * s + H;
+    posAttr.setXYZ(i, v.x, v.y, v.z);
+  }
 
-        // 4. MANIFOLD FIX: Hard Quantization
-        // Rounds to 4 decimals to force vertices to snap exactly together.
-        v.x = Math.round(v.x * 10000) / 10000;
-        v.y = Math.round(v.y * 10000) / 10000;
-        v.z = Math.round(v.z * 10000) / 10000;
-
-        posAttr.setXYZ(i, v.x, v.y, v.z);
-    }
-
-    geom.computeVertexNormals();
-    return geom;
+  geom.attributes.position.needsUpdate = true;
+  geom.computeVertexNormals();
+  return geom;
 }
 
-// --- START: 3MF EXPORTER INTEGRATION (Finalized Manifold Version) ---
+
+// --- START: 3MF EXPORTER INTEGRATION (Restored for Bambu Lab/AMS Multi-Color) ---
 const VoxelApp3MFExporter = {
-    exportBambuStudio3MF: async function(voxels, voxelSize, showToast, parseKey, scaleUnit, isRounded = false, roundnessFactor = 0) {
-        if (!voxels || voxels.size === 0) {
-            showToast('Export Error', 'Scene is empty.', 'warning');
-            return;
-        }
-        if (!window.JSZip || !window.saveAs) {
-            showToast('Export Error', 'Required libraries (JSZip, FileSaver) not found.', 'error');
-            return;
-        }
-        showToast('Exporting...', 'Building Manifold 3MF...', 'info');
+    exportBambuStudio3MF: async function(voxels, voxelSize, showToast, parseKey, scaleUnit, isRounded = false, roundnessFactor = 0) {
+        if (!voxels || voxels.size === 0) {
+            showToast('Export Error', 'Scene is empty.', 'warning');
+            return;
+        }
+        if (!window.JSZip || !window.saveAs) {
+            showToast('Export Error', 'Required libraries (JSZip, FileSaver) not found.', 'error');
+            return;
+        }
+        showToast('Exporting...', 'Building Multi-Color 3MF Project File...', 'info');
 
-        try {
-            // UI Settings Check
-            const shapeTypeElement = document.querySelector('input[name="exportShapeType"]:checked');
-            const shapeType = shapeTypeElement ? shapeTypeElement.value : 'blocky';
-            isRounded = shapeType === 'rounded';
-            const roundnessSlider = document.getElementById('filletRoundnessSlider');
-            roundnessFactor = isRounded && roundnessSlider ? parseFloat(roundnessSlider.value) : 0;
+        try {
+            // Get export settings
+            const shapeType = document.querySelector('input[name="exportShapeType"]:checked').value;
+            isRounded = shapeType === 'rounded';
+            roundnessFactor = isRounded ? parseFloat(document.getElementById('filletRoundnessSlider').value) : 0;
 
-            // Data Prep
-            const voxelArray = Array.from(voxels.entries()).map(([key, data]) => {
-                const [x, y, z] = parseKey(key);
-                if (y < 0) return null;
-                return {x, y, z, color: this.normalizeColor(data.color)};
-            }).filter(v => v !== null);
-            
-            if (voxelArray.length === 0) {
-                showToast('Export Error', 'No voxels to export.', 'warning');
-                return;
-            }
-            
-            const palette = Array.from(new Set(voxelArray.map(v => v.color))).slice(0, 16); 
-            const voxelMM = (scaleUnit === 'cm' ? 10 : 1) * voxelSize;
+            const voxelArray = Array.from(voxels.entries()).map(([key, data]) => {
+                const [x, y, z] = parseKey(key);
+                if (y < 0) return null;
+                return {x, y, z, color: this.normalizeColor(data.color)};
+            }).filter(v => v !== null);
+            
+            if (voxelArray.length === 0) {
+                showToast('Export Error', 'No voxels to export.', 'warning');
+                return;
+            }
+            
+            const palette = Array.from(new Set(voxelArray.map(v => v.color))).slice(0, 16); // Limit to 16 colors for AMS/Palette
+            const voxelMM = (scaleUnit === 'cm' ? 10 : 1) * voxelSize;
 
-            // Build Mesh using Quantized Logic
-            const mainMesh = this.buildPaintMesh(voxelArray, voxelMM, palette, isRounded, roundnessFactor); 
-            
-            // FIX: Empty dummies array to prevent Studio warnings about "Size 0 Objects"
-            const dummies = []; 
-            
-            // Generate XML content
-            const { xml: modelXML } = this.build3DModelXML({ mainMesh, dummies });
-            const contentTypes = this.buildContentTypesXML();
-            const rootRels = this.buildRootRelsXML();
-            const modelRels = this.buildModelRelsXML(); 
+            const mainMesh = this.buildPaintMesh(voxelArray, voxelMM, palette, isRounded, roundnessFactor); 
+            const dummies = palette.map((_, i) => this.tinyTriangle(-0.2 - i * 0.05));
+            
+            const { xml: modelXML, ids } = this.build3DModelXML({ mainMesh, dummies });
+            const projectJSON = this.buildProjectSettingsJSON(palette);
+            const modelXMLset = this.buildModelSettingsXML(ids);
+            
+            const contentTypes = this.buildContentTypesXML();
+            const rootRels = this.buildRootRelsXML();
+            const modelRels = this.buildModelRelsXML();
 
-            // Build ZIP Structure
-            const zip = new JSZip();
-            zip.file("[Content_Types].xml", contentTypes);
-            zip.folder("_rels").file(".rels", rootRels);
-            zip.folder("3D").file("3dmodel.model", modelXML);
-            zip.folder("3D").folder("_rels").file("3dmodel.model.rels", modelRels);
+            const zip = new JSZip();
+            zip.file("[Content_Types].xml", contentTypes);
+            zip.folder("_rels").file(".rels", rootRels);
+            zip.folder("3D").file("3dmodel.model", modelXML);
+            zip.folder("3D").folder("_rels").file("3dmodel.model.rels", modelRels);
 
-            // Metadata (Thumbnails Only - No Project Config Files)
-            // This prevents the printer/nozzle override issue.
-            const metadata = zip.folder("Metadata");
-            const bigThumb = this.dataURLtoUint8Array(this.makeThumb('plate_1', 600, 600));
-            const smallThumb = this.dataURLtoUint8Array(this.makeThumb('plate_1_small', 300, 300));
-            metadata.file("plate_1.png", bigThumb, {binary:true});
-            metadata.file("plate_1_small.png", smallThumb, {binary:true});
+            const metadata = zip.folder("Metadata");
+            const bigThumb = this.dataURLtoUint8Array(this.makeThumb('plate_1', 600, 600));
+            const smallThumb = this.dataURLtoUint8Array(this.makeThumb('plate_1_small', 300, 300));
+            metadata.file("plate_1.png", bigThumb, {binary:true});
+            metadata.file("plate_1_small.png", smallThumb, {binary:true});
+            metadata.file("project_settings.config", projectJSON);
+            metadata.file("model_settings.config",  modelXMLset);
 
-            // Generate Blob and Save
-            const blob = await zip.generateAsync({type:"blob", compression:"DEFLATE", compressionOptions:{level:6}});
-            const filename = isRounded ? `VoxelShaper_rounded_${roundnessFactor.toFixed(2)}.3mf` : "VoxelShaper_blocky.3mf";
-            saveAs(blob, filename);
-            
-            showToast('Export Complete', `${filename} saved!`, 'success');
-        } catch(err) {
-            console.error("3MF Export Error:", err);
-            showToast('Export Error', err.message, 'error');
-        }
-    },
-    
-    // --- Helper Functions ---
-    esc: (s) => String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/"/g,'&quot;'),
-    pad2: (n) => String(n).padStart(2,'0'),
-    ymd: (d=new Date()) => `${d.getFullYear()}-${VoxelApp3MFExporter.pad2(d.getMonth()+1)}-${VoxelApp3MFExporter.pad2(d.getDate())}`,
-    
-    // CRITICAL: Matches the 4-decimal quantization used in createRoundedVoxelGeometry
-    // This ensures the XML coordinates match the geometry coordinates exactly.
-    fmt: (n) => (Math.round(n * 10000) / 10000).toString(),
+            const blob = await zip.generateAsync({type:"blob", compression:"DEFLATE", compressionOptions:{level:6}});
+            
+            const filename = isRounded ? `VoxelShaper_rounded_${roundnessFactor.toFixed(2)}.3mf` : "VoxelShaper_blocky.3mf";
+            saveAs(blob, filename);
+            
+            showToast('Export Complete', `${filename} saved!`, 'success');
+        } catch(err) {
+            console.error("3MF Export Error:", err);
+            showToast('Export Error', err.message, 'error');
+        }
+    },
+    
+    esc: (s) => String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/"/g,'&quot;'),
+    pad2: (n) => String(n).padStart(2,'0'),
+    ymd: (d=new Date()) => `${d.getFullYear()}-${VoxelApp3MFExporter.pad2(d.getMonth()+1)}-${VoxelApp3MFExporter.pad2(d.getDate())}`,
+    fmt: (n) => Number.isInteger(n)? String(n) : Number(n).toFixed(7).replace(/\.?0+$/,''),
 
-    normalizeColor: function(c) {
-        if(!c) return '#FFFFFFFF';
-        let s = String(c).trim();
-        if(/^0x/i.test(s)) s = '#' + s.slice(2);
-        if(!s.startsWith('#')) s = '#' + s;
-        if(/^#([0-9a-f]{3})$/i.test(s)){ s = '#'+s[1]+s[1]+s[2]+s[2]+s[3]+s[3]; }
-        if(/^#([0-9a-f]{6})$/i.test(s)) s = s + 'FF';
-        if(!/^#([0-9a-f]{8})$/i.test(s)) return '#FFFFFFFF';
-        return s.toUpperCase();
-    },
+    normalizeColor: function(c) {
+        if(!c) return '#FFFFFFFF';
+        let s = String(c).trim();
+        if(/^0x/i.test(s)) s = '#' + s.slice(2);
+        if(!s.startsWith('#')) s = '#' + s;
+        if(/^#([0-9a-f]{3})$/i.test(s)){ s = '#'+s[1]+s[1]+s[2]+s[2]+s[3]+s[3]; }
+        if(/^#([0-9a-f]{6})$/i.test(s)) s = s + 'FF';
+        if(!/^#([0-9a-f]{8})$/i.test(s)) return '#FFFFFFFF';
+        return s.toUpperCase();
+    },
+    tokenForColorNumber: function(n) {
+        if (n <= 1) return "0";
+        if (n === 2) return "8";
+        return ((n-3).toString(16).toUpperCase() + "C");
+    },
+    
+    tokenFromPaletteIndex: function(i) { return this.tokenForColorNumber(i + 1); },
 
-    tokenForColorNumber: function(n) {
-        if (n <= 1) return "0";
-        if (n === 2) return "8";
-        return ((n-3).toString(16).toUpperCase() + "C");
-    },
-    
-    tokenFromPaletteIndex: function(i) { return this.tokenForColorNumber(i + 1); },
+    buildPaintMesh: function (voxels, voxelMM, palette, isRounded = false, roundnessFactor = 0) {
+  const V = [];            // final unique vertices as [xStr,yStr,zStr]
+  const T = [];            // final triangles as [i0,i1,i2, paintToken]
+  const colorToIdx = new Map(palette.map((c, i) => [String(c).toUpperCase(), i]));
+  const s_mm = +voxelMM || 1;
 
- // --- Mesh Building Logic with Manifold Fix 2.0 (Ignore Normals) ---
-    buildPaintMesh: function (voxels, voxelMM, palette, isRounded = false, roundnessFactor = 0) {
-        const V = [];            
-        const T = [];            
-        const colorToIdx = new Map(palette.map((c, i) => [String(c).toUpperCase(), i]));
-        const s_mm = +voxelMM || 1;
+  // occupancy for neighbor checks
+  const occKey = (x,y,z) => `${x},${y},${z}`;
+  const occ = new Set(voxels.map(v => occKey(v.x, v.y, v.z)));
+  const has = (x,y,z) => occ.has(occKey(x,y,z));
 
-        const occKey = (x,y,z) => `${x},${y},${z}`;
-        const occ = new Set(voxels.map(v => occKey(v.x, v.y, v.z)));
-        const has = (x,y,z) => occ.has(occKey(x,y,z));
-
-        const vertMap = new Map();
-        const q = n => Math.round(n * 10000) / 10000; // 4 Decimal Quantization
-        
-        const getIdx = (x, y, z) => {
-            const k = `${q(x)},${q(y)},${q(z)}`;
-            if (!vertMap.has(k)) {
-                V.push([this.fmt(x), this.fmt(y), this.fmt(z)]);
-                vertMap.set(k, V.length - 1);
-            }
-            return vertMap.get(k);
-        };
-
-        const pushTriIdx = (i0,i1,i2, token) => {
-            // Area check to prevent zero-area triangles
-            const x0 = parseFloat(V[i0][0]), y0 = parseFloat(V[i0][1]), z0 = parseFloat(V[i0][2]);
-            const x1 = parseFloat(V[i1][0]), y1 = parseFloat(V[i1][1]), z1 = parseFloat(V[i1][2]);
-            const x2 = parseFloat(V[i2][0]), y2 = parseFloat(V[i2][1]), z2 = parseFloat(V[i2][2]);
-            
-            const ux = x1-x0, uy = y1-y0, uz = z1-z0;
-            const vx = x2-x0, vy = y2-y0, vz = z2-z0;
-            const cx = uy*vz - uz*vy, cy = uz*vx - ux*vz, cz = ux*vy - uy*vx;
-            const area2 = cx*cx + cy*cy + cz*cz;
-            
-            if (area2 < 1e-9) return; 
-            T.push([i0, i1, i2, token]);
-        };
-
-        const tokenFromColor = (hex) => this.tokenFromPaletteIndex(colorToIdx.get(hex) ?? 0);
-
-        if (isRounded) {
-            const BGU = (THREE && THREE.BufferGeometryUtils) || (typeof BufferGeometryUtils !== 'undefined' ? BufferGeometryUtils : null);
-            if (!BGU) throw new Error('BufferGeometryUtils not found.');
-
-            const isOn = (val, target) => Math.abs(val - target) <= 1e-4;
-            
-            const p0 = new THREE.Vector3();
-            const p1 = new THREE.Vector3();
-            const p2 = new THREE.Vector3();
-
-            for (const v of voxels) {
-                if (v.y < 0) continue;
-                const neighbors = {
-                    px: has(v.x+1, v.y,   v.z  ), nx: has(v.x-1, v.y,   v.z  ),
-                    py: has(v.x,   v.y+1, v.z  ), ny: has(v.x,   v.y-1, v.z  ),
-                    pz: has(v.x,   v.y,   v.z+1), nz: has(v.x,   v.y,   v.z-1),
-                };
-                
-                // 1. Generate Geometry
-                const gRaw = createRoundedVoxelGeometry(new THREE.Vector3(v.x, v.y, v.z), roundnessFactor, 1.0, neighbors);
-                
-                // 2. CRITICAL FIX: Delete attributes that prevent merging
-                // Three.js won't merge vertices if normals or UVs differ.
-                // We delete them so it merges purely based on Position.
-                delete gRaw.attributes.normal;
-                delete gRaw.attributes.uv;
-
-                // 3. Self-Weld with aggressive tolerance
-                const geom = BGU.mergeVertices(gRaw, 1e-4);
-                gRaw.dispose();
-
-                const pos = geom.getAttribute('position');
-                // Safety check if merge messed up indexing (creates non-indexed geom sometimes)
-                const idx = geom.index ? geom.index.array : [...Array(pos.count).keys()];
-                
-                const minX = v.x,     maxX = v.x + 1.0;
-                const minY = v.y,     maxY = v.y + 1.0;
-                const minZ = v.z,     maxZ = v.z + 1.0;
-                const token = tokenFromColor((v.color || '#FFFFFF').toUpperCase());
-
-                for (let i = 0; i < idx.length; i += 3) {
-                    p0.fromBufferAttribute(pos, idx[i+0]);
-                    p1.fromBufferAttribute(pos, idx[i+1]);
-                    p2.fromBufferAttribute(pos, idx[i+2]);
-
-                    // 4. Face Culling Logic (unchanged)
-                    const onPX = isOn(p0.x, maxX) && isOn(p1.x, maxX) && isOn(p2.x, maxX);
-                    const onNX = isOn(p0.x, minX) && isOn(p1.x, minX) && isOn(p2.x, minX);
-                    const onPY = isOn(p0.y, maxY) && isOn(p1.y, maxY) && isOn(p2.y, maxY);
-                    const onNY = isOn(p0.y, minY) && isOn(p1.y, minY) && isOn(p2.y, minY);
-                    const onPZ = isOn(p0.z, maxZ) && isOn(p1.z, maxZ) && isOn(p2.z, maxZ);
-                    const onNZ = isOn(p0.z, minZ) && isOn(p1.z, minZ) && isOn(p2.z, minZ);
-
-                    if ((neighbors.px && onPX) || (neighbors.nx && onNX) ||
-                        (neighbors.py && onPY) || (neighbors.ny && onNY) ||
-                        (neighbors.pz && onPZ) || (neighbors.nz && onNZ)) continue;
-
-                    // 5. Global Merge
-                    const i0 = getIdx(p0.x*s_mm, -p0.z*s_mm, p0.y*s_mm); 
-                    const i1 = getIdx(p1.x*s_mm, -p1.z*s_mm, p1.y*s_mm);
-                    const i2 = getIdx(p2.x*s_mm, -p2.z*s_mm, p2.y*s_mm);
-                    pushTriIdx(i0,i1,i2, token);
-                }
-                geom.dispose();
-            }
-        } else {
-            // Blocky Logic (Standard)
-            const addQuad = (a,b,c,d, token) => { 
-                const i0 = getIdx(a.x*s_mm, -a.z*s_mm, a.y*s_mm);
-                const i1 = getIdx(b.x*s_mm, -b.z*s_mm, b.y*s_mm);
-                const i2 = getIdx(c.x*s_mm, -c.z*s_mm, c.y*s_mm);
-                const i3 = getIdx(d.x*s_mm, -d.z*s_mm, d.y*s_mm);
-                pushTriIdx(i0,i1,i2, token);
-                pushTriIdx(i0,i2,i3, token);
-            };
-            for (const v of voxels) {
-                if (v.y < 0) continue;
-                const x=v.x, y=v.y, z=v.z;
-                const token = tokenFromColor((v.color || '#FFFFFF').toUpperCase());
-                const P = {
-                    p000: {x:x+0, y:y+0, z:z+0}, p100: {x:x+1, y:y+0, z:z+0},
-                    p110: {x:x+1, y:y+1, z:z+0}, p010: {x:x+0, y:y+1, z:z+0},
-                    p001: {x:x+0, y:y+0, z:z+1}, p101: {x:x+1, y:y+0, z:z+1},
-                    p111: {x:x+1, y:y+1, z:z+1}, p011: {x:x+0, y:y+1, z:z+1},
-                };
-                if (!has(x,   y,   z-1)) addQuad(P.p000, P.p010, P.p110, P.p100, token);
-                if (!has(x,   y,   z+1)) addQuad(P.p001, P.p101, P.p111, P.p011, token);
-                if (!has(x-1, y,   z  )) addQuad(P.p000, P.p001, P.p011, P.p010, token);
-                if (!has(x+1, y,   z  )) addQuad(P.p100, P.p110, P.p111, P.p101, token);
-                if (!has(x,   y+1, z  )) addQuad(P.p010, P.p011, P.p111, P.p110, token);
-                if (!has(x,   y-1, z  )) addQuad(P.p000, P.p100, P.p101, P.p001, token);
-            }
-        }
-        return { V, T, palette };
-    },
-
-    // --- XML Generator Functions ---
-    build3DModelXML: function({mainMesh, dummies, title='VoxelShaper Model', buildXYZ=[125,125,0]}) {
-        const today = this.ymd();
-        let nextId = 1;
-        const mainId = nextId++;
-        const wrapperId = nextId++;
-
-        let xml = `<?xml version="1.0" encoding="UTF-8"?>\n`;
-        xml += `<model unit="millimeter" xml:lang="en-US" xmlns="http://schemas.microsoft.com/3dmanufacturing/core/2015/02" xmlns:BambuStudio="http://schemas.bambulab.com/package/2021">\n`;
-        xml +=  ` <metadata name="Application">BambuStudio-02.02.02.56</metadata>\n <metadata name="BambuStudio:3mfVersion">1</metadata>\n`;
-        xml +=  ` <metadata name="CreationDate">${today}</metadata>\n <metadata name="Thumbnail_Middle">/Metadata/plate_1.png</metadata>\n`;
-        xml +=  ` <metadata name="Thumbnail_Small">/Metadata/plate_1_small.png</metadata>\n <metadata name="Title">${this.esc(title)}</metadata>\n`;
-
-        const tokenMap = {};
-        mainMesh.palette.forEach((hex, i) => { tokenMap[this.tokenFromPaletteIndex(i)] = hex; });
-        xml +=  ` <metadata name="BambuStudio:PaintTokenARGB">${this.esc(JSON.stringify(tokenMap))}</metadata>\n`;
-        xml +=  ` <resources>\n`;
-        
-        // Main Mesh Object
-        xml +=   `<object id="${mainId}" type="model" name="PaintedMesh">\n  <mesh>\n   <vertices>\n`;
-        for (const [x,y,z] of mainMesh.V) { xml +=       `    <vertex x="${x}" y="${y}" z="${z}"/>\n`; }
-        xml +=   `</vertices>\n   <triangles>\n`;
-        for (const [v1,v2,v3,pc] of mainMesh.T) { xml +=       `    <triangle v1="${v1}" v2="${v2}" v3="${v3}" paint_color="${pc}"/>\n`; }
-        xml +=   `</triangles>\n  </mesh>\n </object>\n`;
-
-        // Wrapper Component
-        xml +=   `<object id="${wrapperId}" type="model">\n  <components>\n`;
-        xml +=       `<component objectid="${mainId}" transform="1 0 0 0 1 0 0 0 1 0 0 0"/>\n`;
-        xml +=   `</components>\n </object>\n </resources>\n <build>\n`;
-        
-        // Calculate bounding box center to place correctly
-        let minX = Infinity, minY = Infinity, minZ = Infinity;
-        let maxX = -Infinity, maxY = -Infinity;
-        mainMesh.V.forEach(([x,y,z]) => {
-            minX = Math.min(minX, x); maxX = Math.max(maxX, x);
-            minY = Math.min(minY, y); maxY = Math.max(maxY, y);
-            minZ = Math.min(minZ, z);
-        });
-        
-        // Center on plate (approximate 256x256 bed)
-        const PLATE_CENTER = 128; 
-        const final_bx = PLATE_CENTER - (minX + (maxX-minX)/2);
-        const final_by = PLATE_CENTER - (minY + (maxY-minY)/2);
-        const final_bz = 0 - minZ; 
-        
-        xml +=   `<item objectid="${wrapperId}" transform="1 0 0 0 1 0 0 0 1 ${this.fmt(final_bx)} ${this.fmt(final_by)} ${this.fmt(final_bz)}" printable="1"/>\n`;
-        xml +=  `</build>\n</model>\n`;
-        
-        return {xml, ids:{mainId, wrapperId}};
-    },
-    
-    // --- Relationship & Type Definitions (Cleaned) ---
-    buildContentTypesXML: () => `<?xml version="1.0" encoding="UTF-8"?><Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types"><Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/><Default Extension="png" ContentType="image/png"/><Default Extension="json" ContentType="application/json"/><Default Extension="config" ContentType="text/xml"/><Default Extension="xml" ContentType="application/xml"/><Default Extension="model" ContentType="application/vnd.ms-package.3dmanufacturing-3dmodel+xml"/></Types>`,
-    
-    buildRootRelsXML: () => `<?xml version="1.0" encoding="UTF-8"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rel0" Type="http://schemas.microsoft.com/3dmanufacturing/2013/01/3dmodel" Target="/3D/3dmodel.model"/></Relationships>`,
-    
-    // FIX: This is the file that stops the printer override. It points ONLY to thumbnails.
-    buildModelRelsXML: () => `<?xml version="1.0" encoding="UTF-8"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rThumb1" Type="http://schemas.openxmlformats.org/package/2006/relationships/metadata/thumbnail" Target="/Metadata/plate_1.png"/><Relationship Id="rThumb2" Type="http://schemas.openxmlformats.org/package/2006/relationships/metadata/thumbnail" Target="/Metadata/plate_1_small.png"/></Relationships>`,
-    
-    dataURLtoUint8Array: function(dataURL) {
-        const base64 = dataURL.split(',')[1];
-        const binary = atob(base64);
-        const len = binary.length;
-        const bytes = new Uint8Array(len);
-        for (let i = 0; i < len; i++) bytes[i] = binary.charCodeAt(i);
-        return bytes;
-    },
-
-    makeThumb: function(label="plate_1", w=600, h=600) {
-        const c = document.createElement('canvas');
-        c.width = w; c.height = h;
-        const ctx = c.getContext('2d');
-        const g = ctx.createLinearGradient(0,0,w,h);
-        g.addColorStop(0,'#191a1f'); g.addColorStop(0.5,'#3b3f46'); g.addColorStop(1,'#0e0f12');
-        ctx.fillStyle = g; ctx.fillRect(0,0,w,h);
-        ctx.fillStyle = '#ffffff';
-        ctx.globalAlpha = 0.9;
-        ctx.font = `${Math.floor(w*0.08)}px system-ui,Arial,sans-serif`;
-        ctx.textAlign='center'; ctx.textBaseline='middle';
-        ctx.fillText(label, w/2, h/2);
-        return c.toDataURL('image/png');
+  // global vertex map (after 3MF transform + scale) so triangles share indices
+  const vertMap = new Map(); // key -> index
+  const q = n => Math.round(n * 1e6) / 1e6; // snap to tolerate fp noise
+  const getIdx = (x, y, z) => {
+    const k = `${q(x)},${q(y)},${q(z)}`;
+    if (!vertMap.has(k)) {
+      V.push([this.fmt(x), this.fmt(y), this.fmt(z)]);
+      vertMap.set(k, V.length - 1);
     }
+    return vertMap.get(k);
+  };
+
+  const pushTriIdx = (i0,i1,i2, token) => {
+    // skip degenerate/near-collinear
+    const x0 = parseFloat(V[i0][0]), y0 = parseFloat(V[i0][1]), z0 = parseFloat(V[i0][2]);
+    const x1 = parseFloat(V[i1][0]), y1 = parseFloat(V[i1][1]), z1 = parseFloat(V[i1][2]);
+    const x2 = parseFloat(V[i2][0]), y2 = parseFloat(V[i2][1]), z2 = parseFloat(V[i2][2]);
+    const ux = x1-x0, uy = y1-y0, uz = z1-z0;
+    const vx = x2-x0, vy = y2-y0, vz = z2-z0;
+    const cx = uy*vz - uz*vy, cy = uz*vx - ux*vz, cz = ux*vy - uy*vx;
+    const area2 = cx*cx + cy*cy + cz*cz;
+    if (area2 < 1e-18) return;
+    T.push([i0, i1, i2, token]);
+  };
+
+  const tokenFromColor = (hex) => this.tokenFromPaletteIndex(colorToIdx.get(hex) ?? 0);
+
+  if (isRounded) {
+    const BGU = (THREE && THREE.BufferGeometryUtils) || (typeof BufferGeometryUtils !== 'undefined' ? BufferGeometryUtils : null);
+    if (!BGU) throw new Error('BufferGeometryUtils not found. Load it after three.min.js');
+
+    const isOn = (val, target) => Math.abs(val - target) <= 1e-5;
+
+    const p0 = new THREE.Vector3();
+    const p1 = new THREE.Vector3();
+    const p2 = new THREE.Vector3();
+
+    for (const v of voxels) {
+      if (v.y < 0) continue;
+
+      const neighbors = {
+        px: has(v.x+1, v.y,   v.z  ),
+        nx: has(v.x-1, v.y,   v.z  ),
+        py: has(v.x,   v.y+1, v.z  ),
+        ny: has(v.x,   v.y-1, v.z  ),
+        pz: has(v.x,   v.y,   v.z+1),
+        nz: has(v.x,   v.y,   v.z-1),
+      };
+
+      // build rounded (indexed), then ensure shared vertices
+      const gRaw = createRoundedVoxelGeometry(
+        new THREE.Vector3(v.x, v.y, v.z),
+        roundnessFactor,
+        1.0,
+        neighbors
+      );
+      const geom = BGU.mergeVertices(gRaw, 1e-6);
+      gRaw.dispose();
+
+      const pos = geom.getAttribute('position');
+      const idx = geom.index ? geom.index.array : [...Array(pos.count).keys()];
+      const minX = v.x,     maxX = v.x + 1.0;
+      const minY = v.y,     maxY = v.y + 1.0;
+      const minZ = v.z,     maxZ = v.z + 1.0;
+      const token = tokenFromColor((v.color || '#FFFFFF').toUpperCase());
+
+      for (let i = 0; i < idx.length; i += 3) {
+        p0.fromBufferAttribute(pos, idx[i+0]);
+        p1.fromBufferAttribute(pos, idx[i+1]);
+        p2.fromBufferAttribute(pos, idx[i+2]);
+
+        // cull interior-plane tris if neighbor present
+        const onPX = isOn(p0.x, maxX) && isOn(p1.x, maxX) && isOn(p2.x, maxX);
+        const onNX = isOn(p0.x, minX) && isOn(p1.x, minX) && isOn(p2.x, minX);
+        const onPY = isOn(p0.y, maxY) && isOn(p1.y, maxY) && isOn(p2.y, maxY);
+        const onNY = isOn(p0.y, minY) && isOn(p1.y, minY) && isOn(p2.y, minY);
+        const onPZ = isOn(p0.z, maxZ) && isOn(p1.z, maxZ) && isOn(p2.z, maxZ);
+        const onNZ = isOn(p0.z, minZ) && isOn(p1.z, minZ) && isOn(p2.z, minZ);
+        if ((neighbors.px && onPX) || (neighbors.nx && onNX) ||
+            (neighbors.py && onPY) || (neighbors.ny && onNY) ||
+            (neighbors.pz && onPZ) || (neighbors.nz && onNZ)) {
+          continue;
+        }
+
+        // 3MF coords + scale: (x, -z, y) * s_mm
+        const i0 = getIdx(p0.x*s_mm, -p0.z*s_mm, p0.y*s_mm);
+        const i1 = getIdx(p1.x*s_mm, -p1.z*s_mm, p1.y*s_mm);
+        const i2 = getIdx(p2.x*s_mm, -p2.z*s_mm, p2.y*s_mm);
+        pushTriIdx(i0,i1,i2, token);
+      }
+
+      geom.dispose();
+    }
+
+    return { V, T, palette };
+  }
+
+  // --- BLOCKY (no interior faces, shared vertices) ---
+  const addQuad = (a,b,c,d, token) => { // two CCW tris on the face
+    const i0 = getIdx(a.x*s_mm, -a.z*s_mm, a.y*s_mm);
+    const i1 = getIdx(b.x*s_mm, -b.z*s_mm, b.y*s_mm);
+    const i2 = getIdx(c.x*s_mm, -c.z*s_mm, c.y*s_mm);
+    const i3 = getIdx(d.x*s_mm, -d.z*s_mm, d.y*s_mm);
+    pushTriIdx(i0,i1,i2, token);
+    pushTriIdx(i0,i2,i3, token);
+  };
+
+  for (const v of voxels) {
+    if (v.y < 0) continue;
+    const x=v.x, y=v.y, z=v.z;
+    const token = tokenFromColor((v.color || '#FFFFFF').toUpperCase());
+
+    const P = {
+      p000: {x:x+0, y:y+0, z:z+0},
+      p100: {x:x+1, y:y+0, z:z+0},
+      p110: {x:x+1, y:y+1, z:z+0},
+      p010: {x:x+0, y:y+1, z:z+0},
+      p001: {x:x+0, y:y+0, z:z+1},
+      p101: {x:x+1, y:y+0, z:z+1},
+      p111: {x:x+1, y:y+1, z:z+1},
+      p011: {x:x+0, y:y+1, z:z+1},
+    };
+
+    if (!has(x,   y,   z-1)) addQuad(P.p000, P.p010, P.p110, P.p100, token); // -Z
+    if (!has(x,   y,   z+1)) addQuad(P.p001, P.p101, P.p111, P.p011, token); // +Z
+    if (!has(x-1, y,   z  )) addQuad(P.p000, P.p001, P.p011, P.p010, token); // -X
+    if (!has(x+1, y,   z  )) addQuad(P.p100, P.p110, P.p111, P.p101, token); // +X
+    if (!has(x,   y+1, z  )) addQuad(P.p010, P.p011, P.p111, P.p110, token); // +Y
+    if (!has(x,   y-1, z  )) addQuad(P.p000, P.p100, P.p101, P.p001, token); // -Y
+  }
+
+  return { V, T, palette };
+},
+
+    
+    tinyTriangle: function(z = 0) {
+        return {
+            // X, -Z, Y axis swap
+            V: [[0,0,z],[0.1,0,z],[0,0.1,z]].map(([x,y,z]) => [this.fmt(x), this.fmt(-z), this.fmt(y)]),
+            T: [[0,1,2]],
+        };
+    },
+
+    build3DModelXML: function({mainMesh, dummies, title='VoxelShaper Model', buildXYZ=[125,125,0]}) {
+        const today = this.ymd();
+        const [bx,by,bz] = buildXYZ.map(n=>+n||0);
+
+        let nextId = 1;
+        const mainId = nextId++;
+        const dummyIds = dummies.map(()=>nextId++);
+        const wrapperId = nextId++;
+
+        let xml = `<?xml version="1.0" encoding="UTF-8"?>\n`;
+        xml += `<model unit="millimeter" xml:lang="en-US" xmlns="http://schemas.microsoft.com/3dmanufacturing/core/2015/02" xmlns:BambuStudio="http://schemas.bambulab.com/package/2021">\n`;
+        xml +=  ` <metadata name="Application">BambuStudio-02.02.02.56</metadata>\n <metadata name="BambuStudio:3mfVersion">1</metadata>\n`;
+        xml +=  ` <metadata name="CreationDate">${today}</metadata>\n <metadata name="Thumbnail_Middle">/Metadata/plate_1.png</metadata>\n`;
+        xml +=  ` <metadata name="Thumbnail_Small">/Metadata/plate_1_small.png</metadata>\n <metadata name="Title">${this.esc(title)}</metadata>\n`;
+
+        const tokenMap = {};
+        mainMesh.palette.forEach((hex, i) => { tokenMap[this.tokenFromPaletteIndex(i)] = hex; });
+        xml +=  ` <metadata name="BambuStudio:PaintTokenARGB">${this.esc(JSON.stringify(tokenMap))}</metadata>\n`;
+        xml +=  ` <resources>\n`;
+        
+        xml +=   `<object id="${mainId}" type="model" name="PaintedMesh">\n  <mesh>\n   <vertices>\n`;
+        for (const [x,y,z] of mainMesh.V) { xml +=      `    <vertex x="${x}" y="${y}" z="${z}"/>\n`; }
+        xml +=   `</vertices>\n   <triangles>\n`;
+        for (const [v1,v2,v3,pc] of mainMesh.T) { xml +=      `    <triangle v1="${v1}" v2="${v2}" v3="${v3}" paint_color="${pc}"/>\n`; }
+        xml +=   `</triangles>\n  </mesh>\n </object>\n`;
+
+        dummies.forEach((d, i) => {
+            const id = dummyIds[i];
+            xml +=   `<object id="${id}" type="model" name="ColorSlot_${i+1}">\n  <mesh>\n   <vertices>\n`;
+            d.V.forEach(([x,y,z]) => { xml +=      `    <vertex x="${x}" y="${y}" z="${z}"/>\n`; });
+            xml +=   `</vertices>\n   <triangles>\n`;
+            d.T.forEach(([a,b,c]) => { xml +=      `    <triangle v1="${a}" v2="${b}" v3="${c}"/>\n`; });
+            xml +=   `</triangles>\n  </mesh>\n </object>\n`;
+        });
+
+        xml +=   `<object id="${wrapperId}" type="model">\n  <components>\n`;
+        xml +=      `<component objectid="${mainId}" transform="1 0 0 0 1 0 0 0 1 0 0 0"/>\n`;
+        xml +=   `</components>\n </object>\n </resources>\n <build>\n`;
+        
+        let minX = Infinity, minY = Infinity, minZ = Infinity;
+        let maxX = -Infinity, maxY = -Infinity;
+        mainMesh.V.forEach(([x,y,z]) => {
+            minX = Math.min(minX, x); maxX = Math.max(maxX, x);
+            minY = Math.min(minY, y); maxY = Math.max(maxY, y);
+            minZ = Math.min(minZ, z);
+        });
+        // Calculate center offset (assuming Bambu's plate is 256x256, center 128)
+        const PLATE_CENTER = 128;
+        const final_bx = PLATE_CENTER - (minX + (maxX-minX)/2);
+        const final_by = PLATE_CENTER - (minY + (maxY-minY)/2);
+        const final_bz = 0 - minZ; // Place on the bed (Z=0)
+        
+        xml +=   `<item objectid="${wrapperId}" transform="1 0 0 0 1 0 0 0 1 ${this.fmt(final_bx)} ${this.fmt(final_by)} ${this.fmt(final_bz)}" printable="1"/>\n`;
+        dummies.forEach((_, i) => {
+            xml +=   `<item objectid="${dummyIds[i]}" transform="1 0 0 0 1 0 0 0 1 ${this.fmt(final_bx)} ${this.fmt(final_by)} ${this.fmt(final_bz)}" printable="0"/>\n`;
+        });
+        xml +=  `</build>\n</model>\n`;
+        
+        return {xml, ids:{mainId, wrapperId, dummyIds}};
+    },
+    
+    buildProjectSettingsJSON: function(palette){
+        const cols = palette.map(c=>c.slice(0,7));
+        const n = Math.min(cols.length, 16);
+        const arr = v => Array.from({length:n}, ()=>v);
+        const PRINTER_PRESET_NAME = "VoxelShaper Custom Printer";
+        const niceNames = cols.map(c => `VoxelShaper PLA ${c}`);
+        const j = {
+            "version": "02.02.02.56",
+            "printer_settings_id": PRINTER_PRESET_NAME,
+            "plate_name": ["1"],
+            "plates": [0],
+            "bed_type": "Textured PEI Plate",
+            "curr_bed_type": "Textured PEI Plate",
+            "plate_model_index": [[0]],
+            "filament_settings_id":  niceNames,
+            "filament_name":         niceNames,
+            "filament_display_name": niceNames,
+            "filament_colour": cols,
+            "filament_color":  cols,
+            "filament_vendor": arr("Generic"),
+            "filament_type":   arr("PLA"),
+            "filament_diameter": arr("1.75"),
+            "filament_ids": cols.map((_,i)=>`GEN-PLA-${i+1}`),
+            "filament_is_support": arr("0"),
+            "filament_printable":  arr("3"),
+            "filament_map_mode": "Manual",
+            "filament_map": Array.from({length:n}, (_,i)=> String(i+1)),
+            "nozzle_diameter": ["0.4"],
+            "selected_plate_index": 0,
+            "project_location_type": "local"
+        };
+        return JSON.stringify(j);
+    },
+
+    buildModelSettingsXML: function(ids) {
+        let x = `<?xml version="1.0" encoding="UTF-8"?>\n<config version="02.02.02.56">\n <global>\n  <object_include exclude-non-stl="0"/>\n  <object_split split="1"/>\n </global>\n <objects>\n`;
+        x +=   `<object id="${ids.mainId}">\n  <metadata key="extruder" value="1"/>\n </object>\n`;
+        ids.dummyIds.forEach((oid, i) => {
+            x +=   `<object id="${oid}">\n  <metadata key="extruder" value="${i+2}"/>\n </object>\n`;
+        });
+        x +=  `</objects>\n</config>\n`;
+        return x;
+    },
+
+    buildContentTypesXML: () => `<?xml version="1.0" encoding="UTF-8"?><Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types"><Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/><Default Extension="png" ContentType="image/png"/><Default Extension="json" ContentType="application/json"/><Default Extension="config" ContentType="text/xml"/><Default Extension="xml" ContentType="application/xml"/><Default Extension="model" ContentType="application/vnd.ms-package.3dmanufacturing-3dmodel+xml"/></Types>`,
+    buildRootRelsXML: () => `<?xml version="1.0" encoding="UTF-8"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rel0" Type="http://schemas.microsoft.com/3dmanufacturing/2013/01/3dmodel" Target="/3D/3dmodel.model"/></Relationships>`,
+    buildModelRelsXML: () => `<?xml version="1.0" encoding="UTF-8"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rThumb1" Type="http://schemas.openxmlformats.org/package/2006/relationships/metadata/thumbnail" Target="/Metadata/plate_1.png"/><Relationship Id="rThumb2" Type="http://schemas.openxmlformats.org/package/2006/relationships/metadata/thumbnail" Target="/Metadata/plate_1_small.png"/></Relationships>`,    
+    dataURLtoUint8Array: function(dataURL) {
+        const base64 = dataURL.split(',')[1];
+        const binary = atob(base64);
+        const len = binary.length;
+        const bytes = new Uint8Array(len);
+        for (let i = 0; i < len; i++) bytes[i] = binary.charCodeAt(i);
+        return bytes;
+    },
+
+    makeThumb: function(label="plate_1", w=600, h=600) {
+        const c = document.createElement('canvas');
+        c.width = w; c.height = h;
+        const ctx = c.getContext('2d');
+        const g = ctx.createLinearGradient(0,0,w,h);
+        g.addColorStop(0,'#191a1f'); g.addColorStop(0.5,'#3b3f46'); g.addColorStop(1,'#0e0f12');
+        ctx.fillStyle = g; ctx.fillRect(0,0,w,h);
+        ctx.fillStyle = '#ffffff';
+        ctx.globalAlpha = 0.9;
+        ctx.font = `${Math.floor(w*0.08)}px system-ui,Arial,sans-serif`;
+        ctx.textAlign='center'; ctx.textBaseline='middle';
+        ctx.fillText(label, w/2, h/2);
+        return c.toDataURL('image/png');
+    }
 };
 // --- END: 3MF EXPORTER INTEGRATION ---
 
