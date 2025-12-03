@@ -4148,53 +4148,59 @@ isBedFace: function(faceKey) {
 
 document.addEventListener('DOMContentLoaded', () => VoxelApp.init());
 </script>
-    <a href="https://hub.voxelshaper.com" class="mobile-hub-pill">
-  <span>&#8592;</span> Hub
+   <a href="https://hub.voxelshaper.com" class="voxel-hub-widget" target="_blank">
+  <span class="hub-icon">🌐</span> 
+  <span class="hub-text">Explore Hub</span>
 </a>
 
 <style>
-  /* 1. Default: Hidden on Desktop */
-  .mobile-hub-pill {
-    display: none !important;
+  .voxel-hub-widget {
+    position: fixed;
+    z-index: 99999;
+    background-color: rgba(20, 20, 20, 0.9); /* Dark Glass */
+    color: #fff;
+    text-decoration: none;
+    font-family: sans-serif;
+    font-weight: 600;
+    border: 1px solid rgba(255,255,255,0.2);
+    box-shadow: 0 4px 15px rgba(0,0,0,0.5);
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    transition: all 0.2s ease;
   }
 
-  /* 2. Mobile Only (Max-width 768px matches most tablets/phones) */
-  @media screen and (max-width: 768px) {
-    .mobile-hub-pill {
-      /* Visibility & Position */
-      display: flex !important;
-      align-items: center;
-      justify-content: center;
-      gap: 6px;
-      
-      position: fixed;
-      top: 12px;       /* Adjust vertical alignment if it hits your status bar */
-      left: 12px;      /* Top-Left "Back" Position */
-      z-index: 99999;  /* Ensures it floats above the Canvas and UI */
-
-      /* Styling (Glassmorphism Pill) */
-      background-color: rgba(20, 20, 20, 0.9);
-      color: #ffffff;
-      text-decoration: none;
-      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
-      font-weight: 600;
+  /* DESKTOP STATE: Floating Bottom-Right (Discovery Mode) */
+  @media screen and (min-width: 769px) {
+    .voxel-hub-widget {
+      bottom: 25px;
+      right: 25px;
+      padding: 10px 20px;
+      border-radius: 8px;
       font-size: 14px;
-      
-      /* Shape */
-      padding: 8px 16px;
-      border-radius: 50px;
-      border: 1px solid rgba(255, 255, 255, 0.15);
-      box-shadow: 0 4px 10px rgba(0, 0, 0, 0.4);
-      
-      /* Interaction */
-      -webkit-tap-highlight-color: transparent;
-      transition: transform 0.1s ease, background-color 0.2s;
     }
+    /* Hover Effect for Desktop */
+    .voxel-hub-widget:hover {
+      transform: translateY(-2px);
+      background-color: #000;
+      border-color: #fff;
+    }
+  }
 
-    /* Press Effect */
-    .mobile-hub-pill:active {
+  /* MOBILE STATE: Floating Top-Left (Back Mode) */
+  @media screen and (max-width: 768px) {
+    .voxel-hub-widget {
+      top: 12px;
+      left: 12px;
+      padding: 8px 14px;
+      border-radius: 50px; /* Pill shape */
+      font-size: 13px;
+    }
+    .voxel-hub-widget .hub-text {
+      /* Optional: Hide text on very small phones if needed, or keep 'Hub' */
+    }
+    .voxel-hub-widget:active {
       transform: scale(0.95);
-      background-color: #000000;
     }
   }
 </style>
