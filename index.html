@@ -293,7 +293,7 @@
         </div>
         <div class="divider divider-horizontal"></div>
         <label for="grid-size-slider" class="text-sm whitespace-nowrap">Grid:</label>
-        <input type="range" id="grid-size-slider" min="5" max="100" value="10" class="range range-xs w-28">
+        <input type="range" id="grid-size-slider" min="5" max="200" value="10" class="range range-xs w-28">
         <span id="grid-size-display" class="font-bold text-primary text-sm">17³</span>
         <label for="color-picker-input" class="btn btn-sm btn-ghost normal-case gap-2">Color
             <input type="color" id="color-picker-input" value="#FFFFFF" class="h-6 w-6 cursor-pointer rounded-full">
@@ -312,7 +312,7 @@
         <!-- NEW IN-APP ROUNDED PREVIEW CONTROLS -->
         <div id="in-app-rounded-controls" class="controls-group border border-base-300 rounded-lg p-1">
             <label for="roundedPreviewToggle" class="label cursor-pointer gap-2">
-                <span class="label-text text-sm">Rounded Preview:</span>
+                <span class="label-text text-sm">Round</span>
                 <input type="checkbox" id="roundedPreviewToggle" class="toggle toggle-accent toggle-sm">
             </label>
             <div id="preview-slider-group" class="controls-group gap-1 ml-2" style="opacity: 1;">
@@ -330,8 +330,6 @@
         <span id="fly-speed-display" class="font-bold text-primary text-sm">0.10</span>
         <div class="divider divider-horizontal"></div>
         
-        <button id="goToHubBtn" class="btn btn-sm btn-ghost" aria-label="Go to VoxelShaper Hub"><i class="fas fa-home"></i></button>
-
         <button id="shareBtn" class="btn btn-sm btn-warning" aria-label="Share or Upload Project">
             <i class="fas fa-share-alt"></i>
         </button>
@@ -484,7 +482,7 @@
         </div>
 
         <div class="modal-action">
-            <button id="exportBambuStudioBtn" class="btn btn-accent">Bambu 3MF</button>
+            <button id="exportBambuStudioBtn" class="btn btn-accent">3MF</button>
             <button id="exportGCodePolysliceBtn" class="btn btn-success">G-Code</button>
             <button id="exportSTLFinalBtn" class="btn btn-primary">STL</button>
             <form method="dialog"><button class="btn btn-ghost">Cancel</button></form>
@@ -1142,7 +1140,7 @@ const VoxelApp = {
     PINCH_ZOOM_MULT: 50,
     DRAG_THRESHOLD: 5,
     MAX_HISTORY_SIZE: 50,
-    LONG_PRESS_DURATION: 250,
+    LONG_PRESS_DURATION: 100,
     BACKEND_URL: "https://api.voxelshaper.com",
     HUB_URL: "https://hub.voxelshaper.com",
     // --- State ---
@@ -1632,8 +1630,6 @@ window.addEventListener('keydown', (e) => {
         document.getElementById('loadBtnMobile').addEventListener('click', () => document.getElementById('fileInput').click());
         document.getElementById('exportBtnMobile').addEventListener('click', () => document.getElementById('exportOptionsModal').showModal());
         document.getElementById('mobile-share').addEventListener('click', () => document.getElementById('shareModal').showModal());
-
-        document.getElementById('goToHubBtn').addEventListener('click', () => window.open(this.HUB_URL, '_blank', 'noopener,noreferrer'));
 
         document.getElementById('loadImageBtnMobile').addEventListener('click', () => this.loadImageTemplate());
         document.getElementById('removeImageBtnMobile').addEventListener('click', () => this.removeImageTemplate());
@@ -3227,7 +3223,7 @@ isBedFace: function(faceKey) {
     
     updateModeUI: function() {
         const modeInfo = this.Modes[this.currentMode];
-        document.getElementById('current-mode').textContent = `Mode: ${modeInfo.name}`;
+        document.getElementById('current-mode').textContent = `${modeInfo.name}`;
         if(this.isMobile) document.getElementById('mobile-mode-icon').className = modeInfo.icon;
         
         const isSelectMode = this.currentMode === 'SELECT';
