@@ -1813,6 +1813,7 @@
                 } catch (err) {
                     console.error("3MF Export Error:", err);
                     showToast('Export Error', err.message, 'error');
+                    trackEvent('error', { context: '3mf_export', message: err.message });
 
                 }
 
@@ -2431,6 +2432,7 @@
                         const user = await this.request('/api/user/me');
                         this.user = user;
                         this.updateLoginStateUI();
+                        trackEvent('login_success', { user_id: this.user.id, method: 'oauth' });
                         this.showToast('Login Successful', 'You are now logged in via OAuth!', 'info');
                     } catch (e) {
                         console.error("OAuth redirect user fetch failed:", e);
@@ -2469,6 +2471,7 @@
                         });
                         this.user = response.user;
                         this.updateLoginStateUI();
+                        trackEvent('login_success', { user_id: this.user.id, method: 'magic_link' });
                         this.showToast('Login Successful', 'You are now logged in!', 'info');
                     } catch (e) {
                         this.showToast('Login Error', e.message, 'error');
@@ -2647,6 +2650,7 @@
 
                 // Export Modal Controls (Updated for Polyslice and 3MF)
                 document.getElementById('exportBambuStudioBtn').addEventListener('click', () => {
+                    trackEvent('export', { format: '3mf_bambu', voxel_count: this.voxels.size });
                     const scaleUnit = document.querySelector('input[name="exportScaleUnit"]:checked').value;
                     VoxelApp3MFExporter.exportBambuStudio3MF(this.voxels, this.VS, this.showToast.bind(this), this.parseKey.bind(this), scaleUnit);
                     document.getElementById('exportOptionsModal').close();
@@ -2665,6 +2669,7 @@
                     const shapeType = document.querySelector('input[name="exportShapeType"]:checked').value;
                     const isRounded = shapeType === 'rounded';
 
+                    trackEvent('export', { format: isRounded ? 'stl_rounded' : 'stl_blocky', voxel_count: this.voxels.size });
                     this.exportSTL(scaleUnit, upAxis, isRounded);
                     document.getElementById('exportOptionsModal').close();
                 });
@@ -3246,7 +3251,10 @@
                 if (this.mouseState.isExtruding) {
                     const distance = this.ghostVoxels.size > 0 ? (this.ghostVoxels.get(this.ghostVoxels.keys().next().value).distance || 0) : 0;
                     this.updateExtrudePreview(0);
-                    if (distance !== 0) this.extrudeSelectedFaces(distance);
+                    if (distance !== 0) {
+                        this.extrudeSelectedFaces(distance);
+                        trackEvent('extrude', { distance: distance, method: 'drag' });
+                    }
                     this.onModelChanged(); // NEW: Trigger model change event
                 } else if (this.mouseState.isMoving && this.mouseState.movingVoxelsOriginal) {
                     const changes = new Map();
@@ -3429,6 +3437,7 @@
                 const link = `${window.location.origin}${window.location.pathname}?modelId=${this.currentModelId}`;
                 navigator.clipboard.writeText(link).then(() => {
                     this.showToast('Link Copied', 'The shareable link has been copied to your clipboard.', 'info');
+                    trackEvent('share', { method: 'copy_link', model_id: this.currentModelId });
                 }).catch(err => {
                     console.error('Failed to copy share link: ', err);
                     this.showToast('Copy Failed', 'Could not copy the link.', 'error');
@@ -3477,6 +3486,7 @@
                     this.currentModelId = response.public_id;
                     this.updateUrlWithModelId();
                     this.showToast('Upload Successful!', `Project saved. Share link updated.`, 'success');
+                    trackEvent('upload_hub', { model_id: this.currentModelId, visibility: hubDocument.visibility });
                 } catch (error) {
                     this.showToast('Upload Failed', error.message, 'error');
                 }
@@ -4587,6 +4597,7 @@
 
             loginLogout: async function () {
                 if (this.user) {
+                    trackEvent('logout');
                     try {
                         await this.request('/auth/logout', { method: 'POST' });
                         this.user = null;
@@ -4602,6 +4613,7 @@
             },
 
             signInWithProvider: function (providerName) {
+                trackEvent('login_start', { method: providerName });
                 try {
                     if (this.voxels.size > 0) {
                         const data = {
@@ -4643,6 +4655,7 @@
                     this.showToast('Error', 'Please accept the Terms of Service.', 'error');
                     return;
                 }
+                trackEvent('login_start', { method: 'magic_link' });
                 try {
                     await this.request('/auth/magic-link', {
                         method: 'POST',
@@ -4668,6 +4681,7 @@
             },
 
             saveJSON: function () {
+                trackEvent('save_project');
                 const data = {
                     gridSize: this.GRID,
                     currentDrawingAxis: this.currentDrawingAxis,
@@ -4743,6 +4757,7 @@
             },
 
             loadJSON: function (event) {
+                trackEvent('load_project');
                 const file = event.target.files[0]; if (!file) return;
                 const reader = new FileReader();
                 reader.onload = (e) => {
@@ -5363,15 +5378,18 @@
 
             // --- NEW: Onboarding Methods ---
             startOnboarding: function () {
+                trackEvent('onboarding_start');
                 document.getElementById('onboardingModal').showModal();
             },
 
             markOnboardingComplete: function () {
+                trackEvent('onboarding_complete', { action: 'start_blank' });
                 localStorage.setItem('voxelshaper_onboarding_complete', 'true');
                 document.getElementById('onboardingModal').close();
             },
 
             loadSampleProject: function () {
+                trackEvent('onboarding_complete', { action: 'load_sample' });
                 this.loadFromData(this.sampleProjectData);
                 this.markOnboardingComplete();
                 this.showToast('Sample Loaded', 'Explore the sample house project!', 'info');
