@@ -1,22 +1,36 @@
-<html lang="en" data-theme="dark" data-google-analytics-opt-out="">
+<!DOCTYPE html>
+<html lang="en" data-theme="dark">
 
 <head>
 
-    <script async="" src="https://www.googletagmanager.com/gtag/js?id=G-DMNJKVCNBM"></script>
+    <script async src="https://www.googletagmanager.com/gtag/js?id=G-DMNJKVCNBM"></script>
     <script>
+        const GA_MEASUREMENT_ID = 'G-DMNJKVCNBM';
+        window[`ga-disable-${GA_MEASUREMENT_ID}`] = false;
         window.dataLayer = window.dataLayer || [];
-        function gtag() { dataLayer.push(arguments); }
-        gtag('js', new Date());
 
-        gtag('config', 'G-DMNJKVCNBM', { 'anonymize_ip': true });
+        function gtag() { dataLayer.push(arguments); }
+
+        gtag('js', new Date());
+        gtag('config', GA_MEASUREMENT_ID, {
+            anonymize_ip: true,
+            transport_type: 'beacon'
+        });
 
         function trackEvent(eventName, params = {}) {
             if (typeof gtag === 'function') {
                 gtag('event', eventName, params);
-            } else {
-                console.log(`Analytics Event (gtag not found): ${eventName}`, params);
+                return;
             }
+
+            console.log(`Analytics Event (gtag not found): ${eventName}`, params);
         }
+
+        window.addEventListener('load', () => {
+            trackEvent('app_boot', {
+                source: window.matchMedia('(display-mode: standalone)').matches ? 'pwa' : 'web'
+            });
+        }, { once: true });
     </script>
 
 
