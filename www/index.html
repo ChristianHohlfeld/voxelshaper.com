@@ -2,6 +2,33 @@
 <html lang="de">
 <head>
 <meta charset="UTF-8">
+
+<script async src="https://www.googletagmanager.com/gtag/js?id=G-DMNJKVCNBM"></script>
+<script>
+const GA_MEASUREMENT_ID = 'G-DMNJKVCNBM';
+window[`ga-disable-${GA_MEASUREMENT_ID}`] = false;
+window.dataLayer = window.dataLayer || [];
+
+function gtag(){dataLayer.push(arguments);}
+gtag('js', new Date());
+gtag('config', GA_MEASUREMENT_ID, {
+    anonymize_ip: true,
+    transport_type: 'beacon'
+});
+
+function trackEvent(eventName, params = {}) {
+    if (typeof gtag === 'function') {
+        gtag('event', eventName, params);
+        return;
+    }
+
+    console.log(`Analytics Event (gtag not found): ${eventName}`, params);
+}
+
+window.addEventListener('load', () => {
+    trackEvent('app_boot', { source: 'capacitor' });
+}, { once: true });
+</script>
 <meta property="og:title" content="VoxelShaper – Create in 3D, Effortlessly" />
 <meta property="og:description" content="A powerful, intuitive voxel-based 3D editor – made for makers, artists, and coders." />
 <meta property="og:image" content="https://voxelshaper.com/preview.png" />
