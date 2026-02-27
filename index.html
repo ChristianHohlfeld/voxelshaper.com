@@ -1493,8 +1493,9 @@
 
             <div class="controls-group" id="brush-controls">
                 <label>Brush</label>
-                <input type="range" id="brush-size-slider" min="1" max="10" value="1" class="range range-xs" disabled>
-                <span id="brush-size-display" class="text-xs font-bold opacity-50">1x1</span>
+                <button id="brush-size-decrease" class="btn btn-xs btn-ghost" disabled>-</button>
+                <span id="brush-size-display" class="text-xs font-bold opacity-50 w-[4.5ch] text-center tabular-nums">1x1</span>
+                <button id="brush-size-increase" class="btn btn-xs btn-ghost" disabled>+</button>
             </div>
 
             <div id="in-app-rounded-controls" class="controls-group border border-base-content/20 rounded-lg px-2 py-1">
@@ -1736,10 +1737,12 @@
                         class="range range-primary">
                 </div>
                 <div>
-                    <label for="mobile-brush-size-slider" class="label"><span class="label-text">Brush
-                            Size: <span id="mobile-brush-size-display">1x1</span></span></label>
-                    <input type="range" id="mobile-brush-size-slider" min="1" max="10" value="1"
-                        class="range range-accent" disabled="">
+                    <label class="label"><span class="label-text">Brush Size</span></label>
+                    <div class="flex items-center gap-2">
+                        <button id="mobile-brush-size-decrease" class="btn btn-sm btn-ghost" disabled>-</button>
+                        <span id="mobile-brush-size-display" class="text-sm font-bold w-[4.5ch] text-center tabular-nums">1x1</span>
+                        <button id="mobile-brush-size-increase" class="btn btn-sm btn-ghost" disabled>+</button>
+                    </div>
                 </div>
             </div>
             <div class="modal-action">
@@ -2928,7 +2931,8 @@
                 document.addEventListener('pointerlockchange', this.onPointerLockChange.bind(this), false);
                 // Desktop controls
                 document.getElementById('grid-size-slider').addEventListener('input', (e) => this.setGridSize(parseInt(e.target.value)));
-                document.getElementById('brush-size-slider').addEventListener('input', (e) => this.setBrushSize(parseInt(e.target.value)));
+                document.getElementById('brush-size-decrease').addEventListener('click', () => this.setBrushSize(this.brushSize - 1));
+                document.getElementById('brush-size-increase').addEventListener('click', () => this.setBrushSize(this.brushSize + 1));
                 document.getElementById('fly-speed-setting').addEventListener('input', (e) => this.setFlySpeed(parseFloat(e.target.value)));
                 document.getElementById('mobile-fly-speed-setting').addEventListener('input', (e) => this.setFlySpeed(parseFloat(e.target.value)));
                 document.getElementById('color-picker-input').addEventListener('input', (e) => this.setColor(e.target.value));
@@ -3068,7 +3072,8 @@
                 document.getElementById('mobileInvertStrafeX').addEventListener('change', (e) => this.setControl('invertStrafeX', e.target.checked));
                 document.getElementById('mobileInvertStrafeY').addEventListener('change', (e) => this.setControl('invertStrafeY', e.target.checked));
                 document.getElementById('mobile-grid-size-slider').addEventListener('input', (e) => this.setGridSize(parseInt(e.target.value)));
-                document.getElementById('mobile-brush-size-slider').addEventListener('input', (e) => this.setBrushSize(parseInt(e.target.value)));
+                document.getElementById('mobile-brush-size-decrease').addEventListener('click', () => this.setBrushSize(this.brushSize - 1));
+                document.getElementById('mobile-brush-size-increase').addEventListener('click', () => this.setBrushSize(this.brushSize + 1));
 
                 const mobileLogoutBtn = document.getElementById('mobile-logout');
                 if (mobileLogoutBtn) mobileLogoutBtn.addEventListener('click', this.loginLogout.bind(this));
@@ -4967,13 +4972,17 @@
                 document.getElementById('mobile-selection-lock-toggle').closest('li').style.display = isSelectMode ? '' : 'none';
 
                 const isBrushMode = this.currentMode === 'PAINT' || this.currentMode === 'DELETE' || this.currentMode === 'FREE';
-                const brushSlider = document.getElementById('brush-size-slider');
+                const brushMinus = document.getElementById('brush-size-decrease');
+                const brushPlus = document.getElementById('brush-size-increase');
                 const brushDisplay = document.getElementById('brush-size-display');
-                const mobileBrushSlider = document.getElementById('mobile-brush-size-slider');
-                if (brushSlider) brushSlider.disabled = !isBrushMode;
-                if (mobileBrushSlider) mobileBrushSlider.disabled = !isBrushMode;
+                const mobileBrushMinus = document.getElementById('mobile-brush-size-decrease');
+                const mobileBrushPlus = document.getElementById('mobile-brush-size-increase');
+                if (brushMinus) brushMinus.disabled = !isBrushMode;
+                if (brushPlus) brushPlus.disabled = !isBrushMode;
+                if (mobileBrushMinus) mobileBrushMinus.disabled = !isBrushMode;
+                if (mobileBrushPlus) mobileBrushPlus.disabled = !isBrushMode;
 
-                if (brushSlider && brushDisplay) {
+                if (brushDisplay) {
                     brushDisplay.classList.toggle('text-base-content/50', !isBrushMode);
                     brushDisplay.classList.toggle('text-primary', isBrushMode);
                 }
@@ -5113,7 +5122,7 @@
             },
 
             setBrushSize: function (newSize) {
-                this.brushSize = newSize;
+                this.brushSize = Math.max(1, Math.min(10, parseInt(newSize, 10) || 1));
                 localStorage.setItem('voxelEditorBrushSize', this.brushSize);
                 this.updateAllControlInputs();
             },
@@ -5620,7 +5629,6 @@
                 document.getElementById('grid-size-slider').value = this.GRID;
                 document.getElementById('grid-size-display').textContent = `${this.GRID}³`;
                 document.getElementById('color-picker-input').value = this.currentColor;
-                document.getElementById('brush-size-slider').value = this.brushSize;
                 document.getElementById('brush-size-display').textContent = `${this.brushSize}x${this.brushSize}`;
 
                 // Update new controls
@@ -5641,7 +5649,6 @@
                     document.getElementById('mobile-color-picker').value = this.currentColor;
                     document.getElementById('mobile-grid-size-slider').value = this.GRID;
                     document.getElementById('mobile-grid-size-display').textContent = `${this.GRID}³`;
-                    document.getElementById('mobile-brush-size-slider').value = this.brushSize;
                     document.getElementById('mobile-brush-size-display').textContent = `${this.brushSize}x${this.brushSize}`;
                 }
                 this.setFlySpeed(this.flySpeed);
