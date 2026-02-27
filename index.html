@@ -2424,7 +2424,7 @@
             user: null,
             token: null,
             Modes: {
-                FREE: { name: 'Free', icon: 'fas fa-cube' },
+                FREE: { name: 'Add', icon: 'fas fa-plus-square' },
                 SELECT: { name: 'Select', icon: 'fas fa-mouse-pointer' },
                 PAINT: { name: 'Paint', icon: 'fas fa-paint-brush' },
                 DELETE: { name: 'Delete', icon: 'fas fa-trash' },
@@ -2511,6 +2511,17 @@
                 };
             },
 
+            isFirstRunOnboardingActive: function () {
+                return localStorage.getItem('voxelshaper_onboarding_dont_show') !== 'true';
+            },
+
+            applyFirstRunColorIfNeeded: function () {
+                if (!this.isFirstRunOnboardingActive()) return;
+                const palette = ['#FF6B6B', '#6BCB77', '#4D96FF', '#FFD93D', '#B983FF', '#FF8E3C'];
+                const randomColor = palette[Math.floor(Math.random() * palette.length)];
+                this.setColor(randomColor);
+            },
+
             getOnboardingContent: function () {
                 return {
                     title: 'Start in under 1 minute',
@@ -2555,6 +2566,7 @@
                 this.refreshOnboardingContent();
                 trackEvent('ui_mode_detected', this.getAnalyticsContext());
                 this.setupThree();
+                this.applyFirstRunColorIfNeeded();
                 this.rebuildFoundation();
                 this.setupEventListeners();
                 this.initVisualHapticLayer();
@@ -2565,8 +2577,8 @@
                 const urlParams = new URLSearchParams(window.location.search);
 
                 // Onboarding logic
-                const dontShowOnboarding = localStorage.getItem('voxelshaper_onboarding_dont_show') === 'true';
-                if (!dontShowOnboarding && !urlParams.has('modelId')) {
+                const shouldShowOnboarding = this.isFirstRunOnboardingActive();
+                if (shouldShowOnboarding && !urlParams.has('modelId')) {
                     this.startOnboarding();
                 } else if (!urlParams.has('modelId') && !window.location.hash.includes('#oauth_success')) {
                     this.loadAutosavedScene();
@@ -3896,9 +3908,9 @@
                         this.addHistoryStep({ type: 'SELECT', before, after: new Set(this.selectedFaces) });
                     }
                 }
-                const modeKeys = Object.keys(this.Modes);
-                const currentIndex = modeKeys.indexOf(this.currentMode);
-                this.currentMode = modeKeys[(currentIndex + 1) % modeKeys.length];
+                const modeOrder = ['FREE', 'PAINT', 'DELETE', 'SELECT'];
+                const currentIndex = modeOrder.indexOf(this.currentMode);
+                this.currentMode = modeOrder[(currentIndex + 1) % modeOrder.length];
                 this.updateModeUI();
                 trackEvent('mode_change', {
                     from: oldMode,
