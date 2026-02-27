@@ -1370,6 +1370,7 @@
                                             Y</span><input type="checkbox" id="invertStrafeY"
                                             class="toggle toggle-primary"></label></li>
                                 <div class="divider my-1"></div>
+                                <li><a id="showOnboardingAgainBtn">Show First-Run Guide</a></li>
                                 <li><a id="resetDefaultsBtn">Reset to Default</a></li>
                             </ul>
                         </details>
@@ -1632,6 +1633,7 @@
                             class="toggle toggle-primary"></label></li>
             </ul>
             <div class="modal-action">
+                <button id="mobile-show-onboarding-again" class="btn btn-ghost">First-Run Guide</button>
                 <form method="dialog"><button class="btn">Close</button></form>
             </div>
         </div>
@@ -1771,6 +1773,10 @@
             </div>
             <p id="onboardingModeHint" class="text-xs font-semibold uppercase tracking-wide text-primary pt-1"></p>
             <ul id="onboardingControlsList" class="list-disc list-inside space-y-2 pt-2 onboarding-controls-list"></ul>
+            <label class="label cursor-pointer justify-start gap-3 mt-3">
+                <input type="checkbox" id="onboardingDontShowAgain" class="checkbox checkbox-sm checkbox-primary">
+                <span class="label-text">Don’t show again</span>
+            </label>
             <div class="modal-action mt-6 onboarding-actions">
                 <button id="loadSampleProjectBtn" class="btn btn-primary">Start in 10s (Sample)</button>
                 <button id="startBlankBtn" class="btn">Start Blank</button>
@@ -2559,8 +2565,8 @@
                 const urlParams = new URLSearchParams(window.location.search);
 
                 // Onboarding logic
-                const onboardingComplete = localStorage.getItem('voxelshaper_onboarding_complete') === 'true';
-                if (!onboardingComplete && !urlParams.has('modelId')) {
+                const dontShowOnboarding = localStorage.getItem('voxelshaper_onboarding_dont_show') === 'true';
+                if (!dontShowOnboarding && !urlParams.has('modelId')) {
                     this.startOnboarding();
                 } else if (!urlParams.has('modelId') && !window.location.hash.includes('#oauth_success')) {
                     this.loadAutosavedScene();
@@ -2976,6 +2982,16 @@
                 document.getElementById('startBlankBtn').addEventListener('click', () => {
                     trackEvent('start_blank', {});
                     this.markOnboardingComplete();
+                });
+                document.getElementById('showOnboardingAgainBtn').addEventListener('click', () => {
+                    this.startOnboarding();
+                });
+                document.getElementById('mobile-show-onboarding-again').addEventListener('click', () => {
+                    document.getElementById('mobileControlsModal').close();
+                    this.startOnboarding();
+                });
+                document.getElementById('onboardingDontShowAgain').addEventListener('change', (e) => {
+                    localStorage.setItem('voxelshaper_onboarding_dont_show', String(!!e.target.checked));
                 });
 
                 // Quick tutorial listeners (desktop + mobile + onboarding)
@@ -5632,13 +5648,17 @@
             },
 
             startOnboarding: function () {
+                const dontShow = localStorage.getItem('voxelshaper_onboarding_dont_show') === 'true';
+                const checkbox = document.getElementById('onboardingDontShowAgain');
+                if (checkbox) checkbox.checked = dontShow;
                 trackEvent('onboarding_start');
                 document.getElementById('onboardingModal').showModal();
             },
 
             markOnboardingComplete: function () {
                 trackEvent('onboarding_complete', { action: 'start_blank' });
-                localStorage.setItem('voxelshaper_onboarding_complete', 'true');
+                const dontShow = !!document.getElementById('onboardingDontShowAgain')?.checked;
+                localStorage.setItem('voxelshaper_onboarding_dont_show', String(dontShow));
                 document.getElementById('onboardingModal').close();
             },
 
