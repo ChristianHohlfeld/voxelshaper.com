@@ -363,6 +363,15 @@
             transform: translateY(-1px);
         }
 
+        @keyframes colorControlsPulse {
+            0%, 100% { transform: scale(1); filter: brightness(1); }
+            50% { transform: scale(1.06); filter: brightness(1.25); }
+        }
+
+        .color-controls-pulse {
+            animation: colorControlsPulse 240ms ease-in-out 2;
+        }
+
         .badge-primary {
             background: linear-gradient(135deg, #3b82f6, #1d4ed8);
             color: white;
@@ -3966,6 +3975,22 @@
                 this.previewVoxel.material.color.set(this.currentColor);
             },
 
+            pulseColorControls: function () {
+                const targets = [
+                    document.getElementById('color-picker-input'),
+                    document.getElementById('mobile-color-picker'),
+                    document.getElementById('color-history-palette')
+                ].filter(Boolean);
+
+                targets.forEach((el) => {
+                    el.classList.remove('color-controls-pulse');
+                    // restart animation
+                    void el.offsetWidth;
+                    el.classList.add('color-controls-pulse');
+                    setTimeout(() => el.classList.remove('color-controls-pulse'), 520);
+                });
+            },
+
             setFlySpeed: function (newSpeed) {
                 const minSpeed = 0.01;
                 const maxSpeed = 1.0;
@@ -4090,6 +4115,8 @@
                             this.voxels.get(k).color = this.currentColor;
                             modified = true;
                             this.addColorToHistory(this.currentColor);
+                        } else if (existingVoxel && existingVoxel.color === this.currentColor) {
+                            this.pulseColorControls();
                         }
                         break;
                     case 'DELETE':
