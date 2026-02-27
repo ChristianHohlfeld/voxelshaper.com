@@ -5653,10 +5653,25 @@
             },
 
             openQuickTutorial: function (source = 'unknown') {
-                this.tutorialStep = 0;
-                this.showTutorialStep();
                 trackEvent('tutorial_open', { source, ...this.getAnalyticsContext() });
-                document.getElementById('quickTutorialModal').showModal();
+
+                const modal = document.getElementById('quickTutorialModal');
+                if (modal?.open) modal.close();
+
+                const steps = [
+                    'Mode: Add → Delete → Paint → Select.',
+                    'Use one quick edit now: place or delete one block.',
+                    'Export anytime via File → Export Options.'
+                ];
+
+                steps.forEach((text, i) => {
+                    setTimeout(() => {
+                        this.showToast('Quick Tip', text, 'info', 1800);
+                        if (i === steps.length - 1) {
+                            trackEvent('tutorial_complete', { source: `${source}_snack`, ...this.getAnalyticsContext() });
+                        }
+                    }, i * 1200);
+                });
             },
 
             startOnboarding: function () {
