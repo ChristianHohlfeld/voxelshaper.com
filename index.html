@@ -27,9 +27,9 @@
         }
 
         window.addEventListener('load', () => {
-            trackEvent('app_boot', {
-                source: window.matchMedia('(display-mode: standalone)').matches ? 'pwa' : 'web'
-            });
+            const source = window.matchMedia('(display-mode: standalone)').matches ? 'pwa' : 'web';
+            trackEvent('app_boot', { source });
+            trackEvent('landing_view', { page_path: window.location.pathname, source });
         }, { once: true });
     </script>
 
@@ -1823,6 +1823,7 @@
                     saveAs(blob, filename);
 
                     showToast('Export Complete', `${filename} saved!`, 'success');
+                    trackEvent('export_success', { format: '3mf_bambu', voxel_count: voxels.size });
 
                 } catch (err) {
                     console.error("3MF Export Error:", err);
@@ -2274,6 +2275,8 @@
             previewRoundnessFactor: parseFloat(localStorage.getItem('previewRoundnessFactor') || 0.25),
             originalVoxelsGroup: null,
             roundedVoxelsGroup: null,
+            firstInteractionTracked: false,
+            firstEditTracked: false,
             mouseState: {
                 isRotating: false, isPanning: false, isModifying: false, isDragging: false, isExtruding: false,
                 lastX: 0, lastY: 0, downX: 0, downY: 0,
@@ -2655,6 +2658,13 @@
                     if (this.isEmptyAt(e.clientX, e.clientY)) this.clearSelection();
                 }, true);
 
+                // Track first real interaction once per session
+                this.containerDiv.addEventListener('pointerdown', () => {
+                    if (this.firstInteractionTracked) return;
+                    this.firstInteractionTracked = true;
+                    trackEvent('first_interaction', { mode: this.currentMode, grid: this.GRID });
+                }, { once: true, passive: true });
+
                 // ESC or T → deselect (desktop)
                 window.addEventListener('keydown', (e) => {
                     if (document.querySelector('dialog[open]')) return;
@@ -2664,7 +2674,7 @@
 
                 // Export Modal Controls (Updated for Polyslice and 3MF)
                 document.getElementById('exportBambuStudioBtn').addEventListener('click', () => {
-                    trackEvent('export', { format: '3mf_bambu', voxel_count: this.voxels.size });
+                    trackEvent('export_click', { format: '3mf_bambu', voxel_count: this.voxels.size });
                     const scaleUnit = document.querySelector('input[name="exportScaleUnit"]:checked').value;
                     VoxelApp3MFExporter.exportBambuStudio3MF(this.voxels, this.VS, this.showToast.bind(this), this.parseKey.bind(this), scaleUnit);
                     document.getElementById('exportOptionsModal').close();
@@ -2673,6 +2683,7 @@
                     const scaleUnit = document.querySelector('input[name="exportScaleUnit"]:checked').value;
                     const shapeType = document.querySelector('input[name="exportShapeType"]:checked').value;
                     const isRounded = shapeType === 'rounded';
+                    trackEvent('export_click', { format: isRounded ? 'gcode_rounded' : 'gcode_blocky', voxel_count: this.voxels.size });
                     this.exportGCodePolyslice(scaleUnit, isRounded);
                     document.getElementById('exportOptionsModal').close();
                 });
@@ -2683,7 +2694,7 @@
                     const shapeType = document.querySelector('input[name="exportShapeType"]:checked').value;
                     const isRounded = shapeType === 'rounded';
 
-                    trackEvent('export', { format: isRounded ? 'stl_rounded' : 'stl_blocky', voxel_count: this.voxels.size });
+                    trackEvent('export_click', { format: isRounded ? 'stl_rounded' : 'stl_blocky', voxel_count: this.voxels.size });
                     this.exportSTL(scaleUnit, upAxis, isRounded);
                     document.getElementById('exportOptionsModal').close();
                 });
@@ -2792,8 +2803,14 @@
                 this.updateExportRoundnessUI();
                 this.updateInAppRoundnessUI();
                 // Onboarding listeners
-                document.getElementById('loadSampleProjectBtn').addEventListener('click', () => this.loadSampleProject());
-                document.getElementById('startBlankBtn').addEventListener('click', () => this.markOnboardingComplete());
+                document.getElementById('loadSampleProjectBtn').addEventListener('click', () => {
+                    trackEvent('start_template', { template: 'sample_project' });
+                    this.loadSampleProject();
+                });
+                document.getElementById('startBlankBtn').addEventListener('click', () => {
+                    trackEvent('start_blank', {});
+                    this.markOnboardingComplete();
+                });
             },
 
             updateExportRoundnessUI: function () {
@@ -3766,6 +3783,11 @@
                             this.addColorToHistory(this.currentColor);
                         }
                         break;
+                }
+
+                if (modified && !this.firstEditTracked) {
+                    this.firstEditTracked = true;
+                    trackEvent('first_edit', { mode, voxel_count: this.voxels.size });
                 }
 
                 if (this.currentStroke && modified) {
@@ -4874,6 +4896,7 @@
                 URL.revokeObjectURL(url);
 
                 this.showToast('Export Complete', `Downloaded ${filename}`, 'success');
+                trackEvent('export_success', { format: isRounded ? 'stl_rounded' : 'stl_blocky', voxel_count: this.voxels.size });
             },
 
             exportGCodePolyslice: async function (scaleUnit = 'mm', isRounded = false) {
@@ -4915,6 +4938,7 @@
                         URL.revokeObjectURL(url);
 
                         this.showToast('Slicing Complete', `G-Code for ${filename} downloaded!`, 'success', 3000);
+                        trackEvent('export_success', { format: isRounded ? 'gcode_rounded' : 'gcode_blocky', voxel_count: this.voxels.size });
                     } else {
                         this.showToast('Slicing Failed', 'Polyslice returned no G-Code. Check your model.', 'error', 3000);
                     }
