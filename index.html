@@ -1810,26 +1810,29 @@
     <dialog id="shareModal" class="modal">
         <div class="modal-box">
             <h3 class="font-bold text-lg">Share to VoxelShaper Hub</h3>
-            <p class="py-2 opacity-80">Publish your project so others can open, remix, and download it.</p>
-
-            <div id="shareHubInfoBox" class="alert alert-info text-sm my-3">
-                <i class="fas fa-info-circle"></i>
-                <div>
-                    <div><b>Where to find it:</b> Hub → My Models</div>
-                    <a href="https://hub.voxelshaper.com/" target="_blank" rel="noopener" class="link link-primary">Open Hub</a>
-                </div>
-            </div>
-            <label class="label cursor-pointer justify-start gap-3 py-1">
-                <input type="checkbox" id="shareHubInfoDontShow" class="checkbox checkbox-sm checkbox-primary">
-                <span class="label-text">Don’t show this tip again</span>
-            </label>
-
+            <p class="py-2 opacity-80">Upload this project to the Hub.</p>
             <div class="flex flex-col gap-3 mt-2">
                 <button id="uploadToHubFromShareBtn" class="btn btn-success"><i
                         class="fas fa-cloud-upload-alt mr-2"></i>Share to Hub</button>
             </div>
             <div class="modal-action">
                 <form method="dialog"><button class="btn btn-ghost">Cancel</button></form>
+            </div>
+        </div>
+    </dialog>
+
+    <dialog id="shareSuccessModal" class="modal">
+        <div class="modal-box">
+            <h3 class="font-bold text-lg">Shared to Hub ✅</h3>
+            <p class="py-2">Your model is now online.</p>
+            <p class="text-sm opacity-80">Find it in <b>Hub → My Models</b>.</p>
+            <label class="label cursor-pointer justify-start gap-3 mt-2">
+                <input type="checkbox" id="shareSuccessDontShow" class="checkbox checkbox-sm checkbox-primary">
+                <span class="label-text">Don’t show this again</span>
+            </label>
+            <div class="modal-action">
+                <a href="https://hub.voxelshaper.com/" target="_blank" rel="noopener" class="btn btn-primary">Open Hub</a>
+                <form method="dialog"><button class="btn">Close</button></form>
             </div>
         </div>
     </dialog>
@@ -3051,11 +3054,8 @@
                     document.getElementById('shareModal').close();
                     document.getElementById('uploadProjectModal').showModal();
                 });
-                document.getElementById('shareHubInfoDontShow').addEventListener('change', (e) => {
-                    const dontShow = !!e.target.checked;
-                    localStorage.setItem('voxelshaper_share_hub_hint_dont_show', String(dontShow));
-                    const infoBox = document.getElementById('shareHubInfoBox');
-                    if (infoBox) infoBox.style.display = dontShow ? 'none' : '';
+                document.getElementById('shareSuccessDontShow').addEventListener('change', (e) => {
+                    localStorage.setItem('voxelshaper_share_success_dont_show', String(!!e.target.checked));
                 });
 
                 document.getElementById('uploadConfirmBtn').addEventListener('click', (e) => {
@@ -3762,11 +3762,6 @@
             },
 
             openShareModal: function () {
-                const dontShow = localStorage.getItem('voxelshaper_share_hub_hint_dont_show') === 'true';
-                const checkbox = document.getElementById('shareHubInfoDontShow');
-                const infoBox = document.getElementById('shareHubInfoBox');
-                if (checkbox) checkbox.checked = dontShow;
-                if (infoBox) infoBox.style.display = dontShow ? 'none' : '';
                 document.getElementById('shareModal').showModal();
             },
 
@@ -3810,8 +3805,15 @@
                     });
                     this.currentModelId = response.public_id;
                     this.updateUrlWithModelId();
-                    this.showToast('Upload Successful!', `Project saved. Share link updated.`, 'success');
+                    this.showToast('Upload Successful', '', 'success');
                     trackEvent('upload_hub', { model_id: this.currentModelId, visibility: hubDocument.visibility });
+
+                    const dontShowShareSuccess = localStorage.getItem('voxelshaper_share_success_dont_show') === 'true';
+                    const successCheckbox = document.getElementById('shareSuccessDontShow');
+                    if (successCheckbox) successCheckbox.checked = dontShowShareSuccess;
+                    if (!dontShowShareSuccess) {
+                        document.getElementById('shareSuccessModal').showModal();
+                    }
                 } catch (error) {
                     this.showToast('Upload Failed', error.message, 'error');
                 }
