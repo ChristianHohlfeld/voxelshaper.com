@@ -432,7 +432,7 @@
 
         #grid-size-display,
         #mobile-grid-size-display,
-        #fly-speed-display {
+        #flySpeedHudValue {
             display: inline-flex;
             align-items: center;
             justify-content: center;
@@ -450,10 +450,29 @@
             max-width: 4.5ch;
         }
 
-        #fly-speed-display {
+        #flySpeedHudValue {
             width: 4ch;
             min-width: 4ch;
             max-width: 4ch;
+            display: inline-flex;
+            justify-content: center;
+            font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+            font-variant-numeric: tabular-nums;
+        }
+
+        #flySpeedHud {
+            position: absolute;
+            top: 12px;
+            right: 12px;
+            z-index: 20;
+            pointer-events: none;
+            background: rgba(15, 23, 42, 0.72);
+            color: #e2e8f0;
+            border: 1px solid rgba(255, 255, 255, 0.14);
+            border-radius: 9999px;
+            padding: 4px 10px;
+            font-size: 11px;
+            backdrop-filter: blur(4px);
         }
 
         #preview-factor-display {
@@ -1405,6 +1424,10 @@
                                             Y</span><input type="checkbox" id="invertStrafeY"
                                             class="toggle toggle-primary"></label></li>
                                 <div class="divider my-1"></div>
+                                <li class="px-2 py-1">
+                                    <label class="text-xs opacity-70">Fly Speed</label>
+                                    <input type="range" id="fly-speed-setting" min="0.01" max="1" value="0.1" step="0.01" class="range range-xs mt-1">
+                                </li>
                                 <li><a id="showOnboardingAgainBtn">Show First-Run Guide</a></li>
                                 <li><a id="resetDefaultsBtn">Reset to Default</a></li>
                             </ul>
@@ -1463,13 +1486,6 @@
 
         <!-- RIGHT ZONE -->
         <div class="controls-zone zone-right">
-            <div class="controls-group bg-base-300/30 p-1 rounded-lg">
-                <label>Fly</label>
-                <input type="range" id="fly-speed-slider" min="0.01" max="1" value="0.1" step="0.01"
-                    class="range range-xs">
-                <span id="fly-speed-display" class="text-primary font-bold text-xs w-8 text-center">0.48</span>
-            </div>
-
             <button id="shareBtn" class="btn btn-sm btn-warning btn-square" title="Share Project">
                 <i class="fas fa-share-alt"></i>
             </button>
@@ -1485,6 +1501,7 @@
         </div>
     </div>
     <div id="container">
+        <div id="flySpeedHud">Fly <span id="flySpeedHudValue">0.10</span></div>
         <canvas id="voxelCanvas" tabindex="0" width="750" height="1212" style="width: 375px; height: 606px;"></canvas>
         <div id="marquee" class="marquee"></div>
         <div id="haptic-layer"></div>
@@ -1669,6 +1686,10 @@
                 <li><label class="label cursor-pointer"><span class="label-text">Invert Strafe
                             Y</span><input type="checkbox" id="mobileInvertStrafeY"
                             class="toggle toggle-primary"></label></li>
+                <li class="pt-2">
+                    <label class="label"><span class="label-text">Fly Speed</span></label>
+                    <input type="range" id="mobile-fly-speed-setting" min="0.01" max="1" value="0.1" step="0.01" class="range range-primary">
+                </li>
             </ul>
             <div class="modal-action">
                 <button id="mobile-show-onboarding-again" class="btn btn-ghost">First-Run Guide</button>
@@ -2858,7 +2879,8 @@
                 // Desktop controls
                 document.getElementById('grid-size-slider').addEventListener('input', (e) => this.setGridSize(parseInt(e.target.value)));
                 document.getElementById('brush-size-slider').addEventListener('input', (e) => this.setBrushSize(parseInt(e.target.value)));
-                document.getElementById('fly-speed-slider').addEventListener('input', (e) => this.setFlySpeed(parseFloat(e.target.value)));
+                document.getElementById('fly-speed-setting').addEventListener('input', (e) => this.setFlySpeed(parseFloat(e.target.value)));
+                document.getElementById('mobile-fly-speed-setting').addEventListener('input', (e) => this.setFlySpeed(parseFloat(e.target.value)));
                 document.getElementById('color-picker-input').addEventListener('input', (e) => this.setColor(e.target.value));
                 document.getElementById('modeToggle').addEventListener('click', () => this.cycleMode());
                 document.getElementById('selectionLockToggle').addEventListener('click', () => this.toggleSelectionLock());
@@ -3929,8 +3951,13 @@
                 const minSpeed = 0.01;
                 const maxSpeed = 1.0;
                 this.flySpeed = Math.max(minSpeed, Math.min(maxSpeed, newSpeed));
-                document.getElementById('fly-speed-display').textContent = this.flySpeed.toFixed(2);
-                document.getElementById('fly-speed-slider').value = this.flySpeed;
+                const valueText = this.flySpeed.toFixed(2);
+                const hud = document.getElementById('flySpeedHudValue');
+                const desktopSlider = document.getElementById('fly-speed-setting');
+                const mobileSlider = document.getElementById('mobile-fly-speed-setting');
+                if (hud) hud.textContent = valueText;
+                if (desktopSlider) desktopSlider.value = this.flySpeed;
+                if (mobileSlider) mobileSlider.value = this.flySpeed;
                 localStorage.setItem('voxelEditorFlySpeed', this.flySpeed);
             },
 
