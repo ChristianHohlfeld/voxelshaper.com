@@ -6,6 +6,10 @@
     <script async src="https://www.googletagmanager.com/gtag/js?id=G-DMNJKVCNBM"></script>
     <script>
         const GA_MEASUREMENT_ID = 'G-DMNJKVCNBM';
+        const ANALYTICS_LAST_SEEN_KEY = 'vs_analytics_last_seen_ts';
+        const ANALYTICS_SESSION_KEY = 'vs_analytics_session_id';
+        const ANALYTICS_SESSION_INDEX_KEY = 'vs_analytics_session_index';
+
         window[`ga-disable-${GA_MEASUREMENT_ID}`] = false;
         window.dataLayer = window.dataLayer || [];
 
@@ -17,19 +21,68 @@
             transport_type: 'beacon'
         });
 
+        const SESSION_ID = (() => {
+            try {
+                const existing = sessionStorage.getItem(ANALYTICS_SESSION_KEY);
+                if (existing) return existing;
+                const sid = `vs-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`;
+                sessionStorage.setItem(ANALYTICS_SESSION_KEY, sid);
+                return sid;
+            } catch {
+                return `vs-${Date.now().toString(36)}-fallback`;
+            }
+        })();
+
+        function getAnalyticsContext() {
+            const uiMode = window.matchMedia('(pointer: coarse)').matches || navigator.maxTouchPoints > 0 ? 'mobile' : 'desktop';
+            return {
+                session_id: SESSION_ID,
+                ui_mode: uiMode,
+                viewport_w: window.innerWidth,
+                viewport_h: window.innerHeight,
+                page_path: window.location.pathname
+            };
+        }
+
         function trackEvent(eventName, params = {}) {
+            const payload = { ...getAnalyticsContext(), ...params };
             if (typeof gtag === 'function') {
-                gtag('event', eventName, params);
+                gtag('event', eventName, payload);
+
+                const isValueEvent = eventName === 'export_success' || eventName === 'share_success' || eventName === 'upload_hub';
+                if (isValueEvent) {
+                    try {
+                        const firstValueKey = `vs_first_value_tracked_${SESSION_ID}`;
+                        if (!sessionStorage.getItem(firstValueKey)) {
+                            sessionStorage.setItem(firstValueKey, '1');
+                            gtag('event', 'first_value', { ...getAnalyticsContext(), trigger_event: eventName });
+                        }
+                    } catch {}
+                }
                 return;
             }
 
-            console.log(`Analytics Event (gtag not found): ${eventName}`, params);
+            console.log(`Analytics Event (gtag not found): ${eventName}`, payload);
         }
+
+        window.trackEvent = trackEvent;
 
         window.addEventListener('load', () => {
             const source = window.matchMedia('(display-mode: standalone)').matches ? 'pwa' : 'web';
+            const prevSeen = Number(localStorage.getItem(ANALYTICS_LAST_SEEN_KEY) || 0);
+            const previousSessionIndex = Number(localStorage.getItem(ANALYTICS_SESSION_INDEX_KEY) || 0);
+            const sessionIndex = previousSessionIndex + 1;
+            localStorage.setItem(ANALYTICS_SESSION_INDEX_KEY, String(sessionIndex));
+            localStorage.setItem(ANALYTICS_LAST_SEEN_KEY, String(Date.now()));
+
+            trackEvent('session_start', { source, session_index: sessionIndex });
             trackEvent('app_boot', { source });
-            trackEvent('landing_view', { page_path: window.location.pathname, source });
+            trackEvent('landing_view', { source });
+
+            if (prevSeen > 0) {
+                const daysSinceLast = Math.max(0, Math.round((Date.now() - prevSeen) / 86400000));
+                trackEvent('return_session', { days_since_last: daysSinceLast, source });
+            }
         }, { once: true });
     </script>
 
@@ -365,6 +418,34 @@
             background-color: rgba(255, 255, 0, 0.1);
             pointer-events: none;
             display: none;
+        }
+
+        .onboarding-modal-box {
+            max-width: min(680px, 94vw);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            background: linear-gradient(180deg, rgba(21, 25, 33, 0.98), rgba(15, 17, 23, 0.98));
+        }
+
+        .onboarding-controls-list li {
+            line-height: 1.45;
+        }
+
+        @media (max-width: 768px) {
+            .onboarding-modal-box {
+                max-width: 94vw;
+                padding: 1rem;
+            }
+
+            .onboarding-actions {
+                width: 100%;
+                display: grid;
+                grid-template-columns: 1fr;
+                gap: 0.5rem;
+            }
+
+            .onboarding-actions .btn {
+                width: 100%;
+            }
         }
 
         #mobile-ui-container {
@@ -1680,21 +1761,17 @@
         </div>
     </dialog>
     <dialog id="onboardingModal" class="modal">
-        <div class="modal-box">
-            <h3 class="font-bold text-lg">Create a printable model in under 1 minute</h3>
-            <p class="py-2 opacity-80">Fast path: load sample → edit voxels → export STL / G-Code / 3MF.</p>
+        <div class="modal-box onboarding-modal-box">
+            <h3 id="onboardingTitle" class="font-bold text-lg">Create a printable model in under 1 minute</h3>
+            <p id="onboardingSubtitle" class="py-2 opacity-80">Fast path: load sample → edit voxels → export STL / G-Code / 3MF.</p>
             <div class="flex flex-wrap gap-2 py-2 text-xs">
                 <span class="badge badge-outline">No login required</span>
                 <span class="badge badge-outline">Free exports</span>
                 <span class="badge badge-outline">Works in browser</span>
             </div>
-            <ul class="list-disc list-inside space-y-2 pt-2">
-                <li><b>Look Around:</b> Drag with one finger.</li>
-                <li><b>Zoom &amp; Pan:</b> Pinch or drag with two fingers.</li>
-                <li><b>Paint / Select / Delete:</b> Double-tap and hold, then drag.</li>
-                <li><b>Undo:</b> Tap with three fingers.</li>
-            </ul>
-            <div class="modal-action mt-6">
+            <p id="onboardingModeHint" class="text-xs font-semibold uppercase tracking-wide text-primary pt-1"></p>
+            <ul id="onboardingControlsList" class="list-disc list-inside space-y-2 pt-2 onboarding-controls-list"></ul>
+            <div class="modal-action mt-6 onboarding-actions">
                 <button id="loadSampleProjectBtn" class="btn btn-primary">Start in 10s (Sample)</button>
                 <button id="openTutorialFromOnboarding" class="btn btn-ghost">How controls work</button>
                 <button id="startBlankBtn" class="btn">Start Blank</button>
@@ -2421,22 +2498,69 @@
                 };
             },
 
+            getOnboardingContent: function () {
+                if (this.isMobile) {
+                    return {
+                        title: 'Build your first printable model in under 1 minute',
+                        subtitle: 'Touch flow: load sample → place voxel → delete voxel → export STL / G-Code / 3MF.',
+                        modeHint: 'Mobile Touch Controls',
+                        controls: [
+                            '<b>Look around:</b> drag with one finger.',
+                            '<b>Pan & zoom:</b> pinch or drag with two fingers.',
+                            '<b>Place / paint / delete:</b> tap on the model (use Mode in the bottom bar).',
+                            '<b>Quick undo:</b> use the Undo button in the mobile overlay.'
+                        ],
+                        tutorialSteps: [
+                            'Bottom bar: tap Mode to cycle ADD → PAINT → DELETE → SELECT. Use ADD to place, DELETE to remove, SELECT to move/copy.',
+                            'Tap “Start in 10s (Sample)”, place one voxel, remove one voxel, then switch to SELECT and tap a face.',
+                            'File → Export Options: export STL, G-Code, or 3MF when your first edit is done.'
+                        ]
+                    };
+                }
+
+                return {
+                    title: 'Build your first printable model in under 1 minute',
+                    subtitle: 'Desktop flow: sample project → quick edits → export for printing.',
+                    modeHint: 'Desktop Controls (Unreal-style freelook)',
+                    controls: [
+                        '<b>Free look camera:</b> hold <b>Right Mouse Button</b> and move mouse.',
+                        '<b>Move camera:</b> use <b>W / A / S / D</b> + <b>Q / E</b>.',
+                        '<b>Use tools:</b> <b>Left Click</b> applies the active mode (Add/Paint/Delete/Select).',
+                        '<b>Mode toggle:</b> press <b>Space</b> to cycle modes quickly.'
+                    ],
+                    tutorialSteps: [
+                        'Center toolbar: click Mode to cycle ADD → PAINT → DELETE → SELECT. You can also press Space to switch quickly.',
+                        'Hold Right Mouse Button for freelook, then Left Click to place one voxel and delete one voxel.',
+                        'Open File → Export Options and export STL, G-Code, or 3MF when your first edit is done.'
+                    ]
+                };
+            },
+
+            refreshOnboardingContent: function () {
+                const content = this.getOnboardingContent();
+                const title = document.getElementById('onboardingTitle');
+                const subtitle = document.getElementById('onboardingSubtitle');
+                const modeHint = document.getElementById('onboardingModeHint');
+                const controlsList = document.getElementById('onboardingControlsList');
+
+                if (title) title.textContent = content.title;
+                if (subtitle) subtitle.textContent = content.subtitle;
+                if (modeHint) modeHint.textContent = content.modeHint;
+                if (controlsList) {
+                    controlsList.innerHTML = content.controls.map(item => `<li>${item}</li>`).join('');
+                }
+                this.tutorialSteps = content.tutorialSteps;
+                this.tutorialStep = Math.min(this.tutorialStep, Math.max(0, this.tutorialSteps.length - 1));
+            },
+
             init: function () {
                 this.setupDOM();
                 if (typeof this.keyboard === 'undefined' || this.keyboard === null) {
                     this.keyboard = {};
                 }
                 this.applyUIMode();
+                this.refreshOnboardingContent();
                 trackEvent('ui_mode_detected', this.getAnalyticsContext());
-                this.tutorialSteps = this.isMobile ? [
-                    'Bottom bar: tap Mode to cycle ADD → PAINT → DELETE → SELECT. Use ADD to place, DELETE to remove, SELECT to move/copy.',
-                    'Tap “Start in 10s (Sample)”, place one voxel, remove one voxel, then switch to SELECT and tap a face.',
-                    'File → Export Options: export STL, G-Code, or 3MF when your first edit is done.'
-                ] : [
-                    'Center toolbar: click Mode to cycle ADD → PAINT → DELETE → SELECT. Use ADD to place, DELETE to remove, SELECT to move/copy.',
-                    'Click “Start in 10s (Sample)”, place one voxel, remove one voxel, then switch to SELECT and click a face.',
-                    'File → Export Options: export STL, G-Code, or 3MF when your first edit is done.'
-                ];
                 this.setupThree();
                 this.rebuildFoundation();
                 this.setupEventListeners();
@@ -3704,6 +3828,7 @@
                 this.cam.updateProjectionMatrix();
                 this.ren.setPixelRatio(this.isMobile ? 1.5 : window.devicePixelRatio);
                 this.applyUIMode();
+                this.refreshOnboardingContent();
             },
 
             setGridSize: function (newSize) {
@@ -5596,7 +5721,7 @@
 
         document.addEventListener('DOMContentLoaded', () => VoxelApp.init());
     </script>
-    <a href="https://hub.voxelshaper.com" class="vs-nav-pill vs-pill-left"><span class="vs-arrow">←</span><span class="vs-text">Hub</span></a>
+    <a href="https://hub.voxelshaper.com" class="vs-nav-pill vs-pill-left" onclick="trackEvent('hub_open', { source: 'editor_pill' })"><span class="vs-arrow">←</span><span class="vs-text">Hub</span></a>
 
 
 </body>
