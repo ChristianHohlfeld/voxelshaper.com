@@ -159,7 +159,7 @@
 
         #controls {
             display: grid;
-            grid-template-columns: 280px 1fr 320px;
+            grid-template-columns: minmax(220px, 280px) minmax(0, 1fr) minmax(240px, 320px);
             align-items: center;
             gap: 1.5rem;
             padding: 0 2rem;
@@ -171,6 +171,7 @@
             z-index: 1000;
             box-shadow: 0 4px 30px rgba(0, 0, 0, 0.5);
             transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+            overflow: hidden;
         }
 
         .controls-zone {
@@ -192,6 +193,15 @@
             border-radius: 9999px;
             border: 1px solid rgba(255, 255, 255, 0.05);
             box-shadow: inset 0 1px 1px rgba(255, 255, 255, 0.1);
+            min-width: 0;
+            max-width: 100%;
+            overflow-x: auto;
+            overflow-y: hidden;
+            scrollbar-width: none;
+        }
+
+        .zone-center::-webkit-scrollbar {
+            display: none;
         }
 
         .zone-right {
@@ -4631,7 +4641,11 @@
                 if (this.isMobile) document.getElementById('mobile-mode-icon').className = modeInfo.icon;
 
                 const isSelectMode = this.currentMode === 'SELECT';
-                document.getElementById('selectionLockToggle').classList.toggle('hidden', !isSelectMode);
+                const selectionLockBtn = document.getElementById('selectionLockToggle');
+                selectionLockBtn.classList.toggle('invisible', !isSelectMode);
+                selectionLockBtn.classList.toggle('pointer-events-none', !isSelectMode);
+                selectionLockBtn.setAttribute('aria-hidden', String(!isSelectMode));
+                selectionLockBtn.disabled = !isSelectMode;
                 document.getElementById('mobile-selection-lock-toggle').closest('li').style.display = isSelectMode ? '' : 'none';
 
                 const isBrushMode = this.currentMode === 'PAINT' || this.currentMode === 'DELETE' || this.currentMode === 'FREE';
