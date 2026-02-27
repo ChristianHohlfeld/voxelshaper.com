@@ -363,13 +363,13 @@
             transform: translateY(-1px);
         }
 
-        @keyframes colorControlsPulse {
+        @keyframes colorSwatchBlink {
             0%, 100% { transform: scale(1); filter: brightness(1); }
-            50% { transform: scale(1.06); filter: brightness(1.25); }
+            50% { transform: scale(1.14); filter: brightness(1.45); }
         }
 
-        .color-controls-pulse {
-            animation: colorControlsPulse 240ms ease-in-out 2;
+        .color-swatch-blink {
+            animation: colorSwatchBlink 180ms ease-in-out 3;
         }
 
         .badge-primary {
@@ -4016,19 +4016,14 @@
             },
 
             pulseColorControls: function () {
-                const targets = [
-                    document.getElementById('color-picker-input'),
-                    document.getElementById('mobile-color-picker'),
-                    document.getElementById('color-history-palette')
-                ].filter(Boolean);
+                const activeSwatch = document.querySelector('#color-history-palette .color-swatch.active');
+                const target = activeSwatch || document.getElementById('color-picker-input');
+                if (!target) return;
 
-                targets.forEach((el) => {
-                    el.classList.remove('color-controls-pulse');
-                    // restart animation
-                    void el.offsetWidth;
-                    el.classList.add('color-controls-pulse');
-                    setTimeout(() => el.classList.remove('color-controls-pulse'), 520);
-                });
+                target.classList.remove('color-swatch-blink');
+                void target.offsetWidth;
+                target.classList.add('color-swatch-blink');
+                setTimeout(() => target.classList.remove('color-swatch-blink'), 620);
             },
 
             setFlySpeed: function (newSpeed) {
