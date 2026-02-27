@@ -3006,9 +3006,9 @@
                     localStorage.setItem('voxelshaper_onboarding_dont_show', String(!!e.target.checked));
                 });
 
-                // Help button opens full onboarding guide
-                document.getElementById('helpTutorialBtn').addEventListener('click', () => this.startOnboarding());
-                document.getElementById('mobile-help-tutorial').addEventListener('click', () => this.startOnboarding());
+                // Help button toggles onboarding modal on/off
+                document.getElementById('helpTutorialBtn').addEventListener('click', () => this.toggleOnboardingModal());
+                document.getElementById('mobile-help-tutorial').addEventListener('click', () => this.toggleOnboardingModal());
                 document.getElementById('tutorialPrevBtn').addEventListener('click', () => {
                     this.tutorialStep = Math.max(0, this.tutorialStep - 1);
                     this.showTutorialStep();
@@ -5680,6 +5680,16 @@
                 if (checkbox) checkbox.checked = dontShow;
                 trackEvent('onboarding_start');
                 document.getElementById('onboardingModal').showModal();
+            },
+
+            toggleOnboardingModal: function () {
+                const modal = document.getElementById('onboardingModal');
+                if (!modal) return;
+                if (modal.open) {
+                    modal.close();
+                } else {
+                    this.startOnboarding();
+                }
             },
 
             markOnboardingComplete: function () {
