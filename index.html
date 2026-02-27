@@ -1872,7 +1872,7 @@
     </dialog>
 
 
-    <div id="toast-container" class="toast toast-top toast-center z-50"></div>
+    <div id="toast-container" class="toast toast-bottom toast-end z-50"></div>
 
     <!-- Core Libraries -->
     <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/build/three.min.js"></script>
@@ -4938,11 +4938,14 @@
                 }
             },
 
-            showToast: function (title, message, type = 'info', duration = 1500) {
+            showToast: function (title, message, type = 'info', duration = 1200) {
+                const allow = /login|logged out|logout|upload/i.test(String(title || ''));
+                if (!allow) return;
+
                 const container = document.getElementById('toast-container');
                 const alertClass = { success: 'alert-success', info: 'alert-info', warning: 'alert-warning', error: 'alert-error' }[type] || 'alert-info';
                 const toast = document.createElement('div');
-                toast.className = `alert ${alertClass} shadow-lg`;
+                toast.className = `alert ${alertClass} shadow-lg text-sm`;
                 const wrap = document.createElement('div');
                 const strong = document.createElement('strong');
                 strong.textContent = title;
@@ -4956,7 +4959,7 @@
                 }
                 toast.appendChild(wrap);
                 container.appendChild(toast);
-                setTimeout(() => toast.remove(), duration);
+                setTimeout(() => toast.remove(), Math.min(duration, 1600));
             },
 
             loginLogout: async function () {
