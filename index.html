@@ -408,6 +408,17 @@
             border-radius: 50%;
             cursor: pointer;
             border: 2px solid #555;
+            transition: transform 0.12s ease, box-shadow 0.12s ease, border-color 0.12s ease;
+        }
+
+        #color-history-palette .color-swatch:hover {
+            transform: translateY(-1px);
+        }
+
+        #color-history-palette .color-swatch.active {
+            border-color: #ffffff;
+            box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.55);
+            transform: scale(1.08);
         }
 
         /* Style for the new rounded preview slider group */
@@ -2613,9 +2624,19 @@
                 return localStorage.getItem('voxelshaper_onboarding_dont_show') !== 'true';
             },
 
+            ensureFirstRunPalette: function () {
+                if (!this.isFirstRunOnboardingActive()) return;
+                if (Array.isArray(this.colorHistory) && this.colorHistory.length >= 3) return;
+
+                // Friendly starter palette (Mario-inspired)
+                this.colorHistory = ['#E52521', '#049CD8', '#43B047', '#FBD000'];
+                localStorage.setItem('voxelColorHistory', JSON.stringify(this.colorHistory));
+                this.renderColorHistory();
+            },
+
             applyFirstRunColorIfNeeded: function () {
                 if (!this.isFirstRunOnboardingActive()) return;
-                const palette = ['#FF6B6B', '#6BCB77', '#4D96FF', '#FFD93D', '#B983FF', '#FF8E3C'];
+                const palette = ['#E52521', '#049CD8', '#43B047', '#FBD000'];
                 const randomColor = palette[Math.floor(Math.random() * palette.length)];
                 this.setColor(randomColor);
             },
@@ -2664,6 +2685,7 @@
                 this.refreshOnboardingContent();
                 trackEvent('ui_mode_detected', this.getAnalyticsContext());
                 this.setupThree();
+                this.ensureFirstRunPalette();
                 this.applyFirstRunColorIfNeeded();
                 this.rebuildFoundation();
                 this.setupEventListeners();
@@ -3976,9 +3998,10 @@
             },
 
             setColor: function (newColor) {
-                this.currentColor = newColor;
+                this.currentColor = newColor.toUpperCase();
                 localStorage.setItem('voxelEditorColor', this.currentColor);
                 this.updateAllControlInputs();
+                this.renderColorHistory();
                 this.previewVoxel.material.color.set(this.currentColor);
             },
 
@@ -5659,11 +5682,23 @@
                 const palette = document.getElementById('color-history-palette');
                 palette.innerHTML = '';
                 this.colorHistory.forEach(color => {
-                    const swatch = document.createElement('div');
+                    const swatch = document.createElement('button');
+                    swatch.type = 'button';
                     swatch.className = 'color-swatch';
+                    if ((this.currentColor || '').toUpperCase() === color.toUpperCase()) {
+                        swatch.classList.add('active');
+                    }
                     swatch.style.backgroundColor = color;
                     swatch.title = color;
-                    swatch.addEventListener('click', this.setColor.bind(this, color));
+                    swatch.setAttribute('aria-label', `Set color ${color}`);
+
+                    const apply = (e) => {
+                        e.preventDefault();
+                        this.setColor(color);
+                    };
+                    swatch.addEventListener('pointerdown', apply);
+                    swatch.addEventListener('click', apply);
+
                     palette.appendChild(swatch);
                 });
             },
