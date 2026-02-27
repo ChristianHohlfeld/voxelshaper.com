@@ -2473,7 +2473,15 @@
             },
 
             computeMobileMode: function () {
-                return window.matchMedia('(pointer: coarse)').matches || navigator.maxTouchPoints > 0;
+                const ua = navigator.userAgent || '';
+                const uaMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(ua);
+                const coarse = window.matchMedia('(pointer: coarse)').matches;
+                const fine = window.matchMedia('(pointer: fine)').matches;
+                const hover = window.matchMedia('(hover: hover)').matches;
+
+                // Avoid classifying touch-enabled laptops/desktops as mobile UI.
+                if (uaMobile) return true;
+                return coarse && !fine && !hover;
             },
             applyUIMode: function () {
                 const mobile = this.computeMobileMode();
