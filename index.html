@@ -1787,13 +1787,24 @@
     </dialog>
     <dialog id="shareModal" class="modal">
         <div class="modal-box">
-            <h3 class="font-bold text-lg">Share &amp; Publish Project</h3>
-            <p class="py-4">Choose how you would like to share your work.</p>
-            <div class="flex flex-col gap-3">
-                <button id="copyShareLinkBtn" class="btn btn-primary"><i class="fas fa-link mr-2"></i>Copy
-                    Share Link</button>
+            <h3 class="font-bold text-lg">Share to VoxelShaper Hub</h3>
+            <p class="py-2 opacity-80">Publish your project so others can open, remix, and download it.</p>
+
+            <div id="shareHubInfoBox" class="alert alert-info text-sm my-3">
+                <i class="fas fa-info-circle"></i>
+                <div>
+                    <div><b>Where to find it:</b> Hub → My Models</div>
+                    <a href="https://hub.voxelshaper.com/" target="_blank" rel="noopener" class="link link-primary">Open Hub</a>
+                </div>
+            </div>
+            <label class="label cursor-pointer justify-start gap-3 py-1">
+                <input type="checkbox" id="shareHubInfoDontShow" class="checkbox checkbox-sm checkbox-primary">
+                <span class="label-text">Don’t show this tip again</span>
+            </label>
+
+            <div class="flex flex-col gap-3 mt-2">
                 <button id="uploadToHubFromShareBtn" class="btn btn-success"><i
-                        class="fas fa-cloud-upload-alt mr-2"></i>Upload to VoxelShaper Hub</button>
+                        class="fas fa-cloud-upload-alt mr-2"></i>Share to Hub</button>
             </div>
             <div class="modal-action">
                 <form method="dialog"><button class="btn btn-ghost">Cancel</button></form>
@@ -2984,7 +2995,7 @@
                 document.getElementById('saveBtnMobile').addEventListener('click', () => this.saveJSON());
                 document.getElementById('loadBtnMobile').addEventListener('click', () => document.getElementById('fileInput').click());
                 document.getElementById('exportBtnMobile').addEventListener('click', () => document.getElementById('exportOptionsModal').showModal());
-                document.getElementById('mobile-share').addEventListener('click', () => document.getElementById('shareModal').showModal());
+                document.getElementById('mobile-share').addEventListener('click', () => this.openShareModal());
 
                 document.getElementById('loadImageBtnMobile').addEventListener('click', () => this.loadImageTemplate());
                 document.getElementById('removeImageBtnMobile').addEventListener('click', () => this.removeImageTemplate());
@@ -2996,11 +3007,16 @@
                 document.getElementById('loginLogoutBtn').addEventListener('click', this.loginLogout.bind(this));
                 document.getElementById('mobile-login-logout').addEventListener('click', this.loginLogout.bind(this));
 
-                document.getElementById('shareBtn').addEventListener('click', () => document.getElementById('shareModal').showModal());
-                document.getElementById('copyShareLinkBtn').addEventListener('click', () => this.copyShareLink());
+                document.getElementById('shareBtn').addEventListener('click', () => this.openShareModal());
                 document.getElementById('uploadToHubFromShareBtn').addEventListener('click', () => {
                     document.getElementById('shareModal').close();
                     document.getElementById('uploadProjectModal').showModal();
+                });
+                document.getElementById('shareHubInfoDontShow').addEventListener('change', (e) => {
+                    const dontShow = !!e.target.checked;
+                    localStorage.setItem('voxelshaper_share_hub_hint_dont_show', String(dontShow));
+                    const infoBox = document.getElementById('shareHubInfoBox');
+                    if (infoBox) infoBox.style.display = dontShow ? 'none' : '';
                 });
 
                 document.getElementById('uploadConfirmBtn').addEventListener('click', (e) => {
@@ -3706,22 +3722,13 @@
                 window.history.replaceState({ path: newUrl.href }, '', newUrl.href);
             },
 
-            copyShareLink: function () {
-                if (!this.currentModelId) {
-                    this.showToast('Cannot Share', 'Please upload your project to the Hub first to get a shareable link.', 'warning');
-                    document.getElementById('shareModal').close();
-                    document.getElementById('uploadProjectModal').showModal();
-                    return;
-                }
-                const link = `${window.location.origin}${window.location.pathname}?modelId=${this.currentModelId}`;
-                navigator.clipboard.writeText(link).then(() => {
-                    this.showToast('Link Copied', 'The shareable link has been copied to your clipboard.', 'info');
-                    trackEvent('share', { method: 'copy_link', model_id: this.currentModelId });
-                }).catch(err => {
-                    console.error('Failed to copy share link: ', err);
-                    this.showToast('Copy Failed', 'Could not copy the link.', 'error');
-                });
-                document.getElementById('shareModal').close();
+            openShareModal: function () {
+                const dontShow = localStorage.getItem('voxelshaper_share_hub_hint_dont_show') === 'true';
+                const checkbox = document.getElementById('shareHubInfoDontShow');
+                const infoBox = document.getElementById('shareHubInfoBox');
+                if (checkbox) checkbox.checked = dontShow;
+                if (infoBox) infoBox.style.display = dontShow ? 'none' : '';
+                document.getElementById('shareModal').showModal();
             },
 
             uploadProjectToHub: async function () {
