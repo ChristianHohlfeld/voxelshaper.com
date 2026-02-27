@@ -1343,6 +1343,9 @@
             <button id="shareBtn" class="btn btn-sm btn-warning btn-square" title="Share Project">
                 <i class="fas fa-share-alt"></i>
             </button>
+            <button id="helpTutorialBtn" class="btn btn-sm btn-ghost btn-square" title="Quick tutorial">
+                <i class="fas fa-question"></i>
+            </button>
 
             <div class="flex items-center gap-2 border-l border-base-content/10 pl-2">
                 <button id="loginLogoutBtn" class="btn btn-sm btn-info btn-outline">Login</button>
@@ -1453,6 +1456,9 @@
 
             <button class="btn btn-ghost rounded-full" id="mobile-mode-toggle" aria-label="Toggle Mode">
                 <i id="mobile-mode-icon" class="fas fa-mouse-pointer"></i>
+            </button>
+            <button class="btn btn-ghost rounded-full" id="mobile-help-tutorial" aria-label="Quick tutorial">
+                <i class="fas fa-question"></i>
             </button>
         </div>
     </div>
@@ -1680,7 +1686,21 @@
             </ul>
             <div class="modal-action mt-6">
                 <button id="loadSampleProjectBtn" class="btn btn-primary">Start in 10s (Sample)</button>
+                <button id="openTutorialFromOnboarding" class="btn btn-ghost">How controls work</button>
                 <button id="startBlankBtn" class="btn">Start Blank</button>
+            </div>
+        </div>
+    </dialog>
+
+    <dialog id="quickTutorialModal" class="modal">
+        <div class="modal-box">
+            <h3 class="font-bold text-lg">Quick Tutorial</h3>
+            <p id="tutorialStepMeta" class="text-xs opacity-70 mb-2">Step 1 of 3</p>
+            <p id="tutorialStepText" class="py-2"></p>
+            <div class="modal-action mt-4">
+                <button id="tutorialPrevBtn" class="btn btn-ghost">Back</button>
+                <button id="tutorialNextBtn" class="btn btn-primary">Next</button>
+                <button id="tutorialDoneBtn" class="btn btn-success hidden">Got it</button>
             </div>
         </div>
     </dialog>
@@ -2282,6 +2302,8 @@
             roundedVoxelsGroup: null,
             firstInteractionTracked: false,
             firstEditTracked: false,
+            tutorialStep: 0,
+            tutorialSteps: [],
             mouseState: {
                 isRotating: false, isPanning: false, isModifying: false, isDragging: false, isExtruding: false,
                 lastX: 0, lastY: 0, downX: 0, downY: 0,
@@ -2381,12 +2403,30 @@
                 document.body.classList.toggle('has-mobile-bar', this.isMobile);
             },
 
+            getAnalyticsContext: function () {
+                return {
+                    ui_mode: this.isMobile ? 'mobile' : 'desktop',
+                    viewport_w: window.innerWidth,
+                    viewport_h: window.innerHeight
+                };
+            },
+
             init: function () {
                 this.setupDOM();
                 if (typeof this.keyboard === 'undefined' || this.keyboard === null) {
                     this.keyboard = {};
                 }
                 this.applyUIMode();
+                trackEvent('ui_mode_detected', this.getAnalyticsContext());
+                this.tutorialSteps = this.isMobile ? [
+                    'Bottom bar: tap Mode to cycle ADD → PAINT → DELETE → SELECT. Use ADD to place, DELETE to remove, SELECT to move/copy.',
+                    'Tap “Start in 10s (Sample)”, place one voxel, remove one voxel, then switch to SELECT and tap a face.',
+                    'File → Export Options: export STL, G-Code, or 3MF when your first edit is done.'
+                ] : [
+                    'Center toolbar: click Mode to cycle ADD → PAINT → DELETE → SELECT. Use ADD to place, DELETE to remove, SELECT to move/copy.',
+                    'Click “Start in 10s (Sample)”, place one voxel, remove one voxel, then switch to SELECT and click a face.',
+                    'File → Export Options: export STL, G-Code, or 3MF when your first edit is done.'
+                ];
                 this.setupThree();
                 this.rebuildFoundation();
                 this.setupEventListeners();
@@ -2815,6 +2855,23 @@
                 document.getElementById('startBlankBtn').addEventListener('click', () => {
                     trackEvent('start_blank', {});
                     this.markOnboardingComplete();
+                });
+
+                // Quick tutorial listeners (desktop + mobile + onboarding)
+                document.getElementById('helpTutorialBtn').addEventListener('click', () => this.openQuickTutorial('desktop_help'));
+                document.getElementById('mobile-help-tutorial').addEventListener('click', () => this.openQuickTutorial('mobile_help'));
+                document.getElementById('openTutorialFromOnboarding').addEventListener('click', () => this.openQuickTutorial('onboarding'));
+                document.getElementById('tutorialPrevBtn').addEventListener('click', () => {
+                    this.tutorialStep = Math.max(0, this.tutorialStep - 1);
+                    this.showTutorialStep();
+                });
+                document.getElementById('tutorialNextBtn').addEventListener('click', () => {
+                    this.tutorialStep = Math.min(this.tutorialSteps.length - 1, this.tutorialStep + 1);
+                    this.showTutorialStep();
+                });
+                document.getElementById('tutorialDoneBtn').addEventListener('click', () => {
+                    trackEvent('tutorial_complete', { ...this.getAnalyticsContext() });
+                    document.getElementById('quickTutorialModal').close();
                 });
             },
 
@@ -3706,6 +3763,11 @@
                 const currentIndex = modeKeys.indexOf(this.currentMode);
                 this.currentMode = modeKeys[(currentIndex + 1) % modeKeys.length];
                 this.updateModeUI();
+                trackEvent('mode_change', {
+                    from: oldMode,
+                    to: this.currentMode,
+                    ...this.getAnalyticsContext()
+                });
             },
 
             modifyVoxel: function (x, y, z, normal, modeOverride) {
@@ -5420,6 +5482,30 @@
 
 
             // --- NEW: Onboarding Methods ---
+            showTutorialStep: function () {
+                const total = this.tutorialSteps.length;
+                const index = Math.max(0, Math.min(this.tutorialStep, total - 1));
+                this.tutorialStep = index;
+
+                document.getElementById('tutorialStepMeta').textContent = `Step ${index + 1} of ${total}`;
+                document.getElementById('tutorialStepText').textContent = this.tutorialSteps[index] || '';
+
+                const prevBtn = document.getElementById('tutorialPrevBtn');
+                const nextBtn = document.getElementById('tutorialNextBtn');
+                const doneBtn = document.getElementById('tutorialDoneBtn');
+
+                prevBtn.disabled = index === 0;
+                nextBtn.classList.toggle('hidden', index === total - 1);
+                doneBtn.classList.toggle('hidden', index !== total - 1);
+            },
+
+            openQuickTutorial: function (source = 'unknown') {
+                this.tutorialStep = 0;
+                this.showTutorialStep();
+                trackEvent('tutorial_open', { source, ...this.getAnalyticsContext() });
+                document.getElementById('quickTutorialModal').showModal();
+            },
+
             startOnboarding: function () {
                 trackEvent('onboarding_start');
                 document.getElementById('onboardingModal').showModal();
