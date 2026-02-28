@@ -1377,6 +1377,12 @@
             border-color: rgba(255, 255, 255, 0.5);
         }
 
+        .vs-nav-pill.hidden-by-modal {
+            opacity: 0;
+            pointer-events: none;
+            transform: translateY(8px);
+        }
+
         @media (hover: hover) {
             .vs-nav-pill:hover {
                 transform: translateY(-3px);
@@ -2665,6 +2671,7 @@
                     if (mobileWrap) mobileWrap.style.setProperty('display', 'none', 'important');
                 }
                 document.body.classList.toggle('has-mobile-bar', this.isMobile);
+                this.syncHubOverlayVisibility();
             },
 
             getAnalyticsContext: function () {
@@ -2673,6 +2680,19 @@
                     viewport_w: window.innerWidth,
                     viewport_h: window.innerHeight
                 };
+            },
+
+            syncHubOverlayVisibility: function () {
+                const pill = document.querySelector('.vs-nav-pill.vs-pill-left');
+                if (!pill) return;
+
+                const mobileModalIds = ['mobileControlsModal', 'mobilePropertiesModal', 'mobileFileModal'];
+                const anyMobileModalOpen = mobileModalIds.some((id) => {
+                    const el = document.getElementById(id);
+                    return !!(el && el.open);
+                });
+
+                pill.classList.toggle('hidden-by-modal', this.isMobile && anyMobileModalOpen);
             },
 
             isFirstRunOnboardingActive: function () {
@@ -3226,6 +3246,13 @@
                 // Help button toggles onboarding modal on/off
                 document.getElementById('helpTutorialBtn').addEventListener('click', () => this.toggleOnboardingModal());
                 document.getElementById('mobile-help-tutorial').addEventListener('click', () => this.toggleOnboardingModal());
+
+                ['mobileControlsModal', 'mobilePropertiesModal', 'mobileFileModal'].forEach((id) => {
+                    const dlg = document.getElementById(id);
+                    if (!dlg) return;
+                    dlg.addEventListener('close', () => this.syncHubOverlayVisibility());
+                    dlg.addEventListener('cancel', () => this.syncHubOverlayVisibility());
+                });
                 document.getElementById('tutorialPrevBtn').addEventListener('click', () => {
                     this.tutorialStep = Math.max(0, this.tutorialStep - 1);
                     this.showTutorialStep();
