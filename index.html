@@ -612,6 +612,14 @@
             box-shadow: 0 8px 20px rgba(0, 0, 0, 0.25);
         }
 
+        /* Brush +/- controls deprecated in favor of Brush Picker presets */
+        #brush-size-decrease,
+        #brush-size-increase,
+        #mobile-brush-size-decrease,
+        #mobile-brush-size-increase {
+            display: none !important;
+        }
+
         #modeToggle {
             width: 7ch;
             min-width: 7ch;
@@ -1664,9 +1672,17 @@
             <div class="divider divider-horizontal mx-0"></div>
 
             <div class="controls-group">
-                <input type="color" id="color-picker-input" value="#FFFFFF"
-                    class="w-6 h-6 cursor-pointer border-none bg-transparent" title="Palette color picker">
-                <div id="color-history-palette" class="grid gap-1 ml-1" title="Tap a color to select/edit"></div>
+                <input type="color" id="color-picker-input" value="#FFFFFF" class="hidden">
+                <div class="dropdown dropdown-bottom">
+                    <button id="brushPickerBtn" tabindex="0" class="btn btn-xs btn-outline" title="Brush Picker"><i class="fas fa-brush"></i> Brush</button>
+                    <ul tabindex="0" class="dropdown-content menu p-2 shadow bg-base-100 rounded-box w-44 z-[70]">
+                        <li><button type="button" class="brush-preset-item" data-brush-preset="voxel"><i class="fas fa-cube"></i> 1x1 Cube</button></li>
+                        <li><button type="button" class="brush-preset-item" data-brush-preset="line"><i class="fas fa-slash"></i> Line</button></li>
+                        <li><button type="button" class="brush-preset-item" data-brush-preset="square3"><i class="fas fa-th-large"></i> Square 3x3</button></li>
+                        <li><button type="button" class="brush-preset-item" data-brush-preset="circle3"><i class="far fa-circle"></i> Circle 3x3</button></li>
+                    </ul>
+                </div>
+                <div id="color-history-palette" class="grid gap-1 ml-1" title="Tap to select color, double tap to edit"></div>
             </div>
 
             <div class="divider divider-horizontal mx-0"></div>
@@ -2708,6 +2724,8 @@
             currentMode: 'FREE',
             lastCycleMode: 'FREE',
             brushSize: 1,
+            brushPreset: localStorage.getItem('voxelBrushPreset') || 'voxel',
+            brushShape: localStorage.getItem('voxelBrushShape') || 'square',
             isMobile: false,
             history: [],
             historyPointer: -1,
@@ -3244,6 +3262,9 @@
                 document.getElementById('fly-speed-setting').addEventListener('input', (e) => this.setFlySpeed(parseFloat(e.target.value)));
                 document.getElementById('mobile-fly-speed-setting').addEventListener('input', (e) => this.setFlySpeed(parseFloat(e.target.value)));
                 document.getElementById('color-picker-input').addEventListener('input', (e) => this.setColor(e.target.value));
+                document.querySelectorAll('.brush-preset-item').forEach(btn => {
+                    btn.addEventListener('click', () => this.setBrushPreset(btn.dataset.brushPreset || 'voxel'));
+                });
                 document.getElementById('modeToggle').addEventListener('click', () => this.cycleMode());
                 document.getElementById('selectModeToggle').addEventListener('click', () => this.toggleSelectMode());
                 document.getElementById('rulerToggle').addEventListener('click', () => this.toggleRulerMode());
@@ -3871,7 +3892,7 @@
                             if (targetInfo) {
                                 const coords = { x: targetInfo.x, y: targetInfo.y, z: targetInfo.z };
                                 if (!this.mouseState.lastActionCoords || coords.x !== this.mouseState.lastActionCoords.x || coords.y !== this.mouseState.lastActionCoords.y || coords.z !== this.mouseState.lastActionCoords.z) {
-                                    this.drawVoxelLinePaced(this.mouseState.lastActionCoords || coords, coords, targetInfo.normal);
+                                    this.drawVoxelLinePaced((this.brushShape === 'line' ? (this.mouseState.dragMeasureStartCoords || coords) : (this.mouseState.lastActionCoords || coords)), coords, targetInfo.normal);
                                     this.mouseState.lastActionCoords = coords;
                                     this.mouseState.lastActionNormal = targetInfo.normal;
                                 }
@@ -3880,7 +3901,7 @@
                             if (targetInfo) {
                                 const coords = { x: targetInfo.x, y: targetInfo.y, z: targetInfo.z };
                                 if (!this.mouseState.lastActionCoords || coords.x !== this.mouseState.lastActionCoords.x || coords.y !== this.mouseState.lastActionCoords.y || coords.z !== this.mouseState.lastActionCoords.z) {
-                                    this.drawVoxelLinePaced(this.mouseState.lastActionCoords || coords, coords, this.mouseState.lastActionNormal || targetInfo.normal);
+                                    this.drawVoxelLinePaced((this.brushShape === 'line' ? (this.mouseState.dragMeasureStartCoords || coords) : (this.mouseState.lastActionCoords || coords)), coords, this.mouseState.lastActionNormal || targetInfo.normal);
                                     this.mouseState.lastActionCoords = coords;
                                     this.mouseState.lastActionNormal = targetInfo.normal;
                                 }
@@ -3978,7 +3999,7 @@
                                 const coords = { x: targetInfo.x, y: targetInfo.y, z: targetInfo.z };
                                 this.updateDragLengthHud(this.mouseState.dragMeasureStartCoords || coords, coords);
                                 if (!this.mouseState.lastActionCoords || coords.x !== this.mouseState.lastActionCoords.x || coords.y !== this.mouseState.lastActionCoords.y || coords.z !== this.mouseState.lastActionCoords.z) {
-                                    this.drawVoxelLinePaced(this.mouseState.lastActionCoords || coords, coords, targetInfo.normal);
+                                    this.drawVoxelLinePaced((this.brushShape === 'line' ? (this.mouseState.dragMeasureStartCoords || coords) : (this.mouseState.lastActionCoords || coords)), coords, targetInfo.normal);
                                     this.mouseState.lastActionCoords = coords;
                                     this.mouseState.lastActionNormal = targetInfo.normal;
                                 }
@@ -3990,7 +4011,7 @@
                                 const coords = { x: targetInfo.x, y: targetInfo.y, z: targetInfo.z };
                                 this.updateDragLengthHud(this.mouseState.dragMeasureStartCoords || coords, coords);
                                 if (!this.mouseState.lastActionCoords || coords.x !== this.mouseState.lastActionCoords.x || coords.y !== this.mouseState.lastActionCoords.y || coords.z !== this.mouseState.lastActionCoords.z) {
-                                    this.drawVoxelLinePaced(this.mouseState.lastActionCoords || coords, coords, this.mouseState.lastActionNormal || targetInfo.normal);
+                                    this.drawVoxelLinePaced((this.brushShape === 'line' ? (this.mouseState.dragMeasureStartCoords || coords) : (this.mouseState.lastActionCoords || coords)), coords, this.mouseState.lastActionNormal || targetInfo.normal);
                                     this.mouseState.lastActionCoords = coords;
                                     this.mouseState.lastActionNormal = targetInfo.normal;
                                 }
@@ -4608,9 +4629,15 @@
 
                 for (let i = 0; i < size; i++) {
                     for (let j = 0; j < size; j++) {
+                        const di = i - halfSize;
+                        const dj = j - halfSize;
+                        if (this.brushShape === 'circle') {
+                            const r = halfSize + 0.25;
+                            if ((di * di + dj * dj) > (r * r)) continue;
+                        }
                         const coords = { x: x, y: y, z: z };
-                        coords[iter1] += i - halfSize;
-                        coords[iter2] += j - halfSize;
+                        coords[iter1] += di;
+                        coords[iter2] += dj;
 
                         this._modifySingleVoxel(coords.x, coords.y, coords.z, modeOverride);
                     }
@@ -5712,9 +5739,34 @@
                 }
             },
 
+            setBrushPreset: function (preset) {
+                const p = preset || 'voxel';
+                this.brushPreset = p;
+                if (p === 'voxel') {
+                    this.brushSize = 1;
+                    this.brushShape = 'square';
+                } else if (p === 'line') {
+                    this.brushSize = 1;
+                    this.brushShape = 'line';
+                } else if (p === 'square3') {
+                    this.brushSize = 3;
+                    this.brushShape = 'square';
+                } else if (p === 'circle3') {
+                    this.brushSize = 3;
+                    this.brushShape = 'circle';
+                }
+                localStorage.setItem('voxelBrushPreset', this.brushPreset);
+                localStorage.setItem('voxelBrushShape', this.brushShape);
+                localStorage.setItem('voxelEditorBrushSize', this.brushSize);
+                const btn = document.getElementById('brushPickerBtn');
+                if (btn) btn.innerHTML = `<i class="fas fa-brush"></i> ${p === 'line' ? 'Line' : p === 'circle3' ? 'Circle' : p === 'square3' ? 'Square' : 'Brush'}`;
+                this.updateAllControlInputs();
+            },
+
             setBrushSize: function (newSize) {
                 this.brushSize = Math.max(1, Math.min(10, parseInt(newSize, 10) || 1));
                 localStorage.setItem('voxelEditorBrushSize', this.brushSize);
+                if (this.brushSize === 1 && this.brushShape !== 'line') this.brushPreset = 'voxel';
                 this.updateAllControlInputs();
             },
 
@@ -6237,6 +6289,8 @@
                 document.getElementById('grid-size-display').textContent = `${this.GRID}³`;
                 document.getElementById('color-picker-input').value = this.currentColor;
                 document.getElementById('brush-size-display').textContent = `${this.brushSize}x${this.brushSize}`;
+                const brushBtn = document.getElementById('brushPickerBtn');
+                if (brushBtn) brushBtn.innerHTML = `<i class="fas fa-brush"></i> ${this.brushPreset === 'line' ? 'Line' : this.brushPreset === 'circle3' ? 'Circle' : this.brushPreset === 'square3' ? 'Square' : 'Brush'}`;
                 this.updateSoundButtonUI();
                 this.updatePhysicsButtonsUI();
 
@@ -6311,7 +6365,7 @@
                     if (index === this.activePaletteIndex) swatch.classList.add('active');
                     swatch.style.backgroundColor = color;
                     swatch.title = color;
-                    swatch.setAttribute('aria-label', `Edit color slot ${index + 1}`);
+                    swatch.setAttribute('aria-label', `Select color slot ${index + 1} (double click to edit)`);
 
                     const openPickerNearPointer = (picker, e) => {
                         if (!picker) return;
@@ -6357,15 +6411,9 @@
                     };
 
                     swatch.addEventListener('pointerdown', pick);
-                    swatch.addEventListener('click', (e) => {
-                        if (!this.isMobile && e.detail === 1) {
-                            // Desktop: open picker on normal click (no more blocked flow)
-                            editColor(e);
-                            return;
-                        }
-                        pick(e);
-                    });
+                    swatch.addEventListener('click', pick);
                     swatch.addEventListener('dblclick', editColor);
+                    swatch.addEventListener('contextmenu', editColor);
                     palette.appendChild(swatch);
                 });
             },
