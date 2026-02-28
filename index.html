@@ -1685,6 +1685,9 @@
 
         <!-- RIGHT ZONE -->
         <div class="controls-zone zone-right">
+            <button id="lookYToggleBtn" class="btn btn-sm btn-ghost" title="Look Y: Inverted" aria-label="Toggle Look Up/Down inversion">
+                <span id="lookYToggleLabel">Look Y: Inv</span>
+            </button>
             <button id="soundToggleBtn" class="btn btn-sm btn-ghost btn-square" title="Sound: On" aria-label="Toggle sound">
                 <i id="soundToggleIcon" class="fas fa-volume-up"></i>
             </button>
@@ -3376,6 +3379,7 @@
 
                 document.getElementById('shareBtn').addEventListener('click', () => this.openShareModal());
                 document.getElementById('soundToggleBtn').addEventListener('click', () => this.toggleSound());
+                document.getElementById('lookYToggleBtn').addEventListener('click', () => this.toggleLookY());
                 document.getElementById('uploadToHubFromShareBtn').addEventListener('click', () => {
                     document.getElementById('shareModal').close();
                     document.getElementById('uploadProjectModal').showModal();
@@ -6115,6 +6119,7 @@
                 document.getElementById('invertZoom').checked = this.controls.invertZoom;
                 document.getElementById('invertStrafeX').checked = this.controls.invertStrafeX;
                 document.getElementById('invertStrafeY').checked = this.controls.invertStrafeY;
+                this.updateLookYToggleUI();
                 const soundToggleMenu = document.getElementById('soundToggleMenu');
                 if (soundToggleMenu) soundToggleMenu.checked = !!this.soundEnabled;
                 const mobileSoundToggleMenu = document.getElementById('mobileSoundToggleMenu');
@@ -6427,6 +6432,24 @@
                     this.hapticLayer.id = 'haptic-layer';
                     this.containerDiv.appendChild(this.hapticLayer);
                 }
+            },
+
+            updateLookYToggleUI: function () {
+                const btn = document.getElementById('lookYToggleBtn');
+                const label = document.getElementById('lookYToggleLabel');
+                if (!btn || !label) return;
+                const inverted = !!this.controls.invertLookY;
+                btn.title = inverted ? 'Look Y: Inverted (tap to set normal)' : 'Look Y: Normal (tap to invert)';
+                label.textContent = inverted ? 'Look Y: Inv' : 'Look Y: Norm';
+                btn.classList.toggle('btn-accent', inverted);
+                btn.classList.toggle('btn-ghost', !inverted);
+            },
+
+            toggleLookY: function () {
+                this.controls.invertLookY = !this.controls.invertLookY;
+                localStorage.setItem('invertLookY', this.controls.invertLookY);
+                this.updateAllControlInputs();
+                this.showToast('Look Up/Down', this.controls.invertLookY ? 'Inverted' : 'Normal', 'info', 900);
             },
 
             updateSoundButtonUI: function () {
