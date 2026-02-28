@@ -4492,8 +4492,10 @@
                 if (currentNormalIndex === -1 || targetNormalIndex === currentNormalIndex) {
                     if (this.selectionNormalIndex == null) this.selectionNormalIndex = targetNormalIndex;
                     if (!this.selectedFaces.has(target.faceKey)) {
+                        const before = new Set(this.selectedFaces);
                         this.selectedFaces.add(target.faceKey);
                         this.updateSelectionVisuals();
+                        this.recordSelectionHistoryStep(before, this.selectedFaces);
                     }
                     return true;
                 }
@@ -4627,14 +4629,17 @@
                     }
                 }
 
+                const before = new Set(this.selectedFaces);
                 this.selectedFaces = base;
                 this.updateSelectionVisuals();
+                this.recordSelectionHistoryStep(before, this.selectedFaces);
                 this.marqueeElement.style.display = 'none';
                 return true;
             },
 
             selectVoxelsInMarquee: function () {
                 if (!this.selectionChange.before) return;
+                const before = new Set(this.selectedFaces);
                 const rect = this.containerDiv.getBoundingClientRect();
                 const startX = parseFloat(this.marqueeElement.style.left) + rect.left;
                 const startY = parseFloat(this.marqueeElement.style.top) + rect.top;
@@ -4674,6 +4679,7 @@
                     }
                 });
                 this.updateSelectionVisuals();
+                this.recordSelectionHistoryStep(before, this.selectedFaces);
             },
 
             handleFaceSelection: function (event) {
@@ -4794,13 +4800,21 @@
                 return intersects.length > 0 ? intersects[0] : null;
             },
 
+            recordSelectionHistoryStep: function (beforeSet, afterSet) {
+                const before = beforeSet ? new Set(beforeSet) : new Set();
+                const after = afterSet ? new Set(afterSet) : new Set();
+                if (before.size === after.size && [...before].every(v => after.has(v))) return;
+                this.addHistoryStep({ type: 'SELECT', before, after });
+                if (this.selectionChange) this.selectionChange.before = new Set(after);
+            },
+
             clearSelection: function () {
                 if (this.selectedFaces.size > 0) {
                     const before = new Set(this.selectedFaces);
                     this.selectedFaces.clear();
                     this.selectionNormalIndex = null;
                     this.updateSelectionVisuals();
-                    this.addHistoryStep({ type: 'SELECT', before, after: new Set() });
+                    this.recordSelectionHistoryStep(before, new Set());
                 }
             },
 
