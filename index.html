@@ -2826,7 +2826,7 @@
                 lastPinchCenter: null,
             },
             controls: {
-                invertLookX: false, invertLookY: true, invertZoom: true,
+                invertLookX: false, invertLookY: false, invertZoom: true,
                 invertStrafeX: false, invertStrafeY: false,
             },
             user: null,
@@ -3200,7 +3200,7 @@
                 // END NEW STATE INITIALIZATION
 
                 this.controls.invertLookX = localStorage.getItem('invertLookX') === 'true';
-                this.controls.invertLookY = localStorage.getItem('invertLookY') !== 'false';
+                this.controls.invertLookY = localStorage.getItem('invertLookY') === 'true';
                 this.controls.invertZoom = localStorage.getItem('invertZoom') !== 'false';
                 this.controls.invertStrafeX = localStorage.getItem('invertStrafeX') === 'true';
                 this.controls.invertStrafeY = localStorage.getItem('invertStrafeY') === 'true';
@@ -3964,23 +3964,17 @@
                         }
                         this.touchState.lastPinchDist = newDist;
 
-                        // Two-finger parallel slide = viewport-oriented pan (respect camera orientation, no look rotation)
+                        // Two-finger parallel slide = camera-oriented pan (legacy behavior)
                         if (this.touchState.lastPinchCenter) {
                             const deltaX = center.x - this.touchState.lastPinchCenter.x;
                             const deltaY = center.y - this.touchState.lastPinchCenter.y;
 
                             if (Math.abs(deltaX) > PAN_DEADZONE_PX || Math.abs(deltaY) > PAN_DEADZONE_PX) {
-                                const baseMoveX = -deltaX;
-                                const baseMoveY = deltaY;
-                                const moveX = this.controls.invertStrafeX ? -baseMoveX : baseMoveX;
-                                const moveY = this.controls.invertStrafeY ? -baseMoveY : baseMoveY;
-
-                                const forward = this.cam.getWorldDirection(new THREE.Vector3());
-                                const right = new THREE.Vector3().crossVectors(this.cam.up, forward).normalize();
-                                const up = this.cam.up.clone().normalize();
-
-                                this.cam.position.addScaledVector(right, moveX * this.PAN_SPEED);
-                                this.cam.position.addScaledVector(up, moveY * this.PAN_SPEED);
+                                const strafeX = this.controls.invertStrafeX ? deltaX : -deltaX;
+                                const strafeY = this.controls.invertStrafeY ? -deltaY : deltaY;
+                                const pan = new THREE.Vector3(strafeX * this.PAN_SPEED, strafeY * this.PAN_SPEED, 0);
+                                pan.applyQuaternion(this.cam.quaternion);
+                                this.cam.position.add(pan);
                             }
                         }
                         this.touchState.lastPinchCenter = center;
@@ -6083,14 +6077,15 @@
                     this.mouseState.mouseMovementY = 0;
                     const forward = new THREE.Vector3();
                     this.cam.getWorldDirection(forward);
-                    const right = new THREE.Vector3().crossVectors(this.cam.up, forward).normalize();
-                    // Desktop fly mapping stays fixed (avoid accidental inversion from touch strafe settings).
+                    const right = new THREE.Vector3().crossVectors(forward, this.cam.up).normalize();
+                    const strafeXSpeed = this.controls.invertStrafeX ? -this.flySpeed : this.flySpeed;
+                    const strafeYSpeed = this.controls.invertStrafeY ? -this.flySpeed : this.flySpeed;
                     if (this.keyboard['w']) this.cam.position.addScaledVector(forward, this.flySpeed);
                     if (this.keyboard['s']) this.cam.position.addScaledVector(forward, -this.flySpeed);
-                    if (this.keyboard['a']) this.cam.position.addScaledVector(right, -this.flySpeed);
-                    if (this.keyboard['d']) this.cam.position.addScaledVector(right, this.flySpeed);
-                    if (this.keyboard['q']) this.cam.position.y += this.flySpeed;
-                    if (this.keyboard['e']) this.cam.position.y -= this.flySpeed;
+                    if (this.keyboard['a']) this.cam.position.addScaledVector(right, -strafeXSpeed);
+                    if (this.keyboard['d']) this.cam.position.addScaledVector(right, strafeXSpeed);
+                    if (this.keyboard['e']) this.cam.position.y += strafeYSpeed;
+                    if (this.keyboard['q']) this.cam.position.y -= strafeYSpeed;
                 }
 
                 if (this.isPhysicsPlaying && this.physicsWorld) {
@@ -6320,7 +6315,7 @@
 
             resetToDefaults: function () {
                 this.controls.invertLookX = false;
-                this.controls.invertLookY = true;
+                this.controls.invertLookY = false;
                 this.controls.invertZoom = true;
                 this.controls.invertStrafeX = false;
                 this.controls.invertStrafeY = false;
