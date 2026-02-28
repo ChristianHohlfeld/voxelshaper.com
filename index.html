@@ -1507,9 +1507,8 @@
             <div class="divider divider-horizontal mx-0"></div>
 
             <div class="controls-group">
-                <input type="color" id="color-picker-input" value="#FFFFFF"
-                    class="w-6 h-6 cursor-pointer border-none bg-transparent" title="Custom color">
-                <div id="color-history-palette" class="grid gap-1 ml-1" title="Quick colors"></div>
+                <input type="color" id="color-picker-input" value="#FFFFFF" class="hidden" title="Palette color picker">
+                <div id="color-history-palette" class="grid gap-1 ml-1" title="Tap a color to select/edit"></div>
             </div>
 
             <div class="divider divider-horizontal mx-0"></div>
@@ -1652,8 +1651,7 @@
                 </ul>
             </div>
 
-            <input type="color" id="mobile-color-picker" value="#FFFFFF"
-                class="rounded-full p-1 border-2 border-base-content/50 bg-clip-content">
+            <input type="color" id="mobile-color-picker" value="#FFFFFF" class="hidden">
 
             <button class="btn btn-ghost rounded-full" id="mobile-mode-toggle" aria-label="Cycle Add/Delete/Paint">
                 <i id="mobile-mode-icon" class="fas fa-plus-square"></i>
@@ -2512,6 +2510,7 @@
             history: [],
             historyPointer: -1,
             colorHistory: [],
+            activePaletteIndex: 3,
             selectionChange: { before: null },
             currentStroke: null,
             templateImageMesh: null,
@@ -2892,6 +2891,13 @@
                 this.colorHistory = JSON.parse(localStorage.getItem('voxelColorHistory')) || ['#E52521', '#049CD8', '#43B047', '#FBD000'];
                 if (!Array.isArray(this.colorHistory) || this.colorHistory.length !== 4) {
                     this.colorHistory = ['#E52521', '#049CD8', '#43B047', '#FBD000'];
+                }
+                this.activePaletteIndex = parseInt(localStorage.getItem('voxelActivePaletteIndex') || 3, 10);
+                if (Number.isNaN(this.activePaletteIndex) || this.activePaletteIndex < 0 || this.activePaletteIndex > 3) {
+                    this.activePaletteIndex = 3;
+                }
+                if (!this.colorHistory.includes((this.currentColor || '').toUpperCase())) {
+                    this.currentColor = this.colorHistory[this.activePaletteIndex] || '#FBD000';
                 }
                 this.isSelectionLocked = localStorage.getItem('isSelectionLocked') === 'true';
 
@@ -4062,11 +4068,13 @@
                     this.colorHistory = ['#E52521', '#049CD8', '#43B047', '#FBD000'];
                 }
 
-                if (!this.colorHistory.includes(this.currentColor)) {
-                    this.colorHistory[0] = this.currentColor;
-                    localStorage.setItem('voxelColorHistory', JSON.stringify(this.colorHistory));
+                if (this.activePaletteIndex < 0 || this.activePaletteIndex > 3) {
+                    this.activePaletteIndex = 3;
                 }
+                this.colorHistory[this.activePaletteIndex] = this.currentColor;
 
+                localStorage.setItem('voxelColorHistory', JSON.stringify(this.colorHistory));
+                localStorage.setItem('voxelActivePaletteIndex', String(this.activePaletteIndex));
                 localStorage.setItem('voxelEditorColor', this.currentColor);
                 this.updateAllControlInputs();
                 this.renderColorHistory();
@@ -5736,24 +5744,34 @@
             renderColorHistory: function () {
                 const palette = document.getElementById('color-history-palette');
                 palette.innerHTML = '';
-                this.colorHistory.forEach(color => {
+                this.colorHistory.forEach((color, index) => {
                     const swatch = document.createElement('button');
                     swatch.type = 'button';
                     swatch.className = 'color-swatch';
-                    if ((this.currentColor || '').toUpperCase() === color.toUpperCase()) {
-                        swatch.classList.add('active');
-                    }
+                    if (index === this.activePaletteIndex) swatch.classList.add('active');
                     swatch.style.backgroundColor = color;
                     swatch.title = color;
-                    swatch.setAttribute('aria-label', `Set color ${color}`);
+                    swatch.setAttribute('aria-label', `Edit color slot ${index + 1}`);
 
-                    const apply = (e) => {
+                    const pick = (e) => {
                         e.preventDefault();
-                        this.setColor(color);
-                    };
-                    swatch.addEventListener('pointerdown', apply);
-                    swatch.addEventListener('click', apply);
+                        this.activePaletteIndex = index;
+                        localStorage.setItem('voxelActivePaletteIndex', String(this.activePaletteIndex));
+                        this.currentColor = color.toUpperCase();
+                        localStorage.setItem('voxelEditorColor', this.currentColor);
+                        this.updateAllControlInputs();
+                        this.renderColorHistory();
+                        this.previewVoxel.material.color.set(this.currentColor);
 
+                        const picker = document.getElementById('color-picker-input');
+                        if (picker) {
+                            picker.value = this.currentColor;
+                            picker.click();
+                        }
+                    };
+
+                    swatch.addEventListener('pointerdown', pick);
+                    swatch.addEventListener('click', pick);
                     palette.appendChild(swatch);
                 });
             },
