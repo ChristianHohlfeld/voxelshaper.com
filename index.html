@@ -6840,6 +6840,47 @@ const coords = { x: x, y: y, z: z };
     <a href="https://hub.voxelshaper.com" class="vs-nav-pill vs-pill-left" onclick="trackEvent('hub_open', { source: 'editor_pill' })"><span class="vs-arrow">←</span><span class="vs-text">Hub</span></a>
 
 
+<style>
+  .vs-auth-panel {
+    background: rgba(22, 27, 34, 0.92) !important;
+    border: 1px solid rgba(255,255,255,0.10) !important;
+    border-radius: 14px !important;
+    box-shadow: 0 16px 40px rgba(0,0,0,0.42) !important;
+    backdrop-filter: blur(10px);
+    -webkit-backdrop-filter: blur(10px);
+  }
+  .vs-auth-title { font-weight: 700; letter-spacing: .01em; }
+  .vs-auth-sub { opacity: .75; font-size: .9rem; }
+</style>
+<script>
+(function(){
+  function normalizeAuthDialogs(){
+    const candidates = document.querySelectorAll('#authModal,#auth-modal,#loginModal,#login-modal,.auth-modal,[id*="auth"][class*="modal"]');
+    candidates.forEach(modal=>{
+      const panel = modal.querySelector('.modal-box,.card,.dialog-panel,.bg-base-100,.bg-white') || modal.firstElementChild;
+      if(panel){
+        panel.classList.add('vs-auth-panel');
+        panel.classList.add('max-w-md');
+      }
+      const title = modal.querySelector('h2,h3,.modal-title,.card-title');
+      if(title) title.classList.add('vs-auth-title');
+      const sub = modal.querySelector('p,.text-sm,.opacity-70');
+      if(sub) sub.classList.add('vs-auth-sub');
+      modal.querySelectorAll('input[type="email"],input[type="text"],input[type="password"]').forEach(i=>{
+        i.classList.add('input','input-bordered','w-full');
+        i.style.minHeight = '42px';
+      });
+      modal.querySelectorAll('button').forEach(b=>{
+        if(!b.classList.contains('btn')) b.classList.add('btn');
+      });
+      const prim = modal.querySelector('button[type="submit"],#sendMagicLinkBtn,#authLoginBtn,.btn-primary');
+      if(prim) prim.classList.add('btn-primary');
+    });
+  }
+  if(document.readyState==='loading') document.addEventListener('DOMContentLoaded', normalizeAuthDialogs);
+  else normalizeAuthDialogs();
+})();
+</script>
 </body>
 
 </html>
