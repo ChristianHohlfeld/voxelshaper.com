@@ -688,13 +688,7 @@
             transform: translateX(-100%);
         }
 
-        /* Brush +/- controls deprecated in favor of Brush Picker presets */
-        #brush-size-decrease,
-        #brush-size-increase,
-        #mobile-brush-size-decrease,
-        #mobile-brush-size-increase {
-            display: none !important;
-        }
+        
 
         #modeToggle {
             width: 7ch;
@@ -1749,17 +1743,6 @@
 
             <div class="controls-group">
                 <input type="color" id="color-picker-input" value="#FFFFFF" class="hidden">
-                <details id="brushPickerDetails" class="dropdown dropdown-bottom">
-                    <summary id="brushPickerBtn" class="btn btn-xs btn-outline list-none" title="Brush Picker"><i class="fas fa-brush"></i> Brush</summary>
-                    <ul class="dropdown-content menu p-2 shadow bg-base-100 rounded-box w-48 z-[80]">
-                        <li><button type="button" class="brush-preset-item" data-brush-preset="voxel"><i class="fas fa-cube"></i> 1x1 Cube</button></li>
-                        <li><button type="button" class="brush-preset-item" data-brush-preset="square2"><i class="fas fa-th"></i> Square 2x2</button></li>
-                        <li><button type="button" class="brush-preset-item" data-brush-preset="square3"><i class="fas fa-th-large"></i> Square 3x3</button></li>
-                        <li><button type="button" class="brush-preset-item" data-brush-preset="square4"><i class="fas fa-border-all"></i> Square 4x4</button></li>
-                        <li><button type="button" class="brush-preset-item" data-brush-preset="line"><i class="fas fa-slash"></i> Line</button></li>
-                        <li><button type="button" class="brush-preset-item" data-brush-preset="circle3"><i class="far fa-circle"></i> Circle 3x3</button></li>
-                    </ul>
-                </details>
                 <div id="color-history-palette" class="grid gap-1 ml-1" title="Tap to select color, double tap to edit"></div>
             </div>
 
@@ -1768,7 +1751,7 @@
             <div class="controls-group">
                 <button id="modeToggle" class="btn btn-xs btn-neutral" title="Cycle mode (Space)">Add</button>
                 <button id="selectModeToggle" class="btn btn-xs btn-outline">Extrude</button>
-                <button id="rulerToggle" class="btn btn-xs btn-outline" title="Toggle floor grid ruler"><i class="fas fa-ruler-horizontal"></i> Grid Ruler</button>
+                
                 <button id="selectionLockToggle" class="btn btn-xs btn-ghost btn-square"><i
                         class="fas fa-lock"></i></button>
                 <span class="text-[10px] opacity-60 hidden md:inline" title="Desktop shortcut">Space = mode</span>
@@ -1932,9 +1915,6 @@
             <button class="btn btn-ghost rounded-full" id="mobile-select-toggle" aria-label="Toggle Extrude mode">
                 <i class="fas fa-mouse-pointer"></i>
             </button>
-            <button class="btn btn-ghost rounded-full" id="mobile-ruler-toggle" aria-label="Toggle floor grid ruler">
-                <i class="fas fa-ruler-horizontal"></i>
-            </button>
             <button class="btn btn-ghost rounded-full" id="mobile-help-tutorial" aria-label="Show onboarding">
                 <i class="fas fa-question"></i>
             </button>
@@ -2029,17 +2009,6 @@
                         <label class="flex items-center gap-1"><input type="radio" name="mobileLengthUnit" id="mobile-length-unit-mm" value="mm" class="radio radio-primary radio-sm" checked> mm</label>
                         <label class="flex items-center gap-1"><input type="radio" name="mobileLengthUnit" id="mobile-length-unit-cm" value="cm" class="radio radio-primary radio-sm"> cm</label>
                     </div>
-                </li>
-                <li class="pt-2">
-                    <label class="label"><span class="label-text">Brush Preset</span></label>
-                    <select id="mobile-brush-preset" class="select select-bordered select-sm w-full">
-                        <option value="voxel">1x1 Cube</option>
-                        <option value="square2">Square 2x2</option>
-                        <option value="square3">Square 3x3</option>
-                        <option value="square4">Square 4x4</option>
-                        <option value="line">Line</option>
-                        <option value="circle3">Circle 3x3</option>
-                    </select>
                 </li>
                 <li class="pt-2">
                     <label class="label cursor-pointer"><span class="label-text">Rounded Preview</span><input type="checkbox" id="mobile-roundness-toggle" class="toggle toggle-accent"></label>
@@ -2809,10 +2778,7 @@
             flySpeed: 0.1,
             currentMode: 'FREE',
             lastCycleMode: 'FREE',
-            brushSize: 1,
-            brushPreset: localStorage.getItem('voxelBrushPreset') || 'voxel',
-            brushShape: localStorage.getItem('voxelBrushShape') || 'square',
-            isMobile: false,
+            brushSize: 1,            isMobile: false,
             history: [],
             historyPointer: -1,
             colorHistory: [],
@@ -2840,7 +2806,7 @@
             hapticLayer: null,
             soundEnabled: localStorage.getItem('voxelSoundEnabled') !== 'false',
             lengthUnit: localStorage.getItem('voxelLengthUnit') || 'mm',
-            gridRulerEnabled: localStorage.getItem('gridRulerEnabled') === 'true',
+            gridRulerEnabled: true,
             audioCtx: null,
             lastSoundAt: 0,
             lastVisualFxAt: 0,
@@ -3339,17 +3305,9 @@
                 document.getElementById('brush-size-increase').addEventListener('click', () => this.setBrushSize(this.brushSize + 1));
                 document.getElementById('fly-speed-setting').addEventListener('input', (e) => this.setFlySpeed(parseFloat(e.target.value)));
                 document.getElementById('mobile-fly-speed-setting').addEventListener('input', (e) => this.setFlySpeed(parseFloat(e.target.value)));
-                document.getElementById('color-picker-input').addEventListener('input', (e) => this.setColor(e.target.value));
-                document.querySelectorAll('.brush-preset-item').forEach(btn => {
-                    btn.addEventListener('click', () => {
-                        this.setBrushPreset(btn.dataset.brushPreset || 'voxel');
-                        document.getElementById('brushPickerDetails')?.removeAttribute('open');
-                    });
-                });
-                document.getElementById('mobile-brush-preset').addEventListener('change', (e) => this.setBrushPreset(e.target.value));
+                document.getElementById('color-picker-input').addEventListener('input', (e) => this.setColor(e.target.value));});
                 document.getElementById('modeToggle').addEventListener('click', () => this.cycleMode());
                 document.getElementById('selectModeToggle').addEventListener('click', () => this.toggleSelectMode());
-                document.getElementById('rulerToggle').addEventListener('click', () => this.toggleGridRuler());
                 document.getElementById('onboardingModeAdd').addEventListener('click', () => this.setModeExplicit('FREE', 'onboarding')); 
                 document.getElementById('onboardingModeDelete').addEventListener('click', () => this.setModeExplicit('DELETE', 'onboarding'));
                 document.getElementById('onboardingModePaint').addEventListener('click', () => this.setModeExplicit('PAINT', 'onboarding'));
@@ -3452,7 +3410,6 @@
                 document.getElementById('mobile-overlay-redo').addEventListener('click', () => this.redo());
                 document.getElementById('mobile-mode-toggle').addEventListener('click', () => this.cycleMode());
                 document.getElementById('mobile-select-toggle').addEventListener('click', () => this.toggleSelectMode());
-                document.getElementById('mobile-ruler-toggle').addEventListener('click', () => this.toggleGridRuler());
                 document.getElementById('mobile-selection-lock-toggle').addEventListener('click', () => this.toggleSelectionLock());
                 document.getElementById('mobile-color-picker').addEventListener('input', (e) => this.setColor(e.target.value));
                 document.getElementById('mobile-canvas-color-picker').addEventListener('input', (e) => this.setColor(e.target.value));
@@ -3965,7 +3922,7 @@
                             if (targetInfo) {
                                 const coords = { x: targetInfo.x, y: targetInfo.y, z: targetInfo.z };
                                 if (!this.mouseState.lastActionCoords || coords.x !== this.mouseState.lastActionCoords.x || coords.y !== this.mouseState.lastActionCoords.y || coords.z !== this.mouseState.lastActionCoords.z) {
-                                    this.drawVoxelLinePaced((this.brushShape === 'line' ? (this.mouseState.dragMeasureStartCoords || coords) : (this.mouseState.lastActionCoords || coords)), coords, targetInfo.normal);
+                                    this.drawVoxelLinePaced(this.mouseState.lastActionCoords || coords, coords, targetInfo.normal);
                                     this.mouseState.lastActionCoords = coords;
                                     this.mouseState.lastActionNormal = targetInfo.normal;
                                 }
@@ -3974,7 +3931,7 @@
                             if (targetInfo) {
                                 const coords = { x: targetInfo.x, y: targetInfo.y, z: targetInfo.z };
                                 if (!this.mouseState.lastActionCoords || coords.x !== this.mouseState.lastActionCoords.x || coords.y !== this.mouseState.lastActionCoords.y || coords.z !== this.mouseState.lastActionCoords.z) {
-                                    this.drawVoxelLinePaced((this.brushShape === 'line' ? (this.mouseState.dragMeasureStartCoords || coords) : (this.mouseState.lastActionCoords || coords)), coords, this.mouseState.lastActionNormal || targetInfo.normal);
+                                    this.drawVoxelLinePaced(this.mouseState.lastActionCoords || coords, coords, this.mouseState.lastActionNormal || targetInfo.normal);
                                     this.mouseState.lastActionCoords = coords;
                                     this.mouseState.lastActionNormal = targetInfo.normal;
                                 }
@@ -4065,13 +4022,8 @@
                             if (targetInfo) {
                                 const coords = { x: targetInfo.x, y: targetInfo.y, z: targetInfo.z };
                                 this.updateDragLengthHud(this.mouseState.dragMeasureStartCoords || coords, coords);
-                                if (this.isMobile && this.brushShape === 'line' && this.mouseState.dragMeasureStartCoords && this.mouseState.dragMeasureStartScreen) {
-                                    const rect = this.cvs.getBoundingClientRect();
-                                    const end = { x: e.clientX - rect.left, y: e.clientY - rect.top };
-                                    this.updateRulerOverlay(this.mouseState.dragMeasureStartCoords, coords, this.mouseState.dragMeasureStartScreen, end);
-                                }
                                 if (!this.mouseState.lastActionCoords || coords.x !== this.mouseState.lastActionCoords.x || coords.y !== this.mouseState.lastActionCoords.y || coords.z !== this.mouseState.lastActionCoords.z) {
-                                    this.drawVoxelLinePaced((this.brushShape === 'line' ? (this.mouseState.dragMeasureStartCoords || coords) : (this.mouseState.lastActionCoords || coords)), coords, targetInfo.normal);
+                                    this.drawVoxelLinePaced(this.mouseState.lastActionCoords || coords, coords, targetInfo.normal);
                                     this.mouseState.lastActionCoords = coords;
                                     this.mouseState.lastActionNormal = targetInfo.normal;
                                 }
@@ -4082,13 +4034,8 @@
                             if (targetInfo) {
                                 const coords = { x: targetInfo.x, y: targetInfo.y, z: targetInfo.z };
                                 this.updateDragLengthHud(this.mouseState.dragMeasureStartCoords || coords, coords);
-                                if (this.isMobile && this.brushShape === 'line' && this.mouseState.dragMeasureStartCoords && this.mouseState.dragMeasureStartScreen) {
-                                    const rect = this.cvs.getBoundingClientRect();
-                                    const end = { x: e.clientX - rect.left, y: e.clientY - rect.top };
-                                    this.updateRulerOverlay(this.mouseState.dragMeasureStartCoords, coords, this.mouseState.dragMeasureStartScreen, end);
-                                }
                                 if (!this.mouseState.lastActionCoords || coords.x !== this.mouseState.lastActionCoords.x || coords.y !== this.mouseState.lastActionCoords.y || coords.z !== this.mouseState.lastActionCoords.z) {
-                                    this.drawVoxelLinePaced((this.brushShape === 'line' ? (this.mouseState.dragMeasureStartCoords || coords) : (this.mouseState.lastActionCoords || coords)), coords, this.mouseState.lastActionNormal || targetInfo.normal);
+                                    this.drawVoxelLinePaced(this.mouseState.lastActionCoords || coords, coords, this.mouseState.lastActionNormal || targetInfo.normal);
                                     this.mouseState.lastActionCoords = coords;
                                     this.mouseState.lastActionNormal = targetInfo.normal;
                                 }
@@ -4644,24 +4591,11 @@
             },
 
             updateGridRulerUI: function () {
-                const on = !!this.gridRulerEnabled;
                 const overlay = document.getElementById('floor-grid-ruler-overlay');
-                const desktopBtn = document.getElementById('rulerToggle');
-                const mobileBtn = document.getElementById('mobile-ruler-toggle');
+                const on = this.currentDrawingAxis === 'y';
                 if (overlay) overlay.classList.toggle('show', on);
-                if (desktopBtn) {
-                    desktopBtn.classList.toggle('btn-primary', on);
-                    desktopBtn.classList.toggle('btn-outline', !on);
-                }
-                if (mobileBtn) mobileBtn.classList.toggle('text-primary', on);
             },
 
-            toggleGridRuler: function () {
-                this.gridRulerEnabled = !this.gridRulerEnabled;
-                localStorage.setItem('gridRulerEnabled', String(this.gridRulerEnabled));
-                if (this.gridRulerEnabled) this.renderFloorGridRuler();
-                this.updateGridRulerUI();
-            },
 
             setControl: function (controlName, value) {
                 if (this.controls.hasOwnProperty(controlName)) {
@@ -4742,11 +4676,7 @@
                     for (let j = 0; j < size; j++) {
                         const di = i - halfSize;
                         const dj = j - halfSize;
-                        if (this.brushShape === 'circle') {
-                            const r = halfSize + 0.25;
-                            if ((di * di + dj * dj) > (r * r)) continue;
-                        }
-                        const coords = { x: x, y: y, z: z };
+const coords = { x: x, y: y, z: z };
                         coords[iter1] += di;
                         coords[iter2] += dj;
 
@@ -5841,41 +5771,9 @@
                 }
             },
 
-            setBrushPreset: function (preset) {
-                const p = preset || 'voxel';
-                this.brushPreset = p;
-                if (p === 'voxel') {
-                    this.brushSize = 1;
-                    this.brushShape = 'square';
-                } else if (p === 'line') {
-                    this.brushSize = 1;
-                    this.brushShape = 'line';
-                } else if (p === 'square2') {
-                    this.brushSize = 2;
-                    this.brushShape = 'square';
-                } else if (p === 'square3') {
-                    this.brushSize = 3;
-                    this.brushShape = 'square';
-                } else if (p === 'square4') {
-                    this.brushSize = 4;
-                    this.brushShape = 'square';
-                } else if (p === 'circle3') {
-                    this.brushSize = 3;
-                    this.brushShape = 'circle';
-                }
-                localStorage.setItem('voxelBrushPreset', this.brushPreset);
-                localStorage.setItem('voxelBrushShape', this.brushShape);
-                localStorage.setItem('voxelEditorBrushSize', this.brushSize);
-                const btn = document.getElementById('brushPickerBtn');
-                const label = p === 'line' ? 'Line' : p === 'circle3' ? 'Circle 3x3' : p === 'square4' ? 'Square 4x4' : p === 'square3' ? 'Square 3x3' : p === 'square2' ? 'Square 2x2' : '1x1 Cube';
-                if (btn) btn.innerHTML = `<i class="fas fa-brush"></i> ${label}`;
-                this.updateAllControlInputs();
-            },
-
             setBrushSize: function (newSize) {
                 this.brushSize = Math.max(1, Math.min(10, parseInt(newSize, 10) || 1));
                 localStorage.setItem('voxelEditorBrushSize', this.brushSize);
-                if (this.brushSize === 1 && this.brushShape !== 'line') this.brushPreset = 'voxel';
                 this.updateAllControlInputs();
             },
 
@@ -6386,11 +6284,6 @@
                 document.getElementById('grid-size-display').textContent = `${this.GRID}³`;
                 document.getElementById('color-picker-input').value = this.currentColor;
                 document.getElementById('brush-size-display').textContent = `${this.brushSize}x${this.brushSize}`;
-                const brushBtn = document.getElementById('brushPickerBtn');
-                const brushLabel = this.brushPreset === 'line' ? 'Line' : this.brushPreset === 'circle3' ? 'Circle 3x3' : this.brushPreset === 'square4' ? 'Square 4x4' : this.brushPreset === 'square3' ? 'Square 3x3' : this.brushPreset === 'square2' ? 'Square 2x2' : '1x1 Cube';
-                if (brushBtn) brushBtn.innerHTML = `<i class="fas fa-brush"></i> ${brushLabel}`;
-                const mobileBrushPreset = document.getElementById('mobile-brush-preset');
-                if (mobileBrushPreset) mobileBrushPreset.value = this.brushPreset;
                 this.updateSoundButtonUI();
                 this.updateGridRulerUI();
                 if (this.gridRulerEnabled) this.renderFloorGridRuler();
