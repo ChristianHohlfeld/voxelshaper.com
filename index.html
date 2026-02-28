@@ -373,6 +373,16 @@
             animation: colorSwatchBlink 180ms ease-in-out 3;
         }
 
+        @keyframes modePulse {
+            0% { transform: scale(1); box-shadow: 0 0 0 rgba(59, 130, 246, 0); }
+            30% { transform: scale(1.06); box-shadow: 0 0 0 6px rgba(59, 130, 246, 0.2); }
+            100% { transform: scale(1); box-shadow: 0 0 0 rgba(59, 130, 246, 0); }
+        }
+
+        .mode-highlight {
+            animation: modePulse 220ms ease-out 1;
+        }
+
         .badge-primary {
             background: linear-gradient(135deg, #3b82f6, #1d4ed8);
             color: white;
@@ -1562,10 +1572,11 @@
             <div class="divider divider-horizontal mx-0"></div>
 
             <div class="controls-group">
-                <button id="modeToggle" class="btn btn-xs btn-neutral">Add</button>
+                <button id="modeToggle" class="btn btn-xs btn-neutral" title="Cycle mode (Space)">Add</button>
                 <button id="selectModeToggle" class="btn btn-xs btn-outline">Extrude</button>
                 <button id="selectionLockToggle" class="btn btn-xs btn-ghost btn-square"><i
                         class="fas fa-lock"></i></button>
+                <span class="text-[10px] opacity-60 hidden md:inline" title="Desktop shortcut">Space = mode</span>
             </div>
 
             <div class="divider divider-horizontal mx-0"></div>
@@ -4232,6 +4243,7 @@
 
                 this.currentMode = nextMode;
                 this.updateModeUI();
+                this.flashModeButtons();
                 trackEvent('mode_change', {
                     from: oldMode,
                     to: this.currentMode,
@@ -5111,6 +5123,18 @@
                 this.cam.position.set(size, size * 1.2, size * 1.5);
                 this.cam.lookAt(size / 2, size / 2, size / 2);
                 if (this.euler) this.euler.setFromQuaternion(this.cam.quaternion, 'YXZ');
+            },
+
+            flashModeButtons: function () {
+                const pulse = (el) => {
+                    if (!el) return;
+                    el.classList.remove('mode-highlight');
+                    // Force reflow so repeated mode changes retrigger animation.
+                    void el.offsetWidth;
+                    el.classList.add('mode-highlight');
+                };
+                pulse(document.getElementById('modeToggle'));
+                pulse(document.getElementById('mobile-mode-toggle'));
             },
 
             updateModeUI: function () {
