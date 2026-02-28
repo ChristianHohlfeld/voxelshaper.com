@@ -2651,6 +2651,7 @@
                 lastActionCoords: null,
                 lastActionNormal: null,
                 mouseMovementX: 0, mouseMovementY: 0,
+                lastStrokeApplyAt: 0,
                 drawingPlane: new THREE.Plane(),
                 dragStartPoint: new THREE.Vector3(),
                 extrudeNormal: null,
@@ -3539,6 +3540,7 @@
                 this.mouseState.downY = e.clientY;
                 this.mouseState.lastX = e.clientX;
                 this.mouseState.lastY = e.clientY;
+                this.mouseState.lastStrokeApplyAt = 0;
 
                 if (this.isMobile) {
                     if (this.activePointers.size === 1) {
@@ -3709,7 +3711,7 @@
                             if (targetInfo) {
                                 const coords = { x: targetInfo.x, y: targetInfo.y, z: targetInfo.z };
                                 if (!this.mouseState.lastActionCoords || coords.x !== this.mouseState.lastActionCoords.x || coords.y !== this.mouseState.lastActionCoords.y || coords.z !== this.mouseState.lastActionCoords.z) {
-                                    this.drawVoxelLine(this.mouseState.lastActionCoords || coords, coords, targetInfo.normal);
+                                    this.drawVoxelLinePaced(this.mouseState.lastActionCoords || coords, coords, targetInfo.normal);
                                     this.mouseState.lastActionCoords = coords;
                                     this.mouseState.lastActionNormal = targetInfo.normal;
                                 }
@@ -3718,7 +3720,7 @@
                             if (targetInfo) {
                                 const coords = { x: targetInfo.x, y: targetInfo.y, z: targetInfo.z };
                                 if (!this.mouseState.lastActionCoords || coords.x !== this.mouseState.lastActionCoords.x || coords.y !== this.mouseState.lastActionCoords.y || coords.z !== this.mouseState.lastActionCoords.z) {
-                                    this.drawVoxelLine(this.mouseState.lastActionCoords || coords, coords, this.mouseState.lastActionNormal || targetInfo.normal);
+                                    this.drawVoxelLinePaced(this.mouseState.lastActionCoords || coords, coords, this.mouseState.lastActionNormal || targetInfo.normal);
                                     this.mouseState.lastActionCoords = coords;
                                     this.mouseState.lastActionNormal = targetInfo.normal;
                                 }
@@ -3804,7 +3806,7 @@
                             if (targetInfo) {
                                 const coords = { x: targetInfo.x, y: targetInfo.y, z: targetInfo.z };
                                 if (!this.mouseState.lastActionCoords || coords.x !== this.mouseState.lastActionCoords.x || coords.y !== this.mouseState.lastActionCoords.y || coords.z !== this.mouseState.lastActionCoords.z) {
-                                    this.drawVoxelLine(this.mouseState.lastActionCoords || coords, coords, targetInfo.normal);
+                                    this.drawVoxelLinePaced(this.mouseState.lastActionCoords || coords, coords, targetInfo.normal);
                                     this.mouseState.lastActionCoords = coords;
                                     this.mouseState.lastActionNormal = targetInfo.normal;
                                 }
@@ -3813,7 +3815,7 @@
                             if (targetInfo) {
                                 const coords = { x: targetInfo.x, y: targetInfo.y, z: targetInfo.z };
                                 if (!this.mouseState.lastActionCoords || coords.x !== this.mouseState.lastActionCoords.x || coords.y !== this.mouseState.lastActionCoords.y || coords.z !== this.mouseState.lastActionCoords.z) {
-                                    this.drawVoxelLine(this.mouseState.lastActionCoords || coords, coords, this.mouseState.lastActionNormal || targetInfo.normal);
+                                    this.drawVoxelLinePaced(this.mouseState.lastActionCoords || coords, coords, this.mouseState.lastActionNormal || targetInfo.normal);
                                     this.mouseState.lastActionCoords = coords;
                                     this.mouseState.lastActionNormal = targetInfo.normal;
                                 }
@@ -3959,6 +3961,7 @@
                 Object.keys(this.mouseState).forEach(key => { if (typeof this.mouseState[key] === 'boolean') this.mouseState[key] = false });
                 this.mouseState.lastActionCoords = null;
                 this.mouseState.lastActionNormal = null;
+                this.mouseState.lastStrokeApplyAt = 0;
                 this.mouseState.selectionAxisLock = null;
                 this.mouseState.dragStartPlaneY = null;
                 this.mouseState.selectionDragStartTarget = null;
@@ -4431,6 +4434,15 @@
                 }
             },
 
+            drawVoxelLinePaced: function (start, end, normal) {
+                if (this.currentMode === 'SELECT') return;
+                const now = performance.now();
+                const minGap = this.currentMode === 'DELETE' ? 30 : 22;
+                if (now - this.mouseState.lastStrokeApplyAt < minGap) return;
+                this.mouseState.lastStrokeApplyAt = now;
+                this.drawVoxelLine(start, end, normal);
+            },
+
             drawVoxelLine: function (start, end, normal) {
                 if (this.currentMode === 'SELECT') return;
 
@@ -4440,9 +4452,18 @@
                 const dy = Math.abs(y1 - y0), sy = y0 < y1 ? 1 : -1;
                 const dz = Math.abs(z1 - z0), sz = z0 < z1 ? 1 : -1;
                 let dm = Math.max(dx, dy, dz), i = dm;
+
+                const totalSteps = dm + 1;
+                const maxStepsPerStroke = this.currentMode === 'DELETE' ? 3 : 5;
+                const stride = Math.max(1, Math.ceil(totalSteps / maxStepsPerStroke));
+                let stepIndex = 0;
+
                 x1 = y1 = z1 = dm / 2;
                 while (i-- >= 0) {
-                    this.modifyVoxel(x0, y0, z0, normal);
+                    if (stepIndex % stride === 0 || i < 0) {
+                        this.modifyVoxel(x0, y0, z0, normal);
+                    }
+                    stepIndex++;
                     x1 -= dx; if (x1 < 0) { x1 += dm; x0 += sx; }
                     y1 -= dy; if (y1 < 0) { y1 += dm; y0 += sy; }
                     z1 -= dz; if (z1 < 0) { z1 += dm; z0 += sz; }
