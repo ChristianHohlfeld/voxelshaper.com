@@ -206,14 +206,14 @@
         .vs-editor-stars, .vs-editor-stars-2 {
             position: absolute; inset: -120% 0 0 0; pointer-events: none; z-index: 1;
             background-repeat: repeat;
-            opacity: .36;
+            opacity: .34;
             animation: starDrift 100s linear infinite;
         }
         .vs-editor-stars {
-            background-image: radial-gradient(2px 2px at 20px 30px, rgba(255,255,255,.8) 50%, transparent 51%), radial-gradient(1.5px 1.5px at 120px 80px, rgba(173,216,230,.7) 50%, transparent 51%), radial-gradient(1.5px 1.5px at 300px 150px, rgba(255,255,255,.65) 50%, transparent 51%);
+            background-image: radial-gradient(2px 2px at 20px 30px, rgba(255,255,255,.78) 50%, transparent 51%), radial-gradient(1.5px 1.5px at 120px 80px, rgba(180,210,255,.62) 50%, transparent 51%), radial-gradient(1.5px 1.5px at 300px 150px, rgba(255,255,255,.58) 50%, transparent 51%);
             background-size: 360px 360px;
         }
-        .vs-editor-stars-2 { opacity: .22; animation-duration: 160s; background-image: radial-gradient(1.5px 1.5px at 60px 140px, rgba(255,255,255,.7) 50%, transparent 51%), radial-gradient(1px 1px at 220px 40px, rgba(0,212,255,.8) 50%, transparent 51%); background-size: 280px 280px; }
+        .vs-editor-stars-2 { opacity: .20; animation-duration: 160s; background-image: radial-gradient(1.5px 1.5px at 60px 140px, rgba(255,255,255,.62) 50%, transparent 51%), radial-gradient(1px 1px at 220px 40px, rgba(88,225,255,.62) 50%, transparent 51%); background-size: 280px 280px; }
         /* ... (General styles retained and adapted) ... */
         :root {
             --toast-z-index: 9999;
@@ -3436,7 +3436,7 @@
                 this.sharedBoxGeometry = new THREE.BoxGeometry(this.VS, this.VS, this.VS);
 
                 this.scene = new THREE.Scene();
-                this.scene.background = new THREE.Color(0x282c34);
+                this.scene.background = null;
 
                 // NEW: Separate groups for blocky/rounded rendering
                 this.originalVoxelsGroup = new THREE.Group();
@@ -3448,26 +3448,29 @@
                 this.euler = new THREE.Euler(0, 0, 0, 'YXZ');
                 this.resetCamera();
                 this.lowPerfMode = this.computeMobileMode() || (navigator.hardwareConcurrency || 4) <= 4 || (navigator.deviceMemory || 4) <= 4;
-                this.ren = new THREE.WebGLRenderer({ canvas: this.cvs, antialias: !this.lowPerfMode });
+                this.ren = new THREE.WebGLRenderer({ canvas: this.cvs, antialias: !this.lowPerfMode, alpha: true, powerPreference: 'high-performance' });
                 this.ren.outputEncoding = THREE.sRGBEncoding;
                 this.ren.toneMapping = THREE.ACESFilmicToneMapping;
-                this.ren.toneMappingExposure = 1.05;
+                this.ren.toneMappingExposure = 1.02;
                 this.ren.shadowMap.enabled = !this.lowPerfMode;
                 this.ren.shadowMap.type = THREE.PCFSoftShadowMap;
 
-                this.scene.add(new THREE.AmbientLight(0xffffff, 0.24));
-                this.scene.add(new THREE.HemisphereLight(0xdbeafe, 0x1f2937, 0.68));
+                this.scene.add(new THREE.AmbientLight(0x111622, 0.9));
 
-                const keyLight = new THREE.DirectionalLight(0xffffff, 0.9);
-                keyLight.position.set(10, 20, 15);
+                const keyLight = new THREE.DirectionalLight(0xfff0e0, 1.5);
+                keyLight.position.set(30, 50, 40);
                 keyLight.castShadow = !this.lowPerfMode;
                 this.scene.add(keyLight);
 
-                const rimLight = new THREE.DirectionalLight(0x93c5fd, 0.35);
-                rimLight.position.set(-12, 10, -14);
+                const fillLight = new THREE.DirectionalLight(0x5070a0, 0.6);
+                fillLight.position.set(-40, 20, -20);
+                this.scene.add(fillLight);
+
+                const rimLight = new THREE.DirectionalLight(0x2b62d6, 0.8);
+                rimLight.position.set(0, 10, -50);
                 this.scene.add(rimLight);
 
-                this.scene.fog = new THREE.FogExp2(0x282c34, this.lowPerfMode ? 0.0045 : 0.0065);
+                this.scene.fog = new THREE.FogExp2(0x05070a, this.lowPerfMode ? 0.0038 : 0.0052);
 
                 this.previewVoxel = new THREE.Mesh(
                     this.sharedBoxGeometry,
