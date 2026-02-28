@@ -6037,15 +6037,14 @@
                     this.mouseState.mouseMovementY = 0;
                     const forward = new THREE.Vector3();
                     this.cam.getWorldDirection(forward);
-                    const right = new THREE.Vector3().crossVectors(forward, this.cam.up).normalize();
-                    const strafeXSpeed = this.controls.invertStrafeX ? -this.flySpeed : this.flySpeed;
-                    const strafeYSpeed = this.controls.invertStrafeY ? -this.flySpeed : this.flySpeed;
+                    const right = new THREE.Vector3().crossVectors(this.cam.up, forward).normalize();
+                    // Desktop fly mapping stays fixed (avoid accidental inversion from touch strafe settings).
                     if (this.keyboard['w']) this.cam.position.addScaledVector(forward, this.flySpeed);
                     if (this.keyboard['s']) this.cam.position.addScaledVector(forward, -this.flySpeed);
-                    if (this.keyboard['a']) this.cam.position.addScaledVector(right, -strafeXSpeed);
-                    if (this.keyboard['d']) this.cam.position.addScaledVector(right, strafeXSpeed);
-                    if (this.keyboard['e']) this.cam.position.y += strafeYSpeed;
-                    if (this.keyboard['q']) this.cam.position.y -= strafeYSpeed;
+                    if (this.keyboard['a']) this.cam.position.addScaledVector(right, -this.flySpeed);
+                    if (this.keyboard['d']) this.cam.position.addScaledVector(right, this.flySpeed);
+                    if (this.keyboard['q']) this.cam.position.y += this.flySpeed;
+                    if (this.keyboard['e']) this.cam.position.y -= this.flySpeed;
                 }
 
                 if (this.isPhysicsPlaying && this.physicsWorld) {
