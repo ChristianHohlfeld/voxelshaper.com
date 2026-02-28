@@ -4461,6 +4461,9 @@
                 const minGap = this.currentMode === 'DELETE' ? 30 : 22;
                 if (now - this.mouseState.lastStrokeApplyAt < minGap) return;
                 this.mouseState.lastStrokeApplyAt = now;
+
+                // Keep drag feedback rhythm consistent (audio plop cadence independent from FPS)
+                this.playVoxelBlub(this.currentMode);
                 this.drawVoxelLine(start, end, normal);
             },
 
@@ -6341,13 +6344,15 @@
             },
 
             fallbackHaptic: function (clientX, clientY, color) {
-                // 1) small visual feedback
-                try {
-                    this.containerDiv.animate(
-                        [{ transform: 'scale(1)' }, { transform: 'scale(0.985)' }, { transform: 'scale(1)' }],
-                        { duration: 120, easing: 'ease-out' }
-                    );
-                } catch { }
+                // 1) small visual feedback (mobile only; avoid desktop camera-shake feel)
+                if (this.isMobile) {
+                    try {
+                        this.containerDiv.animate(
+                            [{ transform: 'scale(1)' }, { transform: 'scale(0.985)' }, { transform: 'scale(1)' }],
+                            { duration: 120, easing: 'ease-out' }
+                        );
+                    } catch { }
+                }
 
                 // 2) Ripple at the touch position
                 if (!this.hapticLayer) this.initVisualHapticLayer();
