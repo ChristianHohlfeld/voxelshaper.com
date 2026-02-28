@@ -3688,13 +3688,13 @@
                 this.mouseState.lastY = e.clientY;
                 this.mouseState.lastStrokeApplyAt = 0;
 
-                if (this.isPhysicsPlaying) {
+                if (this.isPhysicsPlaying && !this.isMobile && e.button === 0) {
                     this.startPhysicsMouseJoint(e.clientX, e.clientY);
                     return;
                 }
 
                 if (this.isMobile) {
-                    if (this.activePointers.size === 1) {
+                    if (this.activePointers.size === 1 && !this.isPhysicsPlaying) {
                         this.touchState.longPressTimeout = setTimeout(() => {
                             this.hapticOrVisualAt(this.mouseState.downX, this.mouseState.downY);
                             this.touchState.isInteracting = true;
@@ -3830,7 +3830,7 @@
                     return;
                 }
 
-                if (this.isPhysicsPlaying) {
+                if (this.isPhysicsPlaying && !this.isMobile && this.mouseJointBody) {
                     if (this.isPointerDown) this.updatePhysicsMouseJoint(e.clientX, e.clientY);
                     return;
                 }
@@ -4040,7 +4040,7 @@
 
                 const beforeCount = this.activePointers.size;
 
-                if (this.isPhysicsPlaying) {
+                if (this.isPhysicsPlaying && this.mouseJointBody) {
                     this.teardownMouseJoint();
                     this.activePointers.delete(e.pointerId);
                     this.isPointerDown = this.activePointers.size > 0;
