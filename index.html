@@ -3940,7 +3940,7 @@
                         }
                         this.touchState.lastPinchDist = newDist;
 
-                        // Two-finger parallel slide = world 2D X/Y translate (no look rotation)
+                        // Two-finger parallel slide = viewport-oriented pan (respect camera orientation, no look rotation)
                         if (this.touchState.lastPinchCenter) {
                             const deltaX = center.x - this.touchState.lastPinchCenter.x;
                             const deltaY = center.y - this.touchState.lastPinchCenter.y;
@@ -3950,8 +3950,13 @@
                                 const baseMoveY = deltaY;
                                 const moveX = this.controls.invertStrafeX ? -baseMoveX : baseMoveX;
                                 const moveY = this.controls.invertStrafeY ? -baseMoveY : baseMoveY;
-                                this.cam.position.x += moveX * this.PAN_SPEED;
-                                this.cam.position.y += moveY * this.PAN_SPEED;
+
+                                const forward = this.cam.getWorldDirection(new THREE.Vector3());
+                                const right = new THREE.Vector3().crossVectors(this.cam.up, forward).normalize();
+                                const up = this.cam.up.clone().normalize();
+
+                                this.cam.position.addScaledVector(right, moveX * this.PAN_SPEED);
+                                this.cam.position.addScaledVector(up, moveY * this.PAN_SPEED);
                             }
                         }
                         this.touchState.lastPinchCenter = center;
