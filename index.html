@@ -1686,15 +1686,17 @@
 
             <div class="controls-group">
                 <input type="color" id="color-picker-input" value="#FFFFFF" class="hidden">
-                <div class="dropdown dropdown-bottom">
-                    <button id="brushPickerBtn" tabindex="0" class="btn btn-xs btn-outline" title="Brush Picker"><i class="fas fa-brush"></i> Brush</button>
-                    <ul tabindex="0" class="dropdown-content menu p-2 shadow bg-base-100 rounded-box w-44 z-[70]">
+                <details id="brushPickerDetails" class="dropdown dropdown-bottom">
+                    <summary id="brushPickerBtn" class="btn btn-xs btn-outline list-none" title="Brush Picker"><i class="fas fa-brush"></i> Brush</summary>
+                    <ul class="dropdown-content menu p-2 shadow bg-base-100 rounded-box w-48 z-[80]">
                         <li><button type="button" class="brush-preset-item" data-brush-preset="voxel"><i class="fas fa-cube"></i> 1x1 Cube</button></li>
-                        <li><button type="button" class="brush-preset-item" data-brush-preset="line"><i class="fas fa-slash"></i> Line</button></li>
+                        <li><button type="button" class="brush-preset-item" data-brush-preset="square2"><i class="fas fa-th"></i> Square 2x2</button></li>
                         <li><button type="button" class="brush-preset-item" data-brush-preset="square3"><i class="fas fa-th-large"></i> Square 3x3</button></li>
+                        <li><button type="button" class="brush-preset-item" data-brush-preset="square4"><i class="fas fa-border-all"></i> Square 4x4</button></li>
+                        <li><button type="button" class="brush-preset-item" data-brush-preset="line"><i class="fas fa-slash"></i> Line</button></li>
                         <li><button type="button" class="brush-preset-item" data-brush-preset="circle3"><i class="far fa-circle"></i> Circle 3x3</button></li>
                     </ul>
-                </div>
+                </details>
                 <div id="color-history-palette" class="grid gap-1 ml-1" title="Tap to select color, double tap to edit"></div>
             </div>
 
@@ -1966,6 +1968,17 @@
                         <label class="flex items-center gap-1"><input type="radio" name="mobileLengthUnit" id="mobile-length-unit-mm" value="mm" class="radio radio-primary radio-sm" checked> mm</label>
                         <label class="flex items-center gap-1"><input type="radio" name="mobileLengthUnit" id="mobile-length-unit-cm" value="cm" class="radio radio-primary radio-sm"> cm</label>
                     </div>
+                </li>
+                <li class="pt-2">
+                    <label class="label"><span class="label-text">Brush Preset</span></label>
+                    <select id="mobile-brush-preset" class="select select-bordered select-sm w-full">
+                        <option value="voxel">1x1 Cube</option>
+                        <option value="square2">Square 2x2</option>
+                        <option value="square3">Square 3x3</option>
+                        <option value="square4">Square 4x4</option>
+                        <option value="line">Line</option>
+                        <option value="circle3">Circle 3x3</option>
+                    </select>
                 </li>
                 <li class="pt-2">
                     <label class="label cursor-pointer"><span class="label-text">Rounded Preview</span><input type="checkbox" id="mobile-roundness-toggle" class="toggle toggle-accent"></label>
@@ -3276,8 +3289,12 @@
                 document.getElementById('mobile-fly-speed-setting').addEventListener('input', (e) => this.setFlySpeed(parseFloat(e.target.value)));
                 document.getElementById('color-picker-input').addEventListener('input', (e) => this.setColor(e.target.value));
                 document.querySelectorAll('.brush-preset-item').forEach(btn => {
-                    btn.addEventListener('click', () => this.setBrushPreset(btn.dataset.brushPreset || 'voxel'));
+                    btn.addEventListener('click', () => {
+                        this.setBrushPreset(btn.dataset.brushPreset || 'voxel');
+                        document.getElementById('brushPickerDetails')?.removeAttribute('open');
+                    });
                 });
+                document.getElementById('mobile-brush-preset').addEventListener('change', (e) => this.setBrushPreset(e.target.value));
                 document.getElementById('modeToggle').addEventListener('click', () => this.cycleMode());
                 document.getElementById('selectModeToggle').addEventListener('click', () => this.toggleSelectMode());
                 document.getElementById('rulerToggle').addEventListener('click', () => this.toggleRulerMode());
@@ -5785,8 +5802,14 @@
                 } else if (p === 'line') {
                     this.brushSize = 1;
                     this.brushShape = 'line';
+                } else if (p === 'square2') {
+                    this.brushSize = 2;
+                    this.brushShape = 'square';
                 } else if (p === 'square3') {
                     this.brushSize = 3;
+                    this.brushShape = 'square';
+                } else if (p === 'square4') {
+                    this.brushSize = 4;
                     this.brushShape = 'square';
                 } else if (p === 'circle3') {
                     this.brushSize = 3;
@@ -5796,7 +5819,8 @@
                 localStorage.setItem('voxelBrushShape', this.brushShape);
                 localStorage.setItem('voxelEditorBrushSize', this.brushSize);
                 const btn = document.getElementById('brushPickerBtn');
-                if (btn) btn.innerHTML = `<i class="fas fa-brush"></i> ${p === 'line' ? 'Line' : p === 'circle3' ? 'Circle' : p === 'square3' ? 'Square' : 'Brush'}`;
+                const label = p === 'line' ? 'Line' : p === 'circle3' ? 'Circle 3x3' : p === 'square4' ? 'Square 4x4' : p === 'square3' ? 'Square 3x3' : p === 'square2' ? 'Square 2x2' : '1x1 Cube';
+                if (btn) btn.innerHTML = `<i class="fas fa-brush"></i> ${label}`;
                 this.updateAllControlInputs();
             },
 
@@ -6335,7 +6359,10 @@
                 document.getElementById('color-picker-input').value = this.currentColor;
                 document.getElementById('brush-size-display').textContent = `${this.brushSize}x${this.brushSize}`;
                 const brushBtn = document.getElementById('brushPickerBtn');
-                if (brushBtn) brushBtn.innerHTML = `<i class="fas fa-brush"></i> ${this.brushPreset === 'line' ? 'Line' : this.brushPreset === 'circle3' ? 'Circle' : this.brushPreset === 'square3' ? 'Square' : 'Brush'}`;
+                const brushLabel = this.brushPreset === 'line' ? 'Line' : this.brushPreset === 'circle3' ? 'Circle 3x3' : this.brushPreset === 'square4' ? 'Square 4x4' : this.brushPreset === 'square3' ? 'Square 3x3' : this.brushPreset === 'square2' ? 'Square 2x2' : '1x1 Cube';
+                if (brushBtn) brushBtn.innerHTML = `<i class="fas fa-brush"></i> ${brushLabel}`;
+                const mobileBrushPreset = document.getElementById('mobile-brush-preset');
+                if (mobileBrushPreset) mobileBrushPreset.value = this.brushPreset;
                 this.updateSoundButtonUI();
                 this.updatePhysicsButtonsUI();
 
