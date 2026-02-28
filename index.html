@@ -1945,6 +1945,16 @@
             </div>
 
             <div class="form-control mb-4">
+                <label class="label py-1"><span class="label-text font-semibold">Print Ready</span><span class="text-xs opacity-70">Quick quality presets</span></label>
+                <div class="join w-full">
+                    <button type="button" class="btn btn-xs join-item flex-1" data-print-ready="fast">Fast</button>
+                    <button type="button" class="btn btn-xs join-item flex-1" data-print-ready="balanced">Balanced</button>
+                    <button type="button" class="btn btn-xs join-item flex-1" data-print-ready="smooth">Smooth</button>
+                </div>
+                <p id="printReadyHint" class="text-xs opacity-70 mt-1">Choose a preset to auto-fill export defaults.</p>
+            </div>
+
+            <div class="form-control mb-4">
                 <label class="label"><span class="label-text">Scale Unit (for STL &amp;
                         G-Code):</span></label>
                 <div class="flex gap-3">
@@ -2804,6 +2814,7 @@
             audioCtx: null,
             lastSoundAt: 0,
             lastVisualFxAt: 0,
+            // Keep seam shading subtle for readability/perf (avoid aggressive stylized post FX).
             seamGap: 0.075,
             seamDarkness: 0.22,
             isRoundedPreviewEnabled: localStorage.getItem('isRoundedPreviewEnabled') === 'true',
@@ -3428,6 +3439,9 @@
 
                 document.getElementById('roundedExportRadio').addEventListener('change', this.updateExportRoundnessUI.bind(this));
                 document.getElementById('filletRoundnessSlider').addEventListener('input', this.updateExportRoundnessUI.bind(this));
+                document.querySelectorAll('[data-print-ready]').forEach((btn) => {
+                    btn.addEventListener('click', () => this.applyPrintReadyPreset(btn.dataset.printReady));
+                });
 
                 // NEW: In-App Preview Controls
                 const desktopRoundToggle = document.getElementById('desktop-roundness-toggle');
@@ -3606,12 +3620,31 @@
                 if (display && slider) {
                     display.textContent = parseFloat(slider.value).toFixed(2);
                 }
+            },
 
-                // Update export radio label text
-                const roundedLabel = document.querySelector('label[for="roundedExportRadio"] span');
-                if (roundedLabel) {
-                    roundedLabel.textContent = isRounded ? 'Rounded (Filleted Edges)' : 'Rounded (Smoother Mesh)';
-                }
+            applyPrintReadyPreset: function (presetName) {
+                const presets = {
+                    fast: { rounded: false, roundness: 0.18, unit: 'mm', upAxis: 'Z', hint: 'Fast = blocky export for quickest slicing/printing.' },
+                    balanced: { rounded: true, roundness: 0.35, unit: 'mm', upAxis: 'Z', hint: 'Balanced = rounded details with moderate file size.' },
+                    smooth: { rounded: true, roundness: 0.62, unit: 'mm', upAxis: 'Z', hint: 'Smooth = highest rounded quality (heavier mesh).' }
+                };
+                const preset = presets[presetName] || presets.balanced;
+
+                const blockyRadio = document.querySelector('input[name="exportShapeType"][value="blocky"]');
+                const roundedRadio = document.getElementById('roundedExportRadio');
+                const slider = document.getElementById('filletRoundnessSlider');
+                const unitRadio = document.querySelector(`input[name="exportScaleUnit"][value="${preset.unit}"]`);
+                const axisRadio = document.querySelector(`input[name="exportUpAxis"][value="${preset.upAxis}"]`);
+                const hint = document.getElementById('printReadyHint');
+
+                if (preset.rounded && roundedRadio) roundedRadio.checked = true;
+                if (!preset.rounded && blockyRadio) blockyRadio.checked = true;
+                if (slider) slider.value = String(preset.roundness);
+                if (unitRadio) unitRadio.checked = true;
+                if (axisRadio) axisRadio.checked = true;
+                if (hint) hint.textContent = preset.hint;
+
+                this.updateExportRoundnessUI();
             },
 
             toggleRoundedPreview: function (e) {
@@ -4459,16 +4492,28 @@
                     }
                 }
 
+                // INPUT MAPPING GUARD: Keep keyboard movement bindings stable for user muscle memory.
+                // Do not remap W/A/S/D/Q/E here unless product explicitly requests a control migration.
                 this.keyboard[e.key.toLowerCase()] = true;
             },
 
             onKeyUp: function (e) { this.keyboard[e.key.toLowerCase()] = false; },
 
+            getDevicePixelRatioCap: function () {
+                const hw = navigator.hardwareConcurrency || 4;
+                const mem = navigator.deviceMemory || 4;
+                const isLowTier = this.isMobile && (hw <= 4 || mem <= 4);
+                const isMidTier = this.isMobile || hw <= 8 || mem <= 8;
+                if (isLowTier) return 1.2;
+                if (isMidTier) return 1.5;
+                return 2.0;
+            },
+
             handleResize: function () {
                 this.ren.setSize(this.containerDiv.clientWidth, this.containerDiv.clientHeight);
                 this.cam.aspect = this.containerDiv.clientWidth / this.containerDiv.clientHeight;
                 this.cam.updateProjectionMatrix();
-                const maxPR = this.isMobile ? 1.5 : 2.0;
+                const maxPR = this.getDevicePixelRatioCap();
                 this.ren.setPixelRatio(Math.min(window.devicePixelRatio || 1, maxPR));
                 this.applyUIMode();
                 this.refreshOnboardingContent();
@@ -6024,6 +6069,8 @@ const coords = { x: x, y: y, z: z };
                     const right = new THREE.Vector3().crossVectors(forward, this.cam.up).normalize();
                     const strafeXSpeed = this.controls.invertStrafeX ? -this.flySpeed : this.flySpeed;
                     const strafeYSpeed = this.controls.invertStrafeY ? -this.flySpeed : this.flySpeed;
+                    // INPUT MAPPING GUARD: Desktop fly controls are intentionally fixed.
+                    // W/S = forward/back, A/D = strafe, E/Q = vertical. Preserve this mapping as-is.
                     if (this.keyboard['w']) this.cam.position.addScaledVector(forward, this.flySpeed);
                     if (this.keyboard['s']) this.cam.position.addScaledVector(forward, -this.flySpeed);
                     if (this.keyboard['a']) this.cam.position.addScaledVector(right, -strafeXSpeed);
