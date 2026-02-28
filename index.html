@@ -4663,6 +4663,9 @@
                     return this.handleLineSelectionDrag(e);
                 }
 
+                // free marquee selection: no exact line distance to show
+                this.hideDragLengthHud();
+
                 // if drag started on empty space -> marquee
                 if (this.mouseState.selectionDragStartTarget === null && !this.isMobile) {
                     this.selectVoxelsInMarquee();
@@ -4774,6 +4777,9 @@
                 if (axis === 'x') ex = cx;
                 if (axis === 'y') ey = cy;
                 if (axis === 'z') ez = cz;
+
+                // Show measured line length in selected unit while dragging.
+                this.updateDragLengthHud({ x: sx, y: sy, z: sz }, { x: ex, y: ey, z: ez });
 
                 // Build new selection. Start with the "before" state, but only keep faces
                 // that share the same orientation as the line we are drawing.
