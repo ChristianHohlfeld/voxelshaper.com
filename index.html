@@ -4521,11 +4521,15 @@
                     case 'PAINT':
                         // Always show paint color feedback in the topbar for paint attempts.
                         this.pulseColorControls();
-                        if (existingVoxel && existingVoxel.color !== this.currentColor) {
-                            existingVoxel.mesh.material = this.getMaterial(this.currentColor);
-                            this.voxels.get(k).color = this.currentColor;
-                            modified = true;
-                            this.addColorToHistory(this.currentColor);
+                        if (existingVoxel) {
+                            // Paint sound only when painting an actual cube (also for same-color repaint).
+                            this.playVoxelBlub('PAINT');
+                            if (existingVoxel.color !== this.currentColor) {
+                                existingVoxel.mesh.material = this.getMaterial(this.currentColor);
+                                this.voxels.get(k).color = this.currentColor;
+                                modified = true;
+                                this.addColorToHistory(this.currentColor);
+                            }
                         }
                         break;
                     case 'DELETE':
@@ -4550,7 +4554,7 @@
                         break;
                 }
 
-                if (modified) {
+                if (modified && mode !== 'PAINT') {
                     this.playVoxelBlub(mode);
                 }
 
@@ -4592,8 +4596,6 @@
                 if (now - this.mouseState.lastStrokeApplyAt < minGap) return;
                 this.mouseState.lastStrokeApplyAt = now;
 
-                // Keep drag feedback rhythm consistent (audio plop cadence independent from FPS)
-                this.playVoxelBlub(this.currentMode);
                 this.drawVoxelLine(start, end, normal);
                 this.commitCurrentStroke();
             },
