@@ -624,69 +624,6 @@
             box-shadow: 0 8px 20px rgba(0, 0, 0, 0.25);
         }
 
-        #floor-grid-ruler-overlay {
-            position: absolute;
-            inset: 0;
-            z-index: 21;
-            pointer-events: none;
-            display: none;
-        }
-
-        #floor-grid-ruler-overlay.show {
-            display: block;
-        }
-
-        .floor-ruler-x {
-            position: absolute;
-            left: 24px;
-            right: 8px;
-            bottom: 8px;
-            height: 18px;
-            display: flex;
-            align-items: flex-end;
-            color: rgba(226, 232, 240, 0.86);
-            font-size: 10px;
-        }
-
-        .floor-ruler-z {
-            position: absolute;
-            top: 8px;
-            bottom: 30px;
-            left: 8px;
-            width: 18px;
-            display: flex;
-            flex-direction: column-reverse;
-            align-items: flex-end;
-            color: rgba(226, 232, 240, 0.86);
-            font-size: 10px;
-        }
-
-        .floor-ruler-tick {
-            position: relative;
-            flex: 1;
-            border-left: 1px solid rgba(148, 163, 184, 0.45);
-            min-width: 0;
-        }
-
-        .floor-ruler-z .floor-ruler-tick {
-            border-left: 0;
-            border-top: 1px solid rgba(148, 163, 184, 0.45);
-            width: 100%;
-        }
-
-        .floor-ruler-num {
-            position: absolute;
-            bottom: -2px;
-            left: 2px;
-            transform: translateY(100%);
-        }
-
-        .floor-ruler-z .floor-ruler-num {
-            left: -2px;
-            top: -2px;
-            bottom: auto;
-            transform: translateX(-100%);
-        }
 
         
 
@@ -1799,10 +1736,6 @@
             </svg>
             <div id="ruler-overlay-label">0.0 mm</div>
         </div>
-        <div id="floor-grid-ruler-overlay" aria-hidden="true">
-            <div id="floor-ruler-x" class="floor-ruler-x"></div>
-            <div id="floor-ruler-z" class="floor-ruler-z"></div>
-        </div>
         <input type="file" id="fileInput" accept=".json" class="hidden">
         <input type="file" id="imageFileInput" accept="image/*" class="hidden">
     </div>
@@ -2806,7 +2739,6 @@
             hapticLayer: null,
             soundEnabled: localStorage.getItem('voxelSoundEnabled') !== 'false',
             lengthUnit: localStorage.getItem('voxelLengthUnit') || 'mm',
-            gridRulerEnabled: true,
             audioCtx: null,
             lastSoundAt: 0,
             lastVisualFxAt: 0,
@@ -4519,8 +4451,6 @@
                 if (cm) cm.checked = this.lengthUnit === 'cm';
                 if (mmm) mmm.checked = this.lengthUnit === 'mm';
                 if (mcm) mcm.checked = this.lengthUnit === 'cm';
-                if (this.gridRulerEnabled) this.renderFloorGridRuler();
-                this.updateGridRulerUI();
             },
 
             updateDragLengthHud: function (_startCoords, _endCoords) {
@@ -4556,44 +4486,6 @@
 
             hideRulerOverlay: function () {
                 document.getElementById('ruler-overlay')?.classList.remove('show');
-            },
-
-            renderFloorGridRuler: function () {
-                const xEl = document.getElementById('floor-ruler-x');
-                const zEl = document.getElementById('floor-ruler-z');
-                if (!xEl || !zEl) return;
-                xEl.innerHTML = '';
-                zEl.innerHTML = '';
-                const n = Math.max(1, this.GRID);
-                for (let i = 0; i <= n; i++) {
-                    const tickX = document.createElement('div');
-                    tickX.className = 'floor-ruler-tick';
-                    if (i % 2 === 0 || i === n) {
-                        const num = document.createElement('span');
-                        num.className = 'floor-ruler-num';
-                        const unitVal = this.lengthUnit === 'cm' ? (i / 10).toFixed(1) : String(i);
-                        num.textContent = `${unitVal}`;
-                        tickX.appendChild(num);
-                    }
-                    xEl.appendChild(tickX);
-
-                    const tickZ = document.createElement('div');
-                    tickZ.className = 'floor-ruler-tick';
-                    if (i % 2 === 0 || i === n) {
-                        const numZ = document.createElement('span');
-                        numZ.className = 'floor-ruler-num';
-                        const unitValZ = this.lengthUnit === 'cm' ? (i / 10).toFixed(1) : String(i);
-                        numZ.textContent = `${unitValZ}`;
-                        tickZ.appendChild(numZ);
-                    }
-                    zEl.appendChild(tickZ);
-                }
-            },
-
-            updateGridRulerUI: function () {
-                const overlay = document.getElementById('floor-grid-ruler-overlay');
-                const on = this.currentDrawingAxis === 'y';
-                if (overlay) overlay.classList.toggle('show', on);
             },
 
 
@@ -6285,8 +6177,6 @@ const coords = { x: x, y: y, z: z };
                 document.getElementById('color-picker-input').value = this.currentColor;
                 document.getElementById('brush-size-display').textContent = `${this.brushSize}x${this.brushSize}`;
                 this.updateSoundButtonUI();
-                this.updateGridRulerUI();
-                if (this.gridRulerEnabled) this.renderFloorGridRuler();
 
                 // Update new controls
                 const desktopRoundToggle = document.getElementById('desktop-roundness-toggle');
