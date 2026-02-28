@@ -3455,7 +3455,14 @@
 
                 // Non-select modes keep their single-tap modify behavior:
                 const targetInfo = this.getRayTargetInfo(this.mouseState.downX, this.mouseState.downY);
-                if (targetInfo) this.modifyVoxel(targetInfo.x, targetInfo.y, targetInfo.z, targetInfo.normal);
+                if (targetInfo) {
+                    this.modifyVoxel(targetInfo.x, targetInfo.y, targetInfo.z, targetInfo.normal);
+                    // Desktop visual feedback (mobile already has long-press haptic/visual feedback)
+                    if (!this.isMobile) {
+                        const fxColor = this.currentMode === 'DELETE' ? 'rgba(255, 80, 80, 0.85)' : (this.currentColor || '#ffffff');
+                        this.fallbackHaptic(event.clientX, event.clientY, fxColor);
+                    }
+                }
             },
 
             onPointerDown: function (e) {
