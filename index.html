@@ -1524,7 +1524,8 @@
             <div class="divider divider-horizontal mx-0"></div>
 
             <div class="controls-group">
-                <input type="color" id="color-picker-input" value="#FFFFFF" class="floating-color-picker" title="Palette color picker">
+                <input type="color" id="color-picker-input" value="#FFFFFF"
+                    class="w-6 h-6 cursor-pointer border-none bg-transparent" title="Palette color picker">
                 <div id="color-history-palette" class="grid gap-1 ml-1" title="Tap a color to select/edit"></div>
             </div>
 
@@ -5775,11 +5776,20 @@
 
                     const openPickerNearPointer = (picker, e) => {
                         if (!picker) return;
-                        const cx = e?.clientX ?? window.innerWidth * 0.5;
-                        const cy = e?.clientY ?? window.innerHeight * 0.5;
-                        picker.style.left = `${Math.max(0, cx - 1)}px`;
-                        picker.style.top = `${Math.max(0, cy - 1)}px`;
                         picker.value = this.currentColor;
+
+                        // Mobile hidden picker: place near touch point.
+                        if (this.isMobile) {
+                            const cx = e?.clientX ?? window.innerWidth * 0.5;
+                            const cy = e?.clientY ?? window.innerHeight * 0.5;
+                            picker.style.left = `${Math.max(0, cx - 1)}px`;
+                            picker.style.top = `${Math.max(0, cy - 1)}px`;
+                        }
+
+                        if (typeof picker.showPicker === 'function') {
+                            try { picker.showPicker(); return; } catch (_) {}
+                        }
+                        picker.focus();
                         picker.click();
                     };
 
