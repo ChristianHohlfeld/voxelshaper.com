@@ -4985,7 +4985,7 @@
                 const coords = { x, y, z };
                 const targetKey = this.key(x, y, z);
                 const voxelExists = this.voxels.has(targetKey);
-                if ((this.currentMode === 'PAINT' || this.currentMode === 'DELETE') && !voxelExists) return;
+                if (this.currentMode === 'PAINT' && !voxelExists) return;
                 if (this.brushSize <= 1) {
                     this.updateSingleVoxelPreview(coords);
                 } else {
@@ -5017,7 +5017,7 @@
                         brushCoords[iter2] += j - halfSize;
 
                         if (brushCoords.x >= 0 && brushCoords.x < this.GRID && brushCoords.y >= 0 && brushCoords.y < this.GRID && brushCoords.z >= 0 && brushCoords.z < this.GRID) {
-                            if ((this.currentMode === 'PAINT' || this.currentMode === 'DELETE') && !this.voxels.has(this.key(brushCoords.x, brushCoords.y, brushCoords.z))) continue;
+                            if (this.currentMode === 'PAINT' && !this.voxels.has(this.key(brushCoords.x, brushCoords.y, brushCoords.z))) continue;
 
                             const previewMesh = new THREE.Mesh(this.sharedBoxGeometry, previewMat);
                             previewMesh.position.set(brushCoords.x * this.VS + 0.5, brushCoords.y * this.VS + 0.5, brushCoords.z * this.VS + 0.5);
