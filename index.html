@@ -3456,8 +3456,23 @@
 
 
                 // Mobile controls
-                document.getElementById('mobile-overlay-undo').addEventListener('click', () => this.undo());
-                document.getElementById('mobile-overlay-redo').addEventListener('click', () => this.redo());
+                const bindHistoryButton = (id, dir) => {
+                    const el = document.getElementById(id);
+                    if (!el) return;
+                    el.addEventListener('click', () => dir === 'undo' ? this.undo() : this.redo());
+                    const start = (ev) => { ev.preventDefault(); this.beginHistoryRepeat(dir); };
+                    const stop = () => this.endHistoryRepeat();
+                    el.addEventListener('mousedown', start);
+                    el.addEventListener('touchstart', start, { passive: false });
+                    el.addEventListener('mouseup', stop);
+                    el.addEventListener('mouseleave', stop);
+                    el.addEventListener('touchend', stop);
+                    el.addEventListener('touchcancel', stop);
+                };
+                bindHistoryButton('mobile-overlay-undo', 'undo');
+                bindHistoryButton('mobile-overlay-redo', 'redo');
+                bindHistoryButton('undoBtn', 'undo');
+                bindHistoryButton('redoBtn', 'redo');
                 document.getElementById('mobile-mode-toggle').addEventListener('click', () => this.cycleMode());
                 document.getElementById('mobile-quick-brush-decrease').addEventListener('click', () => this.setBrushSize(this.brushSize - 1));
                 document.getElementById('mobile-quick-brush-increase').addEventListener('click', () => this.setBrushSize(this.brushSize + 1));
@@ -6735,6 +6750,31 @@ const coords = { x: x, y: y, z: z };
 
                 osc.start(t);
                 osc.stop(t + 0.145);
+            },
+
+            playHistorySound: function (type = 'redo') {
+                // redo: normal blub, undo: reversed/downward blub
+                if (type === 'undo') this.playVoxelBlub('DELETE');
+                else this.playVoxelBlub('ADD');
+            },
+
+            beginHistoryRepeat: function (direction = 'undo') {
+                this.endHistoryRepeat();
+                this.historyRepeatDelay = 380;
+                const step = () => {
+                    if (direction === 'undo') this.undo();
+                    else this.redo();
+                    this.historyRepeatDelay = Math.max(65, this.historyRepeatDelay * 0.82);
+                    this.historyRepeatTimer = setTimeout(step, this.historyRepeatDelay);
+                };
+                this.historyRepeatTimer = setTimeout(step, this.historyRepeatDelay);
+            },
+
+            endHistoryRepeat: function () {
+                if (this.historyRepeatTimer) {
+                    clearTimeout(this.historyRepeatTimer);
+                    this.historyRepeatTimer = null;
+                }
             },
 
             triggerActionVisualFx: function (mode = 'ADD') {
