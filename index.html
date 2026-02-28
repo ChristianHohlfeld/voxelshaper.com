@@ -3171,7 +3171,23 @@
                         if (!trustedOrigins.includes(event.origin)) return;
                         if (!event.data || event.data.type !== 'voxelshaper_import_v1') return;
                         const project = event.data.project;
-                        if (project && this.loadFromData(project)) {
+                        let normalized = project;
+                        if (project && Array.isArray(project.voxels) && project.voxels.length && !project.voxels[0].color) {
+                            normalized = {
+                                gridSize: this.GRID_DEFAULT,
+                                currentDrawingAxis: 'y',
+                                activeDrawingLevel: { x: 0, y: 0, z: 0 },
+                                voxels: project.voxels.map(v => {
+                                    let color = '#ffffff';
+                                    if (Array.isArray(v.c) && v.c.length >= 3) {
+                                        const toHex = (n) => Math.max(0, Math.min(255, n | 0)).toString(16).padStart(2, '0');
+                                        color = `#${toHex(v.c[0])}${toHex(v.c[1])}${toHex(v.c[2])}`;
+                                    }
+                                    return { x: v.x, y: v.y, z: v.z, color };
+                                })
+                            };
+                        }
+                        if (normalized && this.loadFromData(normalized)) {
                             this.showToast('Import', 'Model opened from Hub', 'success');
                             try {
                                 event.source?.postMessage({ type: 'voxelshaper_import_ack_v1' }, event.origin);
