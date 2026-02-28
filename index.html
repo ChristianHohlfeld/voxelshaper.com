@@ -2804,6 +2804,8 @@
             audioCtx: null,
             lastSoundAt: 0,
             lastVisualFxAt: 0,
+            seamGap: 0.075,
+            seamDarkness: 0.22,
             isRoundedPreviewEnabled: localStorage.getItem('isRoundedPreviewEnabled') === 'true',
             previewRoundnessFactor: parseFloat(localStorage.getItem('previewRoundnessFactor') || 0.5),
             originalVoxelsGroup: null,
@@ -2878,6 +2880,32 @@
             key: (x, y, z) => (x | ((y + 1) << 10) | (z << 20)) >>> 0,
             parseKey: (k) => [k & 1023, ((k >> 10) & 1023) - 1, (k >> 20) & 1023],
 
+            applySeamShaderToMaterial: function (mat) {
+                if (!mat || mat.userData?.seamShaderPatched) return mat;
+                mat.userData = mat.userData || {};
+                mat.userData.seamShaderPatched = true;
+                mat.onBeforeCompile = (shader) => {
+                    shader.uniforms.uSeamGap = { value: this.seamGap };
+                    shader.uniforms.uSeamDarkness = { value: this.seamDarkness };
+
+                    shader.vertexShader = shader.vertexShader
+                        .replace('#include <common>', '#include <common>\nvarying vec2 vGapUv;')
+                        .replace('#include <uv_vertex>', '#include <uv_vertex>\nvGapUv = uv;');
+
+                    shader.fragmentShader = shader.fragmentShader
+                        .replace('#include <common>', '#include <common>\nvarying vec2 vGapUv;\nuniform float uSeamGap;\nuniform float uSeamDarkness;')
+                        .replace('#include <dithering_fragment>', `
+                            float edgeDist = min(min(vGapUv.x, 1.0 - vGapUv.x), min(vGapUv.y, 1.0 - vGapUv.y));
+                            float seamMask = 1.0 - smoothstep(uSeamGap, uSeamGap + 0.02, edgeDist);
+                            gl_FragColor.rgb *= (1.0 - seamMask * uSeamDarkness);
+                            #include <dithering_fragment>
+                        `);
+                };
+                mat.customProgramCacheKey = () => `seam_${this.seamGap}_${this.seamDarkness}`;
+                mat.needsUpdate = true;
+                return mat;
+            },
+
             getMaterial: function (color) {
                 if (!this.materialCache.has(color)) {
                     const mat = new THREE.MeshStandardMaterial({
@@ -2886,6 +2914,7 @@
                         metalness: 0.12,
                         flatShading: true
                     });
+                    this.applySeamShaderToMaterial(mat);
                     this.materialCache.set(color, mat);
                 }
                 return this.materialCache.get(color);
