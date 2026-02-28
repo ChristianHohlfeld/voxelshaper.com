@@ -339,15 +339,15 @@
         }
 
         @media (max-width: 1024px) {
-            #controls {
+            body.has-mobile-bar #controls {
                 display: none !important;
             }
 
-            body #mobile-ui-container {
+            body.has-mobile-bar #mobile-ui-container {
                 display: block !important;
             }
 
-            body {
+            body.has-mobile-bar {
                 padding-bottom: 5rem;
             }
         }
@@ -690,6 +690,24 @@
                 opacity: 0;
                 transform: translate(-50%, -50%) scale(1.9);
             }
+        }
+
+        #bootLoadingOverlay {
+            position: fixed;
+            inset: 0;
+            z-index: 100000;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            background: rgba(10, 12, 18, 0.76);
+            backdrop-filter: blur(4px);
+            -webkit-backdrop-filter: blur(4px);
+            transition: opacity 180ms ease;
+        }
+
+        #bootLoadingOverlay.hidden {
+            opacity: 0;
+            pointer-events: none;
         }
     </style>
     <style>
@@ -1453,7 +1471,11 @@
     </style>
 </head>
 
-<body class="bg-base-100 min-h-screen text-base-content flex flex-col rounded-lg has-mobile-bar">
+<body class="bg-base-100 min-h-screen text-base-content flex flex-col rounded-lg">
+
+    <div id="bootLoadingOverlay" aria-live="polite" aria-label="Loading editor">
+        <span class="loading loading-spinner loading-lg text-primary"></span>
+    </div>
 
     <div id="controls" class="hidden md:grid" style="display: none;">
         <!-- LEFT ZONE -->
@@ -1631,7 +1653,7 @@
     </div>
 
     <!-- MOBILE UI CONTAINER -->
-    <div id="mobile-ui-container" style="display: block;">
+    <div id="mobile-ui-container" style="display: none;">
         <!-- Undo/Redo overlay -->
         <div id="mobile-undo-redo-overlay" class="absolute bottom-24 right-4 z-50 flex flex-row gap-2"
             style="bottom: calc(5.5rem + var(--safe-bottom));">
@@ -2828,6 +2850,13 @@
                 this.tutorialStep = Math.min(this.tutorialStep, Math.max(0, this.tutorialSteps.length - 1));
             },
 
+            hideBootLoading: function () {
+                const el = document.getElementById('bootLoadingOverlay');
+                if (!el) return;
+                el.classList.add('hidden');
+                setTimeout(() => el.remove(), 220);
+            },
+
             init: function () {
                 this.setupDOM();
                 if (typeof this.keyboard === 'undefined' || this.keyboard === null) {
@@ -2864,6 +2893,7 @@
                 this.authCheckAndInit();
                 this.handleResize();
                 this.animate();
+                requestAnimationFrame(() => requestAnimationFrame(() => this.hideBootLoading()));
                 console.log("VoxelShaper Initialized (Polyslice Ready)");
             },
 
