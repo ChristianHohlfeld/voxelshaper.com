@@ -1542,7 +1542,7 @@
     </style>
     <style>
         :root {
-            --vs-bg: #0d1117;
+            --vs-bg: #05070a;
             --vs-panel: rgba(22, 27, 34, 0.85);
             --vs-border: rgba(255,255,255,0.08);
         }
@@ -1553,7 +1553,7 @@
         }
 
         #container {
-            background: radial-gradient(circle at center, #161b22 0%, #0d1117 100%);
+            background: radial-gradient(circle at center, #161b26 0%, #05070a 100%);
         }
 
         .glass-panel {
@@ -1569,23 +1569,15 @@
             display: flex;
             align-items: center;
             gap: 10px;
-
-            /* BACKGROUND: Deep Matte Black for consistency */
-            background-color: rgba(15, 15, 15, 0.92);
-            backdrop-filter: blur(10px);
-            -webkit-backdrop-filter: blur(10px);
-            color: #ffffff;
-
-            /* BORDER: Slightly stronger white for Dark Mode visibility */
-            border: 1px solid rgba(255, 255, 255, 0.3);
-
-            /* SHADOW: Soft shadow + faint white glow ensures edge visibility */
-            box-shadow: 0 4px 20px rgba(0, 0, 0, 0.5),
-                0 0 0 1px rgba(255, 255, 255, 0.05);
-
+            background: rgba(13, 17, 23, 0.45);
+            backdrop-filter: blur(24px);
+            -webkit-backdrop-filter: blur(24px);
+            color: #eaf8ff;
+            border: 1px solid rgba(255,255,255,0.12);
+            box-shadow: 0 20px 40px rgba(0,0,0,0.4), 0 0 18px rgba(0,212,255,.20);
             text-decoration: none;
             font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
-            font-weight: 600;
+            font-weight: 700;
             font-size: 15px;
             padding: 10px 20px;
             border-radius: 50px;
@@ -1596,8 +1588,8 @@
 
         .vs-nav-pill:active {
             transform: scale(0.96);
-            background-color: #000000;
-            border-color: rgba(255, 255, 255, 0.5);
+            background-color: rgba(13, 17, 23, 0.72);
+            border-color: rgba(255, 255, 255, 0.3);
         }
 
         .vs-nav-pill.hidden-by-modal {
@@ -1631,12 +1623,13 @@
 
         @media screen and (max-width: 768px) {
             .vs-nav-pill {
-                padding: 10px 16px;
-                font-size: 14px;
+                padding: 10px 14px;
+                font-size: 13px;
                 top: calc(env(safe-area-inset-top) + 104px);
                 bottom: auto;
                 left: 12px;
                 right: auto;
+                max-width: calc(100vw - 24px);
             }
         }
     </style>
@@ -3136,10 +3129,11 @@
                 const urlParams = new URLSearchParams(window.location.search);
 
                 // Onboarding logic
+                const fromHub = urlParams.get('from') === 'hub' || urlParams.has('m');
                 const shouldShowOnboarding = this.isFirstRunOnboardingActive();
-                if (shouldShowOnboarding && !urlParams.has('modelId')) {
+                if (shouldShowOnboarding && !urlParams.has('modelId') && !fromHub) {
                     this.startOnboarding();
-                } else if (!urlParams.has('modelId') && !window.location.hash.includes('#oauth_success')) {
+                } else if (!urlParams.has('modelId') && !window.location.hash.includes('#oauth_success') && !fromHub) {
                     this.loadAutosavedScene();
                 }
 
@@ -3238,6 +3232,8 @@
                                     palette: project.metadata.palette ?? 'auto'
                                 };
                             }
+                            const ob = document.getElementById('onboardingModal');
+                            if (ob && ob.open) ob.close();
                             this.showToast('Import', 'Model opened from Hub', 'success');
                             try {
                                 event.source?.postMessage({ type: 'voxelshaper_import_ack_v1' }, event.origin);
@@ -7103,7 +7099,7 @@ const coords = { x: x, y: y, z: z };
 
         document.addEventListener('DOMContentLoaded', () => VoxelApp.init());
     </script>
-    <a href="https://hub.voxelshaper.com" class="vs-nav-pill vs-pill-left" style="background: linear-gradient(135deg, #06b6d4, #22d3ee); color:#001018; border-color: rgba(34,211,238,.65); box-shadow: 0 0 24px rgba(0,212,255,.45);" onclick="trackEvent('hub_open', { source: 'editor_pill' })"><span class="vs-arrow">⚡</span><span class="vs-text">Generate</span></a>
+    <a href="https://hub.voxelshaper.com" class="vs-nav-pill vs-pill-left" onclick="trackEvent('hub_open', { source: 'editor_pill' })"><span class="vs-arrow">⚡</span><span class="vs-text">Generate</span></a>
 
 
 <style>
