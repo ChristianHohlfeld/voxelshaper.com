@@ -2614,34 +2614,6 @@
             getMaterial: function (color) {
                 if (!this.materialCache.has(color)) {
                     const mat = new THREE.MeshLambertMaterial({ color: color });
-
-                    // Performance-safe edge accent for voxel readability (no extra geometry pass).
-                    mat.onBeforeCompile = (shader) => {
-                        shader.vertexShader = shader.vertexShader.replace(
-                            '#include <common>',
-                            `#include <common>\nvarying vec3 vVoxelPos;`
-                        ).replace(
-                            '#include <begin_vertex>',
-                            `#include <begin_vertex>\nvVoxelPos = position;`
-                        );
-
-                        shader.fragmentShader = shader.fragmentShader.replace(
-                            '#include <common>',
-                            `#include <common>\nvarying vec3 vVoxelPos;`
-                        ).replace(
-                            '#include <dithering_fragment>',
-                            `
-                            vec3 gridDist = abs(fract(vVoxelPos + 0.5) - 0.5);
-                            float ex = 1.0 - smoothstep(0.035, 0.07, gridDist.x);
-                            float ey = 1.0 - smoothstep(0.035, 0.07, gridDist.y);
-                            float ez = 1.0 - smoothstep(0.035, 0.07, gridDist.z);
-                            float edgeMask = max(min(ex, ey), max(min(ex, ez), min(ey, ez)));
-                            outgoingLight = mix(outgoingLight, vec3(0.86), edgeMask * 0.18);
-                            #include <dithering_fragment>
-                            `
-                        );
-                    };
-
                     this.materialCache.set(color, mat);
                 }
                 return this.materialCache.get(color);
@@ -2966,7 +2938,7 @@
                 this.sharedBoxGeometry = new THREE.BoxGeometry(this.VS, this.VS, this.VS);
 
                 this.scene = new THREE.Scene();
-                this.scene.background = new THREE.Color(0x1f2430);
+                this.scene.background = new THREE.Color(0x282c34);
 
                 // NEW: Separate groups for blocky/rounded rendering
                 this.originalVoxelsGroup = new THREE.Group();
@@ -2980,20 +2952,12 @@
                 this.ren = new THREE.WebGLRenderer({ canvas: this.cvs, antialias: true });
                 this.ren.shadowMap.enabled = true;
                 this.ren.shadowMap.type = THREE.PCFSoftShadowMap;
-                this.ren.outputEncoding = THREE.sRGBEncoding;
-
-                this.scene.add(new THREE.AmbientLight(0x5f6673, 0.55));
-
-                const keyLight = new THREE.DirectionalLight(0xfff4df, 0.72);
-                keyLight.position.set(12, 24, 14);
-                keyLight.castShadow = true;
-                this.scene.add(keyLight);
-
-                const fillLight = new THREE.DirectionalLight(0xb7cdf7, 0.22);
-                fillLight.position.set(-10, 10, -8);
-                this.scene.add(fillLight);
-
-                this.scene.add(new THREE.HemisphereLight(0xdfe9ff, 0x2c3038, 0.35));
+                this.scene.add(new THREE.AmbientLight(0x606060));
+                const dirLight = new THREE.DirectionalLight(0xffffff, 0.5);
+                dirLight.position.set(10, 20, 15);
+                dirLight.castShadow = true;
+                this.scene.add(dirLight);
+                this.scene.add(new THREE.HemisphereLight(0xffffff, 0x444444, 0.2));
 
                 this.previewVoxel = new THREE.Mesh(
                     this.sharedBoxGeometry,
