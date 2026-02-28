@@ -547,6 +547,27 @@
             backdrop-filter: blur(4px);
         }
 
+        #dragLengthHud {
+            position: absolute;
+            top: 42px;
+            right: 12px;
+            z-index: 20;
+            pointer-events: none;
+            background: rgba(15, 23, 42, 0.72);
+            color: #e2e8f0;
+            border: 1px solid rgba(255, 255, 255, 0.14);
+            border-radius: 9999px;
+            padding: 4px 10px;
+            font-size: 11px;
+            backdrop-filter: blur(4px);
+            opacity: 0;
+            transition: opacity 120ms ease;
+        }
+
+        #dragLengthHud.show {
+            opacity: 1;
+        }
+
         #modeToggle {
             width: 7ch;
             min-width: 7ch;
@@ -1569,6 +1590,13 @@
                                     <input type="range" id="fly-speed-setting" min="0.01" max="1" value="0.1" step="0.01" class="range range-xs mt-1">
                                 </li>
                                 <li class="px-2 py-1">
+                                    <label class="text-xs opacity-70">Length Unit</label>
+                                    <div class="flex gap-3 mt-1 text-xs">
+                                        <label class="flex items-center gap-1"><input type="radio" name="lengthUnit" id="length-unit-mm" value="mm" class="radio radio-primary radio-xs" checked> mm</label>
+                                        <label class="flex items-center gap-1"><input type="radio" name="lengthUnit" id="length-unit-cm" value="cm" class="radio radio-primary radio-xs"> cm</label>
+                                    </div>
+                                </li>
+                                <li class="px-2 py-1">
                                     <label class="text-xs opacity-70">Roundness</label>
                                     <input type="range" id="roundness-setting" min="0.01" max="1.0" value="0.50" step="0.01" class="range range-xs mt-1">
                                 </li>
@@ -1606,6 +1634,7 @@
                         class="fas fa-lock"></i></button>
                 <span class="text-[10px] opacity-60 hidden md:inline" title="Desktop shortcut">Space = mode</span>
             </div>
+            <div id="dragLengthHud">Len <span id="dragLengthHudValue">0.0 mm</span></div>
 
             <div class="divider divider-horizontal mx-0"></div>
 
@@ -1838,6 +1867,13 @@
                 <li class="pt-2">
                     <label class="label"><span class="label-text">Fly Speed</span></label>
                     <input type="range" id="mobile-fly-speed-setting" min="0.01" max="1" value="0.1" step="0.01" class="range range-primary">
+                </li>
+                <li class="pt-2">
+                    <label class="label"><span class="label-text">Length Unit</span></label>
+                    <div class="flex gap-4 text-sm">
+                        <label class="flex items-center gap-1"><input type="radio" name="mobileLengthUnit" id="mobile-length-unit-mm" value="mm" class="radio radio-primary radio-sm" checked> mm</label>
+                        <label class="flex items-center gap-1"><input type="radio" name="mobileLengthUnit" id="mobile-length-unit-cm" value="cm" class="radio radio-primary radio-sm"> cm</label>
+                    </div>
                 </li>
                 <li class="pt-2">
                     <label class="label"><span class="label-text">Roundness</span></label>
@@ -2635,6 +2671,7 @@
             currentModelId: null,
             hapticLayer: null,
             soundEnabled: localStorage.getItem('voxelSoundEnabled') !== 'false',
+            lengthUnit: localStorage.getItem('voxelLengthUnit') || 'mm',
             audioCtx: null,
             lastSoundAt: 0,
             isRoundedPreviewEnabled: localStorage.getItem('isRoundedPreviewEnabled') === 'true',
@@ -2650,6 +2687,7 @@
                 lastX: 0, lastY: 0, downX: 0, downY: 0,
                 lastActionCoords: null,
                 lastActionNormal: null,
+                dragMeasureStartCoords: null,
                 mouseMovementX: 0, mouseMovementY: 0,
                 lastStrokeApplyAt: 0,
                 drawingPlane: new THREE.Plane(),
@@ -3153,6 +3191,8 @@
                 document.getElementById('invertZoom').addEventListener('change', (e) => this.setControl('invertZoom', e.target.checked));
                 document.getElementById('invertStrafeX').addEventListener('change', (e) => this.setControl('invertStrafeX', e.target.checked));
                 document.getElementById('invertStrafeY').addEventListener('change', (e) => this.setControl('invertStrafeY', e.target.checked));
+                document.getElementById('length-unit-mm').addEventListener('change', (e) => { if (e.target.checked) this.setLengthUnit('mm'); });
+                document.getElementById('length-unit-cm').addEventListener('change', (e) => { if (e.target.checked) this.setLengthUnit('cm'); });
                 document.getElementById('soundToggleMenu').addEventListener('change', (e) => {
                     this.soundEnabled = !!e.target.checked;
                     localStorage.setItem('voxelSoundEnabled', String(this.soundEnabled));
@@ -3272,6 +3312,8 @@
                 document.getElementById('mobileInvertZoom').addEventListener('change', (e) => this.setControl('invertZoom', e.target.checked));
                 document.getElementById('mobileInvertStrafeX').addEventListener('change', (e) => this.setControl('invertStrafeX', e.target.checked));
                 document.getElementById('mobileInvertStrafeY').addEventListener('change', (e) => this.setControl('invertStrafeY', e.target.checked));
+                document.getElementById('mobile-length-unit-mm').addEventListener('change', (e) => { if (e.target.checked) this.setLengthUnit('mm'); });
+                document.getElementById('mobile-length-unit-cm').addEventListener('change', (e) => { if (e.target.checked) this.setLengthUnit('cm'); });
                 document.getElementById('mobileSoundToggleMenu').addEventListener('change', (e) => {
                     this.soundEnabled = !!e.target.checked;
                     localStorage.setItem('voxelSoundEnabled', String(this.soundEnabled));
@@ -3653,7 +3695,17 @@
                         this.selectConnectedGroup(this.key(target.x, target.y, target.z));
                         this.mouseState.isModifying = false; // Don't drag-select if we just group-selected
                     }
-                } else if (e.button === 2) {
+                }
+
+                if (this.mouseState.isModifying && this.currentMode !== 'SELECT') {
+                    const t = this.getRayTargetInfo(e.clientX, e.clientY);
+                    this.mouseState.dragMeasureStartCoords = t ? { x: t.x, y: t.y, z: t.z } : null;
+                } else {
+                    this.mouseState.dragMeasureStartCoords = null;
+                    this.hideDragLengthHud();
+                }
+
+                if (e.button === 2) {
                     this.cvs.focus();
                     this.cvs.requestPointerLock();
                 }
@@ -3814,20 +3866,26 @@
                         } else if (this.currentMode === 'FREE') {
                             if (targetInfo) {
                                 const coords = { x: targetInfo.x, y: targetInfo.y, z: targetInfo.z };
+                                this.updateDragLengthHud(this.mouseState.dragMeasureStartCoords || coords, coords);
                                 if (!this.mouseState.lastActionCoords || coords.x !== this.mouseState.lastActionCoords.x || coords.y !== this.mouseState.lastActionCoords.y || coords.z !== this.mouseState.lastActionCoords.z) {
                                     this.drawVoxelLinePaced(this.mouseState.lastActionCoords || coords, coords, targetInfo.normal);
                                     this.mouseState.lastActionCoords = coords;
                                     this.mouseState.lastActionNormal = targetInfo.normal;
                                 }
+                            } else {
+                                this.hideDragLengthHud();
                             }
                         } else {
                             if (targetInfo) {
                                 const coords = { x: targetInfo.x, y: targetInfo.y, z: targetInfo.z };
+                                this.updateDragLengthHud(this.mouseState.dragMeasureStartCoords || coords, coords);
                                 if (!this.mouseState.lastActionCoords || coords.x !== this.mouseState.lastActionCoords.x || coords.y !== this.mouseState.lastActionCoords.y || coords.z !== this.mouseState.lastActionCoords.z) {
                                     this.drawVoxelLinePaced(this.mouseState.lastActionCoords || coords, coords, this.mouseState.lastActionNormal || targetInfo.normal);
                                     this.mouseState.lastActionCoords = coords;
                                     this.mouseState.lastActionNormal = targetInfo.normal;
                                 }
+                            } else {
+                                this.hideDragLengthHud();
                             }
                         }
                     } else if (this.mouseState.isPanning) {
@@ -3958,7 +4016,9 @@
                 Object.keys(this.mouseState).forEach(key => { if (typeof this.mouseState[key] === 'boolean') this.mouseState[key] = false });
                 this.mouseState.lastActionCoords = null;
                 this.mouseState.lastActionNormal = null;
+                this.mouseState.dragMeasureStartCoords = null;
                 this.mouseState.lastStrokeApplyAt = 0;
+                this.hideDragLengthHud();
                 this.mouseState.selectionAxisLock = null;
                 this.mouseState.moveAxisLock = null;
                 this.mouseState.dragStartPlaneY = null;
@@ -4288,6 +4348,36 @@
                 if (desktopSlider) desktopSlider.value = this.flySpeed;
                 if (mobileSlider) mobileSlider.value = this.flySpeed;
                 localStorage.setItem('voxelEditorFlySpeed', this.flySpeed);
+            },
+
+            setLengthUnit: function (unit) {
+                this.lengthUnit = unit === 'cm' ? 'cm' : 'mm';
+                localStorage.setItem('voxelLengthUnit', this.lengthUnit);
+                const mm = document.getElementById('length-unit-mm');
+                const cm = document.getElementById('length-unit-cm');
+                const mmm = document.getElementById('mobile-length-unit-mm');
+                const mcm = document.getElementById('mobile-length-unit-cm');
+                if (mm) mm.checked = this.lengthUnit === 'mm';
+                if (cm) cm.checked = this.lengthUnit === 'cm';
+                if (mmm) mmm.checked = this.lengthUnit === 'mm';
+                if (mcm) mcm.checked = this.lengthUnit === 'cm';
+            },
+
+            updateDragLengthHud: function (startCoords, endCoords) {
+                const hud = document.getElementById('dragLengthHud');
+                const value = document.getElementById('dragLengthHudValue');
+                if (!hud || !value || !startCoords || !endCoords) return;
+                const dx = endCoords.x - startCoords.x;
+                const dy = endCoords.y - startCoords.y;
+                const dz = endCoords.z - startCoords.z;
+                const distVox = Math.sqrt(dx * dx + dy * dy + dz * dz);
+                const scaled = this.lengthUnit === 'cm' ? distVox / 10 : distVox;
+                value.textContent = `${scaled.toFixed(1)} ${this.lengthUnit}`;
+                hud.classList.add('show');
+            },
+
+            hideDragLengthHud: function () {
+                document.getElementById('dragLengthHud')?.classList.remove('show');
             },
 
             setControl: function (controlName, value) {
@@ -5922,6 +6012,7 @@
                 this.GRID = this.GRID_DEFAULT;
                 this.currentColor = '#ffffff';
                 this.flySpeed = 0.1;
+                this.lengthUnit = 'mm';
                 this.currentDrawingAxis = 'y';
                 this.activeDrawingLevel = { x: 0, y: 0, z: 0 };
                 this.templateImageAxis = 'z';
@@ -5932,6 +6023,7 @@
                 localStorage.setItem('voxelEditorGridSize', this.GRID);
                 localStorage.setItem('voxelEditorColor', this.currentColor);
                 localStorage.setItem('voxelEditorFlySpeed', this.flySpeed);
+                localStorage.setItem('voxelLengthUnit', this.lengthUnit);
                 localStorage.setItem('currentDrawingAxis', this.currentDrawingAxis);
                 localStorage.setItem('activeDrawingLevel', JSON.stringify(this.activeDrawingLevel));
                 localStorage.setItem('templateImageAxis', this.templateImageAxis);
@@ -5988,6 +6080,14 @@
                 if (soundToggleMenu) soundToggleMenu.checked = !!this.soundEnabled;
                 const mobileSoundToggleMenu = document.getElementById('mobileSoundToggleMenu');
                 if (mobileSoundToggleMenu) mobileSoundToggleMenu.checked = !!this.soundEnabled;
+                const unitMM = document.getElementById('length-unit-mm');
+                const unitCM = document.getElementById('length-unit-cm');
+                const mUnitMM = document.getElementById('mobile-length-unit-mm');
+                const mUnitCM = document.getElementById('mobile-length-unit-cm');
+                if (unitMM) unitMM.checked = this.lengthUnit === 'mm';
+                if (unitCM) unitCM.checked = this.lengthUnit === 'cm';
+                if (mUnitMM) mUnitMM.checked = this.lengthUnit === 'mm';
+                if (mUnitCM) mUnitCM.checked = this.lengthUnit === 'cm';
                 if (this.isMobile) {
                     document.getElementById('mobileInvertLookX').checked = this.controls.invertLookX;
                     document.getElementById('mobileInvertLookY').checked = this.controls.invertLookY;
