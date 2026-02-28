@@ -1662,7 +1662,7 @@
                                     </div>
                                 </li>
                                 <li class="px-2 py-1">
-                                    <label class="text-xs opacity-70">Roundness</label>
+                                    <label class="label cursor-pointer py-0 min-h-0"><span class="text-xs opacity-70">Rounded Preview</span><input type="checkbox" id="desktop-roundness-toggle" class="toggle toggle-accent toggle-xs"></label>
                                     <input type="range" id="roundness-setting" min="0.01" max="1.0" value="0.50" step="0.01" class="range range-xs mt-1">
                                 </li>
                                 <li><a id="showOnboardingAgainBtn">Show First-Run Guide</a></li>
@@ -1968,7 +1968,7 @@
                     </div>
                 </li>
                 <li class="pt-2">
-                    <label class="label"><span class="label-text">Roundness</span></label>
+                    <label class="label cursor-pointer"><span class="label-text">Rounded Preview</span><input type="checkbox" id="mobile-roundness-toggle" class="toggle toggle-accent"></label>
                     <input type="range" id="mobile-roundness-setting" min="0.01" max="1.0" value="0.50" step="0.01" class="range range-primary">
                 </li>
                 <li class="pt-2">
@@ -3367,11 +3367,13 @@
                 document.getElementById('filletRoundnessSlider').addEventListener('input', this.updateExportRoundnessUI.bind(this));
 
                 // NEW: In-App Preview Controls
-                const previewToggle = document.getElementById('roundedPreviewToggle');
+                const desktopRoundToggle = document.getElementById('desktop-roundness-toggle');
+                const mobileRoundToggle = document.getElementById('mobile-roundness-toggle');
                 const roundnessSetting = document.getElementById('roundness-setting');
                 const mobileRoundnessSetting = document.getElementById('mobile-roundness-setting');
 
-                if (previewToggle) previewToggle.addEventListener('change', this.toggleRoundedPreview.bind(this));
+                if (desktopRoundToggle) desktopRoundToggle.addEventListener('change', this.toggleRoundedPreview.bind(this));
+                if (mobileRoundToggle) mobileRoundToggle.addEventListener('change', this.toggleRoundedPreview.bind(this));
                 if (roundnessSetting) roundnessSetting.addEventListener('input', this.setPreviewRoundnessFactor.bind(this));
                 if (mobileRoundnessSetting) mobileRoundnessSetting.addEventListener('input', this.setPreviewRoundnessFactor.bind(this));
 
@@ -3576,11 +3578,13 @@
             },
 
             updateInAppRoundnessUI: function () {
-                const previewToggle = document.getElementById('roundedPreviewToggle');
+                const desktopRoundToggle = document.getElementById('desktop-roundness-toggle');
+                const mobileRoundToggle = document.getElementById('mobile-roundness-toggle');
                 const roundnessSetting = document.getElementById('roundness-setting');
                 const mobileRoundnessSetting = document.getElementById('mobile-roundness-setting');
 
-                if (previewToggle) previewToggle.checked = this.isRoundedPreviewEnabled;
+                if (desktopRoundToggle) desktopRoundToggle.checked = this.isRoundedPreviewEnabled;
+                if (mobileRoundToggle) mobileRoundToggle.checked = this.isRoundedPreviewEnabled;
 
                 if (roundnessSetting) {
                     roundnessSetting.value = this.previewRoundnessFactor;
@@ -6336,8 +6340,10 @@
                 this.updatePhysicsButtonsUI();
 
                 // Update new controls
-                const previewToggle = document.getElementById('roundedPreviewToggle');
-                if (previewToggle) previewToggle.checked = this.isRoundedPreviewEnabled;
+                const desktopRoundToggle = document.getElementById('desktop-roundness-toggle');
+                const mobileRoundToggle = document.getElementById('mobile-roundness-toggle');
+                if (desktopRoundToggle) desktopRoundToggle.checked = this.isRoundedPreviewEnabled;
+                if (mobileRoundToggle) mobileRoundToggle.checked = this.isRoundedPreviewEnabled;
                 const roundnessSetting = document.getElementById('roundness-setting');
                 const mobileRoundnessSetting = document.getElementById('mobile-roundness-setting');
                 if (roundnessSetting) {
