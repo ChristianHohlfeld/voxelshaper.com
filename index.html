@@ -4518,24 +4518,38 @@
                         throw new Error("Invalid or empty project data received from API.");
                     }
 
-                    let maxX = 0, maxY = 0, maxZ = 0;
+                    let minX = Infinity, minY = Infinity, minZ = Infinity;
+                    let maxX = -Infinity, maxY = -Infinity, maxZ = -Infinity;
+                    const raw = [];
                     for (const key in projectData.voxels) {
                         if (Object.prototype.hasOwnProperty.call(projectData.voxels, key)) {
                             const coords = key.split(',').map(Number);
                             if (coords.length === 3) {
                                 const [x, y, z] = coords;
-                                if (x > maxX) maxX = x;
-                                if (y > maxY) maxY = y;
-                                if (z > maxZ) maxZ = z;
-                                const k = this.key(x, y, z);
-                                this.voxels.set(k, { color: projectData.voxels[key] });
+                                if (!Number.isFinite(x) || !Number.isFinite(y) || !Number.isFinite(z)) continue;
+                                raw.push({ x, y, z, color: projectData.voxels[key] });
+                                if (x < minX) minX = x; if (y < minY) minY = y; if (z < minZ) minZ = z;
+                                if (x > maxX) maxX = x; if (y > maxY) maxY = y; if (z > maxZ) maxZ = z;
                             }
                         }
                     }
 
-                    const requiredGridSize = Math.max(maxX, maxY, maxZ) + 1;
-                    const finalGridSize = Math.max(requiredGridSize, projectData.gridSize || this.GRID_DEFAULT);
-                    this.setGridSize(finalGridSize);
+                    const shiftX = Number.isFinite(minX) ? minX : 0;
+                    const shiftY = Number.isFinite(minY) ? minY : 0;
+                    const shiftZ = Number.isFinite(minZ) ? minZ : 0;
+                    this.voxels.clear();
+                    raw.forEach(v => {
+                        const nx = v.x - shiftX;
+                        const ny = v.y - shiftY;
+                        const nz = v.z - shiftZ;
+                        this.voxels.set(this.key(nx, ny, nz), { color: v.color });
+                    });
+
+                    const extentX = Number.isFinite(maxX) ? (maxX - shiftX + 1) : this.GRID_DEFAULT;
+                    const extentY = Number.isFinite(maxY) ? (maxY - shiftY + 1) : this.GRID_DEFAULT;
+                    const extentZ = Number.isFinite(maxZ) ? (maxZ - shiftZ + 1) : this.GRID_DEFAULT;
+                    const requiredGridSize = Math.max(extentX, extentY, extentZ, this.GRID_DEFAULT);
+                    this.setGridSize(requiredGridSize);
 
                     this.rebuildSceneFromVoxels();
                     this.resetCamera();
@@ -5986,23 +6000,36 @@ const coords = { x: x, y: y, z: z };
 
 
                     this.colorHistory = [];
-                    let maxX = 0, maxY = 0, maxZ = 0;
+                    let minX = Infinity, minY = Infinity, minZ = Infinity;
+                    let maxX = -Infinity, maxY = -Infinity, maxZ = -Infinity;
+                    const raw = [];
                     if (Array.isArray(data.voxels)) {
                         data.voxels.forEach(v => {
-                            const x = Number(v.x) || 0;
-                            const y = Number(v.y) || 0;
-                            const z = Number(v.z) || 0;
+                            const x = Number(v.x);
+                            const y = Number(v.y);
+                            const z = Number(v.z);
+                            if (!Number.isFinite(x) || !Number.isFinite(y) || !Number.isFinite(z)) return;
                             const color = (v.color || '#FFFFFF').toUpperCase();
-                            const k = this.key(x, y, z);
-                            this.voxels.set(k, { color });
-                            this.addColorToHistory(color);
-                            if (x > maxX) maxX = x;
-                            if (y > maxY) maxY = y;
-                            if (z > maxZ) maxZ = z;
+                            raw.push({ x, y, z, color });
+                            if (x < minX) minX = x; if (y < minY) minY = y; if (z < minZ) minZ = z;
+                            if (x > maxX) maxX = x; if (y > maxY) maxY = y; if (z > maxZ) maxZ = z;
                         });
                     }
-                    const boundsGrid = Math.max(maxX, maxY, maxZ) + 1;
-                    this.GRID = Math.max(this.GRID || this.GRID_DEFAULT, boundsGrid, this.GRID_DEFAULT);
+                    const shiftX = Number.isFinite(minX) ? minX : 0;
+                    const shiftY = Number.isFinite(minY) ? minY : 0;
+                    const shiftZ = Number.isFinite(minZ) ? minZ : 0;
+                    raw.forEach(v => {
+                        const nx = v.x - shiftX;
+                        const ny = v.y - shiftY;
+                        const nz = v.z - shiftZ;
+                        const k = this.key(nx, ny, nz);
+                        this.voxels.set(k, { color: v.color });
+                        this.addColorToHistory(v.color);
+                    });
+                    const extentX = Number.isFinite(maxX) ? (maxX - shiftX + 1) : this.GRID_DEFAULT;
+                    const extentY = Number.isFinite(maxY) ? (maxY - shiftY + 1) : this.GRID_DEFAULT;
+                    const extentZ = Number.isFinite(maxZ) ? (maxZ - shiftZ + 1) : this.GRID_DEFAULT;
+                    this.GRID = Math.max(extentX, extentY, extentZ, this.GRID_DEFAULT);
                     this.renderColorHistory();
 
                     this.templateImagePinnedY = (data.templateImagePinnedY ?? null);
