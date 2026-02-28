@@ -431,7 +431,7 @@
             margin: 0;
         }
 
-        #mobile-canvas-color-picker {
+        #mobile-canvas-color-picker-wrap {
             position: fixed;
             right: calc(env(safe-area-inset-right) + 0.75rem);
             bottom: calc(var(--safe-bottom) + 4.9rem);
@@ -443,7 +443,37 @@
             box-shadow: 0 10px 24px rgba(0, 0, 0, 0.45);
             z-index: 58;
             pointer-events: auto;
+            overflow: hidden;
+        }
+
+        #mobile-canvas-color-picker {
+            position: absolute;
+            inset: 0;
+            width: 100%;
+            height: 100%;
+            border: 0;
+            border-radius: 9999px;
             padding: 0;
+            opacity: 0.94;
+            cursor: pointer;
+        }
+
+        #mobile-canvas-color-picker-badge {
+            position: absolute;
+            left: 50%;
+            top: 50%;
+            transform: translate(-50%, -50%);
+            width: 1.4rem;
+            height: 1.4rem;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            border-radius: 9999px;
+            background: rgba(17, 24, 39, 0.55);
+            color: rgba(255, 255, 255, 0.9);
+            font-size: 0.72rem;
+            pointer-events: none;
+            box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.35);
         }
 
         #mobile-undo-redo-overlay {
@@ -1694,7 +1724,10 @@
             </button>
         </div>
 
-        <input type="color" id="mobile-canvas-color-picker" value="#FFFFFF" aria-label="Pick color on canvas">
+        <div id="mobile-canvas-color-picker-wrap" aria-label="Pick brush color on canvas">
+            <input type="color" id="mobile-canvas-color-picker" value="#FFFFFF" aria-label="Pick color on canvas">
+            <span id="mobile-canvas-color-picker-badge" aria-hidden="true"><i class="fas fa-brush"></i></span>
+        </div>
 
         <!-- Bottom bar -->
         <div class="mobile-bottom-bar flex items-center justify-around p-2 bg-base-200 border-t border-base-content/20">
