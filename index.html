@@ -1771,6 +1771,9 @@
             <button id="soundToggleBtn" class="btn btn-sm btn-ghost btn-square" title="Sound: On" aria-label="Toggle sound">
                 <i id="soundToggleIcon" class="fas fa-volume-up"></i>
             </button>
+            <button id="generateHubBtn" class="btn btn-sm btn-accent" title="Generate in Hub" style="box-shadow: 0 0 18px rgba(0,212,255,.45);">
+                <i class="fas fa-dice-d20 mr-1"></i>Generate
+            </button>
             <button id="shareBtn" class="btn btn-sm btn-warning btn-square" title="Share Project">
                 <i class="fas fa-share-alt"></i>
             </button>
@@ -1837,6 +1840,7 @@
                     <li><a id="loadBtnMobile">Load Local (.json)</a></li>
                     <li><a id="exportBtnMobile">Export Options</a></li>
                     <li><a id="mobile-share">Share Project</a></li>
+                    <li><a id="mobile-generate-hub" class="text-accent font-semibold"><i class="fas fa-dice-d20 mr-2"></i>Generate (Hub)</a></li>
                     <div class="divider my-1"></div>
                     <li><a id="loadImageBtnMobile">Load Reference Image</a></li>
                     <li><a id="removeImageBtnMobile" class="hidden">Remove Reference Image</a></li>
@@ -3188,6 +3192,15 @@
                             };
                         }
                         if (normalized && this.loadFromData(normalized)) {
+                            if (project && project.metadata && project.metadata.type && Number.isFinite(project.metadata.seed)) {
+                                window.__lastHubMeta = {
+                                    type: project.metadata.type,
+                                    seed: project.metadata.seed >>> 0,
+                                    shape: project.metadata.shape ?? 60,
+                                    color: project.metadata.color ?? 80,
+                                    palette: project.metadata.palette ?? 'auto'
+                                };
+                            }
                             this.showToast('Import', 'Model opened from Hub', 'success');
                             try {
                                 event.source?.postMessage({ type: 'voxelshaper_import_ack_v1' }, event.origin);
@@ -3252,6 +3265,13 @@
                 if (m) {
                     try {
                         const meta = this.decodeHubMetadata(m);
+                        window.__lastHubMeta = {
+                            type: meta.type,
+                            seed: meta.seed >>> 0,
+                            shape: meta.shape ?? 60,
+                            color: meta.color ?? 80,
+                            palette: meta.palette ?? 'auto'
+                        };
                         const deterministic = this.generateDeterministicHubProject(meta);
                         if (deterministic && this.loadFromData(deterministic)) {
                             this.showToast('Import', 'Hub scene restored deterministically', 'success');
@@ -3645,6 +3665,7 @@
                 document.getElementById('loadBtnMobile').addEventListener('click', () => document.getElementById('fileInput').click());
                 document.getElementById('exportBtnMobile').addEventListener('click', () => document.getElementById('exportOptionsModal').showModal());
                 document.getElementById('mobile-share').addEventListener('click', () => this.openShareModal());
+                document.getElementById('mobile-generate-hub').addEventListener('click', () => this.openHubGenerator());
 
                 document.getElementById('loadImageBtnMobile').addEventListener('click', () => this.loadImageTemplate());
                 document.getElementById('removeImageBtnMobile').addEventListener('click', () => this.removeImageTemplate());
@@ -3657,6 +3678,7 @@
                 document.getElementById('mobile-login-logout').addEventListener('click', this.loginLogout.bind(this));
 
                 document.getElementById('shareBtn').addEventListener('click', () => this.openShareModal());
+                document.getElementById('generateHubBtn').addEventListener('click', () => this.openHubGenerator());
                 document.getElementById('soundToggleBtn').addEventListener('click', () => this.toggleSound());
                 document.getElementById('desktop-canvas-sound-toggle').addEventListener('click', () => this.toggleSound());
                 document.getElementById('uploadToHubFromShareBtn').addEventListener('click', () => {
@@ -4446,6 +4468,19 @@
                     newUrl.searchParams.delete('modelId');
                 }
                 window.history.replaceState({ path: newUrl.href }, '', newUrl.href);
+            },
+
+            openHubGenerator: function () {
+                const url = new URL(this.HUB_URL);
+                const payload = window.__lastHubMeta || null;
+                if (payload && payload.type && Number.isFinite(payload.seed)) {
+                    try {
+                        const m = btoa(unescape(encodeURIComponent(JSON.stringify(payload))));
+                        url.searchParams.set('m', m);
+                    } catch (_) {}
+                }
+                trackEvent('hub_open', { source: 'editor_generate_button' });
+                window.open(url.toString(), '_blank', 'noopener');
             },
 
             openShareModal: function () {
@@ -6983,7 +7018,7 @@ const coords = { x: x, y: y, z: z };
 
         document.addEventListener('DOMContentLoaded', () => VoxelApp.init());
     </script>
-    <a href="https://hub.voxelshaper.com" class="vs-nav-pill vs-pill-left" onclick="trackEvent('hub_open', { source: 'editor_pill' })"><span class="vs-arrow">←</span><span class="vs-text">Hub</span></a>
+    <a href="https://hub.voxelshaper.com" class="vs-nav-pill vs-pill-left" style="background: linear-gradient(135deg, #06b6d4, #22d3ee); color:#001018; border-color: rgba(34,211,238,.65); box-shadow: 0 0 24px rgba(0,212,255,.45);" onclick="trackEvent('hub_open', { source: 'editor_pill' })"><span class="vs-arrow">⚡</span><span class="vs-text">Generate</span></a>
 
 
 <style>
