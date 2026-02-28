@@ -4507,6 +4507,23 @@
                 window.history.replaceState({ path: newUrl.href }, '', newUrl.href);
             },
 
+            createProjectSnapshot: function () {
+                return {
+                    gridSize: this.GRID,
+                    currentDrawingAxis: this.currentDrawingAxis,
+                    activeDrawingLevel: { ...this.activeDrawingLevel },
+                    voxels: Array.from(this.voxels.entries()).map(([k, v]) => {
+                        const [x, y, z] = this.parseKey(k);
+                        return { x, y, z, color: v.color };
+                    }),
+                    templateImageData: this.templateImageData,
+                    templateImagePinnedY: this.templateImagePinnedY,
+                    templateImageAxis: this.templateImageAxis,
+                    isRoundedPreviewEnabled: this.isRoundedPreviewEnabled,
+                    previewRoundnessFactor: this.previewRoundnessFactor
+                };
+            },
+
             openHubGenerator: function () {
                 const types = ['city', 'car', 'spaceship', 'ruins', 'mech', 'castle', 'waterfall', 'ifs_tree', 'floating_island'];
                 const nextMeta = {
@@ -4516,9 +4533,12 @@
                     color: 80,
                     palette: 'auto'
                 };
+                const beforeSnapshot = this.createProjectSnapshot();
                 window.__lastHubMeta = nextMeta;
                 const generated = this.generateDeterministicHubProject(nextMeta);
-                if (generated && this.loadFromData(generated)) {
+                if (generated && this.loadFromData(generated, { preserveHistory: true })) {
+                    const afterSnapshot = this.createProjectSnapshot();
+                    this.addHistoryStep({ type: 'MORPH', before: beforeSnapshot, after: afterSnapshot, meta: nextMeta });
                     this.showToast('Generate', `Morphed: ${nextMeta.type} • 0x${nextMeta.seed.toString(16).toUpperCase().padStart(8, '0')}`, 'success', 1400);
                     try {
                         const url = new URL(window.location.href);
@@ -6061,7 +6081,7 @@ const coords = { x: x, y: y, z: z };
                 this.showToast('Project Saved', 'File downloaded as voxel-project.json', 'info');
             },
 
-            loadFromData: function (data) {
+            loadFromData: function (data, options = {}) {
                 try {
                     this.clearSelection();
 
@@ -6128,7 +6148,9 @@ const coords = { x: x, y: y, z: z };
                     this.updateAllControlInputs();
                     this.updateImageAxisUI();
                     this.resetCamera();
-                    this.history = []; this.historyPointer = -1;
+                    if (!options.preserveHistory) {
+                        this.history = []; this.historyPointer = -1;
+                    }
                     return true;
                 } catch (err) {
                     this.showToast('Load Error', `Invalid project data. ${err.message}`, 'error');
@@ -6434,6 +6456,11 @@ const coords = { x: x, y: y, z: z };
                         this.syncSelectionNormalIndexFromSelection();
                         this.updateSelectionVisuals();
                         break;
+
+                    case 'MORPH':
+                        this.loadFromData(action.before, { preserveHistory: true });
+                        if (action.meta) window.__lastHubMeta = { ...action.meta };
+                        break;
                 }
                 this.historyPointer--;
                 this.autosaveScene();
@@ -6479,6 +6506,11 @@ const coords = { x: x, y: y, z: z };
                         this.selectedFaces = new Set(action.after);
                         this.syncSelectionNormalIndexFromSelection();
                         this.updateSelectionVisuals();
+                        break;
+
+                    case 'MORPH':
+                        this.loadFromData(action.after, { preserveHistory: true });
+                        if (action.meta) window.__lastHubMeta = { ...action.meta };
                         break;
                 }
                 this.autosaveScene();
