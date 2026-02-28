@@ -1739,7 +1739,7 @@
             <div class="divider divider-horizontal mx-0"></div>
 
             <div class="controls-group">
-                <input type="color" id="color-picker-input" value="#FFFFFF" class="hidden">
+                <input type="color" id="color-picker-input" value="#FFFFFF" class="w-10 h-10 rounded-lg border border-base-300 cursor-pointer" title="Color Picker">
                 <div id="color-history-palette" class="grid gap-1 ml-1" title="Tap to select color, double tap to edit"></div>
             </div>
 
@@ -3245,7 +3245,84 @@
                 const urlModelId = urlParams.get('modelId');
                 if (urlModelId) {
                     await this.loadProjectFromModelId(urlModelId);
+                    return;
                 }
+
+                const m = urlParams.get('m');
+                if (m) {
+                    try {
+                        const meta = this.decodeHubMetadata(m);
+                        const deterministic = this.generateDeterministicHubProject(meta);
+                        if (deterministic && this.loadFromData(deterministic)) {
+                            this.showToast('Import', 'Hub scene restored deterministically', 'success');
+                        }
+                    } catch (e) {
+                        console.warn('Failed to restore deterministic Hub scene:', e);
+                    }
+                }
+            },
+
+            decodeHubMetadata: function (encoded) {
+                return JSON.parse(decodeURIComponent(escape(atob(encoded))));
+            },
+
+            generateDeterministicHubProject: function (meta) {
+                if (!meta || !meta.type || !Number.isFinite(meta.seed)) return null;
+                const type = String(meta.type);
+                const seed = (meta.seed >>> 0);
+                const N = 40;
+                const hash = (n) => {
+                    let h = Math.imul((n | 0) ^ seed, 374761393);
+                    h = Math.imul(h ^ (h >>> 13), 1274126177);
+                    return ((h ^ (h >>> 16)) >>> 0) / 4294967296;
+                };
+                const paletteFor = (t) => {
+                    const r = hash(17);
+                    if (t === 'spaceship') return { c1: '#95A3B3', c2: '#58E1FF', c3: '#00D4FF' };
+                    if (t === 'castle') return { c1: '#8B939C', c2: '#C2B280', c3: '#1A1C19' };
+                    if (t === 'waterfall') return { c1: '#00B4D8', c2: '#4CAF50', c3: '#4A4E69' };
+                    if (t === 'mech') return { c1: ['#F4A261', '#E63946', '#457B9D'][Math.floor(r * 3)], c2: '#F1FAEE', c3: '#1D3557' };
+                    if (t === 'car') return { c1: ['#D90429', '#FFC300', '#F8F9FA', '#3A86FF'][Math.floor(r * 4)], c2: '#7D8597', c3: '#111214' };
+                    if (t === 'ifs_tree' || t === 'floating_island') return [{ c1: '#2D8B4E', c2: '#4A3B32', c3: '#1A1E18' }, { c1: '#FF7B9C', c2: '#3D2C2E', c3: '#1D1A1E' }][Math.floor(r * 2)];
+                    return [{ c1: '#2A2D34', c2: '#00E5FF', c3: '#15161A' }, { c1: '#4A505C', c2: '#F9DC5C', c3: '#22252A' }][Math.floor(r * 2)];
+                };
+                const pal = paletteFor(type);
+                const voxels = [];
+                for (let z = 0; z < N; z++) for (let y = 0; y < N; y++) for (let x = 0; x < N; x++) {
+                    const nx = (x - N / 2) / (N / 2), ny = (y - N / 2) / (N / 2), nz = (z - N / 2) / (N / 2);
+                    const ax = Math.abs(nx), az = Math.abs(nz);
+                    let inside = false;
+                    let mat = 1;
+                    if (type === 'spaceship') {
+                        inside = (Math.abs(nx) < 0.14 && Math.abs(ny) < 0.09 && nz > -0.65 && nz < 0.65) ||
+                                 (Math.abs(nx) < 0.35 && Math.abs(ny) < 0.04 && nz > -0.05 && nz < 0.35) ||
+                                 (Math.abs(nx) < 0.10 && Math.abs(ny - 0.1) < 0.07 && nz > -0.25 && nz < 0.15);
+                        mat = (Math.abs(nx) < 0.10 && Math.abs(ny - 0.1) < 0.07) ? 2 : (nz > 0.45 ? 3 : 1);
+                    } else if (type === 'car') {
+                        inside = (Math.abs(nx) < 0.36 && ny > -0.5 && ny < -0.2 && Math.abs(nz) < 0.55) ||
+                                 (Math.abs(nx) < 0.24 && ny > -0.72 && ny < -0.32 && Math.abs(nz) < 0.28);
+                        mat = (ny < -0.58 ? 3 : (Math.abs(nx) < 0.24 && ny < -0.32 ? 2 : 1));
+                    } else if (type === 'mech') {
+                        inside = (Math.abs(nx) < 0.22 && ny > -0.3 && ny < 0.2 && Math.abs(nz) < 0.18) ||
+                                 (Math.abs(nx) < 0.12 && ny > -0.65 && ny < -0.35 && Math.abs(nz) < 0.13) ||
+                                 ((Math.abs(nx - 0.18) < 0.09 || Math.abs(nx + 0.18) < 0.09) && ny > 0.1 && ny < 0.55 && Math.abs(nz) < 0.13);
+                        mat = ny > 0.1 ? 3 : 1;
+                    } else {
+                        const r = Math.sqrt(nx * nx + nz * nz);
+                        const h = 0.65 - r * (type === 'city' ? 0.9 : 1.1) + (hash(x * 57 + z * 113) - 0.5) * 0.2;
+                        inside = ny < h && ny > -0.85;
+                        mat = ny > 0.1 ? 2 : (ny < -0.55 ? 3 : 1);
+                    }
+                    if (!inside) continue;
+                    const color = (mat === 1 ? pal.c1 : (mat === 2 ? pal.c2 : pal.c3));
+                    voxels.push({ x, y, z, color });
+                }
+                return {
+                    gridSize: N,
+                    currentDrawingAxis: 'y',
+                    activeDrawingLevel: { x: 0, y: 0, z: 0 },
+                    voxels
+                };
             },
 
             setupDOM: function () {
@@ -3316,11 +3393,12 @@
                 this.cam = new THREE.PerspectiveCamera(75, this.containerDiv.clientWidth / this.containerDiv.clientHeight, 0.1, 1000);
                 this.euler = new THREE.Euler(0, 0, 0, 'YXZ');
                 this.resetCamera();
-                this.ren = new THREE.WebGLRenderer({ canvas: this.cvs, antialias: true });
+                this.lowPerfMode = this.computeMobileMode() || (navigator.hardwareConcurrency || 4) <= 4 || (navigator.deviceMemory || 4) <= 4;
+                this.ren = new THREE.WebGLRenderer({ canvas: this.cvs, antialias: !this.lowPerfMode });
                 this.ren.outputEncoding = THREE.sRGBEncoding;
                 this.ren.toneMapping = THREE.ACESFilmicToneMapping;
                 this.ren.toneMappingExposure = 1.05;
-                this.ren.shadowMap.enabled = true;
+                this.ren.shadowMap.enabled = !this.lowPerfMode;
                 this.ren.shadowMap.type = THREE.PCFSoftShadowMap;
 
                 this.scene.add(new THREE.AmbientLight(0xffffff, 0.24));
@@ -3328,14 +3406,14 @@
 
                 const keyLight = new THREE.DirectionalLight(0xffffff, 0.9);
                 keyLight.position.set(10, 20, 15);
-                keyLight.castShadow = true;
+                keyLight.castShadow = !this.lowPerfMode;
                 this.scene.add(keyLight);
 
                 const rimLight = new THREE.DirectionalLight(0x93c5fd, 0.35);
                 rimLight.position.set(-12, 10, -14);
                 this.scene.add(rimLight);
 
-                this.scene.fog = new THREE.FogExp2(0x282c34, 0.0065);
+                this.scene.fog = new THREE.FogExp2(0x282c34, this.lowPerfMode ? 0.0045 : 0.0065);
 
                 this.previewVoxel = new THREE.Mesh(
                     this.sharedBoxGeometry,
@@ -5908,13 +5986,23 @@ const coords = { x: x, y: y, z: z };
 
 
                     this.colorHistory = [];
+                    let maxX = 0, maxY = 0, maxZ = 0;
                     if (Array.isArray(data.voxels)) {
                         data.voxels.forEach(v => {
-                            const k = this.key(v.x, v.y, v.z);
-                            this.voxels.set(k, { color: v.color });
-                            this.addColorToHistory(v.color);
+                            const x = Number(v.x) || 0;
+                            const y = Number(v.y) || 0;
+                            const z = Number(v.z) || 0;
+                            const color = (v.color || '#FFFFFF').toUpperCase();
+                            const k = this.key(x, y, z);
+                            this.voxels.set(k, { color });
+                            this.addColorToHistory(color);
+                            if (x > maxX) maxX = x;
+                            if (y > maxY) maxY = y;
+                            if (z > maxZ) maxZ = z;
                         });
                     }
+                    const boundsGrid = Math.max(maxX, maxY, maxZ) + 1;
+                    this.GRID = Math.max(this.GRID || this.GRID_DEFAULT, boundsGrid, this.GRID_DEFAULT);
                     this.renderColorHistory();
 
                     this.templateImagePinnedY = (data.templateImagePinnedY ?? null);
