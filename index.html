@@ -3072,8 +3072,115 @@
                 setTimeout(() => el.remove(), 220);
             },
 
+            setupHubGeneratorPanel: function () {
+                if (document.getElementById('vsHubGenPanel')) return;
+                const panel = document.createElement('div');
+                panel.id = 'vsHubGenPanel';
+                panel.className = 'fixed z-40 right-3 top-24 w-72 p-3 rounded-2xl border border-white/10 bg-black/50 backdrop-blur';
+                panel.innerHTML = `
+                    <div class="text-[10px] uppercase tracking-widest opacity-70 font-bold mb-2">Generate</div>
+                    <select id="vsHubGenType" class="select select-sm select-bordered w-full mb-2">
+                        <option value="city">City</option><option value="ruins">Ruins</option><option value="waterfall">Waterfall</option><option value="ifs_tree">IFS Tree</option><option value="mech">Mech</option><option value="car">Car</option><option value="castle">Castle</option><option value="spaceship">Spaceship</option><option value="floating_island">Terra Island</option>
+                    </select>
+                    <div class="text-xs opacity-70">Shape <span id="vsHubGenShapeVal" class="float-right">60</span></div>
+                    <input id="vsHubGenShape" type="range" min="0" max="100" value="60" class="range range-xs range-accent mb-2" />
+                    <div class="text-xs opacity-70">Color <span id="vsHubGenColorVal" class="float-right">80</span></div>
+                    <input id="vsHubGenColor" type="range" min="0" max="100" value="80" class="range range-xs range-secondary mb-3" />
+                    <button id="vsHubGenRun" class="btn btn-accent btn-sm w-full">Generate Scene</button>
+                `;
+                document.body.appendChild(panel);
+
+                const typeEl = document.getElementById('vsHubGenType');
+                const shapeEl = document.getElementById('vsHubGenShape');
+                const colorEl = document.getElementById('vsHubGenColor');
+                const shapeValEl = document.getElementById('vsHubGenShapeVal');
+                const colorValEl = document.getElementById('vsHubGenColorVal');
+                const runBtn = document.getElementById('vsHubGenRun');
+                if (shapeEl && shapeValEl) shapeEl.addEventListener('input', () => shapeValEl.textContent = shapeEl.value);
+                if (colorEl && colorValEl) colorEl.addEventListener('input', () => colorValEl.textContent = colorEl.value);
+                if (runBtn) {
+                    runBtn.addEventListener('click', () => {
+                        this.generateDeterministicHubScene({
+                            type: typeEl?.value || 'city',
+                            shape: Number(shapeEl?.value || 60),
+                            color: Number(colorEl?.value || 80),
+                            seed: Math.floor(Math.random() * 4294967296)
+                        });
+                    });
+                }
+            },
+
+            generateDeterministicHubScene: function (meta = {}) {
+                const type = meta.type || 'city';
+                const seed = Number.isFinite(meta.seed) ? meta.seed : Math.floor(Math.random() * 4294967296);
+                const intensity = Math.max(0, Math.min(100, Number(meta.shape ?? 60)));
+                const colorPunch = Math.max(0, Math.min(100, Number(meta.color ?? 80))) / 100;
+                const N = 40;
+                const voxels = [];
+
+                const rnd = (n) => {
+                    let h = Math.imul((n | 0) ^ (seed | 0), 374761393);
+                    h = Math.imul(h ^ (h >>> 13), 1274126177);
+                    return ((h ^ (h >>> 16)) >>> 0) / 4294967296;
+                };
+                const noise = (x, y, z, s = 0) => rnd((Math.floor(x) + Math.floor(y) * 57 + Math.floor(z) * 113 + s) | 0);
+                const palette = {
+                    city: ['#2A2D34', '#00E5FF', '#15161A'],
+                    ruins: ['#5A6B48', '#C2B280', '#1A1C19'],
+                    waterfall: ['#00B4D8', '#4CAF50', '#4A4E69'],
+                    ifs_tree: ['#2D8B4E', '#4A3B32', '#1A1E18'],
+                    mech: ['#F4A261', '#F1FAEE', '#1D3557'],
+                    car: ['#D90429', '#7D8597', '#111214'],
+                    castle: ['#8B939C', '#C2B280', '#1A1C19'],
+                    spaceship: ['#95A3B3', '#58E1FF', '#1A2130'],
+                    floating_island: ['#2D8B4E', '#4A3B32', '#1A1E18']
+                };
+
+                for (let z = 0; z < N; z++) {
+                    for (let y = 0; y < N; y++) {
+                        for (let x = 0; x < N; x++) {
+                            const nx = (x - N / 2) / (N / 2);
+                            const ny = (y - N / 2) / (N / 2);
+                            const nz = (z - N / 2) / (N / 2);
+                            const island = Math.max(Math.abs(nx) - 0.68, Math.abs(nz) - 0.68) - 0.2;
+                            let d = 1;
+                            if (type === 'city') {
+                                const gx = .14 + rnd(1) * .28, gz = .14 + rnd(2) * .28, street = .03 + .05 * (1 - intensity / 100);
+                                const isStreet = ((nx % gx) + gx) % gx < street || ((nz % gz) + gz) % gz < street;
+                                const b = rnd(Math.floor(nx / gx) * 12 + Math.floor(nz / gz) * 45 + 77);
+                                const center = Math.sqrt(nx * nx + nz * nz);
+                                const h = isStreet ? -0.85 : (-0.75 + b * (2.2 + 2 * (intensity / 100)) * Math.max(0, 1 - center * 1.2));
+                                d = Math.max(island, ny - h, -(ny + 0.95));
+                            } else if (type === 'floating_island') {
+                                d = Math.max(island, ny - (-0.1 + noise(nx * 5, 0, nz * 5) * 0.25), -(ny + 0.95));
+                            } else {
+                                d = Math.sqrt(nx * nx + ny * ny + nz * nz) - (0.62 + (noise(nx * 3, ny * 3, nz * 3) - 0.5) * (0.5 + intensity / 200));
+                            }
+                            if (d < 0) {
+                                const cols = palette[type] || palette.city;
+                                const idx = (noise(x, y, z) > 0.7) ? 1 : (noise(x + 5, y + 11, z + 3) > 0.8 ? 2 : 0);
+                                const c = new THREE.Color(cols[idx]);
+                                const n = noise(x, y, z);
+                                c.offsetHSL((n - .5) * .03 * colorPunch, 0.12 * (colorPunch - .5), (n - .5) * .1 * colorPunch);
+                                voxels.push({ x, y, z, color: `#${c.getHexString()}` });
+                            }
+                        }
+                    }
+                }
+
+                const data = {
+                    gridSize: this.GRID_DEFAULT,
+                    currentDrawingAxis: 'y',
+                    activeDrawingLevel: { x: 0, y: 0, z: 0 },
+                    voxels
+                };
+                this.loadFromData(data);
+                this.showToast('Generate', `Loaded ${type} (${voxels.length} voxels)`, 'success');
+            },
+
             init: function () {
                 this.setupDOM();
+                this.setupHubGeneratorPanel();
                 if (typeof this.keyboard === 'undefined' || this.keyboard === null) {
                     this.keyboard = {};
                 }
@@ -3171,7 +3278,23 @@
                         if (!trustedOrigins.includes(event.origin)) return;
                         if (!event.data || event.data.type !== 'voxelshaper_import_v1') return;
                         const project = event.data.project;
-                        if (project && this.loadFromData(project)) {
+                        let normalized = project;
+                        if (project && Array.isArray(project.voxels) && project.voxels.length && !project.voxels[0].color) {
+                            normalized = {
+                                gridSize: this.GRID_DEFAULT,
+                                currentDrawingAxis: 'y',
+                                activeDrawingLevel: { x: 0, y: 0, z: 0 },
+                                voxels: project.voxels.map(v => {
+                                    let color = '#ffffff';
+                                    if (Array.isArray(v.c) && v.c.length >= 3) {
+                                        const toHex = (n) => Math.max(0, Math.min(255, n | 0)).toString(16).padStart(2, '0');
+                                        color = `#${toHex(v.c[0])}${toHex(v.c[1])}${toHex(v.c[2])}`;
+                                    }
+                                    return { x: v.x, y: v.y, z: v.z, color };
+                                })
+                            };
+                        }
+                        if (normalized && this.loadFromData(normalized)) {
                             this.showToast('Import', 'Model opened from Hub', 'success');
                             try {
                                 event.source?.postMessage({ type: 'voxelshaper_import_ack_v1' }, event.origin);
@@ -3196,6 +3319,20 @@
                 await this.handleOAuthRedirect();
                 const urlParams = new URLSearchParams(window.location.search || '');
                 const hashParams = new URLSearchParams((window.location.hash || '').slice(1));
+                const morphMeta = urlParams.get('m');
+                if (morphMeta) {
+                    try {
+                        const meta = JSON.parse(decodeURIComponent(escape(atob(morphMeta))));
+                        if (meta && meta.type) {
+                            this.generateDeterministicHubScene({
+                                type: meta.type,
+                                seed: Number.isFinite(meta.seed) ? meta.seed : undefined,
+                                shape: meta.shape,
+                                color: meta.color
+                            });
+                        }
+                    } catch (_) {}
+                }
                 const magicLinkToken = urlParams.get('token') || hashParams.get('token');
                 if (!this.user && magicLinkToken) {
                     try {
