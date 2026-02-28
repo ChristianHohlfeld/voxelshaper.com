@@ -2820,8 +2820,10 @@
 
             getMaterial: function (color) {
                 if (!this.materialCache.has(color)) {
-                    const mat = new THREE.MeshLambertMaterial({
+                    const mat = new THREE.MeshStandardMaterial({
                         color: color,
+                        roughness: 0.62,
+                        metalness: 0.12,
                         flatShading: true
                     });
                     this.materialCache.set(color, mat);
@@ -3184,14 +3186,25 @@
                 this.euler = new THREE.Euler(0, 0, 0, 'YXZ');
                 this.resetCamera();
                 this.ren = new THREE.WebGLRenderer({ canvas: this.cvs, antialias: true });
+                this.ren.outputEncoding = THREE.sRGBEncoding;
+                this.ren.toneMapping = THREE.ACESFilmicToneMapping;
+                this.ren.toneMappingExposure = 1.05;
                 this.ren.shadowMap.enabled = true;
                 this.ren.shadowMap.type = THREE.PCFSoftShadowMap;
-                this.scene.add(new THREE.AmbientLight(0x606060));
-                const dirLight = new THREE.DirectionalLight(0xffffff, 0.5);
-                dirLight.position.set(10, 20, 15);
-                dirLight.castShadow = true;
-                this.scene.add(dirLight);
-                this.scene.add(new THREE.HemisphereLight(0xffffff, 0x444444, 0.2));
+
+                this.scene.add(new THREE.AmbientLight(0xffffff, 0.24));
+                this.scene.add(new THREE.HemisphereLight(0xdbeafe, 0x1f2937, 0.68));
+
+                const keyLight = new THREE.DirectionalLight(0xffffff, 0.9);
+                keyLight.position.set(10, 20, 15);
+                keyLight.castShadow = true;
+                this.scene.add(keyLight);
+
+                const rimLight = new THREE.DirectionalLight(0x93c5fd, 0.35);
+                rimLight.position.set(-12, 10, -14);
+                this.scene.add(rimLight);
+
+                this.scene.fog = new THREE.FogExp2(0x282c34, 0.0065);
 
                 this.previewVoxel = new THREE.Mesh(
                     this.sharedBoxGeometry,
@@ -4366,7 +4379,8 @@
                 this.ren.setSize(this.containerDiv.clientWidth, this.containerDiv.clientHeight);
                 this.cam.aspect = this.containerDiv.clientWidth / this.containerDiv.clientHeight;
                 this.cam.updateProjectionMatrix();
-                this.ren.setPixelRatio(this.isMobile ? 1.5 : window.devicePixelRatio);
+                const maxPR = this.isMobile ? 1.5 : 2.0;
+                this.ren.setPixelRatio(Math.min(window.devicePixelRatio || 1, maxPR));
                 this.applyUIMode();
                 this.refreshOnboardingContent();
             },
