@@ -2707,6 +2707,7 @@
             lengthUnit: localStorage.getItem('voxelLengthUnit') || 'mm',
             audioCtx: null,
             lastSoundAt: 0,
+            lastVisualFxAt: 0,
             isRoundedPreviewEnabled: localStorage.getItem('isRoundedPreviewEnabled') === 'true',
             previewRoundnessFactor: parseFloat(localStorage.getItem('previewRoundnessFactor') || 0.5),
             originalVoxelsGroup: null,
@@ -4556,6 +4557,9 @@
 
                 if (modified && mode !== 'PAINT') {
                     this.playVoxelBlub(mode);
+                }
+                if (modified) {
+                    this.triggerActionVisualFx(mode);
                 }
 
                 if (modified && !this.firstEditTracked) {
@@ -6486,6 +6490,16 @@
                 osc.stop(t + 0.145);
             },
 
+            triggerActionVisualFx: function (mode = 'ADD') {
+                const nowMs = performance.now();
+                if (nowMs - this.lastVisualFxAt < 70) return;
+                this.lastVisualFxAt = nowMs;
+                const x = this.mouseState.lastX || this.mouseState.downX || (window.innerWidth * 0.5);
+                const y = this.mouseState.lastY || this.mouseState.downY || (window.innerHeight * 0.5);
+                const color = mode === 'DELETE' ? 'rgba(255, 80, 80, 0.9)' : (this.currentColor || '#ffffff');
+                this.fallbackHaptic(x, y, color);
+            },
+
             fallbackHaptic: function (clientX, clientY, color) {
                 // 1) small visual feedback (mobile only; avoid desktop camera-shake feel)
                 if (this.isMobile) {
@@ -6497,7 +6511,7 @@
                     } catch { }
                 }
 
-                // 2) Ripple at the touch position
+                // 2) Ripple at the pointer position
                 if (!this.hapticLayer) this.initVisualHapticLayer();
                 if (!this.hapticLayer) return;
 
