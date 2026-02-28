@@ -551,6 +551,9 @@
             left: 0;
             right: 0;
             bottom: 0;
+            box-sizing: border-box;
+            padding-left: calc(env(safe-area-inset-left) + 8px);
+            padding-right: calc(env(safe-area-inset-right) + 8px);
             padding-bottom: calc(var(--safe-bottom) + 8px);
             z-index: 40;
         }
@@ -566,6 +569,27 @@
             user-select: none;
             -webkit-touch-callout: none;
             -webkit-tap-highlight-color: transparent;
+        }
+
+        .modal-box {
+            position: relative;
+        }
+
+        .modal-close-x {
+            position: absolute;
+            top: 0.6rem;
+            right: 0.6rem;
+            width: 2.25rem;
+            height: 2.25rem;
+            min-width: 2.25rem;
+            min-height: 2.25rem;
+            border-radius: 9999px;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 1.2rem;
+            line-height: 1;
+            z-index: 2;
         }
 
         input,
@@ -2667,6 +2691,22 @@
                 };
             },
 
+            ensureModalCloseButtons: function () {
+                document.querySelectorAll('dialog.modal').forEach((dialog) => {
+                    const box = dialog.querySelector('.modal-box');
+                    if (!box) return;
+                    if (box.querySelector('.modal-close-x')) return;
+
+                    const closeBtn = document.createElement('button');
+                    closeBtn.type = 'button';
+                    closeBtn.className = 'btn btn-sm btn-ghost modal-close-x';
+                    closeBtn.setAttribute('aria-label', 'Close dialog');
+                    closeBtn.textContent = '×';
+                    closeBtn.addEventListener('click', () => dialog.close());
+                    box.prepend(closeBtn);
+                });
+            },
+
             refreshOnboardingContent: function () {
                 const content = this.getOnboardingContent();
                 const title = document.getElementById('onboardingTitle');
@@ -2693,6 +2733,7 @@
                 this.refreshOnboardingContent();
                 trackEvent('ui_mode_detected', this.getAnalyticsContext());
                 this.setupThree();
+                this.ensureModalCloseButtons();
                 this.ensureFirstRunPalette();
                 this.applyFirstRunColorIfNeeded();
                 this.rebuildFoundation();
