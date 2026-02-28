@@ -5774,8 +5774,7 @@
                         picker.click();
                     };
 
-                    const pick = (e) => {
-                        e.preventDefault();
+                    const applySlotColor = () => {
                         this.activePaletteIndex = index;
                         localStorage.setItem('voxelActivePaletteIndex', String(this.activePaletteIndex));
                         this.currentColor = color.toUpperCase();
@@ -5783,7 +5782,16 @@
                         this.updateAllControlInputs();
                         this.renderColorHistory();
                         this.previewVoxel.material.color.set(this.currentColor);
+                    };
 
+                    const pick = (e) => {
+                        e.preventDefault();
+                        applySlotColor();
+                    };
+
+                    const editColor = (e) => {
+                        e.preventDefault();
+                        applySlotColor();
                         const picker = this.isMobile
                             ? document.getElementById('mobile-color-picker')
                             : document.getElementById('color-picker-input');
@@ -5792,6 +5800,7 @@
 
                     swatch.addEventListener('pointerdown', pick);
                     swatch.addEventListener('click', pick);
+                    swatch.addEventListener('dblclick', editColor);
                     palette.appendChild(swatch);
                 });
             },
