@@ -5808,7 +5808,14 @@
                     };
 
                     swatch.addEventListener('pointerdown', pick);
-                    swatch.addEventListener('click', pick);
+                    swatch.addEventListener('click', (e) => {
+                        if (!this.isMobile && e.detail === 1) {
+                            // Desktop: open picker on normal click (no more blocked flow)
+                            editColor(e);
+                            return;
+                        }
+                        pick(e);
+                    });
                     swatch.addEventListener('dblclick', editColor);
                     palette.appendChild(swatch);
                 });
