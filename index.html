@@ -2656,6 +2656,7 @@
                 dragStartPoint: new THREE.Vector3(),
                 extrudeNormal: null,
                 selectionAxisLock: null,
+                moveAxisLock: null,
                 selectionDragStartTarget: null,
                 dragStartPlaneY: null,
             },
@@ -3616,19 +3617,23 @@
                     if (target) {
                         this.mouseState.isMoving = true;
                         this.mouseState.moveStartVoxel = target;
+                        this.mouseState.moveAxisLock = null;
                         const vKey = this.key(target.x, target.y, target.z);
 
-                        // If clicking an unselected voxel, select its group first
+                        // If clicking an unselected voxel, select its full connected group first.
                         let isVoxelSelected = false;
                         for (let i = 0; i < 6; i++) { if (this.selectedFaces.has(`${vKey}:${i}`)) { isVoxelSelected = true; break; } }
                         if (!isVoxelSelected) {
                             this.selectConnectedGroup(vKey);
                         }
 
+                        // Move only the connected object under cursor (within current selection), not every disconnected island.
+                        const uniqueSelected = new Set([...this.selectedFaces].map(f => parseInt(f.split(':')[0], 10)));
+                        const moveGroup = this.getConnectedGroup(vKey, uniqueSelected);
+
                         // Capture initial positions
                         this.mouseState.movingVoxelsOriginal = new Map();
-                        const uniqueVKeys = new Set([...this.selectedFaces].map(f => parseInt(f.split(':')[0], 10)));
-                        uniqueVKeys.forEach(vk => {
+                        moveGroup.forEach(vk => {
                             const v = this.voxels.get(vk);
                             if (v) this.mouseState.movingVoxelsOriginal.set(vk, {
                                 pos: { x: v.mesh.position.x, y: v.mesh.position.y, z: v.mesh.position.z },
@@ -3793,6 +3798,9 @@
                                 y: Math.round(delta.y / this.VS),
                                 z: Math.round(delta.z / this.VS)
                             };
+                            if (this.mouseState.moveAxisLock === 'x') { vDelta.y = 0; vDelta.z = 0; }
+                            if (this.mouseState.moveAxisLock === 'y') { vDelta.x = 0; vDelta.z = 0; }
+                            if (this.mouseState.moveAxisLock === 'z') { vDelta.x = 0; vDelta.y = 0; }
                             for (const [vk, orig] of this.mouseState.movingVoxelsOriginal) {
                                 const v = this.voxels.get(vk);
                                 if (v) v.mesh.position.set(orig.pos.x + vDelta.x * this.VS, orig.pos.y + vDelta.y * this.VS, orig.pos.z + vDelta.z * this.VS);
@@ -3963,11 +3971,12 @@
                 this.mouseState.lastActionNormal = null;
                 this.mouseState.lastStrokeApplyAt = 0;
                 this.mouseState.selectionAxisLock = null;
+                this.mouseState.moveAxisLock = null;
                 this.mouseState.dragStartPlaneY = null;
                 this.mouseState.selectionDragStartTarget = null;
             },
 
-            getConnectedGroup: function (voxelKey) {
+            getConnectedGroup: function (voxelKey, allowedSet = null) {
                 const group = new Set();
                 const queue = [typeof voxelKey === 'string' ? parseInt(voxelKey.split(':')[0], 10) : voxelKey];
                 const visited = new Set();
@@ -3977,7 +3986,7 @@
                     if (visited.has(currentK)) continue;
                     visited.add(currentK);
 
-                    if (this.voxels.has(currentK)) {
+                    if (this.voxels.has(currentK) && (!allowedSet || allowedSet.has(currentK))) {
                         group.add(currentK);
                         const [x, y, z] = this.parseKey(currentK);
                         // Check 6 neighbors
@@ -3987,7 +3996,7 @@
                             this.key(x, y, z + 1), this.key(x, y, z - 1)
                         ];
                         for (const n of neighbors) {
-                            if (this.voxels.has(n) && !visited.has(n)) {
+                            if (this.voxels.has(n) && (!allowedSet || allowedSet.has(n)) && !visited.has(n)) {
                                 queue.push(n);
                             }
                         }
@@ -4193,6 +4202,18 @@
                     this.saveJSON();
                 }
                 if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA' || e.target.tagName === 'SELECT') return;
+
+                if (this.currentMode === 'MOVE' && this.mouseState.isMoving) {
+                    const key = e.key.toLowerCase();
+                    if (key === 'x' || key === 'y' || key === 'z') {
+                        this.mouseState.moveAxisLock = key;
+                        this.showToast('Move Axis', `Locked to ${key.toUpperCase()}`, 'info', 700);
+                    } else if (key === 'escape') {
+                        this.mouseState.moveAxisLock = null;
+                        this.showToast('Move Axis', 'Axis lock cleared', 'info', 700);
+                    }
+                }
+
                 this.keyboard[e.key.toLowerCase()] = true;
             },
 
