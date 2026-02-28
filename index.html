@@ -1699,9 +1699,9 @@
 
             <div class="controls-group" id="brush-controls">
                 <label>Brush</label>
-                <button id="brush-size-decrease" class="btn btn-xs btn-ghost" disabled>-</button>
-                <span id="brush-size-display" class="text-xs font-bold opacity-50 w-[4.5ch] text-center tabular-nums">1x1</span>
-                <button id="brush-size-increase" class="btn btn-xs btn-ghost" disabled>+</button>
+                <button id="brush-size-decrease" class="btn btn-xs btn-ghost">-</button>
+                <span id="brush-size-display" class="text-xs font-bold w-[4.5ch] text-center tabular-nums">1x1</span>
+                <button id="brush-size-increase" class="btn btn-xs btn-ghost">+</button>
             </div>
 
         </div>
@@ -1845,6 +1845,8 @@
             <button class="btn btn-ghost rounded-full" id="mobile-mode-toggle" aria-label="Cycle Add/Delete/Paint">
                 <i id="mobile-mode-icon" class="fas fa-plus-square"></i>
             </button>
+            <button class="btn btn-ghost rounded-full" id="mobile-quick-brush-decrease" aria-label="Decrease brush size">−</button>
+            <button class="btn btn-ghost rounded-full" id="mobile-quick-brush-increase" aria-label="Increase brush size">+</button>
             <button class="btn btn-ghost rounded-full" id="mobile-select-toggle" aria-label="Toggle Extrude mode">
                 <i class="fas fa-mouse-pointer"></i>
             </button>
@@ -1975,9 +1977,9 @@
                 <div>
                     <label class="label"><span class="label-text">Brush Size</span></label>
                     <div class="flex items-center gap-2">
-                        <button id="mobile-brush-size-decrease" class="btn btn-sm btn-ghost" disabled>-</button>
+                        <button id="mobile-brush-size-decrease" class="btn btn-sm btn-ghost">-</button>
                         <span id="mobile-brush-size-display" class="text-sm font-bold w-[4.5ch] text-center tabular-nums">1x1</span>
-                        <button id="mobile-brush-size-increase" class="btn btn-sm btn-ghost" disabled>+</button>
+                        <button id="mobile-brush-size-increase" class="btn btn-sm btn-ghost">+</button>
                     </div>
                 </div>
             </div>
@@ -3341,6 +3343,8 @@
                 document.getElementById('mobile-overlay-undo').addEventListener('click', () => this.undo());
                 document.getElementById('mobile-overlay-redo').addEventListener('click', () => this.redo());
                 document.getElementById('mobile-mode-toggle').addEventListener('click', () => this.cycleMode());
+                document.getElementById('mobile-quick-brush-decrease').addEventListener('click', () => this.setBrushSize(this.brushSize - 1));
+                document.getElementById('mobile-quick-brush-increase').addEventListener('click', () => this.setBrushSize(this.brushSize + 1));
                 document.getElementById('mobile-select-toggle').addEventListener('click', () => this.toggleSelectMode());
                 document.getElementById('mobile-selection-lock-toggle').addEventListener('click', () => this.toggleSelectionLock());
                 document.getElementById('mobile-color-picker').addEventListener('input', (e) => this.setColor(e.target.value));
@@ -5513,20 +5517,10 @@ const coords = { x: x, y: y, z: z };
                 selectionLockBtn.disabled = !isSelectMode;
                 document.getElementById('mobile-selection-lock-toggle').closest('li').style.display = isSelectMode ? '' : 'none';
 
-                const isBrushMode = this.currentMode === 'PAINT' || this.currentMode === 'DELETE' || this.currentMode === 'FREE';
-                const brushMinus = document.getElementById('brush-size-decrease');
-                const brushPlus = document.getElementById('brush-size-increase');
                 const brushDisplay = document.getElementById('brush-size-display');
-                const mobileBrushMinus = document.getElementById('mobile-brush-size-decrease');
-                const mobileBrushPlus = document.getElementById('mobile-brush-size-increase');
-                if (brushMinus) brushMinus.disabled = !isBrushMode;
-                if (brushPlus) brushPlus.disabled = !isBrushMode;
-                if (mobileBrushMinus) mobileBrushMinus.disabled = !isBrushMode;
-                if (mobileBrushPlus) mobileBrushPlus.disabled = !isBrushMode;
-
                 if (brushDisplay) {
-                    brushDisplay.classList.toggle('text-base-content/50', !isBrushMode);
-                    brushDisplay.classList.toggle('text-primary', isBrushMode);
+                    brushDisplay.classList.remove('text-base-content/50');
+                    brushDisplay.classList.add('text-primary');
                 }
                 this.updateSelectionLockUI();
             },
@@ -5666,6 +5660,9 @@ const coords = { x: x, y: y, z: z };
             setBrushSize: function (newSize) {
                 this.brushSize = Math.max(1, Math.min(10, parseInt(newSize, 10) || 1));
                 localStorage.setItem('voxelEditorBrushSize', this.brushSize);
+                if (!(this.currentMode === 'PAINT' || this.currentMode === 'DELETE' || this.currentMode === 'FREE')) {
+                    this.setModeExplicit('FREE', 'brush_size_change');
+                }
                 this.updateAllControlInputs();
             },
 
