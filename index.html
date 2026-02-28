@@ -3165,6 +3165,21 @@
                 }
             },
             authCheckAndInit: async function () {
+                window.addEventListener('message', (event) => {
+                    try {
+                        const trustedOrigins = ['https://hub.voxelshaper.com', window.location.origin];
+                        if (!trustedOrigins.includes(event.origin)) return;
+                        if (!event.data || event.data.type !== 'voxelshaper_import_v1') return;
+                        const project = event.data.project;
+                        if (project && this.loadFromData(project)) {
+                            this.showToast('Import', 'Model opened from Hub', 'success');
+                            try {
+                                event.source?.postMessage({ type: 'voxelshaper_import_ack_v1' }, event.origin);
+                            } catch (_) {}
+                        }
+                    } catch (_) {}
+                });
+
                 const unsavedData = sessionStorage.getItem('unsavedVoxelData');
                 if (unsavedData) {
                     try {
