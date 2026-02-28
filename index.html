@@ -1601,6 +1601,9 @@
 
         <!-- RIGHT ZONE -->
         <div class="controls-zone zone-right">
+            <button id="soundToggleBtn" class="btn btn-sm btn-ghost btn-square" title="Sound: On" aria-label="Toggle sound">
+                <i id="soundToggleIcon" class="fas fa-volume-up"></i>
+            </button>
             <button id="shareBtn" class="btn btn-sm btn-warning btn-square" title="Share Project">
                 <i class="fas fa-share-alt"></i>
             </button>
@@ -2604,6 +2607,9 @@
             isPointerDown: false,
             currentModelId: null,
             hapticLayer: null,
+            soundEnabled: localStorage.getItem('voxelSoundEnabled') !== 'false',
+            audioCtx: null,
+            lastSoundAt: 0,
             isRoundedPreviewEnabled: localStorage.getItem('isRoundedPreviewEnabled') === 'true',
             previewRoundnessFactor: parseFloat(localStorage.getItem('previewRoundnessFactor') || 0.5),
             originalVoxelsGroup: null,
@@ -3245,6 +3251,7 @@
                 document.getElementById('mobile-login-logout').addEventListener('click', this.loginLogout.bind(this));
 
                 document.getElementById('shareBtn').addEventListener('click', () => this.openShareModal());
+                document.getElementById('soundToggleBtn').addEventListener('click', () => this.toggleSound());
                 document.getElementById('uploadToHubFromShareBtn').addEventListener('click', () => {
                     document.getElementById('shareModal').close();
                     document.getElementById('uploadProjectModal').showModal();
@@ -4360,6 +4367,10 @@
                             this.addColorToHistory(this.currentColor);
                         }
                         break;
+                }
+
+                if (modified) {
+                    this.playVoxelBlub(mode);
                 }
 
                 if (modified && !this.firstEditTracked) {
@@ -5828,6 +5839,7 @@
                 document.getElementById('grid-size-display').textContent = `${this.GRID}³`;
                 document.getElementById('color-picker-input').value = this.currentColor;
                 document.getElementById('brush-size-display').textContent = `${this.brushSize}x${this.brushSize}`;
+                this.updateSoundButtonUI();
 
                 // Update new controls
                 const previewToggle = document.getElementById('roundedPreviewToggle');
@@ -6160,6 +6172,62 @@
                     this.hapticLayer.id = 'haptic-layer';
                     this.containerDiv.appendChild(this.hapticLayer);
                 }
+            },
+
+            updateSoundButtonUI: function () {
+                const btn = document.getElementById('soundToggleBtn');
+                const icon = document.getElementById('soundToggleIcon');
+                if (!btn || !icon) return;
+                btn.title = this.soundEnabled ? 'Sound: On' : 'Sound: Off';
+                btn.classList.toggle('btn-success', this.soundEnabled);
+                btn.classList.toggle('btn-ghost', !this.soundEnabled);
+                icon.className = this.soundEnabled ? 'fas fa-volume-up' : 'fas fa-volume-mute';
+            },
+
+            toggleSound: function () {
+                this.soundEnabled = !this.soundEnabled;
+                localStorage.setItem('voxelSoundEnabled', String(this.soundEnabled));
+                this.updateSoundButtonUI();
+                if (this.soundEnabled) this.playVoxelBlub('PAINT');
+            },
+
+            playVoxelBlub: function (mode = 'ADD') {
+                if (!this.soundEnabled) return;
+                const nowMs = performance.now();
+                if (nowMs - this.lastSoundAt < 45) return;
+                this.lastSoundAt = nowMs;
+
+                const Ctx = window.AudioContext || window.webkitAudioContext;
+                if (!Ctx) return;
+                if (!this.audioCtx) this.audioCtx = new Ctx();
+                const ctx = this.audioCtx;
+                if (ctx.state === 'suspended') ctx.resume();
+
+                const osc = ctx.createOscillator();
+                const gain = ctx.createGain();
+                const filter = ctx.createBiquadFilter();
+
+                filter.type = 'lowpass';
+                filter.frequency.value = 1500;
+
+                const t = ctx.currentTime;
+                const base = mode === 'DELETE' ? 170 : (mode === 'PAINT' ? 260 : 230);
+                const end = mode === 'DELETE' ? 120 : (mode === 'PAINT' ? 180 : 150);
+
+                osc.type = 'sine';
+                osc.frequency.setValueAtTime(base, t);
+                osc.frequency.exponentialRampToValueAtTime(end, t + 0.11);
+
+                gain.gain.setValueAtTime(0.0001, t);
+                gain.gain.exponentialRampToValueAtTime(0.08, t + 0.015);
+                gain.gain.exponentialRampToValueAtTime(0.0001, t + 0.14);
+
+                osc.connect(filter);
+                filter.connect(gain);
+                gain.connect(ctx.destination);
+
+                osc.start(t);
+                osc.stop(t + 0.145);
             },
 
             fallbackHaptic: function (clientX, clientY, color) {
