@@ -4969,6 +4969,15 @@
                 if (this.selectionChange) this.selectionChange.before = new Set(after);
             },
 
+            syncSelectionNormalIndexFromSelection: function () {
+                if (!this.selectedFaces || this.selectedFaces.size === 0) {
+                    this.selectionNormalIndex = null;
+                    return;
+                }
+                const first = this.selectedFaces.values().next().value;
+                this.selectionNormalIndex = first ? parseInt(first.split(':')[1], 10) : null;
+            },
+
             clearSelection: function () {
                 if (this.selectedFaces.size > 0) {
                     const before = new Set(this.selectedFaces);
@@ -5946,6 +5955,7 @@
 
                     case 'SELECT':
                         this.selectedFaces = new Set(action.before);
+                        this.syncSelectionNormalIndexFromSelection();
                         this.updateSelectionVisuals();
                         break;
                 }
@@ -5991,6 +6001,7 @@
 
                     case 'SELECT':
                         this.selectedFaces = new Set(action.after);
+                        this.syncSelectionNormalIndexFromSelection();
                         this.updateSelectionVisuals();
                         break;
                 }
