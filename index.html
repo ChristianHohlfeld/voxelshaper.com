@@ -678,9 +678,9 @@
         #mobile-ui-container .mobile-bottom-bar .btn,
         #mobile-ui-container .mobile-bottom-bar input[type="color"],
         #mobile-ui-container .mobile-bottom-bar .dropdown>label {
-            width: 3.1rem;
-            height: 3.1rem;
-            font-size: 1.3rem;
+            width: 3.5rem;
+            height: 3.5rem;
+            font-size: 1.5rem;
         }
 
         :root {
@@ -694,11 +694,10 @@
             right: 0;
             bottom: 0;
             box-sizing: border-box;
-            padding-left: calc(env(safe-area-inset-left) + 6px);
-            padding-right: calc(env(safe-area-inset-right) + 6px);
+            padding-left: calc(env(safe-area-inset-left) + 8px);
+            padding-right: calc(env(safe-area-inset-right) + 8px);
             padding-bottom: calc(var(--safe-bottom) + 8px);
             z-index: 40;
-            gap: 0.25rem;
         }
 
         body.has-mobile-bar {
@@ -6171,11 +6170,6 @@
             },
 
             undo: function () {
-                if (this.isPhysicsPlaying) {
-                    // During play mode, undo acts as deterministic "restore pre-play snapshot + pause".
-                    this.stopPhysics();
-                    return;
-                }
                 if (this.historyPointer < 0) return;
                 const action = this.history[this.historyPointer];
 
@@ -6221,10 +6215,6 @@
             },
 
             redo: function () {
-                if (this.isPhysicsPlaying) {
-                    this.stopPhysics();
-                    return;
-                }
                 if (this.historyPointer >= this.history.length - 1) return;
                 this.historyPointer++;
                 const action = this.history[this.historyPointer];
