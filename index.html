@@ -1835,8 +1835,8 @@
             <button id="soundToggleBtn" class="btn btn-sm btn-ghost btn-square" title="Sound: On" aria-label="Toggle sound">
                 <i id="soundToggleIcon" class="fas fa-volume-up"></i>
             </button>
-            <button id="generateHubBtn" class="btn btn-sm btn-accent" title="Generate in Hub" style="box-shadow: 0 0 18px rgba(0,212,255,.45);">
-                <i class="fas fa-dice-d20 mr-1"></i>Generate
+            <button id="generateHubBtn" class="btn btn-sm btn-accent" title="Morph World" style="box-shadow: 0 0 18px rgba(0,212,255,.45);">
+                <i class="fas fa-dice-d20 mr-1"></i>Morph
             </button>
             <button id="shareBtn" class="btn btn-sm btn-warning btn-square" title="Share Project">
                 <i class="fas fa-share-alt"></i>
@@ -1904,7 +1904,7 @@
                     <li><a id="loadBtnMobile">Load Local (.json)</a></li>
                     <li><a id="exportBtnMobile">Export Options</a></li>
                     <li><a id="mobile-share">Share Project</a></li>
-                    <li><a id="mobile-generate-hub" class="text-accent font-semibold"><i class="fas fa-dice-d20 mr-2"></i>Generate (Hub)</a></li>
+                    <li><a id="mobile-generate-hub" class="text-accent font-semibold"><i class="fas fa-dice-d20 mr-2"></i>Morph World</a></li>
                     <div class="divider my-1"></div>
                     <li><a id="loadImageBtnMobile">Load Reference Image</a></li>
                     <li><a id="removeImageBtnMobile" class="hidden">Remove Reference Image</a></li>
@@ -4542,17 +4542,29 @@
             },
 
             openHubGenerator: function () {
-                const url = new URL(this.HUB_URL);
-                const payload = window.__lastHubMeta || null;
-                if (payload && payload.type && Number.isFinite(payload.seed)) {
+                const types = ['city', 'car', 'spaceship', 'ruins', 'mech', 'castle', 'waterfall', 'ifs_tree', 'floating_island'];
+                const nextMeta = {
+                    type: types[Math.floor(Math.random() * types.length)],
+                    seed: (Math.random() * 4294967296) >>> 0,
+                    shape: 60,
+                    color: 80,
+                    palette: 'auto'
+                };
+                window.__lastHubMeta = nextMeta;
+                const generated = this.generateDeterministicHubProject(nextMeta);
+                if (generated && this.loadFromData(generated)) {
+                    this.hideHeroOverlays();
+                    this.showToast('Generate', `Morphed: ${nextMeta.type} • 0x${nextMeta.seed.toString(16).toUpperCase().padStart(8, '0')}`, 'success', 1400);
                     try {
-                        const m = btoa(unescape(encodeURIComponent(JSON.stringify(payload))));
+                        const url = new URL(window.location.href);
+                        const m = btoa(unescape(encodeURIComponent(JSON.stringify(nextMeta))));
                         url.searchParams.set('m', m);
+                        window.history.replaceState({}, document.title, url.toString());
                     } catch (_) {}
+                    trackEvent('hub_generate_in_editor', { type: nextMeta.type });
+                } else {
+                    this.showToast('Generate Error', 'Could not generate scene.', 'error');
                 }
-                trackEvent('hub_open', { source: 'editor_generate_button' });
-                this.hideHeroOverlays();
-                window.open(url.toString(), '_blank', 'noopener');
             },
 
             hideHeroOverlays: function () {
