@@ -410,6 +410,17 @@
             grid-template-columns: repeat(4, minmax(0, 1fr));
         }
 
+        .floating-color-picker {
+            position: fixed;
+            width: 1px;
+            height: 1px;
+            opacity: 0;
+            pointer-events: none;
+            border: 0;
+            padding: 0;
+            margin: 0;
+        }
+
         #color-history-palette .color-swatch {
             width: 1.5rem;
             height: 1.5rem;
@@ -1507,7 +1518,7 @@
             <div class="divider divider-horizontal mx-0"></div>
 
             <div class="controls-group">
-                <input type="color" id="color-picker-input" value="#FFFFFF" class="hidden" title="Palette color picker">
+                <input type="color" id="color-picker-input" value="#FFFFFF" class="floating-color-picker" title="Palette color picker">
                 <div id="color-history-palette" class="grid gap-1 ml-1" title="Tap a color to select/edit"></div>
             </div>
 
@@ -1651,7 +1662,7 @@
                 </ul>
             </div>
 
-            <input type="color" id="mobile-color-picker" value="#FFFFFF" class="hidden">
+            <input type="color" id="mobile-color-picker" value="#FFFFFF" class="floating-color-picker">
 
             <button class="btn btn-ghost rounded-full" id="mobile-mode-toggle" aria-label="Cycle Add/Delete/Paint">
                 <i id="mobile-mode-icon" class="fas fa-plus-square"></i>
@@ -5789,6 +5800,16 @@
                     swatch.title = color;
                     swatch.setAttribute('aria-label', `Edit color slot ${index + 1}`);
 
+                    const openPickerNearPointer = (picker, e) => {
+                        if (!picker) return;
+                        const cx = e?.clientX ?? window.innerWidth * 0.5;
+                        const cy = e?.clientY ?? window.innerHeight * 0.5;
+                        picker.style.left = `${Math.max(0, cx - 1)}px`;
+                        picker.style.top = `${Math.max(0, cy - 1)}px`;
+                        picker.value = this.currentColor;
+                        picker.click();
+                    };
+
                     const pick = (e) => {
                         e.preventDefault();
                         this.activePaletteIndex = index;
@@ -5799,11 +5820,10 @@
                         this.renderColorHistory();
                         this.previewVoxel.material.color.set(this.currentColor);
 
-                        const picker = document.getElementById('color-picker-input');
-                        if (picker) {
-                            picker.value = this.currentColor;
-                            picker.click();
-                        }
+                        const picker = this.isMobile
+                            ? document.getElementById('mobile-color-picker')
+                            : document.getElementById('color-picker-input');
+                        openPickerNearPointer(picker, e);
                     };
 
                     swatch.addEventListener('pointerdown', pick);
