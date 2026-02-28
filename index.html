@@ -1773,6 +1773,14 @@
                     <label class="label"><span class="label-text">Roundness</span></label>
                     <input type="range" id="mobile-roundness-setting" min="0.01" max="1.0" value="0.50" step="0.01" class="range range-primary">
                 </li>
+                <li class="pt-2">
+                    <label class="label"><span class="label-text">Colors</span></label>
+                    <div class="flex items-center gap-2">
+                        <input type="color" id="mobile-color-picker-visible" value="#FFFFFF"
+                            class="w-10 h-10 rounded-full border-2 border-base-content/40 bg-transparent cursor-pointer">
+                        <span class="text-xs opacity-70">Pick active color</span>
+                    </div>
+                </li>
             </ul>
             <div class="modal-action">
                 <button id="mobile-show-onboarding-again" class="btn btn-ghost">First-Run Guide</button>
@@ -3134,6 +3142,7 @@
                 document.getElementById('mobile-select-toggle').addEventListener('click', () => this.toggleSelectMode());
                 document.getElementById('mobile-selection-lock-toggle').addEventListener('click', () => this.toggleSelectionLock());
                 document.getElementById('mobile-color-picker').addEventListener('input', (e) => this.setColor(e.target.value));
+                document.getElementById('mobile-color-picker-visible').addEventListener('input', (e) => this.setColor(e.target.value));
                 document.getElementById('mobile-upload').addEventListener('click', (e) => {
                     e.preventDefault();
                     document.getElementById('uploadProjectModal').showModal();
@@ -5762,6 +5771,8 @@
 
                 if (this.isMobile) {
                     document.getElementById('mobile-color-picker').value = this.currentColor;
+                const mobileVisibleColor = document.getElementById('mobile-color-picker-visible');
+                if (mobileVisibleColor) mobileVisibleColor.value = this.currentColor;
                     document.getElementById('mobile-grid-size-slider').value = this.GRID;
                     document.getElementById('mobile-grid-size-display').textContent = `${this.GRID}³`;
                     document.getElementById('mobile-brush-size-display').textContent = `${this.brushSize}x${this.brushSize}`;
