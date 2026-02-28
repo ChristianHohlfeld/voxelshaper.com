@@ -3933,7 +3933,8 @@
                         if (!this.touchState.lastPinchDist) this.touchState.lastPinchDist = newDist;
                         const pinchDelta = newDist - this.touchState.lastPinchDist;
                         if (Math.abs(pinchDelta) > PINCH_DEADZONE_PX) {
-                            let zoomDelta = pinchDelta * this.PINCH_ZOOM_MULT * 0.001;
+                            // Mobile default: reverse pinch direction (desktop zoom stays unchanged).
+                            let zoomDelta = -pinchDelta * this.PINCH_ZOOM_MULT * 0.001;
                             if (this.controls.invertZoom) zoomDelta *= -1;
                             this.cam.position.addScaledVector(this.cam.getWorldDirection(new THREE.Vector3()), zoomDelta);
                         }
