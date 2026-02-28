@@ -2669,7 +2669,7 @@
                 lastPinchCenter: null,
             },
             controls: {
-                invertLookX: false, invertLookY: false, invertZoom: true,
+                invertLookX: false, invertLookY: true, invertZoom: true,
                 invertStrafeX: false, invertStrafeY: false,
             },
             user: null,
@@ -2809,7 +2809,8 @@
                     controls: [
                         '<b>Add:</b> left click / tap the model to place a voxel.',
                         '<b>Delete:</b> click / tap a voxel to remove it.',
-                        '<b>Camera:</b> Desktop = Right Mouse + W/A/S/D, Mobile = 1 finger orbit, 2 fingers pan/zoom.'
+                        '<b>Camera default:</b> Look Y is pre-set to the expected direction.',
+                        '<b>Need to flip look?</b> Open View → Controls (Desktop) or Menu → Control Settings (Mobile).'
                     ],
                     tutorialSteps: [
                         'Add mode: place 1 voxel.',
@@ -3041,7 +3042,7 @@
                 // END NEW STATE INITIALIZATION
 
                 this.controls.invertLookX = localStorage.getItem('invertLookX') === 'true';
-                this.controls.invertLookY = localStorage.getItem('invertLookY') === 'true';
+                this.controls.invertLookY = localStorage.getItem('invertLookY') !== 'false';
                 this.controls.invertZoom = localStorage.getItem('invertZoom') !== 'false';
                 this.controls.invertStrafeX = localStorage.getItem('invertStrafeX') === 'true';
                 this.controls.invertStrafeY = localStorage.getItem('invertStrafeY') === 'true';
@@ -5914,7 +5915,7 @@
 
             resetToDefaults: function () {
                 this.controls.invertLookX = false;
-                this.controls.invertLookY = false;
+                this.controls.invertLookY = true;
                 this.controls.invertZoom = true;
                 this.controls.invertStrafeX = false;
                 this.controls.invertStrafeY = false;
