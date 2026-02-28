@@ -3921,19 +3921,7 @@
                 }
 
                 if (this.mouseState.isModifying && this.currentStroke && this.currentStroke.size > 0) {
-                    const actualChanges = new Map();
-                    for (const [key, value] of this.currentStroke.entries()) {
-                        const beforeColor = value.before ? value.before.color : null;
-                        const afterColor = value.after ? value.after.color : null;
-                        if (beforeColor !== afterColor) {
-                            actualChanges.set(key, value);
-                        }
-                    }
-                    if (actualChanges.size > 0) {
-                        this.addHistoryStep({ type: 'MODIFY', changes: actualChanges });
-                        this.onModelChanged(); // NEW: Trigger model change event
-                        if (this.isRoundedPreviewEnabled) this.rebuildRoundedPreview();
-                    }
+                    this.commitCurrentStroke();
                 }
 
                 if (document.pointerLockElement === this.cvs) document.exitPointerLock();
@@ -4455,6 +4443,24 @@
                 }
             },
 
+            commitCurrentStroke: function () {
+                if (!this.currentStroke || this.currentStroke.size === 0) return;
+                const actualChanges = new Map();
+                for (const [key, value] of this.currentStroke.entries()) {
+                    const beforeColor = value.before ? value.before.color : null;
+                    const afterColor = value.after ? value.after.color : null;
+                    if (beforeColor !== afterColor) {
+                        actualChanges.set(key, value);
+                    }
+                }
+                if (actualChanges.size > 0) {
+                    this.addHistoryStep({ type: 'MODIFY', changes: actualChanges });
+                    this.onModelChanged();
+                    if (this.isRoundedPreviewEnabled) this.rebuildRoundedPreview();
+                }
+                this.currentStroke = new Map();
+            },
+
             drawVoxelLinePaced: function (start, end, normal) {
                 if (this.currentMode === 'SELECT') return;
                 const now = performance.now();
@@ -4465,6 +4471,7 @@
                 // Keep drag feedback rhythm consistent (audio plop cadence independent from FPS)
                 this.playVoxelBlub(this.currentMode);
                 this.drawVoxelLine(start, end, normal);
+                this.commitCurrentStroke();
             },
 
             drawVoxelLine: function (start, end, normal) {
