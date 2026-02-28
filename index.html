@@ -1538,6 +1538,9 @@
                                 <li><label class="label cursor-pointer"><span class="label-text">Invert Strafe
                                             Y</span><input type="checkbox" id="invertStrafeY"
                                             class="toggle toggle-primary"></label></li>
+                                <li><label class="label cursor-pointer"><span class="label-text">Sound
+                                            FX</span><input type="checkbox" id="soundToggleMenu"
+                                            class="toggle toggle-primary"></label></li>
                                 <div class="divider my-1"></div>
                                 <li class="px-2 py-1">
                                     <label class="text-xs opacity-70">Fly Speed</label>
@@ -1808,6 +1811,8 @@
                 <li><label class="label cursor-pointer"><span class="label-text">Invert Strafe
                             Y</span><input type="checkbox" id="mobileInvertStrafeY"
                             class="toggle toggle-primary"></label></li>
+                <li><label class="label cursor-pointer"><span class="label-text">Sound FX</span><input
+                            type="checkbox" id="mobileSoundToggleMenu" class="toggle toggle-primary"></label></li>
                 <li class="pt-2">
                     <label class="label"><span class="label-text">Fly Speed</span></label>
                     <input type="range" id="mobile-fly-speed-setting" min="0.01" max="1" value="0.1" step="0.01" class="range range-primary">
@@ -3115,6 +3120,11 @@
                 document.getElementById('invertZoom').addEventListener('change', (e) => this.setControl('invertZoom', e.target.checked));
                 document.getElementById('invertStrafeX').addEventListener('change', (e) => this.setControl('invertStrafeX', e.target.checked));
                 document.getElementById('invertStrafeY').addEventListener('change', (e) => this.setControl('invertStrafeY', e.target.checked));
+                document.getElementById('soundToggleMenu').addEventListener('change', (e) => {
+                    this.soundEnabled = !!e.target.checked;
+                    localStorage.setItem('voxelSoundEnabled', String(this.soundEnabled));
+                    this.updateSoundButtonUI();
+                });
                 document.getElementById('resetDefaultsBtn').addEventListener('click', () => this.resetToDefaults());
                 document.getElementById('resetCameraBtn').addEventListener('click', () => this.resetCamera());
                 document.getElementById('undoBtn').addEventListener('click', () => this.undo());
@@ -3229,6 +3239,11 @@
                 document.getElementById('mobileInvertZoom').addEventListener('change', (e) => this.setControl('invertZoom', e.target.checked));
                 document.getElementById('mobileInvertStrafeX').addEventListener('change', (e) => this.setControl('invertStrafeX', e.target.checked));
                 document.getElementById('mobileInvertStrafeY').addEventListener('change', (e) => this.setControl('invertStrafeY', e.target.checked));
+                document.getElementById('mobileSoundToggleMenu').addEventListener('change', (e) => {
+                    this.soundEnabled = !!e.target.checked;
+                    localStorage.setItem('voxelSoundEnabled', String(this.soundEnabled));
+                    this.updateSoundButtonUI();
+                });
                 document.getElementById('mobile-grid-size-slider').addEventListener('input', (e) => this.setGridSize(parseInt(e.target.value)));
                 document.getElementById('mobile-brush-size-decrease').addEventListener('click', () => this.setBrushSize(this.brushSize - 1));
                 document.getElementById('mobile-brush-size-increase').addEventListener('click', () => this.setBrushSize(this.brushSize + 1));
@@ -5872,6 +5887,10 @@
                 document.getElementById('invertZoom').checked = this.controls.invertZoom;
                 document.getElementById('invertStrafeX').checked = this.controls.invertStrafeX;
                 document.getElementById('invertStrafeY').checked = this.controls.invertStrafeY;
+                const soundToggleMenu = document.getElementById('soundToggleMenu');
+                if (soundToggleMenu) soundToggleMenu.checked = !!this.soundEnabled;
+                const mobileSoundToggleMenu = document.getElementById('mobileSoundToggleMenu');
+                if (mobileSoundToggleMenu) mobileSoundToggleMenu.checked = !!this.soundEnabled;
                 if (this.isMobile) {
                     document.getElementById('mobileInvertLookX').checked = this.controls.invertLookX;
                     document.getElementById('mobileInvertLookY').checked = this.controls.invertLookY;
@@ -6182,6 +6201,11 @@
                 btn.classList.toggle('btn-success', this.soundEnabled);
                 btn.classList.toggle('btn-ghost', !this.soundEnabled);
                 icon.className = this.soundEnabled ? 'fas fa-volume-up' : 'fas fa-volume-mute';
+
+                const soundToggleMenu = document.getElementById('soundToggleMenu');
+                if (soundToggleMenu) soundToggleMenu.checked = !!this.soundEnabled;
+                const mobileSoundToggleMenu = document.getElementById('mobileSoundToggleMenu');
+                if (mobileSoundToggleMenu) mobileSoundToggleMenu.checked = !!this.soundEnabled;
             },
 
             toggleSound: function () {
