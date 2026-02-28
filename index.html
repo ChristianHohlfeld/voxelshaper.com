@@ -483,6 +483,18 @@
             z-index: 59;
         }
 
+        #desktop-sound-overlay {
+            position: fixed;
+            right: 14px;
+            bottom: 16px;
+            z-index: 59;
+            display: none;
+        }
+
+        @media (min-width: 1025px) {
+            #desktop-sound-overlay { display: flex; }
+        }
+
         #color-history-palette .color-swatch {
             width: 1.5rem;
             height: 1.5rem;
@@ -1744,6 +1756,12 @@
         </div>
         <input type="file" id="fileInput" accept=".json" class="hidden">
         <input type="file" id="imageFileInput" accept="image/*" class="hidden">
+    </div>
+
+    <div id="desktop-sound-overlay">
+        <button id="desktop-canvas-sound-toggle" class="btn btn-circle btn-ghost bg-base-200/80 backdrop-blur-sm shadow-lg" title="Sound: On" aria-label="Toggle sound in canvas">
+            <i id="desktop-canvas-sound-icon" class="fas fa-volume-up"></i>
+        </button>
     </div>
 
     <!-- MOBILE UI CONTAINER -->
@@ -3437,6 +3455,7 @@
 
                 document.getElementById('shareBtn').addEventListener('click', () => this.openShareModal());
                 document.getElementById('soundToggleBtn').addEventListener('click', () => this.toggleSound());
+                document.getElementById('desktop-canvas-sound-toggle').addEventListener('click', () => this.toggleSound());
                 document.getElementById('playBtn').addEventListener('click', () => this.togglePhysics());
                 document.getElementById('uploadToHubFromShareBtn').addEventListener('click', () => {
                     document.getElementById('shareModal').close();
@@ -6640,11 +6659,21 @@
             updateSoundButtonUI: function () {
                 const btn = document.getElementById('soundToggleBtn');
                 const icon = document.getElementById('soundToggleIcon');
+                const canvasBtn = document.getElementById('desktop-canvas-sound-toggle');
+                const canvasIcon = document.getElementById('desktop-canvas-sound-icon');
                 if (!btn || !icon) return;
                 btn.title = this.soundEnabled ? 'Sound: On' : 'Sound: Off';
                 btn.classList.toggle('btn-success', this.soundEnabled);
                 btn.classList.toggle('btn-ghost', !this.soundEnabled);
                 icon.className = this.soundEnabled ? 'fas fa-volume-up' : 'fas fa-volume-mute';
+                if (canvasBtn) {
+                    canvasBtn.title = this.soundEnabled ? 'Sound: On' : 'Sound: Off';
+                    canvasBtn.classList.toggle('btn-success', this.soundEnabled);
+                    canvasBtn.classList.toggle('btn-ghost', !this.soundEnabled);
+                }
+                if (canvasIcon) {
+                    canvasIcon.className = this.soundEnabled ? 'fas fa-volume-up' : 'fas fa-volume-mute';
+                }
 
                 const soundToggleMenu = document.getElementById('soundToggleMenu');
                 if (soundToggleMenu) soundToggleMenu.checked = !!this.soundEnabled;
