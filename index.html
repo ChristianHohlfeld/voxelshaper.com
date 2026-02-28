@@ -421,6 +421,28 @@
             margin: 0;
         }
 
+        #mobile-canvas-color-picker {
+            position: fixed;
+            right: calc(env(safe-area-inset-right) + 0.75rem);
+            bottom: calc(var(--safe-bottom) + 4.9rem);
+            width: 3.5rem;
+            height: 3.5rem;
+            border-radius: 9999px;
+            border: 2px solid rgba(255, 255, 255, 0.62);
+            background: rgba(17, 24, 39, 0.92);
+            box-shadow: 0 10px 24px rgba(0, 0, 0, 0.45);
+            z-index: 58;
+            pointer-events: auto;
+            padding: 0;
+        }
+
+        #mobile-undo-redo-overlay {
+            position: fixed;
+            right: calc(env(safe-area-inset-right) + 4.8rem);
+            bottom: calc(var(--safe-bottom) + 5.1rem) !important;
+            z-index: 59;
+        }
+
         #color-history-palette .color-swatch {
             width: 1.5rem;
             height: 1.5rem;
@@ -1598,6 +1620,8 @@
                 <i class="fas fa-redo"></i>
             </button>
         </div>
+
+        <input type="color" id="mobile-canvas-color-picker" value="#FFFFFF" aria-label="Pick color on canvas">
 
         <!-- Bottom bar -->
         <div class="mobile-bottom-bar flex items-center justify-around p-2 bg-base-200 border-t border-base-content/20">
@@ -3143,6 +3167,7 @@
                 document.getElementById('mobile-select-toggle').addEventListener('click', () => this.toggleSelectMode());
                 document.getElementById('mobile-selection-lock-toggle').addEventListener('click', () => this.toggleSelectionLock());
                 document.getElementById('mobile-color-picker').addEventListener('input', (e) => this.setColor(e.target.value));
+                document.getElementById('mobile-canvas-color-picker').addEventListener('input', (e) => this.setColor(e.target.value));
                 document.getElementById('mobile-color-picker-visible').addEventListener('input', (e) => this.setColor(e.target.value));
                 document.getElementById('mobile-upload').addEventListener('click', (e) => {
                     e.preventDefault();
@@ -5771,9 +5796,12 @@
                 }
 
                 if (this.isMobile) {
-                    document.getElementById('mobile-color-picker').value = this.currentColor;
-                const mobileVisibleColor = document.getElementById('mobile-color-picker-visible');
-                if (mobileVisibleColor) mobileVisibleColor.value = this.currentColor;
+                    const mobileColorPicker = document.getElementById('mobile-color-picker');
+                    if (mobileColorPicker) mobileColorPicker.value = this.currentColor;
+                    const mobileCanvasColorPicker = document.getElementById('mobile-canvas-color-picker');
+                    if (mobileCanvasColorPicker) mobileCanvasColorPicker.value = this.currentColor;
+                    const mobileVisibleColor = document.getElementById('mobile-color-picker-visible');
+                    if (mobileVisibleColor) mobileVisibleColor.value = this.currentColor;
                     document.getElementById('mobile-grid-size-slider').value = this.GRID;
                     document.getElementById('mobile-grid-size-display').textContent = `${this.GRID}³`;
                     document.getElementById('mobile-brush-size-display').textContent = `${this.brushSize}x${this.brushSize}`;
