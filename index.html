@@ -624,6 +624,70 @@
             box-shadow: 0 8px 20px rgba(0, 0, 0, 0.25);
         }
 
+        #floor-grid-ruler-overlay {
+            position: absolute;
+            inset: 0;
+            z-index: 21;
+            pointer-events: none;
+            display: none;
+        }
+
+        #floor-grid-ruler-overlay.show {
+            display: block;
+        }
+
+        .floor-ruler-x {
+            position: absolute;
+            left: 24px;
+            right: 8px;
+            bottom: 8px;
+            height: 18px;
+            display: flex;
+            align-items: flex-end;
+            color: rgba(226, 232, 240, 0.86);
+            font-size: 10px;
+        }
+
+        .floor-ruler-z {
+            position: absolute;
+            top: 8px;
+            bottom: 30px;
+            left: 8px;
+            width: 18px;
+            display: flex;
+            flex-direction: column-reverse;
+            align-items: flex-end;
+            color: rgba(226, 232, 240, 0.86);
+            font-size: 10px;
+        }
+
+        .floor-ruler-tick {
+            position: relative;
+            flex: 1;
+            border-left: 1px solid rgba(148, 163, 184, 0.45);
+            min-width: 0;
+        }
+
+        .floor-ruler-z .floor-ruler-tick {
+            border-left: 0;
+            border-top: 1px solid rgba(148, 163, 184, 0.45);
+            width: 100%;
+        }
+
+        .floor-ruler-num {
+            position: absolute;
+            bottom: -2px;
+            left: 2px;
+            transform: translateY(100%);
+        }
+
+        .floor-ruler-z .floor-ruler-num {
+            left: -2px;
+            top: -2px;
+            bottom: auto;
+            transform: translateX(-100%);
+        }
+
         /* Brush +/- controls deprecated in favor of Brush Picker presets */
         #brush-size-decrease,
         #brush-size-increase,
@@ -1704,7 +1768,7 @@
             <div class="controls-group">
                 <button id="modeToggle" class="btn btn-xs btn-neutral" title="Cycle mode (Space)">Add</button>
                 <button id="selectModeToggle" class="btn btn-xs btn-outline">Extrude</button>
-                <button id="rulerToggle" class="btn btn-xs btn-outline" title="Ruler tool (measure cube-to-cube)"><i class="fas fa-ruler-horizontal"></i> Ruler</button>
+                <button id="rulerToggle" class="btn btn-xs btn-outline" title="Toggle floor grid ruler"><i class="fas fa-ruler-horizontal"></i> Grid Ruler</button>
                 <button id="selectionLockToggle" class="btn btn-xs btn-ghost btn-square"><i
                         class="fas fa-lock"></i></button>
                 <span class="text-[10px] opacity-60 hidden md:inline" title="Desktop shortcut">Space = mode</span>
@@ -1751,6 +1815,10 @@
                 <line id="ruler-overlay-line" x1="0" y1="0" x2="0" y2="0"></line>
             </svg>
             <div id="ruler-overlay-label">0.0 mm</div>
+        </div>
+        <div id="floor-grid-ruler-overlay" aria-hidden="true">
+            <div id="floor-ruler-x" class="floor-ruler-x"></div>
+            <div id="floor-ruler-z" class="floor-ruler-z"></div>
         </div>
         <input type="file" id="fileInput" accept=".json" class="hidden">
         <input type="file" id="imageFileInput" accept="image/*" class="hidden">
@@ -1864,7 +1932,7 @@
             <button class="btn btn-ghost rounded-full" id="mobile-select-toggle" aria-label="Toggle Extrude mode">
                 <i class="fas fa-mouse-pointer"></i>
             </button>
-            <button class="btn btn-ghost rounded-full" id="mobile-ruler-toggle" aria-label="Toggle ruler tool">
+            <button class="btn btn-ghost rounded-full" id="mobile-ruler-toggle" aria-label="Toggle floor grid ruler">
                 <i class="fas fa-ruler-horizontal"></i>
             </button>
             <button class="btn btn-ghost rounded-full" id="mobile-help-tutorial" aria-label="Show onboarding">
@@ -2772,6 +2840,7 @@
             hapticLayer: null,
             soundEnabled: localStorage.getItem('voxelSoundEnabled') !== 'false',
             lengthUnit: localStorage.getItem('voxelLengthUnit') || 'mm',
+            gridRulerEnabled: localStorage.getItem('gridRulerEnabled') === 'true',
             audioCtx: null,
             lastSoundAt: 0,
             lastVisualFxAt: 0,
@@ -2821,7 +2890,6 @@
                 PAINT: { name: 'Paint', icon: 'fas fa-paint-brush' },
                 DELETE: { name: 'Delete', icon: 'fas fa-trash' },
                 MOVE: { name: 'Move', icon: 'fas fa-arrows-alt' },
-                RULER: { name: 'Ruler', icon: 'fas fa-ruler-horizontal' },
             },
             keyboard: {},
 
@@ -3281,7 +3349,7 @@
                 document.getElementById('mobile-brush-preset').addEventListener('change', (e) => this.setBrushPreset(e.target.value));
                 document.getElementById('modeToggle').addEventListener('click', () => this.cycleMode());
                 document.getElementById('selectModeToggle').addEventListener('click', () => this.toggleSelectMode());
-                document.getElementById('rulerToggle').addEventListener('click', () => this.toggleRulerMode());
+                document.getElementById('rulerToggle').addEventListener('click', () => this.toggleGridRuler());
                 document.getElementById('onboardingModeAdd').addEventListener('click', () => this.setModeExplicit('FREE', 'onboarding')); 
                 document.getElementById('onboardingModeDelete').addEventListener('click', () => this.setModeExplicit('DELETE', 'onboarding'));
                 document.getElementById('onboardingModePaint').addEventListener('click', () => this.setModeExplicit('PAINT', 'onboarding'));
@@ -3384,7 +3452,7 @@
                 document.getElementById('mobile-overlay-redo').addEventListener('click', () => this.redo());
                 document.getElementById('mobile-mode-toggle').addEventListener('click', () => this.cycleMode());
                 document.getElementById('mobile-select-toggle').addEventListener('click', () => this.toggleSelectMode());
-                document.getElementById('mobile-ruler-toggle').addEventListener('click', () => this.toggleRulerMode());
+                document.getElementById('mobile-ruler-toggle').addEventListener('click', () => this.toggleGridRuler());
                 document.getElementById('mobile-selection-lock-toggle').addEventListener('click', () => this.toggleSelectionLock());
                 document.getElementById('mobile-color-picker').addEventListener('input', (e) => this.setColor(e.target.value));
                 document.getElementById('mobile-canvas-color-picker').addEventListener('input', (e) => this.setColor(e.target.value));
@@ -3813,14 +3881,9 @@
                         this.selectConnectedGroup(this.key(target.x, target.y, target.z));
                         this.mouseState.isModifying = false; // Don't drag-select if we just group-selected
                     }
-                } else if (this.mouseState.isModifying && this.currentMode === 'RULER') {
-                    const target = this.getRayTargetInfo(e.clientX, e.clientY);
-                    this.mouseState.rulerStartCoords = target ? { x: target.x, y: target.y, z: target.z } : null;
-                    this.mouseState.rulerStartScreen = { x: e.clientX - this.cvs.getBoundingClientRect().left, y: e.clientY - this.cvs.getBoundingClientRect().top };
-                    this.hideRulerOverlay();
                 }
 
-                if (this.mouseState.isModifying && this.currentMode !== 'SELECT' && this.currentMode !== 'RULER') {
+                if (this.mouseState.isModifying && this.currentMode !== 'SELECT') {
                     const t = this.getRayTargetInfo(e.clientX, e.clientY);
                     this.mouseState.dragMeasureStartCoords = t ? { x: t.x, y: t.y, z: t.z } : null;
                     const rect = this.cvs.getBoundingClientRect();
@@ -3888,7 +3951,7 @@
                                 const voxelDistance = Math.round(extrusionDistance / this.VS);
                                 this.updateExtrudePreview(voxelDistance);
                             }
-                        } else if (this.currentMode === 'RULER') {
+                        } else if (false) {
                             const target = this.getRayTargetInfo(e.clientX, e.clientY);
                             if (target && this.mouseState.rulerStartCoords) {
                                 const start = this.mouseState.rulerStartScreen || { x: 0, y: 0 };
@@ -3974,12 +4037,6 @@
                             const voxelDistance = Math.round(extrusionDistance / this.VS);
                             this.updateExtrudePreview(voxelDistance);
                         }
-                    } else if (this.mouseState.isDragging && this.currentMode === 'RULER') {
-                        if (targetInfo && this.mouseState.rulerStartCoords) {
-                            const start = this.mouseState.rulerStartScreen || { x: 0, y: 0 };
-                            const end = { x: e.clientX - this.cvs.getBoundingClientRect().left, y: e.clientY - this.cvs.getBoundingClientRect().top };
-                            this.updateRulerOverlay(this.mouseState.rulerStartCoords, { x: targetInfo.x, y: targetInfo.y, z: targetInfo.z }, start, end);
-                        }
                     } else if (this.mouseState.isDragging && this.mouseState.isMoving && this.mouseState.movingVoxelsOriginal) {
                         const raycaster = new THREE.Raycaster();
                         const mouse = new THREE.Vector2(((e.clientX - this.cvs.getBoundingClientRect().left) / this.cvs.clientWidth) * 2 - 1, -((e.clientY - this.cvs.getBoundingClientRect().top) / this.cvs.clientHeight) * 2 + 1);
@@ -4001,7 +4058,7 @@
                             }
                             this.updateSelectionVisuals();
                         }
-                    } else if (this.mouseState.isDragging && this.mouseState.isModifying && this.currentMode !== 'RULER') {
+                    } else if (this.mouseState.isDragging && this.mouseState.isModifying) {
                         if (this.currentMode === 'SELECT') {
                             this.handleDragSelection(e);
                         } else if (this.currentMode === 'FREE') {
@@ -4068,10 +4125,10 @@
                     if (this.touchState.isThreeFingerUndoCandidate) {
                         this.undo();
                         this.showToast('Action', 'Undo', 'info', 1000);
-                    } else if (this.touchState.isInteracting && !this.mouseState.isDragging && this.currentMode !== 'RULER') { // Is a long press tap
+                    } else if (this.touchState.isInteracting && !this.mouseState.isDragging) { // Is a long press tap
                         this.handleTapInteraction(e);
                     }
-                } else if (!this.mouseState.isDragging && this.mouseState.isModifying && this.currentMode !== 'RULER') { // Desktop tap
+                } else if (!this.mouseState.isDragging && this.mouseState.isModifying) { // Desktop tap
                     this.handleTapInteraction(e);
                 }
 
@@ -4515,6 +4572,8 @@
                 if (cm) cm.checked = this.lengthUnit === 'cm';
                 if (mmm) mmm.checked = this.lengthUnit === 'mm';
                 if (mcm) mcm.checked = this.lengthUnit === 'cm';
+                if (this.gridRulerEnabled) this.renderFloorGridRuler();
+                this.updateGridRulerUI();
             },
 
             updateDragLengthHud: function (_startCoords, _endCoords) {
@@ -4550,6 +4609,58 @@
 
             hideRulerOverlay: function () {
                 document.getElementById('ruler-overlay')?.classList.remove('show');
+            },
+
+            renderFloorGridRuler: function () {
+                const xEl = document.getElementById('floor-ruler-x');
+                const zEl = document.getElementById('floor-ruler-z');
+                if (!xEl || !zEl) return;
+                xEl.innerHTML = '';
+                zEl.innerHTML = '';
+                const n = Math.max(1, this.GRID);
+                for (let i = 0; i <= n; i++) {
+                    const tickX = document.createElement('div');
+                    tickX.className = 'floor-ruler-tick';
+                    if (i % 2 === 0 || i === n) {
+                        const num = document.createElement('span');
+                        num.className = 'floor-ruler-num';
+                        const unitVal = this.lengthUnit === 'cm' ? (i / 10).toFixed(1) : String(i);
+                        num.textContent = `${unitVal}`;
+                        tickX.appendChild(num);
+                    }
+                    xEl.appendChild(tickX);
+
+                    const tickZ = document.createElement('div');
+                    tickZ.className = 'floor-ruler-tick';
+                    if (i % 2 === 0 || i === n) {
+                        const numZ = document.createElement('span');
+                        numZ.className = 'floor-ruler-num';
+                        const unitValZ = this.lengthUnit === 'cm' ? (i / 10).toFixed(1) : String(i);
+                        numZ.textContent = `${unitValZ}`;
+                        tickZ.appendChild(numZ);
+                    }
+                    zEl.appendChild(tickZ);
+                }
+            },
+
+            updateGridRulerUI: function () {
+                const on = !!this.gridRulerEnabled;
+                const overlay = document.getElementById('floor-grid-ruler-overlay');
+                const desktopBtn = document.getElementById('rulerToggle');
+                const mobileBtn = document.getElementById('mobile-ruler-toggle');
+                if (overlay) overlay.classList.toggle('show', on);
+                if (desktopBtn) {
+                    desktopBtn.classList.toggle('btn-primary', on);
+                    desktopBtn.classList.toggle('btn-outline', !on);
+                }
+                if (mobileBtn) mobileBtn.classList.toggle('text-primary', on);
+            },
+
+            toggleGridRuler: function () {
+                this.gridRulerEnabled = !this.gridRulerEnabled;
+                localStorage.setItem('gridRulerEnabled', String(this.gridRulerEnabled));
+                if (this.gridRulerEnabled) this.renderFloorGridRuler();
+                this.updateGridRulerUI();
             },
 
             setControl: function (controlName, value) {
@@ -4605,17 +4716,8 @@
                 }
             },
 
-            toggleRulerMode: function () {
-                if (this.currentMode === 'RULER') {
-                    this.setModeExplicit(this.lastCycleMode || 'FREE', 'ruler_toggle');
-                    this.hideRulerOverlay();
-                } else {
-                    this.setModeExplicit('RULER', 'ruler_toggle');
-                }
-            },
-
             modifyVoxel: function (x, y, z, normal, modeOverride) {
-                if ((this.currentMode === 'SELECT' || this.currentMode === 'RULER') && !modeOverride) return;
+                if (this.currentMode === 'SELECT' && !modeOverride) return;
 
                 const size = this.brushSize;
                 if (y < 0) return;
@@ -5565,14 +5667,11 @@
                 };
                 pulse(document.getElementById('modeToggle'));
                 pulse(document.getElementById('mobile-mode-toggle'));
-                pulse(document.getElementById('rulerToggle'));
-                pulse(document.getElementById('mobile-ruler-toggle'));
             },
 
             updateModeUI: function () {
                 const isSelectMode = this.currentMode === 'SELECT';
-                const isRulerMode = this.currentMode === 'RULER';
-                const cycleModeKey = (isSelectMode || isRulerMode) ? (this.lastCycleMode || 'FREE') : this.currentMode;
+                const cycleModeKey = isSelectMode ? (this.lastCycleMode || 'FREE') : this.currentMode;
                 const cycleModeInfo = this.Modes[cycleModeKey] || this.Modes.FREE;
 
                 const modeBtn = document.getElementById('modeToggle');
@@ -5581,14 +5680,9 @@
 
                 const selectBtn = document.getElementById('selectModeToggle');
                 const mobileSelectBtn = document.getElementById('mobile-select-toggle');
-                const rulerBtn = document.getElementById('rulerToggle');
-                const mobileRulerBtn = document.getElementById('mobile-ruler-toggle');
                 if (selectBtn) selectBtn.classList.toggle('btn-primary', isSelectMode);
                 if (selectBtn) selectBtn.classList.toggle('btn-outline', !isSelectMode);
                 if (mobileSelectBtn) mobileSelectBtn.classList.toggle('text-primary', isSelectMode);
-                if (rulerBtn) rulerBtn.classList.toggle('btn-primary', isRulerMode);
-                if (rulerBtn) rulerBtn.classList.toggle('btn-outline', !isRulerMode);
-                if (mobileRulerBtn) mobileRulerBtn.classList.toggle('text-primary', isRulerMode);
 
                 const selectionLockBtn = document.getElementById('selectionLockToggle');
                 selectionLockBtn.classList.toggle('invisible', !isSelectMode);
@@ -5612,7 +5706,6 @@
                     brushDisplay.classList.toggle('text-base-content/50', !isBrushMode);
                     brushDisplay.classList.toggle('text-primary', isBrushMode);
                 }
-                if (!isRulerMode) this.hideRulerOverlay();
                 this.updateSelectionLockUI();
             },
 
@@ -6299,6 +6392,8 @@
                 const mobileBrushPreset = document.getElementById('mobile-brush-preset');
                 if (mobileBrushPreset) mobileBrushPreset.value = this.brushPreset;
                 this.updateSoundButtonUI();
+                this.updateGridRulerUI();
+                if (this.gridRulerEnabled) this.renderFloorGridRuler();
 
                 // Update new controls
                 const desktopRoundToggle = document.getElementById('desktop-roundness-toggle');
