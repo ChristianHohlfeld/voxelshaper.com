@@ -3825,8 +3825,11 @@
                 if (this.mouseState.isModifying && this.currentMode !== 'SELECT' && this.currentMode !== 'RULER') {
                     const t = this.getRayTargetInfo(e.clientX, e.clientY);
                     this.mouseState.dragMeasureStartCoords = t ? { x: t.x, y: t.y, z: t.z } : null;
+                    const rect = this.cvs.getBoundingClientRect();
+                    this.mouseState.dragMeasureStartScreen = { x: e.clientX - rect.left, y: e.clientY - rect.top };
                 } else {
                     this.mouseState.dragMeasureStartCoords = null;
+                    this.mouseState.dragMeasureStartScreen = null;
                     this.hideDragLengthHud();
                 }
 
@@ -4018,6 +4021,11 @@
                             if (targetInfo) {
                                 const coords = { x: targetInfo.x, y: targetInfo.y, z: targetInfo.z };
                                 this.updateDragLengthHud(this.mouseState.dragMeasureStartCoords || coords, coords);
+                                if (this.isMobile && this.brushShape === 'line' && this.mouseState.dragMeasureStartCoords && this.mouseState.dragMeasureStartScreen) {
+                                    const rect = this.cvs.getBoundingClientRect();
+                                    const end = { x: e.clientX - rect.left, y: e.clientY - rect.top };
+                                    this.updateRulerOverlay(this.mouseState.dragMeasureStartCoords, coords, this.mouseState.dragMeasureStartScreen, end);
+                                }
                                 if (!this.mouseState.lastActionCoords || coords.x !== this.mouseState.lastActionCoords.x || coords.y !== this.mouseState.lastActionCoords.y || coords.z !== this.mouseState.lastActionCoords.z) {
                                     this.drawVoxelLinePaced((this.brushShape === 'line' ? (this.mouseState.dragMeasureStartCoords || coords) : (this.mouseState.lastActionCoords || coords)), coords, targetInfo.normal);
                                     this.mouseState.lastActionCoords = coords;
@@ -4030,6 +4038,11 @@
                             if (targetInfo) {
                                 const coords = { x: targetInfo.x, y: targetInfo.y, z: targetInfo.z };
                                 this.updateDragLengthHud(this.mouseState.dragMeasureStartCoords || coords, coords);
+                                if (this.isMobile && this.brushShape === 'line' && this.mouseState.dragMeasureStartCoords && this.mouseState.dragMeasureStartScreen) {
+                                    const rect = this.cvs.getBoundingClientRect();
+                                    const end = { x: e.clientX - rect.left, y: e.clientY - rect.top };
+                                    this.updateRulerOverlay(this.mouseState.dragMeasureStartCoords, coords, this.mouseState.dragMeasureStartScreen, end);
+                                }
                                 if (!this.mouseState.lastActionCoords || coords.x !== this.mouseState.lastActionCoords.x || coords.y !== this.mouseState.lastActionCoords.y || coords.z !== this.mouseState.lastActionCoords.z) {
                                     this.drawVoxelLinePaced((this.brushShape === 'line' ? (this.mouseState.dragMeasureStartCoords || coords) : (this.mouseState.lastActionCoords || coords)), coords, this.mouseState.lastActionNormal || targetInfo.normal);
                                     this.mouseState.lastActionCoords = coords;
