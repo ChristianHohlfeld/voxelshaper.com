@@ -3599,6 +3599,9 @@
 
                 // --- Mobile Logic ---
                 if (this.isMobile) {
+                    // Keep active touch points fresh before gesture math (improves 2-finger stability)
+                    this.activePointers.set(e.pointerId, { x: e.clientX, y: e.clientY });
+
                     if (!this.mouseState.isDragging && dist > this.DRAG_THRESHOLD) { // First frame of drag
                         this.mouseState.isDragging = true;
                         this.touchState.isThreeFingerUndoCandidate = false;
@@ -3652,20 +3655,31 @@
                         const pointers = Array.from(this.activePointers.values());
                         const newDist = Math.hypot(pointers[0].x - pointers[1].x, pointers[0].y - pointers[1].y);
                         const center = { x: (pointers[0].x + pointers[1].x) / 2, y: (pointers[0].y + pointers[1].y) / 2 };
+
+                        const PINCH_DEADZONE_PX = 1.5;
+                        const PAN_DEADZONE_PX = 0.75;
+
+                        // Pinch = fly forward/backward along camera forward vector
                         if (!this.touchState.lastPinchDist) this.touchState.lastPinchDist = newDist;
-                        let zoomDelta = (this.touchState.lastPinchDist - newDist) * this.PINCH_ZOOM_MULT * 0.001;
-                        if (this.controls.invertZoom) zoomDelta *= -1;
-                        this.cam.position.addScaledVector(this.cam.getWorldDirection(new THREE.Vector3()), zoomDelta);
+                        const pinchDelta = newDist - this.touchState.lastPinchDist;
+                        if (Math.abs(pinchDelta) > PINCH_DEADZONE_PX) {
+                            let zoomDelta = pinchDelta * this.PINCH_ZOOM_MULT * 0.001;
+                            if (this.controls.invertZoom) zoomDelta *= -1;
+                            this.cam.position.addScaledVector(this.cam.getWorldDirection(new THREE.Vector3()), zoomDelta);
+                        }
                         this.touchState.lastPinchDist = newDist;
 
+                        // Two-finger parallel slide = world 2D X/Y translate (no look rotation)
                         if (this.touchState.lastPinchCenter) {
                             const deltaX = center.x - this.touchState.lastPinchCenter.x;
                             const deltaY = center.y - this.touchState.lastPinchCenter.y;
-                            const strafeX = this.controls.invertStrafeX ? deltaX : -deltaX;
-                            const strafeY = this.controls.invertStrafeY ? -deltaY : deltaY;
-                            const pan = new THREE.Vector3(strafeX * this.PAN_SPEED, strafeY * this.PAN_SPEED, 0);
-                            pan.applyQuaternion(this.cam.quaternion);
-                            this.cam.position.add(pan);
+
+                            if (Math.abs(deltaX) > PAN_DEADZONE_PX || Math.abs(deltaY) > PAN_DEADZONE_PX) {
+                                const moveX = this.controls.invertStrafeX ? -deltaX : deltaX;
+                                const moveY = this.controls.invertStrafeY ? deltaY : -deltaY;
+                                this.cam.position.x += moveX * this.PAN_SPEED;
+                                this.cam.position.y += moveY * this.PAN_SPEED;
+                            }
                         }
                         this.touchState.lastPinchCenter = center;
                     } else if (this.touchState.isLookAround) { // Single-finger drag for look
@@ -3674,8 +3688,6 @@
                         this.euler.y -= (this.controls.invertLookX ? -deltaX : deltaX) * this.ROTATE_SPEED * this.MOBILE_ROTATE_SPEED_MULT;
                         this.euler.x -= (this.controls.invertLookY ? -deltaY : deltaY) * this.ROTATE_SPEED * this.MOBILE_ROTATE_SPEED_MULT;
                     }
-
-                    this.activePointers.set(e.pointerId, { x: e.clientX, y: e.clientY });
 
                 } else { // --- Desktop Logic ---
                     if (!this.mouseState.isDragging && dist > this.DRAG_THRESHOLD) {
