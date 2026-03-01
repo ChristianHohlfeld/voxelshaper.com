@@ -2965,6 +2965,8 @@
             _lastPreviewRayAt: 0,
             _lastPreviewClientX: null,
             _lastPreviewClientY: null,
+            ambientParticles: null,
+            ambientParticleAttr: null,
             firstInteractionTracked: false,
             firstEditTracked: false,
             tutorialStep: 0,
@@ -3644,7 +3646,18 @@
                 rimLight.position.set(0, 10, -50);
                 this.scene.add(rimLight);
 
-                this.scene.fog = new THREE.FogExp2(0x05070a, this.lowPerfMode ? 0.0038 : 0.0052);
+                // Keep visual baseline aligned with Hub (no scene fog washout).
+                this.scene.fog = null;
+
+                const pCount = this.lowPerfMode ? 800 : 1500;
+                const pGeo = new THREE.BufferGeometry();
+                const pPos = new Float32Array(pCount * 3);
+                for (let i = 0; i < pCount * 3; i++) pPos[i] = (Math.random() - 0.5) * 200;
+                pGeo.setAttribute('position', new THREE.BufferAttribute(pPos, 3));
+                const pMat = new THREE.PointsMaterial({ color: 0xffffff, size: 0.4, transparent: true, opacity: 0.6 });
+                this.ambientParticles = new THREE.Points(pGeo, pMat);
+                this.ambientParticleAttr = pGeo.attributes.position;
+                this.scene.add(this.ambientParticles);
 
                 this.previewVoxel = new THREE.Mesh(
                     this.sharedBoxGeometry,
@@ -6636,6 +6649,15 @@ const coords = { x: x, y: y, z: z };
 
             animate: function () {
                 requestAnimationFrame(() => this.animate());
+
+                if (this.ambientParticleAttr) {
+                    const arr = this.ambientParticleAttr.array;
+                    for (let i = 2; i < arr.length; i += 3) {
+                        arr[i] -= 0.10;
+                        if (arr[i] < -100) arr[i] += 200;
+                    }
+                    this.ambientParticleAttr.needsUpdate = true;
+                }
 
                 if (document.pointerLockElement === this.cvs) {
                     const rotX = this.controls.invertLookX ? this.mouseState.mouseMovementX : -this.mouseState.mouseMovementX;
