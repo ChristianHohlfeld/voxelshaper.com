@@ -3062,6 +3062,12 @@
                 return this.materialCache.get(key);
             },
 
+            normalizeHexColor: function (value, fallback = '#FBD000') {
+                const raw = String(value || '').trim();
+                const m = raw.match(/^#([0-9a-fA-F]{6})$/);
+                return m ? `#${m[1].toUpperCase()}` : fallback;
+            },
+
             toggleBlockType: function () {
                 this.currentBlockType = this.currentBlockType === 'glass' ? 'solid' : 'glass';
                 localStorage.setItem('voxelBlockType', this.currentBlockType);
@@ -3544,13 +3550,12 @@
                 if (!Array.isArray(this.colorHistory) || this.colorHistory.length !== 4) {
                     this.colorHistory = ['#E52521', '#049CD8', '#43B047', '#FBD000'];
                 }
+                this.colorHistory = this.colorHistory.map((c, i) => this.normalizeHexColor(c, ['#E52521', '#049CD8', '#43B047', '#FBD000'][i]));
                 this.activePaletteIndex = parseInt(localStorage.getItem('voxelActivePaletteIndex') || 3, 10);
                 if (Number.isNaN(this.activePaletteIndex) || this.activePaletteIndex < 0 || this.activePaletteIndex > 3) {
                     this.activePaletteIndex = 3;
                 }
-                if (!this.colorHistory.includes((this.currentColor || '').toUpperCase())) {
-                    this.currentColor = this.colorHistory[this.activePaletteIndex] || '#FBD000';
-                }
+                this.currentColor = this.normalizeHexColor(this.currentColor, this.colorHistory[this.activePaletteIndex] || '#FBD000');
                 this.isSelectionLocked = localStorage.getItem('isSelectionLocked') === 'true';
 
                 // START NEW STATE INITIALIZATION
@@ -6992,7 +6997,9 @@ const coords = { x: x, y: y, z: z };
             renderColorHistory: function () {
                 const palette = document.getElementById('color-history-palette');
                 palette.innerHTML = '';
-                this.colorHistory.forEach((color, index) => {
+                this.colorHistory.forEach((rawColor, index) => {
+                    const color = this.normalizeHexColor(rawColor, ['#E52521', '#049CD8', '#43B047', '#FBD000'][index] || '#FBD000');
+                    this.colorHistory[index] = color;
                     const swatch = document.createElement('button');
                     swatch.type = 'button';
                     swatch.className = 'color-swatch';
