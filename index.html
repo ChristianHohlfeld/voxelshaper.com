@@ -4777,15 +4777,19 @@
                     this.moveDrawingLevel(direction);
                     return;
                 }
-                if (document.pointerLockElement === this.cvs) {
+
+                // Desktop contract: while RMB is held, wheel adjusts fly speed.
+                // Also keep pointer-lock behavior for continuity.
+                const rmbHeld = (e.buttons & 2) === 2;
+                if (document.pointerLockElement === this.cvs || rmbHeld) {
                     const speedChange = e.deltaY > 0 ? -0.01 : 0.01;
-                    const newSpeed = this.flySpeed + speedChange;
-                    this.setFlySpeed(newSpeed);
-                } else {
-                    let zoomAmount = e.deltaY * 0.001 * this.PINCH_ZOOM_MULT;
-                    if (this.controls.invertZoom) zoomAmount *= -1;
-                    this.cam.position.addScaledVector(this.cam.getWorldDirection(new THREE.Vector3()), zoomAmount);
+                    this.setFlySpeed(this.flySpeed + speedChange);
+                    return;
                 }
+
+                let zoomAmount = e.deltaY * 0.001 * this.PINCH_ZOOM_MULT;
+                if (this.controls.invertZoom) zoomAmount *= -1;
+                this.cam.position.addScaledVector(this.cam.getWorldDirection(new THREE.Vector3()), zoomAmount);
             },
 
             onKeyDown: function (e) {
