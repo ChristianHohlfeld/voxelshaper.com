@@ -640,6 +640,28 @@
             backdrop-filter: blur(4px);
         }
 
+        #deleteBrushHint {
+            position: absolute;
+            left: 50%;
+            bottom: calc(88px + var(--safe-bottom, 0px));
+            transform: translateX(-50%);
+            z-index: 35;
+            display: none;
+            align-items: center;
+            gap: 8px;
+            max-width: min(92vw, 520px);
+            padding: 10px 12px;
+            border-radius: 9999px;
+            background: rgba(10, 14, 22, 0.78);
+            border: 1px solid rgba(255,255,255,.16);
+            color: #eaf2ff;
+            backdrop-filter: blur(10px);
+            box-shadow: 0 10px 30px rgba(0,0,0,.35);
+            font-size: 12px;
+        }
+        #deleteBrushHint.show { display: inline-flex; }
+        #deleteBrushHint button { pointer-events: auto; }
+
         #dragLengthHud {
             display: none !important;
         }
@@ -1821,7 +1843,12 @@
     </div>
     <div id="container">
         <div id="flySpeedHud">Fly <span id="flySpeedHudValue">0.10</span></div>
-        <canvas id="voxelCanvas" tabindex="0" width="750" height="1212" style="width: 375px; height: 606px;"></canvas>
+        <div id="deleteBrushHint" role="status" aria-live="polite">
+            <span>Deleting fast on 1×1. Increase brush?</span>
+            <button id="deleteHintGrowBtn" class="btn btn-xs btn-accent">Set 3×3</button>
+            <button id="deleteHintCloseBtn" class="btn btn-xs btn-ghost">×</button>
+        </div>
+        <canvas id="voxelCanvas" tabindex="0" width="750" height="1212" style="width: 375px; height: 606px;"}></canvas>
         <div id="marquee" class="marquee"></div>
         <div id="haptic-layer"></div>
         <div id="ruler-overlay" aria-hidden="true">
@@ -2919,6 +2946,7 @@
                 dragStartPlaneY: null,
                 rulerStartCoords: null,
                 rulerStartScreen: null,
+                deleteCycleDeletes: 0,
             },
             touchState: {
                 longPressTimeout: null,
@@ -3723,6 +3751,8 @@
                 document.getElementById('mobile-mode-toggle').addEventListener('click', () => this.cycleMode());
                 document.getElementById('mobile-quick-brush-decrease').addEventListener('click', () => this.setBrushSize(this.brushSize - 1));
                 document.getElementById('mobile-quick-brush-increase').addEventListener('click', () => this.setBrushSize(this.brushSize + 1));
+                document.getElementById('deleteHintGrowBtn')?.addEventListener('click', () => { this.setBrushSize(3); this.hideDeleteBrushHint(); });
+                document.getElementById('deleteHintCloseBtn')?.addEventListener('click', () => this.hideDeleteBrushHint());
                 document.getElementById('mobile-select-toggle').addEventListener('click', () => this.toggleSelectMode());
                 document.getElementById('mobile-selection-lock-toggle').addEventListener('click', () => this.toggleSelectionLock());
                 document.getElementById('mobile-color-picker').addEventListener('input', (e) => this.setColor(e.target.value));
@@ -4054,6 +4084,7 @@
                 }
 
                 this.currentStroke = new Map();
+                this.mouseState.deleteCycleDeletes = 0;
                 this.isPointerDown = true;
                 this.activePointers.set(e.pointerId, { x: e.clientX, y: e.clientY });
 
@@ -4475,6 +4506,11 @@
 
                 if (this.mouseState.isModifying && this.currentStroke && this.currentStroke.size > 0) {
                     this.commitCurrentStroke();
+                }
+
+                // Non-blocking delete hint after an actual drag-delete cycle with 1x1 brush.
+                if (this.currentMode === 'DELETE' && this.brushSize === 1 && this.mouseState.isDragging && (this.mouseState.deleteCycleDeletes || 0) > 0) {
+                    this.showDeleteBrushHint();
                 }
 
                 if (document.pointerLockElement === this.cvs) document.exitPointerLock();
@@ -5192,6 +5228,15 @@ const coords = { x: x, y: y, z: z };
                     this.addHistoryStep({ type: 'MODIFY', changes: actualChanges });
                     this.onModelChanged();
                     if (this.isRoundedPreviewEnabled) this.rebuildRoundedPreview();
+
+                    // Track real delete activity for drag-cycle hinting.
+                    if (this.currentMode === 'DELETE' && this.brushSize === 1) {
+                        let deletedNow = 0;
+                        for (const [, v] of actualChanges.entries()) {
+                            if (v && v.before && !v.after) deletedNow++;
+                        }
+                        this.mouseState.deleteCycleDeletes = (this.mouseState.deleteCycleDeletes || 0) + deletedNow;
+                    }
                 }
                 this.currentStroke = new Map();
             },
@@ -6187,8 +6232,25 @@ const coords = { x: x, y: y, z: z };
                 }
             },
 
+            showDeleteBrushHint: function () {
+                const now = Date.now();
+                if (this._deleteHintUntil && now < this._deleteHintUntil) return;
+                const el = document.getElementById('deleteBrushHint');
+                if (!el) return;
+                el.classList.add('show');
+                clearTimeout(this._deleteHintTimer);
+                this._deleteHintTimer = setTimeout(() => this.hideDeleteBrushHint(), 4200);
+                this._deleteHintUntil = now + 7000;
+            },
+
+            hideDeleteBrushHint: function () {
+                const el = document.getElementById('deleteBrushHint');
+                if (el) el.classList.remove('show');
+            },
+
             setBrushSize: function (newSize) {
                 this.brushSize = Math.max(1, Math.min(10, parseInt(newSize, 10) || 1));
+                if (this.brushSize > 1) this.hideDeleteBrushHint();
                 localStorage.setItem('voxelEditorBrushSize', this.brushSize);
                 if (!(this.currentMode === 'PAINT' || this.currentMode === 'DELETE' || this.currentMode === 'FREE')) {
                     this.setModeExplicit('FREE', 'brush_size_change');
