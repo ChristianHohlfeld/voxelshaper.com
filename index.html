@@ -3961,6 +3961,7 @@
             DRAG_THRESHOLD: 5,
             MAX_HISTORY_SIZE: 50,
             LONG_PRESS_DURATION: 100,
+            DELETE_HOLD_DELAY_MS: 260,
             BACKEND_URL: "https://api.voxelshaper.com",
             HUB_URL: "https://hub.voxelshaper.com",
             // --- State ---
@@ -4055,6 +4056,8 @@
                 deleteCycleDeletes: 0,
                 deleteCycleStartAt: 0,
                 deleteChargeAccel: 0,
+                pointerDownAt: null,
+                deleteHoldArmed: false,
             },
             touchState: {
                 longPressTimeout: null,
@@ -5376,6 +5379,8 @@
                 this.mouseState.lastX = e.clientX;
                 this.mouseState.lastY = e.clientY;
                 this.mouseState.lastStrokeApplyAt = 0;
+                this.mouseState.pointerDownAt = performance.now();
+                this.mouseState.deleteHoldArmed = false;
 
                 if (this.isMobile) {
                     if (this.activePointers.size === 1) {
@@ -5837,6 +5842,8 @@
                 this.mouseState.lastStrokeApplyAt = 0;
                 this.hideDragLengthHud();
                 this.hideRulerOverlay();
+                this.mouseState.pointerDownAt = null;
+                this.mouseState.deleteHoldArmed = false;
                 this.mouseState.selectionAxisLock = null;
                 this.mouseState.moveAxisLock = null;
                 this.mouseState.dragStartPlaneY = null;
@@ -6629,6 +6636,14 @@ setGridSize: function (newSize) {
                 if (this.currentMode !== 'DELETE') { this.stopDeleteChargeSound(); return; }
                 if (!this.mouseState.isModifying) return;
                 if (this.mouseState.isRotating || this.mouseState.isPanning || this.mouseState.isMoving || this.mouseState.isExtruding) return;
+
+                const now = performance.now();
+                const pointerDownAt = this.mouseState.pointerDownAt || 0;
+                const holdDelay = this.DELETE_HOLD_DELAY_MS || 260;
+                if (!this.mouseState.deleteHoldArmed) {
+                    if (!pointerDownAt || (now - pointerDownAt) < holdDelay) return;
+                    this.mouseState.deleteHoldArmed = true;
+                }
 
                 this.startDeleteChargeSound();
                 const x = this.mouseState.lastX || this.mouseState.downX;
