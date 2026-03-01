@@ -2925,6 +2925,14 @@
             previewRoundnessFactor: parseFloat(localStorage.getItem('previewRoundnessFactor') || 0.5),
             originalVoxelsGroup: null,
             roundedVoxelsGroup: null,
+            _rayMouse: new THREE.Vector2(),
+            _raycaster: new THREE.Raycaster(),
+            _rayPlaneY0: new THREE.Plane(new THREE.Vector3(0, 1, 0), 0),
+            _rayPlaneHit: new THREE.Vector3(),
+            _tmpNormalMatrix: new THREE.Matrix3(),
+            _lastPreviewRayAt: 0,
+            _lastPreviewClientX: null,
+            _lastPreviewClientY: null,
             firstInteractionTracked: false,
             firstEditTracked: false,
             tutorialStep: 0,
@@ -3558,6 +3566,7 @@
                 this.resetCamera();
                 this.lowPerfMode = this.computeMobileMode() || (navigator.hardwareConcurrency || 4) <= 4 || (navigator.deviceMemory || 4) <= 4;
                 this.ren = new THREE.WebGLRenderer({ canvas: this.cvs, antialias: !this.lowPerfMode, alpha: true, powerPreference: 'high-performance' });
+                this.ren.setPixelRatio(Math.min(window.devicePixelRatio || 1, this.lowPerfMode ? 1.25 : 1.8));
                 this.ren.outputEncoding = THREE.sRGBEncoding;
                 this.ren.toneMapping = THREE.ACESFilmicToneMapping;
                 this.ren.toneMappingExposure = 1.02;
@@ -3606,6 +3615,7 @@
                 this.originalVoxelsGroup.visible = !this.isRoundedPreviewEnabled;
                 this.roundedVoxelsGroup.visible = this.isRoundedPreviewEnabled;
                 if (this.isRoundedPreviewEnabled) this.rebuildRoundedPreview();
+                this.updateShadowPolicy();
             },
 
             setupEventListeners: function () {
@@ -4029,8 +4039,8 @@
                     if (list.length > 1) list.forEach(g => g.dispose());
 
                     const mesh = new THREE.Mesh(merged, this.getMaterial(hex));
-                    mesh.castShadow = true;
-                    mesh.receiveShadow = true;
+                    mesh.castShadow = !this.lowPerfMode && this.voxels.size < 3500;
+                    mesh.receiveShadow = !this.lowPerfMode && this.voxels.size < 3500;
                     this.roundedVoxelsGroup.add(mesh);
                 }
             },
@@ -4235,8 +4245,15 @@
                 }
 
                 if (!this.isPointerDown) {
-                    const targetInfo = this.getRayTargetInfo(e.clientX, e.clientY);
-                    this.updateToolPreview(targetInfo);
+                    const now = performance.now();
+                    const movedLittle = this._lastPreviewClientX != null && Math.abs(e.clientX - this._lastPreviewClientX) < 1 && Math.abs(e.clientY - this._lastPreviewClientY) < 1;
+                    if (!movedLittle && (now - this._lastPreviewRayAt > (this.lowPerfMode ? 42 : 20))) {
+                        this._lastPreviewRayAt = now;
+                        this._lastPreviewClientX = e.clientX;
+                        this._lastPreviewClientY = e.clientY;
+                        const targetInfo = this.getRayTargetInfo(e.clientX, e.clientY);
+                        this.updateToolPreview(targetInfo);
+                    }
                     return;
                 }
 
@@ -5184,8 +5201,8 @@ const coords = { x: x, y: y, z: z };
                         if (!existingVoxel) {
                             const mesh = new THREE.Mesh(this.sharedBoxGeometry, this.getMaterial(this.currentColor));
                             mesh.position.set(x * this.VS + 0.5, y * this.VS + 0.5, z * this.VS + 0.5);
-                            mesh.castShadow = true;
-                            mesh.receiveShadow = true;
+                            mesh.castShadow = !this.lowPerfMode && this.voxels.size < 3500;
+                            mesh.receiveShadow = !this.lowPerfMode && this.voxels.size < 3500;
                             this.originalVoxelsGroup.add(mesh);
                             this.voxels.set(k, { color: this.currentColor, mesh: mesh });
                             modified = true;
@@ -5811,7 +5828,7 @@ const coords = { x: x, y: y, z: z };
 
                             const newMesh = new THREE.Mesh(this.sharedBoxGeometry, this.getMaterial(extrudeColor));
                             newMesh.position.set(newX * this.VS + 0.5, newY * this.VS + 0.5, newZ * this.VS + 0.5);
-                            newMesh.castShadow = true; newMesh.receiveShadow = true;
+                            newMesh.castShadow = !this.lowPerfMode && this.voxels.size < 3500; newMesh.receiveShadow = !this.lowPerfMode && this.voxels.size < 3500;
                             this.originalVoxelsGroup.add(newMesh);
                             this.voxels.set(newKey, { color: extrudeColor, mesh: newMesh });
                             changes.get(newKey).after = { color: extrudeColor };
@@ -5857,9 +5874,9 @@ const coords = { x: x, y: y, z: z };
 
             getRayTargetInfo: function (clientX, clientY) {
                 const rect = this.cvs.getBoundingClientRect();
-                const mouse = new THREE.Vector2(((clientX - rect.left) / rect.width) * 2 - 1, -((clientY - rect.top) / rect.height) * 2 + 1);
-                const raycaster = new THREE.Raycaster();
-                raycaster.setFromCamera(mouse, this.cam);
+                this._rayMouse.set(((clientX - rect.left) / rect.width) * 2 - 1, -((clientY - rect.top) / rect.height) * 2 + 1);
+                const raycaster = this._raycaster;
+                raycaster.setFromCamera(this._rayMouse, this.cam);
 
                 // Target meshes are always the individual block meshes for accurate interaction
                 const allMeshes = [...this.originalVoxelsGroup.children, this.groundPlaneMesh].filter(m => m && m.visible !== false);
@@ -5868,9 +5885,8 @@ const coords = { x: x, y: y, z: z };
                 const intersects = raycaster.intersectObjects(allMeshes, false);
                 let hit = intersects[0] || null;
                 if (!hit) {
-                    const fallbackPlane = new THREE.Plane(new THREE.Vector3(0, 1, 0), 0);
-                    const p = new THREE.Vector3();
-                    if (raycaster.ray.intersectPlane(fallbackPlane, p)) {
+                    const p = this._rayPlaneHit;
+                    if (raycaster.ray.intersectPlane(this._rayPlaneY0, p)) {
                         hit = { point: p, object: this.groundPlaneMesh, face: { normal: new THREE.Vector3(0, 1, 0) } };
                     } else {
                         return null;
@@ -5885,8 +5901,8 @@ const coords = { x: x, y: y, z: z };
                 } else {
                     // Get the face normal, transform it by the object's world matrix
                     normal = hit.face.normal.clone();
-                    const nMat = new THREE.Matrix3().getNormalMatrix(hit.object.matrixWorld);
-                    normal.applyNormalMatrix(nMat).normalize();
+                    this._tmpNormalMatrix.getNormalMatrix(hit.object.matrixWorld);
+                    normal.applyNormalMatrix(this._tmpNormalMatrix).normalize();
 
                     // Snap the normal to the nearest major axis
                     const ax = Math.abs(normal.x), ay = Math.abs(normal.y), az = Math.abs(normal.z);
@@ -6345,6 +6361,7 @@ const coords = { x: x, y: y, z: z };
                         this.removeImageTemplate();
                     }
                     this.rebuildSceneFromVoxels();
+                    this.updateShadowPolicy();
                     this.rebuildHelpers();
                     this.updateAllControlInputs();
                     this.updateImageAxisUI();
@@ -6554,7 +6571,18 @@ const coords = { x: x, y: y, z: z };
             roundedPreviewDirty: false,
             _roundedRebuildRAF: null,
 
+            updateShadowPolicy: function () {
+                const heavy = this.lowPerfMode || this.voxels.size >= 3500;
+                if (this.ren) this.ren.shadowMap.enabled = !heavy;
+                this.originalVoxelsGroup?.children?.forEach((m) => {
+                    if (!m || !m.isMesh) return;
+                    m.castShadow = !heavy;
+                    m.receiveShadow = !heavy;
+                });
+            },
+
             onModelChanged(reason = '') {
+                this.updateShadowPolicy();
                 // collapse multiple mutations into one rebuild
                 if (!this.isRoundedPreviewEnabled) return;
                 this.roundedPreviewDirty = true;
@@ -6641,8 +6669,8 @@ const coords = { x: x, y: y, z: z };
                                 } else {
                                     const voxelMesh = new THREE.Mesh(this.sharedBoxGeometry, this.getMaterial(change.before.color));
                                     voxelMesh.position.set(x * this.VS + 0.5, y * this.VS + 0.5, z * this.VS + 0.5);
-                                    voxelMesh.castShadow = true;
-                                    voxelMesh.receiveShadow = true;
+                                    voxelMesh.castShadow = !this.lowPerfMode && this.voxels.size < 3500;
+                                    voxelMesh.receiveShadow = !this.lowPerfMode && this.voxels.size < 3500;
                                     this.originalVoxelsGroup.add(voxelMesh);
                                     this.voxels.set(key, { color: change.before.color, mesh: voxelMesh });
                                 }
@@ -6692,8 +6720,8 @@ const coords = { x: x, y: y, z: z };
                                 } else {
                                     const voxelMesh = new THREE.Mesh(this.sharedBoxGeometry, this.getMaterial(change.after.color));
                                     voxelMesh.position.set(x * this.VS + 0.5, y * this.VS + 0.5, z * this.VS + 0.5);
-                                    voxelMesh.castShadow = true;
-                                    voxelMesh.receiveShadow = true;
+                                    voxelMesh.castShadow = !this.lowPerfMode && this.voxels.size < 3500;
+                                    voxelMesh.receiveShadow = !this.lowPerfMode && this.voxels.size < 3500;
                                     this.originalVoxelsGroup.add(voxelMesh);
                                     this.voxels.set(key, { color: change.after.color, mesh: voxelMesh });
                                 }
