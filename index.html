@@ -2892,7 +2892,8 @@
             lastVisualFxAt: 0,
             // Keep seam shading subtle for readability/perf (avoid aggressive stylized post FX).
             seamGap: 0.075,
-            seamDarkness: 0.22,
+            // Keep seam shader path available, but neutral by default to match Hub cube look.
+            seamDarkness: 0.0,
             isRoundedPreviewEnabled: localStorage.getItem('isRoundedPreviewEnabled') === 'true',
             previewRoundnessFactor: parseFloat(localStorage.getItem('previewRoundnessFactor') || 0.5),
             originalVoxelsGroup: null,
@@ -2997,9 +2998,8 @@
                 if (!this.materialCache.has(color)) {
                     const mat = new THREE.MeshStandardMaterial({
                         color: color,
-                        roughness: 0.62,
-                        metalness: 0.12,
-                        flatShading: true
+                        roughness: 0.72,
+                        metalness: 0.12
                     });
                     this.applySeamShaderToMaterial(mat);
                     this.materialCache.set(color, mat);
