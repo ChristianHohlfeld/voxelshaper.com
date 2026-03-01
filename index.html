@@ -1773,6 +1773,7 @@
                                     <input type="range" id="roundness-setting" min="0.01" max="1.0" value="0.50" step="0.01" class="range range-xs mt-1">
                                 </li>
                                 <li><a id="showOnboardingAgainBtn">Show First-Run Guide</a></li>
+                                <li><a id="resetDeleteHintBtn">Reset “Delete Brush Hint”</a></li>
                                 <li><a id="resetDefaultsBtn">Reset to Default</a></li>
                             </ul>
                         </details>
@@ -1845,8 +1846,9 @@
     <div id="container">
         <div id="flySpeedHud">Fly <span id="flySpeedHudValue">0.10</span></div>
         <div id="deleteBrushHint" role="status" aria-live="polite">
-            <span>Deleting fast on 1×1. Increase brush?</span>
+            <span>Fast delete on 1×1. Use bigger brush?</span>
             <button id="deleteHintGrowBtn" class="btn btn-xs btn-accent">Set 3×3</button>
+            <button id="deleteHintDontShowBtn" class="btn btn-xs btn-ghost">Don’t show again</button>
             <button id="deleteHintCloseBtn" class="btn btn-xs btn-ghost">×</button>
         </div>
         <canvas id="voxelCanvas" tabindex="0" width="750" height="1212" style="width: 375px; height: 606px;"}></canvas>
@@ -2084,6 +2086,7 @@
                     <label class="label cursor-pointer"><span class="label-text">Rounded Preview</span><input type="checkbox" id="mobile-roundness-toggle" class="toggle toggle-accent"></label>
                     <input type="range" id="mobile-roundness-setting" min="0.01" max="1.0" value="0.50" step="0.01" class="range range-primary">
                 </li>
+                <li><a id="mobile-reset-delete-hint">Reset "Delete Brush Hint"</a></li>
                 <li class="pt-2">
                     <label class="label"><span class="label-text">Colors</span></label>
                     <div class="flex items-center gap-2">
@@ -2884,6 +2887,7 @@
             cvs: null, containerDiv: null,
             currentColor: '#ffffff',
             currentBlockType: (localStorage.getItem('voxelBlockType') || 'solid'),
+            deleteBrushHintDisabled: localStorage.getItem('deleteBrushHintDisabled') === 'true',
             GRID: 10,
             flySpeed: 0.1,
             currentMode: 'FREE',
@@ -3784,6 +3788,12 @@
                 document.getElementById('mobile-quick-brush-decrease').addEventListener('click', () => this.setBrushSize(this.brushSize - 1));
                 document.getElementById('mobile-quick-brush-increase').addEventListener('click', () => this.setBrushSize(this.brushSize + 1));
                 document.getElementById('deleteHintGrowBtn')?.addEventListener('click', () => { this.setBrushSize(3); this.hideDeleteBrushHint(); });
+                document.getElementById('deleteHintDontShowBtn')?.addEventListener('click', () => {
+                    this.deleteBrushHintDisabled = true;
+                    localStorage.setItem('deleteBrushHintDisabled', 'true');
+                    this.hideDeleteBrushHint();
+                    this.showToast('Hints', 'Delete Brush Hint disabled.', 'info', 900);
+                });
                 document.getElementById('deleteHintCloseBtn')?.addEventListener('click', () => this.hideDeleteBrushHint());
                 document.getElementById('mobile-select-toggle').addEventListener('click', () => this.toggleSelectMode());
                 document.getElementById('mobile-selection-lock-toggle').addEventListener('click', () => this.toggleSelectionLock());
@@ -3906,6 +3916,16 @@
                 });
                 document.getElementById('showOnboardingAgainBtn').addEventListener('click', () => {
                     this.startOnboarding();
+                });
+                document.getElementById('resetDeleteHintBtn')?.addEventListener('click', () => {
+                    this.deleteBrushHintDisabled = false;
+                    localStorage.removeItem('deleteBrushHintDisabled');
+                    this.showToast('Hints', 'Delete Brush Hint reset.', 'success', 1000);
+                });
+                document.getElementById('mobile-reset-delete-hint')?.addEventListener('click', () => {
+                    this.deleteBrushHintDisabled = false;
+                    localStorage.removeItem('deleteBrushHintDisabled');
+                    this.showToast('Hints', 'Delete Brush Hint reset.', 'success', 1000);
                 });
                 document.getElementById('mobile-show-onboarding-again').addEventListener('click', () => {
                     document.getElementById('mobileControlsModal').close();
@@ -5282,6 +5302,9 @@ const coords = { x: x, y: y, z: z };
                             if (v && v.before && !v.after) deletedNow++;
                         }
                         this.mouseState.deleteCycleDeletes = (this.mouseState.deleteCycleDeletes || 0) + deletedNow;
+                        if (this.isPointerDown && this.mouseState.isDragging && this.mouseState.deleteCycleDeletes >= 2) {
+                            this.showDeleteBrushHint();
+                        }
                     }
                 }
                 this.currentStroke = new Map();
@@ -6278,14 +6301,15 @@ const coords = { x: x, y: y, z: z };
             },
 
             showDeleteBrushHint: function () {
+                if (this.deleteBrushHintDisabled) return;
                 const now = Date.now();
                 if (this._deleteHintUntil && now < this._deleteHintUntil) return;
                 const el = document.getElementById('deleteBrushHint');
                 if (!el) return;
                 el.classList.add('show');
                 clearTimeout(this._deleteHintTimer);
-                this._deleteHintTimer = setTimeout(() => this.hideDeleteBrushHint(), 4200);
-                this._deleteHintUntil = now + 7000;
+                this._deleteHintTimer = setTimeout(() => this.hideDeleteBrushHint(), 5200);
+                this._deleteHintUntil = now + 3500;
             },
 
             hideDeleteBrushHint: function () {
@@ -6853,6 +6877,8 @@ const coords = { x: x, y: y, z: z };
                 localStorage.setItem('currentDrawingAxis', this.currentDrawingAxis);
                 localStorage.setItem('activeDrawingLevel', JSON.stringify(this.activeDrawingLevel));
                 localStorage.setItem('templateImageAxis', this.templateImageAxis);
+                this.deleteBrushHintDisabled = false;
+                localStorage.removeItem('deleteBrushHintDisabled');
 
                 this.isRoundedPreviewEnabled = false;
                 this.previewRoundnessFactor = 0.5;
