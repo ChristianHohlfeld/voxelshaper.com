@@ -7459,7 +7459,36 @@ const allMeshes = [...this.originalVoxelsGroup.children, this.groundPlaneMesh].f
                 pulse(document.getElementById('mobile-mode-toggle'));
             },
 
-        updateModeUI: function () {
+            updateModeUI: function () {
+                const isSelectMode = this.currentMode === 'SELECT';
+                const cycleModeKey = isSelectMode ? (this.lastCycleMode || 'FREE') : this.currentMode;
+                const cycleModeInfo = this.Modes[cycleModeKey] || this.Modes.FREE;
+
+                const modeBtn = document.getElementById('modeToggle');
+                if (modeBtn) modeBtn.textContent = cycleModeInfo.name;
+                if (this.isMobile) document.getElementById('mobile-mode-icon').className = cycleModeInfo.icon;
+
+                const selectBtn = document.getElementById('selectModeToggle');
+                const mobileSelectBtn = document.getElementById('mobile-select-toggle');
+                if (selectBtn) selectBtn.classList.toggle('btn-primary', isSelectMode);
+                if (selectBtn) selectBtn.classList.toggle('btn-outline', !isSelectMode);
+                if (mobileSelectBtn) mobileSelectBtn.classList.toggle('text-primary', isSelectMode);
+
+                const selectionLockBtn = document.getElementById('selectionLockToggle');
+                selectionLockBtn.classList.toggle('invisible', !isSelectMode);
+                selectionLockBtn.classList.toggle('pointer-events-none', !isSelectMode);
+                selectionLockBtn.setAttribute('aria-hidden', String(!isSelectMode));
+                selectionLockBtn.disabled = !isSelectMode;
+                document.getElementById('mobile-selection-lock-toggle').closest('li').style.display = isSelectMode ? '' : 'none';
+
+                const brushDisplay = document.getElementById('brush-size-display');
+                if (brushDisplay) {
+                    brushDisplay.classList.remove('text-base-content/50');
+                    brushDisplay.classList.add('text-primary');
+                }
+                this.updateSelectionLockUI();
+            },
+
             updateLoginStateUI: function () {
                 const isLoggedIn = !!this.user;
                 document.getElementById('loginLogoutBtn').textContent = isLoggedIn ? 'Logout' : 'Login';
