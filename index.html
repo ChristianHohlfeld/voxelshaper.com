@@ -4804,8 +4804,8 @@
 
                 this.rebuildHelpers();
                 // Ensure initial visibility matches stored state and build the preview once if needed
-                this.originalVoxelsGroup.visible = !this.isRoundedPreviewEnabled;
-                this.roundedVoxelsGroup.visible = this.isRoundedPreviewEnabled;
+                this.originalVoxelsGroup.visible = true;
+                this.roundedVoxelsGroup.visible = false;
                 if (this.isRoundedPreviewEnabled) this.rebuildRoundedPreview();
                 this.updateShadowPolicy();
 
@@ -5991,8 +5991,6 @@
                     templateImageData: this.templateImageData,
                     templateImagePinnedY: this.templateImagePinnedY,
                     templateImageAxis: this.templateImageAxis,
-                    isRoundedPreviewEnabled: this.isRoundedPreviewEnabled,
-                    previewRoundnessFactor: this.previewRoundnessFactor
                 };
             },
 
@@ -7709,7 +7707,7 @@
                     this.templateImageAxis = data.templateImageAxis || 'z';
 
                     // Load rounding state if available
-                    this.isRoundedPreviewEnabled = data.isRoundedPreviewEnabled ?? (localStorage.getItem('isRoundedPreviewEnabled') === 'true');
+                    this.isRoundedPreviewEnabled = false;
                     this.previewRoundnessFactor = data.previewRoundnessFactor ?? parseFloat(localStorage.getItem('previewRoundnessFactor') || 0.5);
 
 
