@@ -3330,32 +3330,12 @@
             </div>
         </div>
     </dialog>
-
-    <dialog id="shareModal" class="modal">
-        <div class="modal-box"><button type="button" class="btn btn-sm btn-ghost modal-close-x"
-                aria-label="Close dialog">×</button>
-            <h3 class="font-bold text-lg">Share to VoxelShaper Hub</h3>
-            <p class="py-2 opacity-80">Upload this project to the Hub.</p>
-            <div class="flex flex-col gap-3 mt-2">
-                <button id="uploadToHubFromShareBtn" class="btn btn-success"><i
-                        class="fas fa-cloud-upload-alt mr-2"></i>Share to Hub</button>
-            </div>
-            <div class="modal-action">
-                <form method="dialog"><button class="btn btn-ghost">Cancel</button></form>
-            </div>
-        </div>
-    </dialog>
-
-    <dialog id="shareSuccessModal" class="modal">
+<dialog id="shareSuccessModal" class="modal">
         <div class="modal-box"><button type="button" class="btn btn-sm btn-ghost modal-close-x"
                 aria-label="Close dialog">×</button>
             <h3 class="font-bold text-lg">Shared to Hub ✅</h3>
             <p class="py-2">Your model is now online.</p>
             <p class="text-sm opacity-80">Find it in <b>Hub → My Models</b>.</p>
-            <label class="label cursor-pointer justify-start gap-3 mt-2">
-                <input type="checkbox" id="shareSuccessDontShow" class="checkbox checkbox-sm checkbox-primary">
-                <span class="label-text">Don’t show this again</span>
-            </label>
             <div class="modal-action">
                 <a href="https://hub.voxelshaper.com/" target="_blank" rel="noopener" class="btn btn-primary">Open
                     Hub</a>
@@ -5128,13 +5108,6 @@
                 document.getElementById('openMorphSettingsBtn')?.addEventListener('click', () => this.openMorphSettingsModal());
                 document.getElementById('saveMorphSettingsBtn')?.addEventListener('click', () => this.saveMorphSettings());
                 document.getElementById('soundToggleBtn').addEventListener('click', () => this.toggleSound());
-                document.getElementById('uploadToHubFromShareBtn').addEventListener('click', () => {
-                    document.getElementById('shareModal').close();
-                    document.getElementById('uploadProjectModal').showModal();
-                });
-                document.getElementById('shareSuccessDontShow').addEventListener('change', (e) => {
-                    localStorage.setItem('voxelshaper_share_success_dont_show', String(!!e.target.checked));
-                });
 
                 document.getElementById('uploadConfirmBtn').addEventListener('click', (e) => {
                     e.preventDefault();
@@ -6029,7 +6002,7 @@
 
 
             openShareModal: function () {
-                document.getElementById('shareModal').showModal();
+                document.getElementById('uploadProjectModal').showModal();
             },
 
             uploadProjectToHub: async function () {
@@ -6072,15 +6045,10 @@
                     });
                     this.currentModelId = response.public_id;
                     this.updateUrlWithModelId();
-                    this.showToast('Upload Successful', '', 'success');
+                    this.showToast('Thanks for sharing', 'Your model is live on the Hub.', 'success', 2500);
                     trackEvent('upload_hub', { model_id: this.currentModelId, visibility: hubDocument.visibility });
 
-                    const dontShowShareSuccess = localStorage.getItem('voxelshaper_share_success_dont_show') === 'true';
-                    const successCheckbox = document.getElementById('shareSuccessDontShow');
-                    if (successCheckbox) successCheckbox.checked = dontShowShareSuccess;
-                    if (!dontShowShareSuccess) {
-                        document.getElementById('shareSuccessModal').showModal();
-                    }
+                    document.getElementById('shareSuccessModal').showModal();
                 } catch (error) {
                     this.showToast('Upload Failed', error.message, 'error');
                 }
