@@ -1674,6 +1674,7 @@
                 <label tabindex="0" class="btn btn-sm btn-ghost">View</label>
                 <ul tabindex="0" class="dropdown-content z-[100] menu p-2 shadow bg-base-300 rounded-box w-60">
                     <li><a id="resetCameraBtn">Reset View</a></li>
+                    <li><a id="openMorphSettingsBtn"><i class="fas fa-sliders-h mr-2"></i>Morph Settings</a></li>
                     <li>
                         <details>
                             <summary>Drawing Plane</summary>
@@ -1929,6 +1930,7 @@
                         </a>
                     </li>
                     <li><a id="mobile-properties">Grid &amp; Brush Size</a></li>
+                    <li><a id="mobile-morph-settings"><i class="fas fa-sliders-h mr-2"></i>Morph Settings</a></li>
                     <li><a id="mobile-reset-camera">Reset Camera</a></li>
                     <li><a id="mobile-settings">Control Settings</a></li>
                 </ul>
@@ -2179,6 +2181,45 @@
             </div>
         </div>
     </dialog>
+    <dialog id="morphSettingsModal" class="modal">
+        <div class="modal-box">
+            <h3 class="font-bold text-lg">Morph Settings</h3>
+            <div class="space-y-3 mt-3">
+                <label class="form-control">
+                    <span class="label-text">Scene Type</span>
+                    <select id="morphTypeSelect" class="select select-bordered w-full">
+                        <option value="random">Random</option>
+                        <option value="city">City</option>
+                        <option value="car">Car</option>
+                        <option value="spaceship">Spaceship</option>
+                        <option value="ruins">Ruins</option>
+                        <option value="mech">Mech</option>
+                        <option value="castle">Castle</option>
+                        <option value="waterfall">Waterfall</option>
+                        <option value="ifs_tree">IFS Tree</option>
+                        <option value="floating_island">Floating Island</option>
+                    </select>
+                </label>
+                <label class="form-control">
+                    <span class="label-text">Seed</span>
+                    <input id="morphSeedInput" type="number" class="input input-bordered w-full" placeholder="Random if empty">
+                </label>
+                <label class="form-control">
+                    <span class="label-text">Shape</span>
+                    <input id="morphShapeInput" type="range" min="0" max="100" value="60" class="range range-xs">
+                </label>
+                <label class="form-control">
+                    <span class="label-text">Color Intensity</span>
+                    <input id="morphColorInput" type="range" min="0" max="100" value="80" class="range range-xs">
+                </label>
+            </div>
+            <div class="modal-action">
+                <button id="saveMorphSettingsBtn" class="btn btn-primary">Save</button>
+                <form method="dialog"><button class="btn">Close</button></form>
+            </div>
+        </div>
+    </dialog>
+
     <dialog id="shareModal" class="modal">
         <div class="modal-box">
             <h3 class="font-bold text-lg">Share to VoxelShaper Hub</h3>
@@ -2842,6 +2883,7 @@
             activePointers: new Map(),
             isPointerDown: false,
             currentModelId: null,
+            morphSettings: { type: 'random', seed: null, shape: 60, color: 80, palette: 'auto' },
             hapticLayer: null,
             soundEnabled: localStorage.getItem('voxelSoundEnabled') !== 'false',
             lengthUnit: localStorage.getItem('voxelLengthUnit') || 'mm',
@@ -3108,6 +3150,7 @@
 
             init: function () {
                 this.setupDOM();
+                this.loadMorphSettings();
                 if (typeof this.keyboard === 'undefined' || this.keyboard === null) {
                     this.keyboard = {};
                 }
@@ -3676,6 +3719,7 @@
                 document.getElementById('mobile-reset-camera').addEventListener('click', () => this.resetCamera());
                 document.getElementById('mobile-settings').addEventListener('click', () => document.getElementById('mobileControlsModal').showModal());
                 document.getElementById('mobile-properties').addEventListener('click', () => document.getElementById('mobilePropertiesModal').showModal());
+                document.getElementById('mobile-morph-settings').addEventListener('click', () => this.openMorphSettingsModal());
                 document.getElementById('mobile-cycle-axis').addEventListener('click', () => this.cycleDrawingAxis());
                 document.getElementById('mobile-level-up').addEventListener('click', () => this.moveDrawingLevel(1));
                 document.getElementById('mobile-level-down').addEventListener('click', () => this.moveDrawingLevel(-1));
@@ -3715,6 +3759,9 @@
 
                 document.getElementById('shareBtn').addEventListener('click', () => this.openShareModal());
                 document.getElementById('generateHubBtn').addEventListener('click', () => this.openHubGenerator());
+                document.getElementById('sideGeneratePill')?.addEventListener('click', () => this.openHubGenerator());
+                document.getElementById('openMorphSettingsBtn')?.addEventListener('click', () => this.openMorphSettingsModal());
+                document.getElementById('saveMorphSettingsBtn')?.addEventListener('click', () => this.saveMorphSettings());
                 document.getElementById('soundToggleBtn').addEventListener('click', () => this.toggleSound());
                 document.getElementById('desktop-canvas-sound-toggle').addEventListener('click', () => this.toggleSound());
                 document.getElementById('uploadToHubFromShareBtn').addEventListener('click', () => {
@@ -4506,6 +4553,47 @@
                 window.history.replaceState({ path: newUrl.href }, '', newUrl.href);
             },
 
+            loadMorphSettings: function () {
+                try {
+                    const raw = localStorage.getItem('voxelMorphSettings');
+                    if (raw) {
+                        const saved = JSON.parse(raw);
+                        this.morphSettings = {
+                            type: saved.type || 'random',
+                            seed: Number.isFinite(saved.seed) ? (saved.seed >>> 0) : null,
+                            shape: Number.isFinite(saved.shape) ? saved.shape : 60,
+                            color: Number.isFinite(saved.color) ? saved.color : 80,
+                            palette: saved.palette || 'auto'
+                        };
+                    }
+                } catch (_) {}
+                const typeEl = document.getElementById('morphTypeSelect');
+                const seedEl = document.getElementById('morphSeedInput');
+                const shapeEl = document.getElementById('morphShapeInput');
+                const colorEl = document.getElementById('morphColorInput');
+                if (typeEl) typeEl.value = this.morphSettings.type;
+                if (seedEl) seedEl.value = this.morphSettings.seed == null ? '' : String(this.morphSettings.seed >>> 0);
+                if (shapeEl) shapeEl.value = String(this.morphSettings.shape);
+                if (colorEl) colorEl.value = String(this.morphSettings.color);
+            },
+
+            openMorphSettingsModal: function () {
+                this.loadMorphSettings();
+                document.getElementById('morphSettingsModal')?.showModal();
+            },
+
+            saveMorphSettings: function () {
+                const type = document.getElementById('morphTypeSelect')?.value || 'random';
+                const seedRaw = document.getElementById('morphSeedInput')?.value?.trim();
+                const shape = Number(document.getElementById('morphShapeInput')?.value ?? 60);
+                const color = Number(document.getElementById('morphColorInput')?.value ?? 80);
+                const seed = seedRaw === '' ? null : (Number(seedRaw) >>> 0);
+                this.morphSettings = { type, seed: Number.isFinite(seed) ? seed : null, shape, color, palette: 'auto' };
+                try { localStorage.setItem('voxelMorphSettings', JSON.stringify(this.morphSettings)); } catch (_) {}
+                document.getElementById('morphSettingsModal')?.close();
+                this.showToast('Morph', 'Settings saved.', 'success', 1100);
+            },
+
             createProjectSnapshot: function () {
                 return {
                     gridSize: this.GRID,
@@ -4525,12 +4613,13 @@
 
             openHubGenerator: function () {
                 const types = ['city', 'car', 'spaceship', 'ruins', 'mech', 'castle', 'waterfall', 'ifs_tree', 'floating_island'];
+                const cfg = this.morphSettings || { type: 'random', seed: null, shape: 60, color: 80, palette: 'auto' };
                 const nextMeta = {
-                    type: types[Math.floor(Math.random() * types.length)],
-                    seed: (Math.random() * 4294967296) >>> 0,
-                    shape: 60,
-                    color: 80,
-                    palette: 'auto'
+                    type: (cfg.type && cfg.type !== 'random') ? cfg.type : types[Math.floor(Math.random() * types.length)],
+                    seed: Number.isFinite(cfg.seed) ? (cfg.seed >>> 0) : ((Math.random() * 4294967296) >>> 0),
+                    shape: Number.isFinite(cfg.shape) ? cfg.shape : 60,
+                    color: Number.isFinite(cfg.color) ? cfg.color : 80,
+                    palette: cfg.palette || 'auto'
                 };
                 const beforeSnapshot = this.createProjectSnapshot();
                 window.__lastHubMeta = nextMeta;
@@ -7099,7 +7188,7 @@ const coords = { x: x, y: y, z: z };
 
         document.addEventListener('DOMContentLoaded', () => VoxelApp.init());
     </script>
-    <a href="https://hub.voxelshaper.com" class="vs-nav-pill vs-pill-left" onclick="trackEvent('hub_open', { source: 'editor_pill_back' })"><span class="vs-arrow">←</span><span class="vs-text">Back</span></a>
+    <button id="sideGeneratePill" class="vs-nav-pill vs-pill-left" type="button"><span class="vs-arrow">⚡</span><span class="vs-text">Morph</span></button>
 
 
 <style>
