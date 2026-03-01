@@ -6583,29 +6583,28 @@ setGridSize: function (newSize) {
             },
 
             getDeleteRamp: function (now = performance.now()) {
-                const baseGap = 40;
+                const baseGap = 34;
                 const fastGap = 12;
+                const warmupDelay = 250;
+                const warmupWindow = 1600;
+                const qtyThreshold = 8;
+                const qtyWindow = 60;
+
                 const cycleStart = this.mouseState.deleteCycleStartAt || now;
                 const elapsed = Math.max(0, now - cycleStart);
                 const deleted = this.mouseState.deleteCycleDeletes || 0;
 
-                const graceMs = 220;
-                if (elapsed < graceMs && deleted <= 1) {
+                if (deleted <= 0 || elapsed < 40) {
                     return { minGap: baseGap, accel: 0 };
                 }
 
-                const rampTime = Math.max(0, elapsed - graceMs);
-                const timePortion = Math.min(1, rampTime / 1400);
-                const timeEase = 1 - Math.pow(1 - timePortion, 2.8);
+                const timeProgress = Math.min(1, Math.max(0, elapsed - warmupDelay) / warmupWindow);
+                const qtyProgress = Math.min(1, Math.max(0, deleted - qtyThreshold) / qtyWindow);
 
-                const qtyPortion = Math.max(0, (deleted - 1) * 0.012);
-                const qtyBoost = Math.min(0.35, qtyPortion);
-
-                const accel = Math.min(1, timeEase * 0.7 + qtyBoost);
+                const accel = Math.min(1, timeProgress * 0.7 + qtyProgress * 0.5);
                 const minGap = baseGap - (baseGap - fastGap) * accel;
                 return { minGap, accel };
             },
-
             drawVoxelLinePaced: function (start, end, normal) {
                 if (this.currentMode === 'SELECT') return;
                 const now = performance.now();
@@ -9009,3 +9008,4 @@ this.roundedVoxelsGroup.visible = this.isRoundedPreviewEnabled;
 </body>
 
 </html>
+
