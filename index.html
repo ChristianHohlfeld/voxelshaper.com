@@ -204,19 +204,26 @@
 
         @keyframes cta-pulse { 0% { box-shadow: 0 0 15px rgba(0,212,255,.15);} 50% { box-shadow: 0 0 35px rgba(0,212,255,.5);} 100% { box-shadow: 0 0 15px rgba(0,212,255,.15);} }
         @keyframes fadeInUp { to { opacity:1; transform:translateY(0);} }
-        @keyframes starDrift { from { transform: translateY(0); } to { transform: translateY(800px); } }
+        @keyframes starDrift {
+            from { transform: translate3d(0, 0, 0); }
+            to { transform: translate3d(-6px, 320px, 0); }
+        }
 
         .vs-editor-stars, .vs-editor-stars-2 {
             position: absolute; inset: -120% 0 0 0; pointer-events: none; z-index: 1;
             background-repeat: repeat;
             opacity: .34;
-            animation: starDrift 100s linear infinite;
+            animation: starDrift 220s linear infinite;
+            will-change: transform;
         }
         .vs-editor-stars {
             background-image: radial-gradient(2px 2px at 20px 30px, rgba(255,255,255,.78) 50%, transparent 51%), radial-gradient(1.5px 1.5px at 120px 80px, rgba(180,210,255,.62) 50%, transparent 51%), radial-gradient(1.5px 1.5px at 300px 150px, rgba(255,255,255,.58) 50%, transparent 51%);
             background-size: 360px 360px;
         }
-        .vs-editor-stars-2 { opacity: .20; animation-duration: 160s; background-image: radial-gradient(1.5px 1.5px at 60px 140px, rgba(255,255,255,.62) 50%, transparent 51%), radial-gradient(1px 1px at 220px 40px, rgba(88,225,255,.62) 50%, transparent 51%); background-size: 280px 280px; }
+        .vs-editor-stars-2 { opacity: .20; animation-duration: 320s; background-image: radial-gradient(1.5px 1.5px at 60px 140px, rgba(255,255,255,.62) 50%, transparent 51%), radial-gradient(1px 1px at 220px 40px, rgba(88,225,255,.62) 50%, transparent 51%); background-size: 280px 280px; }
+        @media (prefers-reduced-motion: reduce) {
+            .vs-editor-stars, .vs-editor-stars-2 { animation: none !important; }
+        }
         /* ... (General styles retained and adapted) ... */
         :root {
             --toast-z-index: 9999;
