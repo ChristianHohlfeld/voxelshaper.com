@@ -5769,7 +5769,7 @@ const coords = { x: x, y: y, z: z };
 
             getRayTargetInfo: function (clientX, clientY) {
                 const rect = this.cvs.getBoundingClientRect();
-                const mouse = new THREE.Vector2(((clientX - rect.left) / rect.width) * 2 - 1, -((clientY - rect.top) / this.cvs.clientHeight) * 2 + 1);
+                const mouse = new THREE.Vector2(((clientX - rect.left) / rect.width) * 2 - 1, -((clientY - rect.top) / rect.height) * 2 + 1);
                 const raycaster = new THREE.Raycaster();
                 raycaster.setFromCamera(mouse, this.cam);
 
@@ -5778,8 +5778,16 @@ const coords = { x: x, y: y, z: z };
 
                 if (allMeshes.length === 0) return null;
                 const intersects = raycaster.intersectObjects(allMeshes, false);
-                if (intersects.length === 0) return null;
-                const hit = intersects[0];
+                let hit = intersects[0] || null;
+                if (!hit) {
+                    const fallbackPlane = new THREE.Plane(new THREE.Vector3(0, 1, 0), 0);
+                    const p = new THREE.Vector3();
+                    if (raycaster.ray.intersectPlane(fallbackPlane, p)) {
+                        hit = { point: p, object: this.groundPlaneMesh, face: { normal: new THREE.Vector3(0, 1, 0) } };
+                    } else {
+                        return null;
+                    }
+                }
                 const pos = hit.point.clone();
                 let normal;
 
