@@ -7677,8 +7677,6 @@
                     templateImageData: this.templateImageData,
                     templateImagePinnedY: this.templateImagePinnedY,
                     templateImageAxis: this.templateImageAxis,
-                    isRoundedPreviewEnabled: this.isRoundedPreviewEnabled, // NEW: Include rounding state
-                    previewRoundnessFactor: this.previewRoundnessFactor,   // NEW: Include rounding state
                 };
                 const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
                 const url = URL.createObjectURL(blob);
@@ -8107,8 +8105,8 @@
                 });
 
                 // 1. Ensure the correct group is visible
-                this.originalVoxelsGroup.visible = !this.isRoundedPreviewEnabled;
-                this.roundedVoxelsGroup.visible = this.isRoundedPreviewEnabled;
+                this.originalVoxelsGroup.visible = true;  // Cubes immer sichtbar
+                this.roundedVoxelsGroup.visible = false; // Abgerundetes Mesh im Viewport immer aus
 
                 // 2. Rebuild the rounded preview if enabled
                 if (this.isRoundedPreviewEnabled) {
