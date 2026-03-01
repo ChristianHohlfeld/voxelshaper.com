@@ -1856,8 +1856,8 @@
             <button id="soundToggleBtn" class="btn btn-sm btn-ghost btn-square shrink-0 self-center" title="Sound: On" aria-label="Toggle sound">
                 <i id="soundToggleIcon" class="fas fa-volume-up"></i>
             </button>
-            <button id="generateHubBtn" class="btn btn-sm btn-accent" title="Morph World" style="box-shadow: 0 0 18px rgba(0,212,255,.45);">
-                <i class="fas fa-dice-d20 mr-1"></i>Morph
+            <button id="morphLightningBtn" class="btn btn-sm btn-warning btn-square" title="Morph World" style="box-shadow: 0 0 18px rgba(250,204,21,.45);">
+                <i class="fas fa-bolt"></i>
             </button>
             <button id="shareBtn" class="btn btn-sm btn-warning btn-square" title="Share Project">
                 <i class="fas fa-share-alt"></i>
@@ -3150,7 +3150,7 @@
             },
 
             syncHubOverlayVisibility: function () {
-                const pill = document.querySelector('.vs-nav-pill.vs-pill-left');
+                const pill = document.querySelector('#sideToHubPill.vs-nav-pill.vs-pill-left');
                 if (!pill) return;
 
                 const mobileModalIds = ['mobileControlsModal', 'mobilePropertiesModal', 'mobileFileModal'];
@@ -3914,8 +3914,7 @@
                 document.getElementById('mobile-login-logout').addEventListener('click', this.loginLogout.bind(this));
 
                 document.getElementById('shareBtn').addEventListener('click', () => this.openShareModal());
-                document.getElementById('generateHubBtn').addEventListener('click', () => this.openHubGenerator());
-                document.getElementById('sideGeneratePill')?.addEventListener('click', () => this.openHubGenerator());
+                document.getElementById('morphLightningBtn').addEventListener('click', () => this.openHubGenerator());
                 document.getElementById('openMorphSettingsBtn')?.addEventListener('click', () => this.openMorphSettingsModal());
                 document.getElementById('saveMorphSettingsBtn')?.addEventListener('click', () => this.saveMorphSettings());
                 document.getElementById('soundToggleBtn').addEventListener('click', () => this.toggleSound());
@@ -7454,7 +7453,7 @@ const coords = { x: x, y: y, z: z };
 
         document.addEventListener('DOMContentLoaded', () => VoxelApp.init());
     </script>
-    <button id="sideGeneratePill" class="vs-nav-pill vs-pill-left" type="button"><span class="vs-arrow">⚡</span><span class="vs-text">Morph</span></button>
+    <a id="sideToHubPill" href="https://hub.voxelshaper.com" class="vs-nav-pill vs-pill-left" onclick="trackEvent('hub_open', { source: 'editor_pill_to_hub' })"><span class="vs-arrow">←</span><span class="vs-text">To Hub</span></a>
 
 
 <style>
