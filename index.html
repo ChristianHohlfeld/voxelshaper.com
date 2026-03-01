@@ -564,16 +564,42 @@
             z-index: 59;
         }
 
-        #desktop-sound-overlay {
+        #desktop-overlay-controls,
+        #desktop-undo-redo-overlay,
+        #desktop-canvas-color-picker-wrap {
             position: fixed;
-            right: 14px;
-            bottom: 16px;
+            top: calc(env(safe-area-inset-top) + 104px);
             z-index: 59;
+            pointer-events: auto;
             display: none;
+        }
+        #desktop-overlay-controls { right: 176px; }
+        #desktop-undo-redo-overlay { right: 96px; }
+        #desktop-canvas-color-picker-wrap {
+            right: 20px;
+            width: 2.8rem;
+            height: 2.8rem;
+            border-radius: 9999px;
+            border: 2px solid rgba(255, 255, 255, 0.62);
+            background: rgba(17, 24, 39, 0.92);
+            box-shadow: 0 8px 20px rgba(0, 0, 0, 0.42);
+            overflow: hidden;
+        }
+        #desktop-canvas-color-picker {
+            position: absolute;
+            inset: 0;
+            width: 100%;
+            height: 100%;
+            border: 0;
+            border-radius: 9999px;
+            opacity: 0.94;
+            cursor: pointer;
         }
 
         @media (min-width: 1025px) {
-            #desktop-sound-overlay { display: flex; }
+            #desktop-overlay-controls,
+            #desktop-undo-redo-overlay,
+            #desktop-canvas-color-picker-wrap { display: flex; }
         }
 
         #color-history-palette .color-swatch {
@@ -1894,6 +1920,19 @@
         <input type="file" id="imageFileInput" accept="image/*" class="hidden">
     </div>
 
+    <!-- DESKTOP OVERLAY CONTROLS (parity with mobile overlays) -->
+    <div id="desktop-overlay-controls" class="flex gap-2">
+        <button id="desktop-overlay-mode-toggle" class="btn btn-circle btn-ghost bg-base-200/80 backdrop-blur-sm shadow-lg" title="Cycle mode (Space)"><i class="fas fa-plus"></i></button>
+        <button id="desktop-overlay-brush-decrease" class="btn btn-circle btn-ghost bg-base-200/80 backdrop-blur-sm shadow-lg" title="Brush -"><i class="fas fa-minus"></i></button>
+        <button id="desktop-overlay-brush-increase" class="btn btn-circle btn-ghost bg-base-200/80 backdrop-blur-sm shadow-lg" title="Brush +"><i class="fas fa-plus"></i></button>
+    </div>
+    <div id="desktop-undo-redo-overlay" class="flex gap-2">
+        <button id="desktop-overlay-undo" class="btn btn-circle btn-ghost bg-base-200/80 backdrop-blur-sm shadow-lg" title="Undo"><i class="fas fa-undo"></i></button>
+        <button id="desktop-overlay-redo" class="btn btn-circle btn-ghost bg-base-200/80 backdrop-blur-sm shadow-lg" title="Redo"><i class="fas fa-redo"></i></button>
+    </div>
+    <div id="desktop-canvas-color-picker-wrap" aria-label="Pick brush color on canvas (desktop)">
+        <input type="color" id="desktop-canvas-color-picker" value="#FFFFFF" aria-label="Pick color on canvas desktop">
+    </div>
 
     <!-- MOBILE UI CONTAINER -->
     <div id="mobile-ui-container" style="display: none;">
@@ -3918,11 +3957,16 @@
                 };
                 bindHistoryButton('mobile-overlay-undo', 'undo');
                 bindHistoryButton('mobile-overlay-redo', 'redo');
+                bindHistoryButton('desktop-overlay-undo', 'undo');
+                bindHistoryButton('desktop-overlay-redo', 'redo');
                 bindHistoryButton('undoBtn', 'undo');
                 bindHistoryButton('redoBtn', 'redo');
                 document.getElementById('mobile-mode-toggle').addEventListener('click', () => this.cycleMode());
+                document.getElementById('desktop-overlay-mode-toggle')?.addEventListener('click', () => this.cycleMode());
                 document.getElementById('mobile-quick-brush-decrease').addEventListener('click', () => this.setBrushSize(this.brushSize - 1));
                 document.getElementById('mobile-quick-brush-increase').addEventListener('click', () => this.setBrushSize(this.brushSize + 1));
+                document.getElementById('desktop-overlay-brush-decrease')?.addEventListener('click', () => this.setBrushSize(this.brushSize - 1));
+                document.getElementById('desktop-overlay-brush-increase')?.addEventListener('click', () => this.setBrushSize(this.brushSize + 1));
                 document.getElementById('deleteHintGrowBtn')?.addEventListener('click', () => { this.setBrushSize(3); this.hideDeleteBrushHint(); });
                 document.getElementById('deleteHintDontShowBtn')?.addEventListener('click', () => {
                     this.deleteBrushHintDisabled = true;
@@ -3935,6 +3979,7 @@
                 document.getElementById('mobile-selection-lock-toggle').addEventListener('click', () => this.toggleSelectionLock());
                 document.getElementById('mobile-color-picker').addEventListener('input', (e) => this.setColor(e.target.value));
                 document.getElementById('mobile-canvas-color-picker').addEventListener('input', (e) => this.setColor(e.target.value));
+                document.getElementById('desktop-canvas-color-picker')?.addEventListener('input', (e) => this.setColor(e.target.value));
                 document.getElementById('mobile-color-picker-visible').addEventListener('input', (e) => this.setColor(e.target.value));
                 document.getElementById('mobile-block-type-toggle')?.addEventListener('click', () => this.toggleBlockType());
                 document.getElementById('mobile-upload').addEventListener('click', (e) => {
@@ -7108,6 +7153,8 @@ const coords = { x: x, y: y, z: z };
                     if (mobileColorPicker) mobileColorPicker.value = this.currentColor;
                     const mobileCanvasColorPicker = document.getElementById('mobile-canvas-color-picker');
                     if (mobileCanvasColorPicker) mobileCanvasColorPicker.value = this.currentColor;
+                    const desktopCanvasColorPicker = document.getElementById('desktop-canvas-color-picker');
+                    if (desktopCanvasColorPicker) desktopCanvasColorPicker.value = this.currentColor;
                     const mobileVisibleColor = document.getElementById('mobile-color-picker-visible');
                     if (mobileVisibleColor) mobileVisibleColor.value = this.currentColor;
                     document.getElementById('mobile-grid-size-slider').value = this.GRID;
