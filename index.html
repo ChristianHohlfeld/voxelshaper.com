@@ -5330,8 +5330,12 @@
             },
 
             handleTapInteraction: function (event) {
+                const clientX = event?.clientX ?? this.mouseState.lastX ?? this.mouseState.downX;
+                const clientY = event?.clientY ?? this.mouseState.lastY ?? this.mouseState.downY;
+                if (!Number.isFinite(clientX) || !Number.isFinite(clientY)) return;
+
                 if (this.currentMode === 'SELECT') {
-                    const target = this.getFaceTarget(event.clientX, event.clientY);
+                    const target = this.getFaceTarget(clientX, clientY);
                     // Tap should ONLY affect selection — no extrusion on tap.
                     if (target) {
                         this.handleFaceSelection(event);
@@ -5340,13 +5344,13 @@
                 }
 
                 // Non-select modes keep their single-tap modify behavior:
-                const targetInfo = this.getRayTargetInfo(this.mouseState.downX, this.mouseState.downY);
+                const targetInfo = this.getRayTargetInfo(clientX, clientY);
                 if (targetInfo) {
                     this.modifyVoxel(targetInfo.x, targetInfo.y, targetInfo.z, targetInfo.normal);
                     // Desktop visual feedback (mobile already has long-press haptic/visual feedback)
                     if (!this.isMobile) {
                         const fxColor = this.currentMode === 'DELETE' ? 'rgba(255, 80, 80, 0.85)' : (this.currentColor || '#ffffff');
-                        this.fallbackHaptic(event.clientX, event.clientY, fxColor);
+                        this.fallbackHaptic(clientX, clientY, fxColor);
                     }
                 }
             },
@@ -7272,7 +7276,18 @@ setGridSize: function (newSize) {
 const allMeshes = [...this.originalVoxelsGroup.children, this.groundPlaneMesh].filter(m => m !== null);
                 if (allMeshes.length === 0) return null;
                 const intersects = raycaster.intersectObjects(allMeshes, false);
-                let hit = intersects[0] || null;
+                const skipGroundPlane = (this.cam?.position?.y ?? 0) < -0.25 && raycaster.ray.direction.y > 0.01;
+                let hit = null;
+                for (const candidate of intersects) {
+                    if (skipGroundPlane && candidate.object === this.groundPlaneMesh) continue;
+                    hit = candidate;
+                    break;
+                }
+
+                if (!hit && skipGroundPlane) {
+                    hit = intersects.find(c => c.object === this.groundPlaneMesh) || null;
+                }
+
                 if (!hit) {
                     const p = this._rayPlaneHit;
                     if (raycaster.ray.intersectPlane(this._rayPlaneY0, p)) {
