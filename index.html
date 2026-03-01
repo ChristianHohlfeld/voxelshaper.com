@@ -7062,8 +7062,8 @@
                 const raycaster = new THREE.Raycaster();
                 raycaster.setFromCamera(mouse, this.cam);
 
-                // Use only the original blocky meshes for face detection.
-                const allMeshes = [...this.originalVoxelsGroup.children, this.groundPlaneMesh].filter(m => m && m.visible);
+                // Der Boden soll erkannt werden, auch wenn er für das Auge unsichtbar ist
+                const allMeshes = [...this.originalVoxelsGroup.children, this.groundPlaneMesh].filter(m => m && (m.visible || m === this.groundPlaneMesh));
 
                 if (allMeshes.length === 0) return null;
                 const intersects = raycaster.intersectObjects(allMeshes, false);
@@ -7382,6 +7382,7 @@
                 if (this.currentMode === 'SELECT' || !targetInfo) return;
                 const { x, y, z, normal } = targetInfo;
                 const coords = { x, y, z };
+                this.previewVoxel.position.set(x * this.VS + 0.5, y * this.VS + 0.5, z * this.VS + 0.5);
                 const targetKey = this.key(x, y, z);
                 const voxelExists = this.voxels.has(targetKey);
                 if (this.currentMode === 'PAINT' && !voxelExists) return;
@@ -7995,7 +7996,7 @@
                 if (this.vacuumParticleAttr) {
                     const pos = this.vacuumParticleAttr.array;
                     const data = this._vData;
-                    const brushPos = this.previewBrush.position;
+                    const brushPos = this.previewVoxel.position;
                     let needsUpdate = false;
                     for (let i = 0; i < pos.length / 3; i++) {
                         const lifeIdx = i * 4 + 3;
@@ -8772,7 +8773,7 @@
                 const filter = ctx.createBiquadFilter();
 
                 filter.type = 'lowpass';
-                filter.frequency.value = 350; // Muffled atmosphere
+                filter.frequency.value = 200;
                 filter.Q.value = 1;
 
                 gain.gain.value = 0.0001;
@@ -8795,13 +8796,22 @@
                 if (!this._deleteChargeGain || !this.audioCtx) return;
                 const t = this.audioCtx.currentTime;
 
-                // Vacuum ramp up: filter opens and volume increases
-                const filterF = 350 + accel * 900;
-                const volume = 0.0001 + accel * 0.09;
+                // Frequenz-Ramp (Tieferer Pitch)
+                const filterF = 200 + accel * 400;
 
-                if (this._deleteChargeFilter) this._deleteChargeFilter.frequency.setTargetAtTime(filterF, t, 0.015);
-                this._deleteChargeGain.gain.setTargetAtTime(volume, t, 0.015);
-                if (this._deleteChargeOsc) this._deleteChargeOsc.frequency.setTargetAtTime(45 + accel * 10, t, 0.03);
+                // LAUTSTÄRKE-DEKLARATION (Hier lag der Fehler)
+                const targetVolume = 0.0001 + accel * 0.05;
+
+                if (this._deleteChargeFilter) {
+                    this._deleteChargeFilter.frequency.setTargetAtTime(filterF, t, 0.015);
+                }
+
+                // Nutze hier die oben deklarierte Variable
+                this._deleteChargeGain.gain.setTargetAtTime(targetVolume, t, 0.015);
+
+                if (this._deleteChargeOsc) {
+                    this._deleteChargeOsc.frequency.setTargetAtTime(45 + accel * 10, t, 0.03);
+                }
             },
 
             stopDeleteChargeSound: function () {
