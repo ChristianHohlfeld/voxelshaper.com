@@ -5383,6 +5383,25 @@ const coords = { x: x, y: y, z: z };
                 this.commitCurrentStroke();
             },
 
+            continueHeldDeleteTick: function () {
+                if (!this.isPointerDown) return;
+                if (this.currentMode !== 'DELETE') return;
+                if (!this.mouseState.isModifying) return;
+                if (this.mouseState.isRotating || this.mouseState.isPanning || this.mouseState.isMoving || this.mouseState.isExtruding) return;
+
+                const x = this.mouseState.lastX || this.mouseState.downX;
+                const y = this.mouseState.lastY || this.mouseState.downY;
+                if (!Number.isFinite(x) || !Number.isFinite(y)) return;
+
+                const targetInfo = this.getRayTargetInfo(x, y);
+                if (!targetInfo) return;
+
+                const coords = { x: targetInfo.x, y: targetInfo.y, z: targetInfo.z };
+                this.mouseState.lastActionCoords = coords;
+                this.mouseState.lastActionNormal = targetInfo.normal;
+                this.drawVoxelLinePaced(coords, coords, targetInfo.normal);
+            },
+
             drawVoxelLine: function (start, end, normal) {
                 if (this.currentMode === 'SELECT') return;
 
@@ -6681,6 +6700,7 @@ const coords = { x: x, y: y, z: z };
                     if (this.keyboard['e']) this.cam.position.y += strafeYSpeed;
                     if (this.keyboard['q']) this.cam.position.y -= strafeYSpeed;
                 }
+                this.continueHeldDeleteTick();
                 this.ren.render(this.scene, this.cam);
             },
 
