@@ -2910,7 +2910,7 @@
             cvs: null, containerDiv: null,
             currentColor: '#ffffff',
             currentBlockType: (localStorage.getItem('voxelBlockType') || 'solid'),
-            deleteBrushHintDisabled: localStorage.getItem('deleteBrushHintDisabled') === 'true',
+            deleteBrushHintDisabled: true,
             GRID: 10,
             flySpeed: 0.1,
             currentMode: 'FREE',
@@ -4599,9 +4599,7 @@
                 }
 
                 // Non-blocking delete hint after an actual drag-delete cycle with 1x1 brush.
-                if (this.currentMode === 'DELETE' && this.brushSize === 1 && this.mouseState.isDragging && (this.mouseState.deleteCycleDeletes || 0) > 0) {
-                    this.showDeleteBrushHint();
-                }
+                // Hint removed by design: progressive delete ramp is primary UX now.
 
                 if (document.pointerLockElement === this.cvs) document.exitPointerLock();
 
@@ -5332,9 +5330,7 @@ const coords = { x: x, y: y, z: z };
                             if (v && v.before && !v.after) deletedNow++;
                         }
                         this.mouseState.deleteCycleDeletes = (this.mouseState.deleteCycleDeletes || 0) + deletedNow;
-                        if (this.isPointerDown && this.mouseState.isDragging && this.mouseState.deleteCycleDeletes >= 2) {
-                            this.showDeleteBrushHint();
-                        }
+                        // no mid-drag hint; speed ramp handles guidance intrinsically.
                     }
                 }
                 this.currentStroke = new Map();
@@ -5350,8 +5346,8 @@ const coords = { x: x, y: y, z: z };
                     // - time-based acceleration
                     // - slightly boosted by actual delete count
                     // - guarded: no acceleration until real deletes happened
-                    const baseGap = 34;
-                    const fastGap = 12;
+                    const baseGap = 30;
+                    const fastGap = 10;
                     const cycleStart = this.mouseState.deleteCycleStartAt || now;
                     const elapsed = Math.max(0, now - cycleStart);
                     const deleted = this.mouseState.deleteCycleDeletes || 0;
@@ -5359,9 +5355,9 @@ const coords = { x: x, y: y, z: z };
                     if (deleted <= 0) {
                         minGap = baseGap; // guard: no blind speedup
                     } else {
-                        const t = Math.min(1, elapsed / 1400); // reach near-max in ~1.4s
-                        const timeEase = 1 - Math.pow(1 - t, 2.2); // smooth progressive curve
-                        const qtyBoost = Math.min(0.22, deleted * 0.02); // mild quantity influence
+                        const t = Math.min(1, elapsed / 1000); // reaches fast zone in ~1.0s
+                        const timeEase = 1 - Math.pow(1 - t, 2.0); // smooth ramp
+                        const qtyBoost = Math.min(0.18, deleted * 0.015); // mild extra boost from real deletes
                         const accel = Math.min(1, timeEase + qtyBoost);
                         minGap = baseGap - (baseGap - fastGap) * accel;
                     }
@@ -6354,15 +6350,7 @@ const coords = { x: x, y: y, z: z };
             },
 
             showDeleteBrushHint: function () {
-                if (this.deleteBrushHintDisabled) return;
-                const now = Date.now();
-                if (this._deleteHintUntil && now < this._deleteHintUntil) return;
-                const el = document.getElementById('deleteBrushHint');
-                if (!el) return;
-                el.classList.add('show');
-                clearTimeout(this._deleteHintTimer);
-                this._deleteHintTimer = setTimeout(() => this.hideDeleteBrushHint(), 5200);
-                this._deleteHintUntil = now + 3500;
+                // intentionally disabled (UX decision: rely on speed ramp, no hint)
             },
 
             hideDeleteBrushHint: function () {
