@@ -1793,6 +1793,7 @@
 
             <div class="controls-group">
                 <input type="color" id="color-picker-input" value="#FFFFFF" class="w-10 h-10 rounded-lg border border-base-300 cursor-pointer" title="Color Picker">
+                <button id="blockTypeToggle" class="btn btn-xs btn-outline ml-1" title="Toggle Solid/Glass">Solid</button>
                 <div id="color-history-palette" class="grid gap-1 ml-1" title="Tap to select color, double tap to edit"></div>
             </div>
 
@@ -1973,6 +1974,7 @@
             <button class="btn btn-ghost rounded-full" id="mobile-select-toggle" aria-label="Toggle Extrude mode">
                 <i class="fas fa-mouse-pointer"></i>
             </button>
+            <button class="btn btn-ghost rounded-full" id="mobile-block-type-toggle" aria-label="Toggle Solid/Glass" title="Solid/Glass">S</button>
             <button class="btn btn-ghost rounded-full" id="mobile-help-tutorial" aria-label="Show onboarding">
                 <i class="fas fa-question"></i>
             </button>
@@ -2881,6 +2883,7 @@
             groundPlaneMesh: null,
             cvs: null, containerDiv: null,
             currentColor: '#ffffff',
+            currentBlockType: (localStorage.getItem('voxelBlockType') || 'solid'),
             GRID: 10,
             flySpeed: 0.1,
             currentMode: 'FREE',
@@ -3030,17 +3033,35 @@
                 return mat;
             },
 
-            getMaterial: function (color) {
-                if (!this.materialCache.has(color)) {
+            getMaterial: function (color, blockType = 'solid') {
+                const key = `${String(color).toUpperCase()}|${blockType}`;
+                if (!this.materialCache.has(key)) {
+                    const isGlass = blockType === 'glass';
                     const mat = new THREE.MeshStandardMaterial({
                         color: color,
-                        roughness: 0.72,
-                        metalness: 0.12
+                        roughness: isGlass ? 0.14 : 0.72,
+                        metalness: isGlass ? 0.18 : 0.12,
+                        transparent: isGlass,
+                        opacity: isGlass ? 0.48 : 1,
+                        depthWrite: !isGlass
                     });
+                    if (isGlass) {
+                        mat.envMapIntensity = 1.0;
+                        mat.polygonOffset = true;
+                        mat.polygonOffsetFactor = -0.2;
+                        mat.polygonOffsetUnits = -1;
+                    }
                     this.applySeamShaderToMaterial(mat);
-                    this.materialCache.set(color, mat);
+                    this.materialCache.set(key, mat);
                 }
-                return this.materialCache.get(color);
+                return this.materialCache.get(key);
+            },
+
+            toggleBlockType: function () {
+                this.currentBlockType = this.currentBlockType === 'glass' ? 'solid' : 'glass';
+                localStorage.setItem('voxelBlockType', this.currentBlockType);
+                this.updateAllControlInputs();
+                this.showToast('Block Type', this.currentBlockType === 'glass' ? 'Glass' : 'Solid', 'info', 900);
             },
             clearSelection: function () {
                 if (!this.selectedFaces || this.selectedFaces.size === 0) return;
@@ -3638,6 +3659,7 @@
                 document.getElementById('fly-speed-setting').addEventListener('input', (e) => this.setFlySpeed(parseFloat(e.target.value)));
                 document.getElementById('mobile-fly-speed-setting').addEventListener('input', (e) => this.setFlySpeed(parseFloat(e.target.value)));
                 document.getElementById('color-picker-input').addEventListener('input', (e) => this.setColor(e.target.value));
+                document.getElementById('blockTypeToggle')?.addEventListener('click', () => this.toggleBlockType());
                 document.getElementById('modeToggle').addEventListener('click', () => this.cycleMode());
                 document.getElementById('selectModeToggle').addEventListener('click', () => this.toggleSelectMode());
                 document.getElementById('onboardingModeAdd').addEventListener('click', () => this.setModeExplicit('FREE', 'onboarding')); 
@@ -3768,6 +3790,7 @@
                 document.getElementById('mobile-color-picker').addEventListener('input', (e) => this.setColor(e.target.value));
                 document.getElementById('mobile-canvas-color-picker').addEventListener('input', (e) => this.setColor(e.target.value));
                 document.getElementById('mobile-color-picker-visible').addEventListener('input', (e) => this.setColor(e.target.value));
+                document.getElementById('mobile-block-type-toggle')?.addEventListener('click', () => this.toggleBlockType());
                 document.getElementById('mobile-upload').addEventListener('click', (e) => {
                     e.preventDefault();
                     document.getElementById('uploadProjectModal').showModal();
@@ -4693,7 +4716,7 @@
                     activeDrawingLevel: { ...this.activeDrawingLevel },
                     voxels: Array.from(this.voxels.entries()).map(([k, v]) => {
                         const [x, y, z] = this.parseKey(k);
-                        return { x, y, z, color: v.color };
+                        return { x, y, z, color: v.color, glass: !!v.glass };
                     }),
                     templateImageData: this.templateImageData,
                     templateImagePinnedY: this.templateImagePinnedY,
@@ -5166,7 +5189,7 @@ const coords = { x: x, y: y, z: z };
                 if (this.currentStroke && !this.currentStroke.has(k)) {
                     const originalVoxel = this.voxels.get(k);
                     this.currentStroke.set(k, {
-                        before: originalVoxel ? { color: originalVoxel.color } : null
+                        before: originalVoxel ? { color: originalVoxel.color, glass: !!originalVoxel.glass } : null
                     });
                 }
 
@@ -5181,9 +5204,12 @@ const coords = { x: x, y: y, z: z };
                         if (existingVoxel) {
                             // Paint sound only when painting an actual cube (also for same-color repaint).
                             this.playVoxelBlub('PAINT');
-                            if (existingVoxel.color !== this.currentColor) {
-                                existingVoxel.mesh.material = this.getMaterial(this.currentColor);
+                            const targetIsGlass = this.currentBlockType === 'glass';
+                            if (existingVoxel.color !== this.currentColor || !!existingVoxel.glass !== targetIsGlass) {
+                                existingVoxel.mesh.material = this.getMaterial(this.currentColor, this.currentBlockType);
                                 this.voxels.get(k).color = this.currentColor;
+                                this.voxels.get(k).glass = targetIsGlass;
+                                existingVoxel.mesh.renderOrder = targetIsGlass ? 2 : 1;
                                 modified = true;
                                 this.addColorToHistory(this.currentColor);
                             }
@@ -5199,12 +5225,13 @@ const coords = { x: x, y: y, z: z };
                     case 'FREE':
                     case 'ADD':
                         if (!existingVoxel) {
-                            const mesh = new THREE.Mesh(this.sharedBoxGeometry, this.getMaterial(this.currentColor));
+                            const mesh = new THREE.Mesh(this.sharedBoxGeometry, this.getMaterial(this.currentColor, this.currentBlockType));
                             mesh.position.set(x * this.VS + 0.5, y * this.VS + 0.5, z * this.VS + 0.5);
                             mesh.castShadow = !this.lowPerfMode && this.voxels.size < 3500;
                             mesh.receiveShadow = !this.lowPerfMode && this.voxels.size < 3500;
                             this.originalVoxelsGroup.add(mesh);
-                            this.voxels.set(k, { color: this.currentColor, mesh: mesh });
+                            mesh.renderOrder = this.currentBlockType === 'glass' ? 2 : 1;
+                            this.voxels.set(k, { color: this.currentColor, glass: this.currentBlockType === 'glass', mesh: mesh });
                             modified = true;
                             this.addColorToHistory(this.currentColor);
                         }
@@ -5226,7 +5253,7 @@ const coords = { x: x, y: y, z: z };
                 if (this.currentStroke && modified) {
                     const finalVoxel = this.voxels.get(k);
                     const historyEntry = this.currentStroke.get(k);
-                    historyEntry.after = finalVoxel ? { color: finalVoxel.color } : null;
+                    historyEntry.after = finalVoxel ? { color: finalVoxel.color, glass: !!finalVoxel.glass } : null;
 
                 }
             },
@@ -5237,7 +5264,9 @@ const coords = { x: x, y: y, z: z };
                 for (const [key, value] of this.currentStroke.entries()) {
                     const beforeColor = value.before ? value.before.color : null;
                     const afterColor = value.after ? value.after.color : null;
-                    if (beforeColor !== afterColor) {
+                    const beforeGlass = value.before ? !!value.before.glass : false;
+                    const afterGlass = value.after ? !!value.after.glass : false;
+                    if (beforeColor !== afterColor || beforeGlass !== afterGlass) {
                         actualChanges.set(key, value);
                     }
                 }
@@ -6196,7 +6225,7 @@ const coords = { x: x, y: y, z: z };
                             activeDrawingLevel: this.activeDrawingLevel,
                             voxels: Array.from(this.voxels.entries()).map(([k, v]) => {
                                 const [x, y, z] = this.parseKey(k);
-                                return { x, y, z, color: v.color };
+                                return { x, y, z, color: v.color, glass: !!v.glass };
                             }),
                             templateImageData: this.templateImageData,
                             templateImagePinnedY: this.templateImagePinnedY,
@@ -6282,7 +6311,7 @@ const coords = { x: x, y: y, z: z };
                     activeDrawingLevel: this.activeDrawingLevel,
                     voxels: Array.from(this.voxels.entries()).map(([k, v]) => {
                         const [x, y, z] = this.parseKey(k);
-                        return { x, y, z, color: v.color };
+                        return { x, y, z, color: v.color, glass: !!v.glass };
                     }),
                     templateImageData: this.templateImageData,
                     templateImagePinnedY: this.templateImagePinnedY,
@@ -6332,7 +6361,8 @@ const coords = { x: x, y: y, z: z };
                             const z = Number(v.z);
                             if (!Number.isFinite(x) || !Number.isFinite(y) || !Number.isFinite(z)) return;
                             const color = (v.color || '#FFFFFF').toUpperCase();
-                            raw.push({ x, y, z, color });
+                            const glass = !!v.glass;
+                            raw.push({ x, y, z, color, glass });
                             if (x < minX) minX = x; if (y < minY) minY = y; if (z < minZ) minZ = z;
                             if (x > maxX) maxX = x; if (y > maxY) maxY = y; if (z > maxZ) maxZ = z;
                         });
@@ -6345,7 +6375,7 @@ const coords = { x: x, y: y, z: z };
                         const ny = v.y - shiftY;
                         const nz = v.z - shiftZ;
                         const k = this.key(nx, ny, nz);
-                        this.voxels.set(k, { color: v.color });
+                        this.voxels.set(k, { color: v.color, glass: !!v.glass });
                         this.addColorToHistory(v.color);
                     });
                     const extentX = Number.isFinite(maxX) ? (maxX - shiftX + 1) : this.GRID_DEFAULT;
@@ -6612,12 +6642,13 @@ const coords = { x: x, y: y, z: z };
 
                     const mesh = new THREE.Mesh(
                         this.sharedBoxGeometry,
-                        this.getMaterial(voxelData.color)
+                        this.getMaterial(voxelData.color, voxelData.glass ? 'glass' : 'solid')
                     );
 
                     mesh.position.set(x * this.VS + 0.5, y * this.VS + 0.5, z * this.VS + 0.5);
-                    mesh.castShadow = true;
-                    mesh.receiveShadow = true;
+                    mesh.castShadow = !this.lowPerfMode && this.voxels.size < 3500;
+                    mesh.receiveShadow = !this.lowPerfMode && this.voxels.size < 3500;
+                    mesh.renderOrder = voxelData.glass ? 2 : 1;
                     mesh.userData.isVoxel = true;
                     mesh.userData.isFoundation = false;
                     this.originalVoxelsGroup.add(mesh);
@@ -6664,15 +6695,18 @@ const coords = { x: x, y: y, z: z };
                             } else {
                                 const existingVoxel = this.voxels.get(key);
                                 if (existingVoxel) {
-                                    existingVoxel.mesh.material = this.getMaterial(change.before.color);
+                                    existingVoxel.mesh.material = this.getMaterial(change.before.color, change.before.glass ? 'glass' : 'solid');
                                     existingVoxel.color = change.before.color;
+                                    existingVoxel.glass = !!change.before.glass;
+                                    existingVoxel.mesh.renderOrder = existingVoxel.glass ? 2 : 1;
                                 } else {
-                                    const voxelMesh = new THREE.Mesh(this.sharedBoxGeometry, this.getMaterial(change.before.color));
+                                    const voxelMesh = new THREE.Mesh(this.sharedBoxGeometry, this.getMaterial(change.before.color, change.before.glass ? 'glass' : 'solid'));
                                     voxelMesh.position.set(x * this.VS + 0.5, y * this.VS + 0.5, z * this.VS + 0.5);
                                     voxelMesh.castShadow = !this.lowPerfMode && this.voxels.size < 3500;
                                     voxelMesh.receiveShadow = !this.lowPerfMode && this.voxels.size < 3500;
+                                    voxelMesh.renderOrder = change.before.glass ? 2 : 1;
                                     this.originalVoxelsGroup.add(voxelMesh);
-                                    this.voxels.set(key, { color: change.before.color, mesh: voxelMesh });
+                                    this.voxels.set(key, { color: change.before.color, glass: !!change.before.glass, mesh: voxelMesh });
                                 }
                             }
                         });
@@ -6715,15 +6749,18 @@ const coords = { x: x, y: y, z: z };
                             } else {
                                 const existingVoxel = this.voxels.get(key);
                                 if (existingVoxel) {
-                                    existingVoxel.mesh.material = this.getMaterial(change.after.color);
+                                    existingVoxel.mesh.material = this.getMaterial(change.after.color, change.after.glass ? 'glass' : 'solid');
                                     existingVoxel.color = change.after.color;
+                                    existingVoxel.glass = !!change.after.glass;
+                                    existingVoxel.mesh.renderOrder = existingVoxel.glass ? 2 : 1;
                                 } else {
-                                    const voxelMesh = new THREE.Mesh(this.sharedBoxGeometry, this.getMaterial(change.after.color));
+                                    const voxelMesh = new THREE.Mesh(this.sharedBoxGeometry, this.getMaterial(change.after.color, change.after.glass ? 'glass' : 'solid'));
                                     voxelMesh.position.set(x * this.VS + 0.5, y * this.VS + 0.5, z * this.VS + 0.5);
                                     voxelMesh.castShadow = !this.lowPerfMode && this.voxels.size < 3500;
                                     voxelMesh.receiveShadow = !this.lowPerfMode && this.voxels.size < 3500;
+                                    voxelMesh.renderOrder = change.after.glass ? 2 : 1;
                                     this.originalVoxelsGroup.add(voxelMesh);
-                                    this.voxels.set(key, { color: change.after.color, mesh: voxelMesh });
+                                    this.voxels.set(key, { color: change.after.color, glass: !!change.after.glass, mesh: voxelMesh });
                                 }
                             }
                         });
@@ -6798,6 +6835,7 @@ const coords = { x: x, y: y, z: z };
                 this.controls.invertStrafeY = false;
                 this.GRID = this.GRID_DEFAULT;
                 this.currentColor = '#ffffff';
+                this.currentBlockType = 'solid';
                 this.flySpeed = 0.1;
                 this.lengthUnit = 'mm';
                 this.currentDrawingAxis = 'y';
@@ -6809,6 +6847,7 @@ const coords = { x: x, y: y, z: z };
                 Object.keys(this.controls).forEach(key => localStorage.setItem(key, this.controls[key]));
                 localStorage.setItem('voxelEditorGridSize', this.GRID);
                 localStorage.setItem('voxelEditorColor', this.currentColor);
+                localStorage.setItem('voxelBlockType', this.currentBlockType);
                 localStorage.setItem('voxelEditorFlySpeed', this.flySpeed);
                 localStorage.setItem('voxelLengthUnit', this.lengthUnit);
                 localStorage.setItem('currentDrawingAxis', this.currentDrawingAxis);
@@ -6829,6 +6868,10 @@ const coords = { x: x, y: y, z: z };
                 document.getElementById('grid-size-slider').value = this.GRID;
                 document.getElementById('grid-size-display').textContent = `${this.GRID}³`;
                 document.getElementById('color-picker-input').value = this.currentColor;
+                const bt = document.getElementById('blockTypeToggle');
+                if (bt) bt.textContent = this.currentBlockType === 'glass' ? 'Glass' : 'Solid';
+                const mbt = document.getElementById('mobile-block-type-toggle');
+                if (mbt) mbt.textContent = this.currentBlockType === 'glass' ? 'G' : 'S';
                 document.getElementById('brush-size-display').textContent = `${this.brushSize}x${this.brushSize}`;
                 this.updateSoundButtonUI();
 
@@ -7063,7 +7106,7 @@ const coords = { x: x, y: y, z: z };
                         activeDrawingLevel: this.activeDrawingLevel,
                         voxels: Array.from(this.voxels.entries()).map(([k, v]) => {
                             const [x, y, z] = this.parseKey(k);
-                            return { x, y, z, color: v.color };
+                            return { x, y, z, color: v.color, glass: !!v.glass };
                         }),
                         templateImageData: this.templateImageData,
                         templateImagePinnedY: this.templateImagePinnedY,
@@ -7376,3 +7419,4 @@ const coords = { x: x, y: y, z: z };
 </body>
 
 </html>
+
