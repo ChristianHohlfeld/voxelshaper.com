@@ -1,9 +1,8 @@
-<!DOCTYPE html>
 <html lang="en" data-theme="dark">
 
 <head>
 
-    <script async src="https://www.googletagmanager.com/gtag/js?id=G-DMNJKVCNBM"></script>
+    <script async="" src="https://www.googletagmanager.com/gtag/js?id=G-DMNJKVCNBM"></script>
     <script>
         const GA_MEASUREMENT_ID = 'G-DMNJKVCNBM';
         const ANALYTICS_LAST_SEEN_KEY = 'vs_analytics_last_seen_ts';
@@ -629,51 +628,44 @@
             z-index: 59;
         }
 
-        #desktop-overlay-controls,
-        #desktop-undo-redo-overlay,
-        #desktop-canvas-color-picker-wrap {
+        #desktop-bottom-right-container {
             position: fixed;
-            bottom: calc(env(safe-area-inset-bottom) + 20px);
-            z-index: 59;
-            pointer-events: auto;
+            bottom: calc(env(safe-area-inset-bottom) + 24px);
+            right: calc(env(safe-area-inset-right) + 24px);
+            z-index: 60;
             display: none;
+            align-items: flex-end;
+            /* Align bottoms perfectly */
+            gap: 12px;
+            pointer-events: none;
         }
 
-        #desktop-overlay-controls {
-            right: 176px;
-        }
-
-        #desktop-undo-redo-overlay {
-            right: 96px;
+        #desktop-bottom-right-container>* {
+            pointer-events: auto;
         }
 
         #desktop-canvas-color-picker-wrap {
-            right: 20px;
-            width: 2.8rem;
-            height: 2.8rem;
+            width: 3rem;
+            height: 3rem;
             border-radius: 9999px;
-            border: 2px solid rgba(255, 255, 255, 0.62);
-            background: rgba(17, 24, 39, 0.92);
-            box-shadow: 0 8px 20px rgba(0, 0, 0, 0.42);
+            border: 2px solid rgba(255, 255, 255, 0.4);
+            background: rgba(17, 24, 39, 0.9);
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
             overflow: hidden;
+            position: relative;
+            transition: transform 0.15s ease, border-color 0.15s;
+            display: flex;
+            align-items: center;
+            justify-content: center;
         }
 
-        #desktop-canvas-color-picker {
-            position: absolute;
-            inset: 0;
-            width: 100%;
-            height: 100%;
-            border: 0;
-            border-radius: 9999px;
-            opacity: 0.94;
-            cursor: pointer;
+        #desktop-canvas-color-picker-wrap:hover {
+            transform: scale(1.05);
+            border-color: rgba(255, 255, 255, 0.8);
         }
 
         @media (min-width: 768px) {
-
-            #desktop-overlay-controls,
-            #desktop-undo-redo-overlay,
-            #desktop-canvas-color-picker-wrap {
+            #desktop-bottom-right-container {
                 display: flex;
             }
         }
@@ -1797,13 +1789,824 @@
             }
         }
     </style>
+    <style>
+        *,
+        ::before,
+        ::after {
+            --tw-border-spacing-x: 0;
+            --tw-border-spacing-y: 0;
+            --tw-translate-x: 0;
+            --tw-translate-y: 0;
+            --tw-rotate: 0;
+            --tw-skew-x: 0;
+            --tw-skew-y: 0;
+            --tw-scale-x: 1;
+            --tw-scale-y: 1;
+            --tw-pan-x: ;
+            --tw-pan-y: ;
+            --tw-pinch-zoom: ;
+            --tw-scroll-snap-strictness: proximity;
+            --tw-gradient-from-position: ;
+            --tw-gradient-via-position: ;
+            --tw-gradient-to-position: ;
+            --tw-ordinal: ;
+            --tw-slashed-zero: ;
+            --tw-numeric-figure: ;
+            --tw-numeric-spacing: ;
+            --tw-numeric-fraction: ;
+            --tw-ring-inset: ;
+            --tw-ring-offset-width: 0px;
+            --tw-ring-offset-color: #fff;
+            --tw-ring-color: rgb(59 130 246 / 0.5);
+            --tw-ring-offset-shadow: 0 0 #0000;
+            --tw-ring-shadow: 0 0 #0000;
+            --tw-shadow: 0 0 #0000;
+            --tw-shadow-colored: 0 0 #0000;
+            --tw-blur: ;
+            --tw-brightness: ;
+            --tw-contrast: ;
+            --tw-grayscale: ;
+            --tw-hue-rotate: ;
+            --tw-invert: ;
+            --tw-saturate: ;
+            --tw-sepia: ;
+            --tw-drop-shadow: ;
+            --tw-backdrop-blur: ;
+            --tw-backdrop-brightness: ;
+            --tw-backdrop-contrast: ;
+            --tw-backdrop-grayscale: ;
+            --tw-backdrop-hue-rotate: ;
+            --tw-backdrop-invert: ;
+            --tw-backdrop-opacity: ;
+            --tw-backdrop-saturate: ;
+            --tw-backdrop-sepia: ;
+            --tw-contain-size: ;
+            --tw-contain-layout: ;
+            --tw-contain-paint: ;
+            --tw-contain-style:
+        }
+
+        ::backdrop {
+            --tw-border-spacing-x: 0;
+            --tw-border-spacing-y: 0;
+            --tw-translate-x: 0;
+            --tw-translate-y: 0;
+            --tw-rotate: 0;
+            --tw-skew-x: 0;
+            --tw-skew-y: 0;
+            --tw-scale-x: 1;
+            --tw-scale-y: 1;
+            --tw-pan-x: ;
+            --tw-pan-y: ;
+            --tw-pinch-zoom: ;
+            --tw-scroll-snap-strictness: proximity;
+            --tw-gradient-from-position: ;
+            --tw-gradient-via-position: ;
+            --tw-gradient-to-position: ;
+            --tw-ordinal: ;
+            --tw-slashed-zero: ;
+            --tw-numeric-figure: ;
+            --tw-numeric-spacing: ;
+            --tw-numeric-fraction: ;
+            --tw-ring-inset: ;
+            --tw-ring-offset-width: 0px;
+            --tw-ring-offset-color: #fff;
+            --tw-ring-color: rgb(59 130 246 / 0.5);
+            --tw-ring-offset-shadow: 0 0 #0000;
+            --tw-ring-shadow: 0 0 #0000;
+            --tw-shadow: 0 0 #0000;
+            --tw-shadow-colored: 0 0 #0000;
+            --tw-blur: ;
+            --tw-brightness: ;
+            --tw-contrast: ;
+            --tw-grayscale: ;
+            --tw-hue-rotate: ;
+            --tw-invert: ;
+            --tw-saturate: ;
+            --tw-sepia: ;
+            --tw-drop-shadow: ;
+            --tw-backdrop-blur: ;
+            --tw-backdrop-brightness: ;
+            --tw-backdrop-contrast: ;
+            --tw-backdrop-grayscale: ;
+            --tw-backdrop-hue-rotate: ;
+            --tw-backdrop-invert: ;
+            --tw-backdrop-opacity: ;
+            --tw-backdrop-saturate: ;
+            --tw-backdrop-sepia: ;
+            --tw-contain-size: ;
+            --tw-contain-layout: ;
+            --tw-contain-paint: ;
+            --tw-contain-style:
+        }
+
+        /* ! tailwindcss v3.4.17 | MIT License | https://tailwindcss.com */
+        *,
+        ::after,
+        ::before {
+            box-sizing: border-box;
+            border-width: 0;
+            border-style: solid;
+            border-color: #e5e7eb
+        }
+
+        ::after,
+        ::before {
+            --tw-content: ''
+        }
+
+        :host,
+        html {
+            line-height: 1.5;
+            -webkit-text-size-adjust: 100%;
+            -moz-tab-size: 4;
+            tab-size: 4;
+            font-family: ui-sans-serif, system-ui, sans-serif, "Apple Color Emoji", "Segoe UI Emoji", "Segoe UI Symbol", "Noto Color Emoji";
+            font-feature-settings: normal;
+            font-variation-settings: normal;
+            -webkit-tap-highlight-color: transparent
+        }
+
+        body {
+            margin: 0;
+            line-height: inherit
+        }
+
+        hr {
+            height: 0;
+            color: inherit;
+            border-top-width: 1px
+        }
+
+        abbr:where([title]) {
+            -webkit-text-decoration: underline dotted;
+            text-decoration: underline dotted
+        }
+
+        h1,
+        h2,
+        h3,
+        h4,
+        h5,
+        h6 {
+            font-size: inherit;
+            font-weight: inherit
+        }
+
+        a {
+            color: inherit;
+            text-decoration: inherit
+        }
+
+        b,
+        strong {
+            font-weight: bolder
+        }
+
+        code,
+        kbd,
+        pre,
+        samp {
+            font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+            font-feature-settings: normal;
+            font-variation-settings: normal;
+            font-size: 1em
+        }
+
+        small {
+            font-size: 80%
+        }
+
+        sub,
+        sup {
+            font-size: 75%;
+            line-height: 0;
+            position: relative;
+            vertical-align: baseline
+        }
+
+        sub {
+            bottom: -.25em
+        }
+
+        sup {
+            top: -.5em
+        }
+
+        table {
+            text-indent: 0;
+            border-color: inherit;
+            border-collapse: collapse
+        }
+
+        button,
+        input,
+        optgroup,
+        select,
+        textarea {
+            font-family: inherit;
+            font-feature-settings: inherit;
+            font-variation-settings: inherit;
+            font-size: 100%;
+            font-weight: inherit;
+            line-height: inherit;
+            letter-spacing: inherit;
+            color: inherit;
+            margin: 0;
+            padding: 0
+        }
+
+        button,
+        select {
+            text-transform: none
+        }
+
+        button,
+        input:where([type=button]),
+        input:where([type=reset]),
+        input:where([type=submit]) {
+            -webkit-appearance: button;
+            background-color: transparent;
+            background-image: none
+        }
+
+        :-moz-focusring {
+            outline: auto
+        }
+
+        :-moz-ui-invalid {
+            box-shadow: none
+        }
+
+        progress {
+            vertical-align: baseline
+        }
+
+        ::-webkit-inner-spin-button,
+        ::-webkit-outer-spin-button {
+            height: auto
+        }
+
+        [type=search] {
+            -webkit-appearance: textfield;
+            outline-offset: -2px
+        }
+
+        ::-webkit-search-decoration {
+            -webkit-appearance: none
+        }
+
+        ::-webkit-file-upload-button {
+            -webkit-appearance: button;
+            font: inherit
+        }
+
+        summary {
+            display: list-item
+        }
+
+        blockquote,
+        dd,
+        dl,
+        figure,
+        h1,
+        h2,
+        h3,
+        h4,
+        h5,
+        h6,
+        hr,
+        p,
+        pre {
+            margin: 0
+        }
+
+        fieldset {
+            margin: 0;
+            padding: 0
+        }
+
+        legend {
+            padding: 0
+        }
+
+        menu,
+        ol,
+        ul {
+            list-style: none;
+            margin: 0;
+            padding: 0
+        }
+
+        dialog {
+            padding: 0
+        }
+
+        textarea {
+            resize: vertical
+        }
+
+        input::placeholder,
+        textarea::placeholder {
+            opacity: 1;
+            color: #9ca3af
+        }
+
+        [role=button],
+        button {
+            cursor: pointer
+        }
+
+        :disabled {
+            cursor: default
+        }
+
+        audio,
+        canvas,
+        embed,
+        iframe,
+        img,
+        object,
+        svg,
+        video {
+            display: block;
+            vertical-align: middle
+        }
+
+        img,
+        video {
+            max-width: 100%;
+            height: auto
+        }
+
+        [hidden]:where(:not([hidden=until-found])) {
+            display: none
+        }
+
+        .pointer-events-none {
+            pointer-events: none
+        }
+
+        .invisible {
+            visibility: hidden
+        }
+
+        .absolute {
+            position: absolute
+        }
+
+        .inset-0 {
+            inset: 0px
+        }
+
+        .bottom-24 {
+            bottom: 6rem
+        }
+
+        .left-0 {
+            left: 0px
+        }
+
+        .right-4 {
+            right: 1rem
+        }
+
+        .right-auto {
+            right: auto
+        }
+
+        .right-2 {
+            right: 0.5rem
+        }
+
+        .top-2 {
+            top: 0.5rem
+        }
+
+        .z-50 {
+            z-index: 50
+        }
+
+        .z-\[100\] {
+            z-index: 100
+        }
+
+        .z-\[15\] {
+            z-index: 15
+        }
+
+        .z-\[60\] {
+            z-index: 60
+        }
+
+        .mx-0 {
+            margin-left: 0px;
+            margin-right: 0px
+        }
+
+        .my-1 {
+            margin-top: 0.25rem;
+            margin-bottom: 0.25rem
+        }
+
+        .my-2 {
+            margin-top: 0.5rem;
+            margin-bottom: 0.5rem
+        }
+
+        .mb-4 {
+            margin-bottom: 1rem
+        }
+
+        .ml-1 {
+            margin-left: 0.25rem
+        }
+
+        .ml-2 {
+            margin-left: 0.5rem
+        }
+
+        .mr-2 {
+            margin-right: 0.5rem
+        }
+
+        .mt-1 {
+            margin-top: 0.25rem
+        }
+
+        .mb-2 {
+            margin-bottom: 0.5rem
+        }
+
+        .mr-1 {
+            margin-right: 0.25rem
+        }
+
+        .mt-2 {
+            margin-top: 0.5rem
+        }
+
+        .mt-3 {
+            margin-top: 0.75rem
+        }
+
+        .mt-4 {
+            margin-top: 1rem
+        }
+
+        .mt-6 {
+            margin-top: 1.5rem
+        }
+
+        .flex {
+            display: flex
+        }
+
+        .grid {
+            display: grid
+        }
+
+        .hidden {
+            display: none
+        }
+
+        .h-10 {
+            height: 2.5rem
+        }
+
+        .min-h-0 {
+            min-height: 0px
+        }
+
+        .min-h-screen {
+            min-height: 100vh
+        }
+
+        .w-10 {
+            width: 2.5rem
+        }
+
+        .w-52 {
+            width: 13rem
+        }
+
+        .w-6 {
+            width: 1.5rem
+        }
+
+        .w-60 {
+            width: 15rem
+        }
+
+        .w-\[4\.5ch\] {
+            width: 4.5ch
+        }
+
+        .w-full {
+            width: 100%
+        }
+
+        .w-8 {
+            width: 2rem
+        }
+
+        .max-w-\[100px\] {
+            max-width: 100px
+        }
+
+        .max-w-sm {
+            max-width: 24rem
+        }
+
+        .max-w-md {
+            max-width: 28rem
+        }
+
+        .flex-1 {
+            flex: 1 1 0%
+        }
+
+        .shrink-0 {
+            flex-shrink: 0
+        }
+
+        .flex-grow {
+            flex-grow: 1
+        }
+
+        .cursor-pointer {
+            cursor: pointer
+        }
+
+        .list-inside {
+            list-style-position: inside
+        }
+
+        .list-disc {
+            list-style-type: disc
+        }
+
+        .flex-row {
+            flex-direction: row
+        }
+
+        .flex-col {
+            flex-direction: column
+        }
+
+        .flex-wrap {
+            flex-wrap: wrap
+        }
+
+        .items-center {
+            align-items: center
+        }
+
+        .justify-start {
+            justify-content: flex-start
+        }
+
+        .justify-between {
+            justify-content: space-between
+        }
+
+        .justify-around {
+            justify-content: space-around
+        }
+
+        .gap-1 {
+            gap: 0.25rem
+        }
+
+        .gap-2 {
+            gap: 0.5rem
+        }
+
+        .gap-3 {
+            gap: 0.75rem
+        }
+
+        .gap-4 {
+            gap: 1rem
+        }
+
+        .space-y-2> :not([hidden])~ :not([hidden]) {
+            --tw-space-y-reverse: 0;
+            margin-top: calc(0.5rem * calc(1 - var(--tw-space-y-reverse)));
+            margin-bottom: calc(0.5rem * var(--tw-space-y-reverse))
+        }
+
+        .space-y-3> :not([hidden])~ :not([hidden]) {
+            --tw-space-y-reverse: 0;
+            margin-top: calc(0.75rem * calc(1 - var(--tw-space-y-reverse)));
+            margin-bottom: calc(0.75rem * var(--tw-space-y-reverse))
+        }
+
+        .space-y-4> :not([hidden])~ :not([hidden]) {
+            --tw-space-y-reverse: 0;
+            margin-top: calc(1rem * calc(1 - var(--tw-space-y-reverse)));
+            margin-bottom: calc(1rem * var(--tw-space-y-reverse))
+        }
+
+        .self-center {
+            align-self: center
+        }
+
+        .truncate {
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap
+        }
+
+        .rounded-full {
+            border-radius: 9999px
+        }
+
+        .rounded-lg {
+            border-radius: 0.5rem
+        }
+
+        .border {
+            border-width: 1px
+        }
+
+        .border-2 {
+            border-width: 2px
+        }
+
+        .border-l {
+            border-left-width: 1px
+        }
+
+        .border-t {
+            border-top-width: 1px
+        }
+
+        .bg-transparent {
+            background-color: transparent
+        }
+
+        .p-2 {
+            padding: 0.5rem
+        }
+
+        .px-2 {
+            padding-left: 0.5rem;
+            padding-right: 0.5rem
+        }
+
+        .px-4 {
+            padding-left: 1rem;
+            padding-right: 1rem
+        }
+
+        .py-0 {
+            padding-top: 0px;
+            padding-bottom: 0px
+        }
+
+        .py-1 {
+            padding-top: 0.25rem;
+            padding-bottom: 0.25rem
+        }
+
+        .py-2 {
+            padding-top: 0.5rem;
+            padding-bottom: 0.5rem
+        }
+
+        .py-4 {
+            padding-top: 1rem;
+            padding-bottom: 1rem
+        }
+
+        .pl-2 {
+            padding-left: 0.5rem
+        }
+
+        .pt-1 {
+            padding-top: 0.25rem
+        }
+
+        .pt-2 {
+            padding-top: 0.5rem
+        }
+
+        .text-left {
+            text-align: left
+        }
+
+        .text-center {
+            text-align: center
+        }
+
+        .text-right {
+            text-align: right
+        }
+
+        .font-mono {
+            font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace
+        }
+
+        .text-\[10px\] {
+            font-size: 10px
+        }
+
+        .text-lg {
+            font-size: 1.125rem;
+            line-height: 1.75rem
+        }
+
+        .text-sm {
+            font-size: 0.875rem;
+            line-height: 1.25rem
+        }
+
+        .text-xs {
+            font-size: 0.75rem;
+            line-height: 1rem
+        }
+
+        .text-\[11px\] {
+            font-size: 11px
+        }
+
+        .font-bold {
+            font-weight: 700
+        }
+
+        .font-semibold {
+            font-weight: 600
+        }
+
+        .uppercase {
+            text-transform: uppercase
+        }
+
+        .tabular-nums {
+            --tw-numeric-spacing: tabular-nums;
+            font-variant-numeric: var(--tw-ordinal) var(--tw-slashed-zero) var(--tw-numeric-figure) var(--tw-numeric-spacing) var(--tw-numeric-fraction)
+        }
+
+        .tracking-wide {
+            letter-spacing: 0.025em
+        }
+
+        .text-gray-400 {
+            --tw-text-opacity: 1;
+            color: rgb(156 163 175 / var(--tw-text-opacity, 1))
+        }
+
+        .text-white {
+            --tw-text-opacity: 1;
+            color: rgb(255 255 255 / var(--tw-text-opacity, 1))
+        }
+
+        .opacity-60 {
+            opacity: 0.6
+        }
+
+        .opacity-70 {
+            opacity: 0.7
+        }
+
+        .opacity-80 {
+            opacity: 0.8
+        }
+
+        .shadow {
+            --tw-shadow: 0 1px 3px 0 rgb(0 0 0 / 0.1), 0 1px 2px -1px rgb(0 0 0 / 0.1);
+            --tw-shadow-colored: 0 1px 3px 0 var(--tw-shadow-color), 0 1px 2px -1px var(--tw-shadow-color);
+            box-shadow: var(--tw-ring-offset-shadow, 0 0 #0000), var(--tw-ring-shadow, 0 0 #0000), var(--tw-shadow)
+        }
+
+        .shadow-lg {
+            --tw-shadow: 0 10px 15px -3px rgb(0 0 0 / 0.1), 0 4px 6px -4px rgb(0 0 0 / 0.1);
+            --tw-shadow-colored: 0 10px 15px -3px var(--tw-shadow-color), 0 4px 6px -4px var(--tw-shadow-color);
+            box-shadow: var(--tw-ring-offset-shadow, 0 0 #0000), var(--tw-ring-shadow, 0 0 #0000), var(--tw-shadow)
+        }
+
+        .backdrop-blur-sm {
+            --tw-backdrop-blur: blur(4px);
+            -webkit-backdrop-filter: var(--tw-backdrop-blur) var(--tw-backdrop-brightness) var(--tw-backdrop-contrast) var(--tw-backdrop-grayscale) var(--tw-backdrop-hue-rotate) var(--tw-backdrop-invert) var(--tw-backdrop-opacity) var(--tw-backdrop-saturate) var(--tw-backdrop-sepia);
+            backdrop-filter: var(--tw-backdrop-blur) var(--tw-backdrop-brightness) var(--tw-backdrop-contrast) var(--tw-backdrop-grayscale) var(--tw-backdrop-hue-rotate) var(--tw-backdrop-invert) var(--tw-backdrop-opacity) var(--tw-backdrop-saturate) var(--tw-backdrop-sepia)
+        }
+
+        @media (min-width: 768px) {
+            .md\:inline {
+                display: inline
+            }
+
+            .md\:grid {
+                display: grid
+            }
+        }
+    </style>
 </head>
 
 <body class="bg-base-100 min-h-screen text-base-content flex flex-col rounded-lg">
 
-    <div id="bootLoadingOverlay" aria-live="polite" aria-label="Loading editor">
-        <span class="loading loading-spinner loading-lg text-primary"></span>
-    </div>
+
 
     <div id="editor-theme-overlay" class="absolute inset-0 pointer-events-none z-[15]">
         <div class="vs-editor-stars"></div>
@@ -1811,7 +2614,7 @@
     </div>
 
 
-    <div id="controls" class="hidden md:grid" style="display: none;">
+    <div id="controls" class="hidden md:grid" style="display: grid !important;">
         <!-- LEFT ZONE -->
         <div class="controls-zone zone-left">
             <div class="dropdown">
@@ -1910,7 +2713,7 @@
                                     <div class="flex gap-3 mt-1 text-xs">
                                         <label class="flex items-center gap-1"><input type="radio" name="lengthUnit"
                                                 id="length-unit-mm" value="mm" class="radio radio-primary radio-xs"
-                                                checked> mm</label>
+                                                checked=""> mm</label>
                                         <label class="flex items-center gap-1"><input type="radio" name="lengthUnit"
                                                 id="length-unit-cm" value="cm" class="radio radio-primary radio-xs">
                                             cm</label>
@@ -1922,7 +2725,7 @@
                                             id="desktop-roundness-toggle"
                                             class="toggle toggle-accent toggle-xs"></label>
                                     <input type="range" id="roundness-setting" min="0.01" max="1.0" value="0.50"
-                                        step="0.01" class="range range-xs mt-1">
+                                        step="0.01" class="range range-xs mt-1" disabled="">
                                 </li>
                                 <li><a id="showOnboardingAgainBtn">Show First-Run Guide</a></li>
                                 <li><a id="resetDeleteHintBtn">Reset “Delete Brush Hint”</a></li>
@@ -1939,7 +2742,7 @@
             <div class="controls-group">
                 <label>Grid</label>
                 <input type="range" id="grid-size-slider" min="5" max="200" value="10" class="range range-xs">
-                <span id="grid-size-display" class="badge badge-primary font-bold">100³</span>
+                <span id="grid-size-display" class="badge badge-primary font-bold">47³</span>
             </div>
 
             <div class="divider divider-horizontal mx-0"></div>
@@ -1956,11 +2759,12 @@
             <div class="divider divider-horizontal mx-0"></div>
 
             <div class="controls-group">
-                <button id="modeToggle" class="btn btn-xs btn-neutral" title="Cycle mode (Space)">Add</button>
+                <button id="modeToggle" class="btn btn-xs btn-neutral mode-highlight"
+                    title="Cycle mode (Space)">Delete</button>
                 <button id="selectModeToggle" class="btn btn-xs btn-outline">Extrude</button>
 
-                <button id="selectionLockToggle" class="btn btn-xs btn-ghost btn-square"><i
-                        class="fas fa-lock"></i></button>
+                <button id="selectionLockToggle" class="btn btn-xs btn-ghost btn-square invisible pointer-events-none"
+                    aria-hidden="true" disabled=""><i class="fas fa-unlock"></i></button>
                 <span class="text-[10px] opacity-60 hidden md:inline" title="Desktop shortcut">Space = mode</span>
             </div>
             <div id="dragLengthHud">Len <span id="dragLengthHudValue">0.0 mm</span></div>
@@ -1971,7 +2775,8 @@
                 <label>Brush ±</label>
                 <button id="brush-size-decrease" class="btn btn-xs brush-step-btn"
                     aria-label="Brush size down">−</button>
-                <span id="brush-size-display" class="text-xs font-bold w-[4.5ch] text-center tabular-nums">1x1</span>
+                <span id="brush-size-display"
+                    class="text-xs font-bold w-[4.5ch] text-center tabular-nums text-primary">1x1</span>
                 <button id="brush-size-increase" class="btn btn-xs brush-step-btn" aria-label="Brush size up">+</button>
             </div>
 
@@ -1979,7 +2784,7 @@
 
         <!-- RIGHT ZONE -->
         <div class="controls-zone zone-right">
-            <button id="soundToggleBtn" class="btn btn-sm btn-ghost btn-square shrink-0 self-center" title="Sound: On"
+            <button id="soundToggleBtn" class="btn btn-sm btn-square shrink-0 self-center btn-success" title="Sound: On"
                 aria-label="Toggle sound">
                 <i id="soundToggleIcon" class="fas fa-volume-up"></i>
             </button>
@@ -2002,14 +2807,15 @@
         </div>
     </div>
     <div id="container">
-        <div id="flySpeedHud">Fly <span id="flySpeedHudValue">0.10</span></div>
+        <div id="flySpeedHud">Fly <span id="flySpeedHudValue">0.81</span></div>
         <div id="deleteBrushHint" role="status" aria-live="polite">
             <span>Fast delete on 1×1. Use bigger brush?</span>
             <button id="deleteHintGrowBtn" class="btn btn-xs btn-accent">Set 3×3</button>
             <button id="deleteHintDontShowBtn" class="btn btn-xs btn-ghost">Don’t show again</button>
             <button id="deleteHintCloseBtn" class="btn btn-xs btn-ghost">×</button>
         </div>
-        <canvas id="voxelCanvas" tabindex="0" width="750" height="1212" style="width: 375px; height: 606px;" }></canvas>
+        <canvas id="voxelCanvas" tabindex="0" width="1728" height="1129" style="width: 1152px; height: 753px;"
+            }=""></canvas>
         <div id="marquee" class="marquee"></div>
         <div id="haptic-layer"></div>
         <div id="ruler-overlay" aria-hidden="true">
@@ -2022,30 +2828,33 @@
         <input type="file" id="imageFileInput" accept="image/*" class="hidden">
     </div>
 
-    <!-- DESKTOP OVERLAY CONTROLS (parity with mobile overlays) -->
-    <div id="desktop-overlay-controls" class="flex gap-2">
-        <button id="desktop-overlay-mode-toggle"
-            class="btn btn-circle btn-ghost bg-base-200/80 backdrop-blur-sm shadow-lg" title="Cycle mode (Space)"><i
-                class="fas fa-plus"></i></button>
-        <button id="desktop-overlay-brush-decrease"
-            class="btn btn-circle btn-ghost bg-base-200/80 backdrop-blur-sm shadow-lg" title="Brush -"><i
-                class="fas fa-minus"></i></button>
-        <button id="desktop-overlay-brush-increase"
-            class="btn btn-circle btn-ghost bg-base-200/80 backdrop-blur-sm shadow-lg" title="Brush +"><i
-                class="fas fa-plus"></i></button>
-    </div>
-    <div id="desktop-undo-redo-overlay" class="flex gap-2">
-        <button id="desktop-overlay-undo" class="btn btn-circle btn-ghost bg-base-200/80 backdrop-blur-sm shadow-lg"
-            title="Undo"><i class="fas fa-undo"></i></button>
-        <button id="desktop-overlay-redo" class="btn btn-circle btn-ghost bg-base-200/80 backdrop-blur-sm shadow-lg"
-            title="Redo"><i class="fas fa-redo"></i></button>
-    </div>
-    <div id="desktop-canvas-color-picker-wrap" aria-label="Pick brush color on canvas (desktop)">
-        <input type="color" id="desktop-canvas-color-picker" value="#FFFFFF" aria-label="Pick color on canvas desktop">
+    <!-- DESKTOP OVERLAY CONTROLS (consolidated) -->
+    <div id="desktop-bottom-right-container">
+        <div id="desktop-overlay-controls" class="flex gap-2">
+            <button id="desktop-overlay-mode-toggle"
+                class="btn btn-circle btn-ghost bg-base-200/80 backdrop-blur-sm shadow-lg" title="Cycle mode (Space)"><i
+                    class="fas fa-plus"></i></button>
+            <button id="desktop-overlay-brush-decrease"
+                class="btn btn-circle btn-ghost bg-base-200/80 backdrop-blur-sm shadow-lg" title="Brush -"><i
+                    class="fas fa-minus"></i></button>
+            <button id="desktop-overlay-brush-increase"
+                class="btn btn-circle btn-ghost bg-base-200/80 backdrop-blur-sm shadow-lg" title="Brush +"><i
+                    class="fas fa-plus"></i></button>
+        </div>
+        <div id="desktop-undo-redo-overlay" class="flex gap-2">
+            <button id="desktop-overlay-undo" class="btn btn-circle btn-ghost bg-base-200/80 backdrop-blur-sm shadow-lg"
+                title="Undo"><i class="fas fa-undo"></i></button>
+            <button id="desktop-overlay-redo" class="btn btn-circle btn-ghost bg-base-200/80 backdrop-blur-sm shadow-lg"
+                title="Redo"><i class="fas fa-redo"></i></button>
+        </div>
+        <div id="desktop-canvas-color-picker-wrap" aria-label="Pick brush color on canvas (desktop)">
+            <input type="color" id="desktop-canvas-color-picker" value="#FFFFFF"
+                aria-label="Pick color on canvas desktop">
+        </div>
     </div>
 
     <!-- MOBILE UI CONTAINER -->
-    <div id="mobile-ui-container" style="display: none;">
+    <div id="mobile-ui-container" style="display: none !important;">
         <!-- Undo/Redo overlay -->
         <div id="mobile-undo-redo-overlay" class="absolute bottom-24 right-4 z-50 flex flex-row gap-2"
             style="bottom: calc(5.5rem + var(--safe-bottom));">
@@ -2128,10 +2937,10 @@
                         </a>
                     </li>
                     <div class="divider my-1"></div>
-                    <li>
+                    <li style="display: none;">
                         <a id="mobile-selection-lock-toggle" class="flex justify-between">
                             <span>Select Lock</span>
-                            <span id="mobile-lock-status-icon"><i class="fas fa-lock"></i></span>
+                            <span id="mobile-lock-status-icon"><i class="fas fa-unlock"></i></span>
                         </a>
                     </li>
                     <li><a id="mobile-properties">Grid &amp; Brush Size</a></li>
@@ -2144,7 +2953,8 @@
 
             <input type="color" id="mobile-color-picker" value="#FFFFFF" class="floating-color-picker">
 
-            <button class="btn btn-ghost rounded-full" id="mobile-mode-toggle" aria-label="Cycle Add/Delete/Paint">
+            <button class="btn btn-ghost rounded-full mode-highlight" id="mobile-mode-toggle"
+                aria-label="Cycle Add/Delete/Paint">
                 <i id="mobile-mode-icon" class="fas fa-plus-square"></i>
             </button>
             <button class="btn btn-ghost rounded-full" id="mobile-quick-brush-decrease"
@@ -2163,7 +2973,8 @@
     </div>
 
     <dialog id="exportOptionsModal" class="modal">
-        <div class="modal-box">
+        <div class="modal-box"><button type="button" class="btn btn-sm btn-ghost modal-close-x"
+                aria-label="Close dialog">×</button>
             <h3 class="font-bold text-lg">Export Options</h3>
 
             <!-- Shape Type Selection -->
@@ -2235,7 +3046,8 @@
 
     <!-- ... (Other modals retained) ... -->
     <dialog id="mobileControlsModal" class="modal">
-        <div class="modal-box">
+        <div class="modal-box"><button type="button" class="btn btn-sm btn-ghost modal-close-x"
+                aria-label="Close dialog">×</button>
             <h3 class="font-bold text-lg">Control Settings</h3>
             <ul class="menu p-2">
                 <li><label class="label cursor-pointer"><span class="label-text">Invert Look X</span><input
@@ -2261,7 +3073,7 @@
                     <label class="label"><span class="label-text">Length Unit</span></label>
                     <div class="flex gap-4 text-sm">
                         <label class="flex items-center gap-1"><input type="radio" name="mobileLengthUnit"
-                                id="mobile-length-unit-mm" value="mm" class="radio radio-primary radio-sm" checked>
+                                id="mobile-length-unit-mm" value="mm" class="radio radio-primary radio-sm" checked="">
                             mm</label>
                         <label class="flex items-center gap-1"><input type="radio" name="mobileLengthUnit"
                                 id="mobile-length-unit-cm" value="cm" class="radio radio-primary radio-sm"> cm</label>
@@ -2271,7 +3083,7 @@
                     <label class="label cursor-pointer"><span class="label-text">Rounded Preview</span><input
                             type="checkbox" id="mobile-roundness-toggle" class="toggle toggle-accent"></label>
                     <input type="range" id="mobile-roundness-setting" min="0.01" max="1.0" value="0.50" step="0.01"
-                        class="range range-primary">
+                        class="range range-primary" disabled="">
                 </li>
                 <li><a id="mobile-reset-delete-hint">Reset "Delete Brush Hint"</a></li>
                 <li class="pt-2">
@@ -2290,7 +3102,8 @@
         </div>
     </dialog>
     <dialog id="mobilePropertiesModal" class="modal">
-        <div class="modal-box">
+        <div class="modal-box"><button type="button" class="btn btn-sm btn-ghost modal-close-x"
+                aria-label="Close dialog">×</button>
             <h3 class="font-bold text-lg">Grid &amp; Brush Size</h3>
             <div class="py-4 space-y-4">
                 <div>
@@ -2315,7 +3128,8 @@
         </div>
     </dialog>
     <dialog id="uploadProjectModal" class="modal">
-        <div class="modal-box">
+        <div class="modal-box"><button type="button" class="btn btn-sm btn-ghost modal-close-x"
+                aria-label="Close dialog">×</button>
             <h3 class="font-bold text-lg">Upload Project to Hub</h3>
             <form method="dialog" class="flex flex-col gap-4 py-4">
                 <input type="text" id="uploadTitle" placeholder="Project Title" class="input input-bordered w-full">
@@ -2323,6 +3137,15 @@
                     class="textarea textarea-bordered w-full"></textarea>
                 <select id="uploadCategory" class="select select-bordered w-full">
                     <option disabled="" selected="">Select Category</option>
+                    <option value="Toy">Toy</option>
+                    <option value="Decoration">Decoration</option>
+                    <option value="Functional">Functional</option>
+                    <option value="Art">Art</option>
+                    <option value="General">General</option>
+                    <option value="Character">Character</option>
+                    <option value="Vehicle">Vehicle</option>
+                    <option value="Nature">Nature</option>
+                    <option value="Architecture">Architecture</option>
                     <option value="Toy">Toy</option>
                     <option value="Decoration">Decoration</option>
                     <option value="Functional">Functional</option>
@@ -2356,16 +3179,17 @@
         </div>
     </dialog>
     <dialog id="authModal" class="modal">
-        <div class="modal-box text-center">
-            <h3 class="font-bold text-lg">Login to VoxelShaper Hub</h3>
-            <p class="py-4">Choose a login method or use a magic link.</p>
+        <div class="modal-box text-center vs-auth-panel max-w-md"><button type="button"
+                class="btn btn-sm btn-ghost modal-close-x" aria-label="Close dialog">×</button>
+            <h3 class="font-bold text-lg vs-auth-title">Login to VoxelShaper Hub</h3>
+            <p class="py-4 vs-auth-sub">Choose a login method or use a magic link.</p>
             <div class="py-4 flex flex-col gap-3">
                 <button id="signInGoogleBtn" class="btn btn-error text-white">With Google</button>
                 <button id="signInGithubBtn" class="btn bg-neutral text-neutral-content">With
                     GitHub</button>
                 <form id="magicLinkForm" class="flex flex-col gap-2 w-full mt-4">
                     <input type="email" id="magicLinkEmail" placeholder="Enter your email"
-                        class="input input-bordered w-full">
+                        class="input input-bordered w-full" style="min-height: 42px;">
                     <label class="label cursor-pointer justify-start gap-2">
                         <input type="checkbox" id="agbCheckbox" class="checkbox">
                         <span class="label-text">I agree to the Terms of Service and Privacy
@@ -2384,7 +3208,8 @@
         </div>
     </dialog>
     <dialog id="magicLinkVerifyModal" class="modal">
-        <div class="modal-box text-center">
+        <div class="modal-box text-center"><button type="button" class="btn btn-sm btn-ghost modal-close-x"
+                aria-label="Close dialog">×</button>
             <h3 class="font-bold text-lg">Check your email!</h3>
             <p class="py-4" id="magicLinkVerifyMessage">We've sent a magic link to your email address. Please
                 check your inbox and click the link to log in. You can close this window now.</p>
@@ -2392,7 +3217,8 @@
         </div>
     </dialog>
     <dialog id="clearConfirmationModal" class="modal">
-        <div class="modal-box">
+        <div class="modal-box"><button type="button" class="btn btn-sm btn-ghost modal-close-x"
+                aria-label="Close dialog">×</button>
             <h3 class="font-bold text-lg">Clear Scene</h3>
             <p class="py-4">Are you sure you want to clear the entire project? This action cannot be undone.</p>
             <div class="modal-action">
@@ -2403,7 +3229,8 @@
     </dialog>
 
     <dialog id="sceneSettingsModal" class="modal text-base-content">
-        <div class="modal-box bg-base-300 max-w-sm">
+        <div class="modal-box bg-base-300 max-w-sm"><button type="button" class="btn btn-sm btn-ghost modal-close-x"
+                aria-label="Close dialog">×</button>
             <h3 class="font-bold text-lg mb-4 flex items-center gap-2">
                 <i class="fas fa-palette text-primary"></i>
                 Scene Settings
@@ -2423,7 +3250,7 @@
             <div class="form-control w-full mb-4">
                 <label class="label py-1 cursor-pointer">
                     <span class="label-text-alt uppercase opacity-60 font-bold">Anti-Aliasing (FXAA)</span>
-                    <input type="checkbox" id="fxaaToggle" class="toggle toggle-xs toggle-primary" checked>
+                    <input type="checkbox" id="fxaaToggle" class="toggle toggle-xs toggle-primary" checked="">
                 </label>
             </div>
 
@@ -2432,7 +3259,7 @@
             <div class="form-control w-full mb-4">
                 <label class="label py-1 cursor-pointer">
                     <span class="label-text-alt uppercase opacity-60 font-bold">Ground Shadows</span>
-                    <input type="checkbox" id="groundShadowsToggle" class="toggle toggle-xs toggle-primary" checked>
+                    <input type="checkbox" id="groundShadowsToggle" class="toggle toggle-xs toggle-primary" checked="">
                 </label>
                 <div class="flex items-center gap-3">
                     <input type="range" id="groundShadowOpacitySlider" min="0" max="1" step="0.1" value="0.2"
@@ -2444,7 +3271,7 @@
             <div class="form-control w-full mb-4">
                 <label class="label py-1 cursor-pointer">
                     <span class="label-text-alt uppercase opacity-60 font-bold">Environment (IBL)</span>
-                    <input type="checkbox" id="iblToggle" class="toggle toggle-xs toggle-primary" checked>
+                    <input type="checkbox" id="iblToggle" class="toggle toggle-xs toggle-primary" checked="">
                 </label>
             </div>
 
@@ -2459,7 +3286,8 @@
         </form>
     </dialog>
     <dialog id="morphSettingsModal" class="modal">
-        <div class="modal-box">
+        <div class="modal-box"><button type="button" class="btn btn-sm btn-ghost modal-close-x"
+                aria-label="Close dialog">×</button>
             <h3 class="font-bold text-lg">Morph Settings</h3>
             <div class="space-y-3 mt-3">
                 <label class="form-control">
@@ -2504,7 +3332,8 @@
     </dialog>
 
     <dialog id="shareModal" class="modal">
-        <div class="modal-box">
+        <div class="modal-box"><button type="button" class="btn btn-sm btn-ghost modal-close-x"
+                aria-label="Close dialog">×</button>
             <h3 class="font-bold text-lg">Share to VoxelShaper Hub</h3>
             <p class="py-2 opacity-80">Upload this project to the Hub.</p>
             <div class="flex flex-col gap-3 mt-2">
@@ -2518,7 +3347,8 @@
     </dialog>
 
     <dialog id="shareSuccessModal" class="modal">
-        <div class="modal-box">
+        <div class="modal-box"><button type="button" class="btn btn-sm btn-ghost modal-close-x"
+                aria-label="Close dialog">×</button>
             <h3 class="font-bold text-lg">Shared to Hub ✅</h3>
             <p class="py-2">Your model is now online.</p>
             <p class="text-sm opacity-80">Find it in <b>Hub → My Models</b>.</p>
@@ -2534,16 +3364,17 @@
         </div>
     </dialog>
     <dialog id="onboardingModal" class="modal">
-        <div class="modal-box onboarding-modal-box">
-            <h3 id="onboardingTitle" class="font-bold text-lg">Create a printable model in under 1 minute</h3>
-            <p id="onboardingSubtitle" class="py-2 opacity-80">Fast path: build your own model → edit voxels → export
-                STL / G-Code / 3MF.</p>
+        <div class="modal-box onboarding-modal-box"><button type="button" class="btn btn-sm btn-ghost modal-close-x"
+                aria-label="Close dialog">×</button>
+            <h3 id="onboardingTitle" class="font-bold text-lg">Build your first voxel ✨</h3>
+            <p id="onboardingSubtitle" class="py-2 opacity-80">Only 3 quick actions.</p>
             <div class="flex flex-wrap gap-2 py-2 text-xs">
                 <span class="badge badge-outline">No login required</span>
                 <span class="badge badge-outline">Free exports</span>
                 <span class="badge badge-outline">Works in browser</span>
             </div>
-            <p id="onboardingModeHint" class="text-xs font-semibold uppercase tracking-wide text-primary pt-1"></p>
+            <p id="onboardingModeHint" class="text-xs font-semibold uppercase tracking-wide text-primary pt-1">How it
+                works</p>
             <div id="onboardingModeButtons" class="flex flex-wrap gap-2 pt-2">
                 <button id="onboardingModeAdd" type="button" class="btn btn-xs"><i class="fas fa-plus-square"></i>
                     Add</button>
@@ -2555,7 +3386,12 @@
                         class="fas fa-mouse-pointer"></i> Extrude</button>
             </div>
             <p class="text-[11px] opacity-70 pt-1">Same buttons are in the center top toolbar.</p>
-            <ul id="onboardingControlsList" class="list-disc list-inside space-y-2 pt-2 onboarding-controls-list"></ul>
+            <ul id="onboardingControlsList" class="list-disc list-inside space-y-2 pt-2 onboarding-controls-list">
+                <li><b>Add:</b> left click / tap the model to place a voxel.</li>
+                <li><b>Delete:</b> click / tap a voxel to remove it.</li>
+                <li><b>Camera default:</b> Look Y is pre-set to the expected direction.</li>
+                <li><b>Need to flip look?</b> Open View → Controls (Desktop) or Menu → Control Settings (Mobile).</li>
+            </ul>
             <label class="label cursor-pointer justify-start gap-3 mt-3">
                 <input type="checkbox" id="onboardingDontShowAgain" class="checkbox checkbox-sm checkbox-primary">
                 <span class="label-text">Don’t show again</span>
@@ -2567,7 +3403,8 @@
     </dialog>
 
     <dialog id="quickTutorialModal" class="modal">
-        <div class="modal-box">
+        <div class="modal-box"><button type="button" class="btn btn-sm btn-ghost modal-close-x"
+                aria-label="Close dialog">×</button>
             <h3 class="font-bold text-lg">Quick Tutorial</h3>
             <p id="tutorialStepMeta" class="text-xs opacity-70 mb-2">Step 1 of 3</p>
             <p id="tutorialStepText" class="py-2"></p>
@@ -2600,6 +3437,7 @@
     <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/shaders/SAOShader.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/shaders/DepthLimitedBlurShader.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/shaders/FXAAShader.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/shaders/UnpackDepthRGBAShader.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/math/SimplexNoise.js"></script>
 
 
@@ -3914,6 +4752,7 @@
                 }
                 document.getElementById('newsletterCheckbox').checked = newsletterChecked ? (newsletterChecked === 'true') && !this.computeMobileMode() : false;
                 this.updateAllControlInputs();
+                this._flyAccel = 0;
             },
 
             setupThree: function () {
@@ -3967,6 +4806,18 @@
                 this.ambientParticles = new THREE.Points(pGeo, pMat);
                 this.ambientParticleAttr = pGeo.attributes.position;
                 this.scene.add(this.ambientParticles);
+
+                // VACUUM SUCTION PARTICLES
+                const vCount = 120;
+                const vGeo = new THREE.BufferGeometry();
+                const vPos = new Float32Array(vCount * 3);
+                for (let i = 0; i < vCount * 3; i++) vPos[i] = 0;
+                vGeo.setAttribute('position', new THREE.BufferAttribute(vPos, 3));
+                const vMat = new THREE.PointsMaterial({ color: 0xaaaaaa, size: 0.12, transparent: true, opacity: 0 });
+                this.vacuumParticles = new THREE.Points(vGeo, vMat);
+                this.vacuumParticleAttr = vGeo.attributes.position;
+                this._vData = new Float32Array(vCount * 4); // x,y,z,life
+                this.scene.add(this.vacuumParticles);
 
                 this.previewVoxel = new THREE.Mesh(
                     this.sharedBoxGeometry,
@@ -4582,6 +5433,9 @@
                 this.mouseState.deleteCycleStartAt = performance.now();
                 this.isPointerDown = true;
                 this.activePointers.set(e.pointerId, { x: e.clientX, y: e.clientY });
+                if (this.currentMode === 'DELETE' && !this.isMobile) {
+                    this.startDeleteChargeSound();
+                }
 
                 if (this.isMobile && this.activePointers.size >= 2 && this.touchState.longPressTimeout) {
                     clearTimeout(this.touchState.longPressTimeout);
@@ -5497,6 +6351,13 @@
                 this.updateAllControlInputs();
                 this.renderColorHistory();
                 this.previewVoxel.material.color.set(this.currentColor);
+
+                // Ensure all picker inputs in DOM reflect the change immediately
+                const pickers = ['color-picker-input', 'desktop-canvas-color-picker', 'mobile-color-picker', 'mobile-canvas-color-picker', 'mobile-color-picker-visible'];
+                pickers.forEach(id => {
+                    const el = document.getElementById(id);
+                    if (el) el.value = this.currentColor;
+                });
             },
 
             pulseColorControls: function () {
@@ -5699,6 +6560,7 @@
                         break;
                     case 'DELETE':
                         if (existingVoxel) {
+                            this.spawnVacuumParticles(x, y, z, 4);
                             this.originalVoxelsGroup.remove(existingVoxel.mesh);
                             this.voxels.delete(k);
                             modified = true;
@@ -5737,6 +6599,27 @@
                     const historyEntry = this.currentStroke.get(k);
                     historyEntry.after = finalVoxel ? { color: finalVoxel.color, glass: !!finalVoxel.glass } : null;
 
+                }
+            },
+
+            spawnVacuumParticles: function (x, y, z, count = 2) {
+                if (!this.vacuumParticleAttr) return;
+                const pos = this.vacuumParticleAttr.array;
+                const data = this._vData;
+                const worldX = x * this.VS + 0.5;
+                const worldY = y * this.VS + 0.5;
+                const worldZ = z * this.VS + 0.5;
+                let spawned = 0;
+                for (let i = 0; i < pos.length / 3 && spawned < count; i++) {
+                    const lifeIdx = i * 4 + 3;
+                    if (data[lifeIdx] <= 0) {
+                        data[lifeIdx] = 1.0;
+                        const px = i * 3, py = i * 3 + 1, pz = i * 3 + 2;
+                        pos[px] = worldX + (Math.random() - 0.5) * 1.5;
+                        pos[py] = worldY + (Math.random() - 0.5) * 1.5;
+                        pos[pz] = worldZ + (Math.random() - 0.5) * 1.5;
+                        spawned++;
+                    }
                 }
             },
 
@@ -7108,6 +7991,36 @@
                     }
                 }
 
+                // Update Vacuum Particles
+                if (this.vacuumParticleAttr) {
+                    const pos = this.vacuumParticleAttr.array;
+                    const data = this._vData;
+                    const brushPos = this.previewBrush.position;
+                    let needsUpdate = false;
+                    for (let i = 0; i < pos.length / 3; i++) {
+                        const lifeIdx = i * 4 + 3;
+                        if (data[lifeIdx] > 0) {
+                            needsUpdate = true;
+                            data[lifeIdx] -= 0.05;
+                            // Pull towards brush
+                            const px = i * 3, py = i * 3 + 1, pz = i * 3 + 2;
+                            pos[px] += (brushPos.x - pos[px]) * 0.15;
+                            pos[py] += (brushPos.y - pos[py]) * 0.15;
+                            pos[pz] += (brushPos.z - pos[pz]) * 0.15;
+
+                            if (data[lifeIdx] <= 0) {
+                                pos[px] = pos[py] = pos[pz] = 0; // Hide
+                            }
+                        }
+                    }
+                    if (needsUpdate) {
+                        this.vacuumParticleAttr.needsUpdate = true;
+                        this.vacuumParticles.material.opacity = 0.6;
+                    } else {
+                        this.vacuumParticles.material.opacity = 0;
+                    }
+                }
+
                 if (document.pointerLockElement === this.cvs) {
                     const rotX = this.controls.invertLookX ? this.mouseState.mouseMovementX : -this.mouseState.mouseMovementX;
                     const rotY = this.controls.invertLookY ? this.mouseState.mouseMovementY : -this.mouseState.mouseMovementY;
@@ -7122,14 +8035,26 @@
                     const right = this._tmpRight.crossVectors(forward, this.cam.up).normalize();
                     const strafeXSpeed = this.controls.invertStrafeX ? -this.flySpeed : this.flySpeed;
                     const strafeYSpeed = this.controls.invertStrafeY ? -this.flySpeed : this.flySpeed;
+
+                    // Adaptive Fly Speed Acceleration
+                    const isMoving = this.keyboard['w'] || this.keyboard['s'] || this.keyboard['a'] || this.keyboard['d'] || this.keyboard['e'] || this.keyboard['q'];
+                    if (isMoving) {
+                        this._flyAccel = Math.min(3.0, (this._flyAccel || 0) + 0.01);
+                    } else {
+                        this._flyAccel = 0;
+                    }
+                    const speed = this.flySpeed * (1.0 + this._flyAccel);
+
                     // INPUT MAPPING GUARD: Desktop fly controls are intentionally fixed.
                     // W/S = forward/back, A/D = strafe, E/Q = vertical. Preserve this mapping as-is.
-                    if (this.keyboard['w']) this.cam.position.addScaledVector(forward, this.flySpeed);
-                    if (this.keyboard['s']) this.cam.position.addScaledVector(forward, -this.flySpeed);
-                    if (this.keyboard['a']) this.cam.position.addScaledVector(right, -strafeXSpeed);
-                    if (this.keyboard['d']) this.cam.position.addScaledVector(right, strafeXSpeed);
-                    if (this.keyboard['e']) this.cam.position.y += strafeYSpeed;
-                    if (this.keyboard['q']) this.cam.position.y -= strafeYSpeed;
+                    if (this.keyboard['w']) this.cam.position.addScaledVector(forward, speed);
+                    if (this.keyboard['s']) this.cam.position.addScaledVector(forward, -speed);
+                    if (this.keyboard['a']) this.cam.position.addScaledVector(right, -strafeXSpeed * speed / this.flySpeed);
+                    if (this.keyboard['d']) this.cam.position.addScaledVector(right, strafeXSpeed * speed / this.flySpeed);
+                    if (this.keyboard['e']) this.cam.position.y += strafeYSpeed * speed / this.flySpeed;
+                    if (this.keyboard['q']) this.cam.position.y -= strafeYSpeed * speed / this.flySpeed;
+                } else {
+                    this._flyAccel = 0;
                 }
                 this.continueHeldDeleteTick();
 
@@ -7471,14 +8396,15 @@
                     if (mobileColorPicker) mobileColorPicker.value = this.currentColor;
                     const mobileCanvasColorPicker = document.getElementById('mobile-canvas-color-picker');
                     if (mobileCanvasColorPicker) mobileCanvasColorPicker.value = this.currentColor;
-                    const desktopCanvasColorPicker = document.getElementById('desktop-canvas-color-picker');
-                    if (desktopCanvasColorPicker) desktopCanvasColorPicker.value = this.currentColor;
                     const mobileVisibleColor = document.getElementById('mobile-color-picker-visible');
                     if (mobileVisibleColor) mobileVisibleColor.value = this.currentColor;
                     document.getElementById('mobile-grid-size-slider').value = this.GRID;
                     document.getElementById('mobile-grid-size-display').textContent = `${this.GRID}³`;
                     document.getElementById('mobile-brush-size-display').textContent = `${this.brushSize}x${this.brushSize}`;
                 }
+                const desktopCanvasColorPicker = document.getElementById('desktop-canvas-color-picker');
+                if (desktopCanvasColorPicker) desktopCanvasColorPicker.value = this.currentColor;
+
                 this.setFlySpeed(this.flySpeed);
                 document.getElementById('invertLookX').checked = this.controls.invertLookX;
                 document.getElementById('invertLookY').checked = this.controls.invertLookY;
@@ -7819,41 +8745,85 @@
                 if (!this.audioCtx) this.audioCtx = new Ctx();
                 const ctx = this.audioCtx;
                 if (ctx.state === 'suspended') ctx.resume();
-                if (this._deleteChargeOsc) return;
+                if (this._deleteChargeNoise) return;
+                this.playVoxelBlub('DELETE'); // Snappy startup feedback
+
+                // Create Noise Buffer for "Air Turbulence" (Vacuum)
+                if (!this._noiseBuffer) {
+                    const bufferSize = ctx.sampleRate * 2;
+                    const buffer = ctx.createBuffer(1, bufferSize, ctx.sampleRate);
+                    const data = buffer.getChannelData(0);
+                    for (let i = 0; i < bufferSize; i++) {
+                        data[i] = (Math.random() * 2 - 1) * 0.5;
+                    }
+                    this._noiseBuffer = buffer;
+                }
+
+                const noise = ctx.createBufferSource();
+                noise.buffer = this._noiseBuffer;
+                noise.loop = true;
+
+                // Motor hum
                 const osc = ctx.createOscillator();
+                osc.type = 'triangle';
+                osc.frequency.value = 45; // Very deep motor hum
+
                 const gain = ctx.createGain();
                 const filter = ctx.createBiquadFilter();
+
                 filter.type = 'lowpass';
-                filter.frequency.value = 2200;
-                osc.type = 'triangle';
-                osc.frequency.value = 140;
+                filter.frequency.value = 350; // Muffled atmosphere
+                filter.Q.value = 1;
+
                 gain.gain.value = 0.0001;
+
+                noise.connect(filter);
                 osc.connect(filter);
                 filter.connect(gain);
                 gain.connect(ctx.destination);
+
+                noise.start();
                 osc.start();
+
+                this._deleteChargeNoise = noise;
                 this._deleteChargeOsc = osc;
                 this._deleteChargeGain = gain;
+                this._deleteChargeFilter = filter;
             },
 
             updateDeleteChargeSound: function (accel) {
-                if (!this._deleteChargeOsc || !this._deleteChargeGain || !this.audioCtx) return;
+                if (!this._deleteChargeGain || !this.audioCtx) return;
                 const t = this.audioCtx.currentTime;
-                const f = 140 + accel * 560;
-                const g = 0.0001 + accel * 0.03;
-                this._deleteChargeOsc.frequency.setTargetAtTime(f, t, 0.025);
-                this._deleteChargeGain.gain.setTargetAtTime(g, t, 0.03);
+
+                // Vacuum ramp up: filter opens and volume increases
+                const filterF = 350 + accel * 900;
+                const volume = 0.0001 + accel * 0.09;
+
+                if (this._deleteChargeFilter) this._deleteChargeFilter.frequency.setTargetAtTime(filterF, t, 0.015);
+                this._deleteChargeGain.gain.setTargetAtTime(volume, t, 0.015);
+                if (this._deleteChargeOsc) this._deleteChargeOsc.frequency.setTargetAtTime(45 + accel * 10, t, 0.03);
             },
 
             stopDeleteChargeSound: function () {
-                if (!this._deleteChargeOsc || !this._deleteChargeGain || !this.audioCtx) return;
+                if (!this._deleteChargeGain || !this.audioCtx) return;
+                const noise = this._deleteChargeNoise;
                 const osc = this._deleteChargeOsc;
                 const gain = this._deleteChargeGain;
+
+                this._deleteChargeNoise = null;
                 this._deleteChargeOsc = null;
                 this._deleteChargeGain = null;
+                this._deleteChargeFilter = null;
+
                 const t = this.audioCtx.currentTime;
                 gain.gain.setTargetAtTime(0.0001, t, 0.04);
-                setTimeout(() => { try { osc.stop(); osc.disconnect(); gain.disconnect(); } catch (_) { } }, 120);
+                setTimeout(() => {
+                    try {
+                        if (noise) { noise.stop(); noise.disconnect(); }
+                        if (osc) { osc.stop(); osc.disconnect(); }
+                        gain.disconnect();
+                    } catch (_) { }
+                }, 120);
             },
 
             playVoxelBlub: function (mode = 'ADD') {
@@ -7876,8 +8846,8 @@
                 filter.frequency.value = 1500;
 
                 const t = ctx.currentTime;
-                const base = mode === 'DELETE' ? 170 : (mode === 'PAINT' ? 260 : 230);
-                const end = mode === 'DELETE' ? 120 : (mode === 'PAINT' ? 180 : 150);
+                const base = mode === 'DELETE' ? 120 : (mode === 'PAINT' ? 260 : 230);
+                const end = mode === 'DELETE' ? 80 : (mode === 'PAINT' ? 180 : 150);
 
                 osc.type = 'sine';
                 osc.frequency.setValueAtTime(base, t);
@@ -8034,6 +9004,8 @@
             else normalizeAuthDialogs();
         })();
     </script>
+
+
 </body>
 
 </html>
