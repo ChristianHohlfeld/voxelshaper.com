@@ -2967,6 +2967,9 @@
             _lastPreviewClientY: null,
             ambientParticles: null,
             ambientParticleAttr: null,
+            _ambientTick: 0,
+            _tmpForward: new THREE.Vector3(),
+            _tmpRight: new THREE.Vector3(),
             firstInteractionTracked: false,
             firstEditTracked: false,
             tutorialStep: 0,
@@ -3624,37 +3627,37 @@
                 this.resetCamera();
                 this.lowPerfMode = this.computeMobileMode() || (navigator.hardwareConcurrency || 4) <= 4 || (navigator.deviceMemory || 4) <= 4;
                 this.ren = new THREE.WebGLRenderer({ canvas: this.cvs, antialias: !this.lowPerfMode, alpha: true, powerPreference: 'high-performance' });
-                this.ren.setPixelRatio(Math.min(window.devicePixelRatio || 1, this.lowPerfMode ? 1.25 : 1.8));
+                this.ren.setPixelRatio(Math.min(window.devicePixelRatio || 1, this.lowPerfMode ? 1.0 : 1.4));
                 this.ren.outputEncoding = THREE.sRGBEncoding;
                 this.ren.toneMapping = THREE.ACESFilmicToneMapping;
-                this.ren.toneMappingExposure = 1.02;
+                this.ren.toneMappingExposure = 0.94;
                 this.ren.shadowMap.enabled = !this.lowPerfMode;
                 this.ren.shadowMap.type = THREE.PCFSoftShadowMap;
 
                 this.scene.add(new THREE.AmbientLight(0x111622, 0.9));
 
-                const keyLight = new THREE.DirectionalLight(0xfff0e0, 1.5);
+                const keyLight = new THREE.DirectionalLight(0xfff0e0, 1.25);
                 keyLight.position.set(30, 50, 40);
                 keyLight.castShadow = !this.lowPerfMode;
                 this.scene.add(keyLight);
 
-                const fillLight = new THREE.DirectionalLight(0x5070a0, 0.6);
+                const fillLight = new THREE.DirectionalLight(0x5070a0, 0.48);
                 fillLight.position.set(-40, 20, -20);
                 this.scene.add(fillLight);
 
-                const rimLight = new THREE.DirectionalLight(0x2b62d6, 0.8);
+                const rimLight = new THREE.DirectionalLight(0x2b62d6, 0.66);
                 rimLight.position.set(0, 10, -50);
                 this.scene.add(rimLight);
 
                 // Keep visual baseline aligned with Hub (no scene fog washout).
                 this.scene.fog = null;
 
-                const pCount = this.lowPerfMode ? 800 : 1500;
+                const pCount = this.lowPerfMode ? 420 : 900;
                 const pGeo = new THREE.BufferGeometry();
                 const pPos = new Float32Array(pCount * 3);
                 for (let i = 0; i < pCount * 3; i++) pPos[i] = (Math.random() - 0.5) * 200;
                 pGeo.setAttribute('position', new THREE.BufferAttribute(pPos, 3));
-                const pMat = new THREE.PointsMaterial({ color: 0xffffff, size: 0.4, transparent: true, opacity: 0.6 });
+                const pMat = new THREE.PointsMaterial({ color: 0xffffff, size: 0.34, transparent: true, opacity: 0.34 });
                 this.ambientParticles = new THREE.Points(pGeo, pMat);
                 this.ambientParticleAttr = pGeo.attributes.position;
                 this.scene.add(this.ambientParticles);
@@ -6669,12 +6672,15 @@ const coords = { x: x, y: y, z: z };
                 requestAnimationFrame(() => this.animate());
 
                 if (this.ambientParticleAttr) {
-                    const arr = this.ambientParticleAttr.array;
-                    for (let i = 2; i < arr.length; i += 3) {
-                        arr[i] -= 0.10;
-                        if (arr[i] < -100) arr[i] += 200;
+                    this._ambientTick = (this._ambientTick + 1) & 1;
+                    if (this._ambientTick === 0) {
+                        const arr = this.ambientParticleAttr.array;
+                        for (let i = 2; i < arr.length; i += 3) {
+                            arr[i] -= 0.10;
+                            if (arr[i] < -100) arr[i] += 200;
+                        }
+                        this.ambientParticleAttr.needsUpdate = true;
                     }
-                    this.ambientParticleAttr.needsUpdate = true;
                 }
 
                 if (document.pointerLockElement === this.cvs) {
@@ -6686,9 +6692,9 @@ const coords = { x: x, y: y, z: z };
                     this.cam.quaternion.setFromEuler(this.euler);
                     this.mouseState.mouseMovementX = 0;
                     this.mouseState.mouseMovementY = 0;
-                    const forward = new THREE.Vector3();
+                    const forward = this._tmpForward;
                     this.cam.getWorldDirection(forward);
-                    const right = new THREE.Vector3().crossVectors(forward, this.cam.up).normalize();
+                    const right = this._tmpRight.crossVectors(forward, this.cam.up).normalize();
                     const strafeXSpeed = this.controls.invertStrafeX ? -this.flySpeed : this.flySpeed;
                     const strafeYSpeed = this.controls.invertStrafeY ? -this.flySpeed : this.flySpeed;
                     // INPUT MAPPING GUARD: Desktop fly controls are intentionally fixed.
@@ -6709,7 +6715,7 @@ const coords = { x: x, y: y, z: z };
             _roundedRebuildRAF: null,
 
             updateShadowPolicy: function () {
-                const heavy = this.lowPerfMode || this.voxels.size >= 3500;
+                const heavy = this.lowPerfMode || this.voxels.size >= 2200;
                 if (this.ren) this.ren.shadowMap.enabled = !heavy;
                 this.originalVoxelsGroup?.children?.forEach((m) => {
                     if (!m || !m.isMesh) return;
