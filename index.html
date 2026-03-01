@@ -3337,6 +3337,45 @@
                     return;
                 }
 
+                try {
+                    const raw = localStorage.getItem('voxelshaper_handoff_payload_v1');
+                    if (raw) {
+                        const handoff = JSON.parse(raw);
+                        if (handoff?.project?.voxels?.length && Date.now() - (handoff.ts || 0) < 120000) {
+                            let payload = handoff.project;
+                            if (Array.isArray(payload.voxels) && payload.voxels.length && !payload.voxels[0].color) {
+                                payload = {
+                                    gridSize: this.GRID_DEFAULT,
+                                    currentDrawingAxis: 'y',
+                                    activeDrawingLevel: { x: 0, y: 0, z: 0 },
+                                    voxels: payload.voxels.map(v => {
+                                        let color = '#ffffff';
+                                        if (Array.isArray(v.c) && v.c.length >= 3) {
+                                            const toHex = (n) => Math.max(0, Math.min(255, n | 0)).toString(16).padStart(2, '0');
+                                            color = `#${toHex(v.c[0])}${toHex(v.c[1])}${toHex(v.c[2])}`;
+                                        }
+                                        return { x: v.x, y: v.y, z: v.z, color };
+                                    })
+                                };
+                            }
+                            if (this.loadFromData(payload)) {
+                                if (handoff.project.metadata) {
+                                    window.__lastHubMeta = {
+                                        type: handoff.project.metadata.type,
+                                        seed: (handoff.project.metadata.seed >>> 0),
+                                        shape: handoff.project.metadata.shape ?? 60,
+                                        color: handoff.project.metadata.color ?? 80,
+                                        palette: handoff.project.metadata.palette ?? 'auto'
+                                    };
+                                }
+                                this.showToast('Import', 'Hub scene loaded', 'success');
+                                localStorage.removeItem('voxelshaper_handoff_payload_v1');
+                                return;
+                            }
+                        }
+                    }
+                } catch (_) {}
+
                 const m = urlParams.get('m');
                 if (m) {
                     try {
