@@ -6583,16 +6583,25 @@ setGridSize: function (newSize) {
             },
 
             getDeleteRamp: function (now = performance.now()) {
-                const baseGap = 26;
-                const fastGap = 7.5;
+                const baseGap = 40;
+                const fastGap = 12;
                 const cycleStart = this.mouseState.deleteCycleStartAt || now;
                 const elapsed = Math.max(0, now - cycleStart);
                 const deleted = this.mouseState.deleteCycleDeletes || 0;
-                if (deleted <= 0) return { minGap: baseGap, accel: 0 };
-                const t = Math.min(1, elapsed / 820);
-                const timeEase = 1 - Math.pow(1 - t, 2.15);
-                const qtyBoost = Math.min(0.20, deleted * 0.018);
-                const accel = Math.min(1, timeEase + qtyBoost);
+
+                const graceMs = 220;
+                if (elapsed < graceMs && deleted <= 1) {
+                    return { minGap: baseGap, accel: 0 };
+                }
+
+                const rampTime = Math.max(0, elapsed - graceMs);
+                const timePortion = Math.min(1, rampTime / 1400);
+                const timeEase = 1 - Math.pow(1 - timePortion, 2.8);
+
+                const qtyPortion = Math.max(0, (deleted - 1) * 0.012);
+                const qtyBoost = Math.min(0.35, qtyPortion);
+
+                const accel = Math.min(1, timeEase * 0.7 + qtyBoost);
                 const minGap = baseGap - (baseGap - fastGap) * accel;
                 return { minGap, accel };
             },
