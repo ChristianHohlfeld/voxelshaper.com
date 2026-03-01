@@ -4347,6 +4347,21 @@
                 this.animate();
                 requestAnimationFrame(() => requestAnimationFrame(() => this.hideBootLoading()));
                 console.log("VoxelShaper Initialized (Polyslice Ready)");
+                // Mobile Audio Unlock
+                const unlock = () => {
+                    if (!this.audioCtx) {
+                        const Ctx = window.AudioContext || window.webkitAudioContext;
+                        if (Ctx) this.audioCtx = new Ctx();
+                    }
+                    if (this.audioCtx && this.audioCtx.state === 'suspended') {
+                        this.audioCtx.resume().then(() => {
+                            window.removeEventListener('click', unlock);
+                            window.removeEventListener('touchstart', unlock);
+                        });
+                    }
+                };
+                window.addEventListener('click', unlock, { once: true });
+                window.addEventListener('touchstart', unlock, { once: true });
             },
 
             request: async function (endpoint, options = {}) {
