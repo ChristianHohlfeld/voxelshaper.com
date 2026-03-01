@@ -8326,76 +8326,116 @@ this.roundedVoxelsGroup.visible = this.isRoundedPreviewEnabled;
             },
 
             updateAllControlInputs: function () {
-                document.getElementById('grid-size-slider').value = this.GRID;
-                document.getElementById('grid-size-display').textContent = `${this.GRID}³`;
-                document.getElementById('color-picker-input').value = this.currentColor;
-                const bt = document.getElementById('blockTypeToggle');
-                if (bt) bt.textContent = this.currentBlockType === 'glass' ? 'Glass' : 'Solid';
-                const mbt = document.getElementById('mobile-block-type-toggle');
-                if (mbt) mbt.textContent = this.currentBlockType === 'glass' ? 'G' : 'S';
-                document.getElementById('brush-size-display').textContent = `${this.brushSize}x${this.brushSize}`;
-                this.updateSoundButtonUI();
+    // --- NEUER BLOCK ANFANG: Grid-Slider Synchronisation ---
+    const slider = document.getElementById('grid-size-slider');
+    const mobileSlider = document.getElementById('mobile-grid-size-slider');
 
-                // Update new controls
-                const desktopRoundToggle = document.getElementById('desktop-roundness-toggle');
-                const mobileRoundToggle = document.getElementById('mobile-roundness-toggle');
-                if (desktopRoundToggle) desktopRoundToggle.checked = this.isRoundedPreviewEnabled;
-                if (mobileRoundToggle) mobileRoundToggle.checked = this.isRoundedPreviewEnabled;
-                const roundnessSetting = document.getElementById('roundness-setting');
-                const mobileRoundnessSetting = document.getElementById('mobile-roundness-setting');
-                if (roundnessSetting) {
-                    roundnessSetting.value = this.previewRoundnessFactor;
-                    roundnessSetting.disabled = !this.isRoundedPreviewEnabled;
-                }
-                if (mobileRoundnessSetting) {
-                    mobileRoundnessSetting.value = this.previewRoundnessFactor;
-                    mobileRoundnessSetting.disabled = !this.isRoundedPreviewEnabled;
-                }
+    // Berechne das absolute Minimum basierend auf den Modell-Grenzen
+    let currentMin = 5;
+    if (this.voxels.size > 0) {
+        let mX = 0, mY = 0, mZ = 0;
+        this.voxels.forEach((_, k) => {
+            const [x, y, z] = this.parseKey(k);
+            mX = Math.max(mX, x); mY = Math.max(mY, y); mZ = Math.max(mZ, z);
+        });
+        currentMin = Math.max(mX, mY, mZ) + 1;
+    }
 
-                if (this.isMobile) {
-                    const mobileColorPicker = document.getElementById('mobile-color-picker');
-                    if (mobileColorPicker) mobileColorPicker.value = this.currentColor;
-                    const mobileCanvasColorPicker = document.getElementById('mobile-canvas-color-picker');
-                    if (mobileCanvasColorPicker) mobileCanvasColorPicker.value = this.currentColor;
-                    const mobileVisibleColor = document.getElementById('mobile-color-picker-visible');
-                    if (mobileVisibleColor) mobileVisibleColor.value = this.currentColor;
-                    document.getElementById('mobile-grid-size-slider').value = this.GRID;
-                    document.getElementById('mobile-grid-size-display').textContent = `${this.GRID}³`;
-                    document.getElementById('mobile-brush-size-display').textContent = `${this.brushSize}x${this.brushSize}`;
-                }
-                const desktopCanvasColorPicker = document.getElementById('desktop-canvas-color-picker');
-                if (desktopCanvasColorPicker) desktopCanvasColorPicker.value = this.currentColor;
+    // Desktop Slider updaten
+    if (slider) {
+        slider.min = currentMin;
+        slider.value = this.GRID;
+    }
+    // Mobile Slider updaten
+    if (mobileSlider) {
+        mobileSlider.min = currentMin;
+        mobileSlider.value = this.GRID;
+    }
+    // --- NEUER BLOCK ENDE ---
 
-                this.setFlySpeed(this.flySpeed);
-                document.getElementById('invertLookX').checked = this.controls.invertLookX;
-                document.getElementById('invertLookY').checked = this.controls.invertLookY;
-                document.getElementById('invertZoom').checked = this.controls.invertZoom;
-                document.getElementById('invertStrafeX').checked = this.controls.invertStrafeX;
-                document.getElementById('invertStrafeY').checked = this.controls.invertStrafeY;
-                const soundToggleMenu = document.getElementById('soundToggleMenu');
-                if (soundToggleMenu) soundToggleMenu.checked = !!this.soundEnabled;
-                const mobileSoundToggleMenu = document.getElementById('mobileSoundToggleMenu');
-                if (mobileSoundToggleMenu) mobileSoundToggleMenu.checked = !!this.soundEnabled;
-                const unitMM = document.getElementById('length-unit-mm');
-                const unitCM = document.getElementById('length-unit-cm');
-                const mUnitMM = document.getElementById('mobile-length-unit-mm');
-                const mUnitCM = document.getElementById('mobile-length-unit-cm');
-                if (unitMM) unitMM.checked = this.lengthUnit === 'mm';
-                if (unitCM) unitCM.checked = this.lengthUnit === 'cm';
-                if (mUnitMM) mUnitMM.checked = this.lengthUnit === 'mm';
-                if (mUnitCM) mUnitCM.checked = this.lengthUnit === 'cm';
-                if (this.isMobile) {
-                    document.getElementById('mobileInvertLookX').checked = this.controls.invertLookX;
-                    document.getElementById('mobileInvertLookY').checked = this.controls.invertLookY;
-                    document.getElementById('mobileInvertZoom').checked = this.controls.invertZoom;
-                    document.getElementById('mobileInvertStrafeX').checked = this.controls.invertStrafeX;
-                    document.getElementById('mobileInvertStrafeY').checked = this.controls.invertStrafeY;
-                }
-                this.updateAxisAndLevelUI();
-                this.updateImageAxisUI();
-                this.updateModeUI();
-                this.updateInAppRoundnessUI(); // Ensure new preview slider UI is updated
-            },
+    // Anzeige-Text aktualisieren
+    document.getElementById('grid-size-display').textContent = `${this.GRID}³`;
+    if (this.isMobile) {
+        document.getElementById('mobile-grid-size-display').textContent = `${this.GRID}³`;
+    }
+
+    // Rest der bestehenden UI-Updates
+    document.getElementById('color-picker-input').value = this.currentColor;
+    const bt = document.getElementById('blockTypeToggle');
+    if (bt) bt.textContent = this.currentBlockType === 'glass' ? 'Glass' : 'Solid';
+    
+    const mbt = document.getElementById('mobile-block-type-toggle');
+    if (mbt) mbt.textContent = this.currentBlockType === 'glass' ? 'G' : 'S';
+    
+    document.getElementById('brush-size-display').textContent = `${this.brushSize}x${this.brushSize}`;
+    this.updateSoundButtonUI();
+
+    // Update Roundness/Preview controls
+    const desktopRoundToggle = document.getElementById('desktop-roundness-toggle');
+    const mobileRoundToggle = document.getElementById('mobile-roundness-toggle');
+    if (desktopRoundToggle) desktopRoundToggle.checked = this.isRoundedPreviewEnabled;
+    if (mobileRoundToggle) mobileRoundToggle.checked = this.isRoundedPreviewEnabled;
+    
+    const roundnessSetting = document.getElementById('roundness-setting');
+    const mobileRoundnessSetting = document.getElementById('mobile-roundness-setting');
+    if (roundnessSetting) {
+        roundnessSetting.value = this.previewRoundnessFactor;
+        roundnessSetting.disabled = !this.isRoundedPreviewEnabled;
+    }
+    if (mobileRoundnessSetting) {
+        mobileRoundnessSetting.value = this.previewRoundnessFactor;
+        mobileRoundnessSetting.disabled = !this.isRoundedPreviewEnabled;
+    }
+
+    if (this.isMobile) {
+        const mobileColorPicker = document.getElementById('mobile-color-picker');
+        if (mobileColorPicker) mobileColorPicker.value = this.currentColor;
+        const mobileCanvasColorPicker = document.getElementById('mobile-canvas-color-picker');
+        if (mobileCanvasColorPicker) mobileCanvasColorPicker.value = this.currentColor;
+        const mobileVisibleColor = document.getElementById('mobile-color-picker-visible');
+        if (mobileVisibleColor) mobileVisibleColor.value = this.currentColor;
+        
+        // Hinweis: mobile-grid-size-slider wurde oben bereits im neuen Block mitbehandelt
+        document.getElementById('mobile-brush-size-display').textContent = `${this.brushSize}x${this.brushSize}`;
+    }
+    
+    const desktopCanvasColorPicker = document.getElementById('desktop-canvas-color-picker');
+    if (desktopCanvasColorPicker) desktopCanvasColorPicker.value = this.currentColor;
+
+    this.setFlySpeed(this.flySpeed);
+    document.getElementById('invertLookX').checked = this.controls.invertLookX;
+    document.getElementById('invertLookY').checked = this.controls.invertLookY;
+    document.getElementById('invertZoom').checked = this.controls.invertZoom;
+    document.getElementById('invertStrafeX').checked = this.controls.invertStrafeX;
+    document.getElementById('invertStrafeY').checked = this.controls.invertStrafeY;
+    
+    const soundToggleMenu = document.getElementById('soundToggleMenu');
+    if (soundToggleMenu) soundToggleMenu.checked = !!this.soundEnabled;
+    const mobileSoundToggleMenu = document.getElementById('mobileSoundToggleMenu');
+    if (mobileSoundToggleMenu) mobileSoundToggleMenu.checked = !!this.soundEnabled;
+    
+    const unitMM = document.getElementById('length-unit-mm');
+    const unitCM = document.getElementById('length-unit-cm');
+    if (unitMM) unitMM.checked = this.lengthUnit === 'mm';
+    if (unitCM) unitCM.checked = this.lengthUnit === 'cm';
+    
+    if (this.isMobile) {
+        const mUnitMM = document.getElementById('mobile-length-unit-mm');
+        const mUnitCM = document.getElementById('mobile-length-unit-cm');
+        if (mUnitMM) mUnitMM.checked = this.lengthUnit === 'mm';
+        if (mUnitCM) mUnitCM.checked = this.lengthUnit === 'cm';
+        document.getElementById('mobileInvertLookX').checked = this.controls.invertLookX;
+        document.getElementById('mobileInvertLookY').checked = this.controls.invertLookY;
+        document.getElementById('mobileInvertZoom').checked = this.controls.invertZoom;
+        document.getElementById('mobileInvertStrafeX').checked = this.controls.invertStrafeX;
+        document.getElementById('mobileInvertStrafeY').checked = this.controls.invertStrafeY;
+    }
+    
+    this.updateAxisAndLevelUI();
+    this.updateImageAxisUI();
+    this.updateModeUI();
+    this.updateInAppRoundnessUI();
+},
 
             addColorToHistory: function (color) {
                 // Keep quick colors stable; avoid reordering while painting/extruding.
