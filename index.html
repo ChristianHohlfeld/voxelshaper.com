@@ -2353,7 +2353,7 @@
     <dialog id="onboardingModal" class="modal">
         <div class="modal-box onboarding-modal-box">
             <h3 id="onboardingTitle" class="font-bold text-lg">Create a printable model in under 1 minute</h3>
-            <p id="onboardingSubtitle" class="py-2 opacity-80">Fast path: load sample → edit voxels → export STL / G-Code / 3MF.</p>
+            <p id="onboardingSubtitle" class="py-2 opacity-80">Fast path: build your own model → edit voxels → export STL / G-Code / 3MF.</p>
             <div class="flex flex-wrap gap-2 py-2 text-xs">
                 <span class="badge badge-outline">No login required</span>
                 <span class="badge badge-outline">Free exports</span>
@@ -2373,8 +2373,7 @@
                 <span class="label-text">Don’t show again</span>
             </label>
             <div class="modal-action mt-6 onboarding-actions">
-                <button id="loadSampleProjectBtn" class="btn btn-primary">Start in 10s (Sample)</button>
-                <button id="startBlankBtn" class="btn">Start Blank</button>
+                <button id="startBlankBtn" class="btn btn-primary">Start Building</button>
             </div>
         </div>
     </dialog>
@@ -3063,27 +3062,6 @@
             },
             keyboard: {},
 
-            sampleProjectData: {
-                gridSize: 10,
-                voxels: [
-                    { x: 3, y: 0, z: 3, color: '#8B4513' }, { x: 4, y: 0, z: 3, color: '#8B4513' }, { x: 5, y: 0, z: 3, color: '#8B4513' },
-                    { x: 3, y: 0, z: 4, color: '#8B4513' }, { x: 4, y: 0, z: 4, color: '#8B4513' }, { x: 5, y: 0, z: 4, color: '#8B4513' },
-                    { x: 3, y: 0, z: 5, color: '#8B4513' }, { x: 4, y: 0, z: 5, color: '#8B4513' }, { x: 5, y: 0, z: 5, color: '#8B4513' },
-                    { x: 3, y: 1, z: 3, color: '#D2B48C' }, { x: 5, y: 1, z: 3, color: '#D2B48C' }, { x: 3, y: 1, z: 4, color: '#D2B48C' },
-                    { x: 5, y: 1, z: 4, color: '#D2B48C' }, { x: 3, y: 1, z: 5, color: '#D2B48C' }, { x: 4, y: 1, z: 5, color: '#D2B48C' },
-                    { x: 5, y: 1, z: 5, color: '#D2B48C' }, { x: 3, y: 2, z: 3, color: '#D2B48C' }, { x: 5, y: 2, z: 3, color: '#D2B48C' },
-                    { x: 3, y: 2, z: 4, color: '#D2B48C' }, { x: 5, y: 2, z: 4, color: '#D2B48C' }, { x: 3, y: 2, z: 5, color: '#D2B48C' },
-                    { x: 4, y: 2, z: 5, color: '#D2B48C' }, { x: 5, y: 2, z: 5, color: '#D2B48C' }, { x: 2, y: 3, z: 2, color: '#A52A2A' },
-                    { x: 3, y: 3, z: 2, color: '#A52A2A' }, { x: 4, y: 3, z: 2, color: '#A52A2A' }, { x: 5, y: 3, z: 2, color: '#A52A2A' },
-                    { x: 6, y: 3, z: 2, color: '#A52A2A' }, { x: 2, y: 3, z: 3, color: '#A52A2A' }, { x: 6, y: 3, z: 3, color: '#A52A2A' },
-                    { x: 2, y: 3, z: 4, color: '#A52A2A' }, { x: 6, y: 3, z: 4, color: '#A52A2A' }, { x: 2, y: 3, z: 5, color: '#A52A2A' },
-                    { x: 6, y: 3, z: 5, color: '#A52A2A' }, { x: 2, y: 3, z: 6, color: '#A52A2A' }, { x: 3, y: 3, z: 6, color: '#A52A2A' },
-                    { x: 4, y: 3, z: 6, color: '#A52A2A' }, { x: 5, y: 3, z: 6, color: '#A52A2A' }, { x: 6, y: 3, z: 6, color: '#A52A2A' },
-                    { x: 3, y: 4, z: 3, color: '#A52A2A' }, { x: 4, y: 4, z: 3, color: '#A52A2A' }, { x: 5, y: 4, z: 3, color: '#A52A2A' },
-                    { x: 3, y: 4, z: 4, color: '#A52A2A' }, { x: 4, y: 4, z: 4, color: '#A52A2A' }, { x: 5, y: 4, z: 4, color: '#A52A2A' },
-                    { x: 3, y: 4, z: 5, color: '#A52A2A' }, { x: 4, y: 4, z: 5, color: '#A52A2A' }, { x: 5, y: 4, z: 5, color: '#A52A2A' },
-                ]
-            },
 
             key: (x, y, z) => (x | ((y + 1) << 10) | (z << 20)) >>> 0,
             parseKey: (k) => [k & 1023, ((k >> 10) & 1023) - 1, (k >> 20) & 1023],
@@ -4086,10 +4064,6 @@
                 this.updateExportRoundnessUI();
                 this.updateInAppRoundnessUI();
                 // Onboarding listeners
-                document.getElementById('loadSampleProjectBtn').addEventListener('click', () => {
-                    trackEvent('start_template', { template: 'sample_project' });
-                    this.loadSampleProject();
-                });
                 document.getElementById('startBlankBtn').addEventListener('click', () => {
                     trackEvent('start_blank', {});
                     this.markOnboardingComplete();
@@ -7464,12 +7438,6 @@ const coords = { x: x, y: y, z: z };
                 document.getElementById('onboardingModal').close();
             },
 
-            loadSampleProject: function () {
-                trackEvent('onboarding_complete', { action: 'load_sample' });
-                this.loadFromData(this.sampleProjectData);
-                this.markOnboardingComplete();
-                this.showToast('Sample Loaded', 'Explore the sample house project!', 'info');
-            },
 
             initVisualHapticLayer: function () {
                 if (!this.containerDiv) return;
