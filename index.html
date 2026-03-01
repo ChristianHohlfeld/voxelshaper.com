@@ -5017,8 +5017,10 @@
                     const el = document.getElementById(id);
                     if (!el) return;
                     el.addEventListener('click', () => dir === 'undo' ? this.undo() : this.redo());
-                    const start = (ev) => { ev.preventDefault(); this.beginHistoryRepeat(dir); };
-                    const stop = () => this.endHistoryRepeat();
+                    const start = (ev) => {
+                        if (ev.cancelable) ev.preventDefault(); // Nur blocken, wenn erlaubt
+                        this.beginHistoryRepeat(dir);
+                    }; const stop = () => this.endHistoryRepeat();
                     el.addEventListener('mousedown', start);
                     el.addEventListener('touchstart', start, { passive: false });
                     el.addEventListener('mouseup', stop);
