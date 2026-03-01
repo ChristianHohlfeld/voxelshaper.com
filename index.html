@@ -3038,6 +3038,7 @@
                 rulerStartScreen: null,
                 deleteCycleDeletes: 0,
                 deleteCycleStartAt: 0,
+                deleteChargeAccel: 0,
             },
             touchState: {
                 longPressTimeout: null,
@@ -4751,6 +4752,7 @@
                 // Non-blocking delete hint after an actual drag-delete cycle with 1x1 brush.
                 // Hint removed by design: progressive delete ramp is primary UX now.
 
+                this.stopDeleteChargeSound();
                 if (document.pointerLockElement === this.cvs) document.exitPointerLock();
 
                 this.activePointers.delete(e.pointerId);
@@ -4773,6 +4775,7 @@
                 if (this.activePointers.size === 0) this.isPointerDown = false;
 
                 // --- Universal Cleanup ---
+                this.stopDeleteChargeSound();
                 this.currentStroke = null;
                 this.touchState.longPressTimeout = null;
                 this.touchState.isInteracting = false;
@@ -5494,31 +5497,31 @@ const coords = { x: x, y: y, z: z };
                 this.currentStroke = new Map();
             },
 
+            getDeleteRamp: function (now = performance.now()) {
+                const baseGap = 26;
+                const fastGap = 7.5;
+                const cycleStart = this.mouseState.deleteCycleStartAt || now;
+                const elapsed = Math.max(0, now - cycleStart);
+                const deleted = this.mouseState.deleteCycleDeletes || 0;
+                if (deleted <= 0) return { minGap: baseGap, accel: 0 };
+                const t = Math.min(1, elapsed / 820);
+                const timeEase = 1 - Math.pow(1 - t, 2.15);
+                const qtyBoost = Math.min(0.20, deleted * 0.018);
+                const accel = Math.min(1, timeEase + qtyBoost);
+                const minGap = baseGap - (baseGap - fastGap) * accel;
+                return { minGap, accel };
+            },
+
             drawVoxelLinePaced: function (start, end, normal) {
                 if (this.currentMode === 'SELECT') return;
                 const now = performance.now();
                 let minGap = 22;
 
                 if (this.currentMode === 'DELETE') {
-                    // Progressive delete speed (Apple-backspace style):
-                    // - time-based acceleration
-                    // - slightly boosted by actual delete count
-                    // - guarded: no acceleration until real deletes happened
-                    const baseGap = 30;
-                    const fastGap = 10;
-                    const cycleStart = this.mouseState.deleteCycleStartAt || now;
-                    const elapsed = Math.max(0, now - cycleStart);
-                    const deleted = this.mouseState.deleteCycleDeletes || 0;
-
-                    if (deleted <= 0) {
-                        minGap = baseGap; // guard: no blind speedup
-                    } else {
-                        const t = Math.min(1, elapsed / 1000); // reaches fast zone in ~1.0s
-                        const timeEase = 1 - Math.pow(1 - t, 2.0); // smooth ramp
-                        const qtyBoost = Math.min(0.18, deleted * 0.015); // mild extra boost from real deletes
-                        const accel = Math.min(1, timeEase + qtyBoost);
-                        minGap = baseGap - (baseGap - fastGap) * accel;
-                    }
+                    const ramp = this.getDeleteRamp(now);
+                    minGap = ramp.minGap;
+                    this.mouseState.deleteChargeAccel = ramp.accel;
+                    this.updateDeleteChargeSound(ramp.accel);
                 }
 
                 if (now - this.mouseState.lastStrokeApplyAt < minGap) return;
@@ -5530,10 +5533,11 @@ const coords = { x: x, y: y, z: z };
 
             continueHeldDeleteTick: function () {
                 if (!this.isPointerDown) return;
-                if (this.currentMode !== 'DELETE') return;
+                if (this.currentMode !== 'DELETE') { this.stopDeleteChargeSound(); return; }
                 if (!this.mouseState.isModifying) return;
                 if (this.mouseState.isRotating || this.mouseState.isPanning || this.mouseState.isMoving || this.mouseState.isExtruding) return;
 
+                this.startDeleteChargeSound();
                 const x = this.mouseState.lastX || this.mouseState.downX;
                 const y = this.mouseState.lastY || this.mouseState.downY;
                 if (!Number.isFinite(x) || !Number.isFinite(y)) return;
@@ -7496,7 +7500,52 @@ const coords = { x: x, y: y, z: z };
                 this.soundEnabled = !this.soundEnabled;
                 localStorage.setItem('voxelSoundEnabled', String(this.soundEnabled));
                 this.updateSoundButtonUI();
+                if (!this.soundEnabled) this.stopDeleteChargeSound();
                 if (this.soundEnabled) this.playVoxelBlub('PAINT');
+            },
+
+            startDeleteChargeSound: function () {
+                if (!this.soundEnabled) return;
+                const Ctx = window.AudioContext || window.webkitAudioContext;
+                if (!Ctx) return;
+                if (!this.audioCtx) this.audioCtx = new Ctx();
+                const ctx = this.audioCtx;
+                if (ctx.state === 'suspended') ctx.resume();
+                if (this._deleteChargeOsc) return;
+                const osc = ctx.createOscillator();
+                const gain = ctx.createGain();
+                const filter = ctx.createBiquadFilter();
+                filter.type = 'lowpass';
+                filter.frequency.value = 2200;
+                osc.type = 'triangle';
+                osc.frequency.value = 140;
+                gain.gain.value = 0.0001;
+                osc.connect(filter);
+                filter.connect(gain);
+                gain.connect(ctx.destination);
+                osc.start();
+                this._deleteChargeOsc = osc;
+                this._deleteChargeGain = gain;
+            },
+
+            updateDeleteChargeSound: function (accel) {
+                if (!this._deleteChargeOsc || !this._deleteChargeGain || !this.audioCtx) return;
+                const t = this.audioCtx.currentTime;
+                const f = 140 + accel * 560;
+                const g = 0.0001 + accel * 0.03;
+                this._deleteChargeOsc.frequency.setTargetAtTime(f, t, 0.025);
+                this._deleteChargeGain.gain.setTargetAtTime(g, t, 0.03);
+            },
+
+            stopDeleteChargeSound: function () {
+                if (!this._deleteChargeOsc || !this._deleteChargeGain || !this.audioCtx) return;
+                const osc = this._deleteChargeOsc;
+                const gain = this._deleteChargeGain;
+                this._deleteChargeOsc = null;
+                this._deleteChargeGain = null;
+                const t = this.audioCtx.currentTime;
+                gain.gain.setTargetAtTime(0.0001, t, 0.04);
+                setTimeout(() => { try { osc.stop(); osc.disconnect(); gain.disconnect(); } catch (_) {} }, 120);
             },
 
             playVoxelBlub: function (mode = 'ADD') {
