@@ -6260,34 +6260,39 @@
                 this.applyUIMode();
                 this.refreshOnboardingContent();
             },
+setGridSize: function (newSize) {
+    let minSize = 5;
+    if (this.voxels.size > 0) {
+        let maxX = 0, maxY = 0, maxZ = 0;
+        this.voxels.forEach((v, k) => {
+            const [x, y, z] = this.parseKey(k);
+            if (x > maxX) maxX = x;
+            if (y > maxY) maxY = y;
+            if (z > maxZ) maxZ = z;
+        });
+        minSize = Math.max(maxX, maxY, maxZ) + 1;
+    }
 
-            setGridSize: function (newSize) {
-                let minSize = 5;
-                if (this.voxels.size > 0) {
-                    let maxX = 0, maxY = 0, maxZ = 0;
-                    this.voxels.forEach((v, k) => {
-                        const [x, y, z] = this.parseKey(k);
-                        if (x > maxX) maxX = x;
-                        if (y > maxY) maxY = y;
-                        if (z > maxZ) maxZ = z;
-                    });
-                    minSize = Math.max(maxX, maxY, maxZ) + 1;
-                }
-                const slider = document.getElementById('grid-size-slider');
-                slider.min = minSize;
-                if (newSize < minSize) {
-                    this.showToast('Error', `Grid cannot be smaller than the current model (${minSize}³).`, 'error');
-                    slider.value = minSize;
-                    return;
-                }
-                this.GRID = newSize;
-                localStorage.setItem('voxelEditorGridSize', this.GRID);
-                this.updateAllControlInputs();
-                this.rebuildHelpers();
-                this.rebuildFoundation();
-                this.resetCamera();
-                this.updateTemplateImagePosition();
-            },
+    // Beide Slider-Elemente holen
+    const slider = document.getElementById('grid-size-slider');
+    const mobileSlider = document.getElementById('mobile-grid-size-slider');
+
+    // Minimum für beide setzen, damit der Regler-Weg korrekt berechnet wird
+    if (slider) slider.min = minSize;
+    if (mobileSlider) mobileSlider.min = minSize;
+
+    if (newSize < minSize) {
+        newSize = minSize; // Erzwinge Minimum, falls Input zu klein
+    }
+
+    this.GRID = newSize;
+    localStorage.setItem('voxelEditorGridSize', this.GRID);
+    
+    this.updateAllControlInputs();
+    this.rebuildHelpers();
+    this.rebuildFoundation();
+    this.updateTemplateImagePosition();
+},
 
             setColor: function (newColor) {
                 this.currentColor = newColor.toUpperCase();
