@@ -3400,12 +3400,12 @@
                                 currentDrawingAxis: 'y',
                                 activeDrawingLevel: { x: 0, y: 0, z: 0 },
                                 voxels: project.voxels.map(v => {
-                                    let color = '#ffffff';
-                                    if (Array.isArray(v.c) && v.c.length >= 3) {
+                                    let color = typeof v.color === 'string' ? v.color : '#ffffff';
+                                    if ((!color || color[0] !== '#') && Array.isArray(v.c) && v.c.length >= 3) {
                                         const toHex = (n) => Math.max(0, Math.min(255, n | 0)).toString(16).padStart(2, '0');
                                         color = `#${toHex(v.c[0])}${toHex(v.c[1])}${toHex(v.c[2])}`;
                                     }
-                                    return { x: v.x, y: v.y, z: v.z, color };
+                                    return { x: v.x, y: v.y, z: v.z, color: String(color).toUpperCase() };
                                 })
                             };
                         }
@@ -3495,12 +3495,12 @@
                                     currentDrawingAxis: 'y',
                                     activeDrawingLevel: { x: 0, y: 0, z: 0 },
                                     voxels: payload.voxels.map(v => {
-                                        let color = '#ffffff';
-                                        if (Array.isArray(v.c) && v.c.length >= 3) {
+                                        let color = typeof v.color === 'string' ? v.color : '#ffffff';
+                                        if ((!color || color[0] !== '#') && Array.isArray(v.c) && v.c.length >= 3) {
                                             const toHex = (n) => Math.max(0, Math.min(255, n | 0)).toString(16).padStart(2, '0');
                                             color = `#${toHex(v.c[0])}${toHex(v.c[1])}${toHex(v.c[2])}`;
                                         }
-                                        return { x: v.x, y: v.y, z: v.z, color };
+                                        return { x: v.x, y: v.y, z: v.z, color: String(color).toUpperCase() };
                                     })
                                 };
                             }
@@ -3759,7 +3759,7 @@
                 this.ren.setPixelRatio(Math.min(window.devicePixelRatio || 1, this.lowPerfMode ? 1.0 : 1.4));
                 this.ren.outputEncoding = THREE.sRGBEncoding;
                 this.ren.toneMapping = THREE.ACESFilmicToneMapping;
-                this.ren.toneMappingExposure = 0.94;
+                this.ren.toneMappingExposure = 0.96;
                 this.ren.shadowMap.enabled = !this.lowPerfMode;
                 this.ren.shadowMap.type = THREE.PCFSoftShadowMap;
 
