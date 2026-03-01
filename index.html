@@ -2962,6 +2962,7 @@
                 rulerStartCoords: null,
                 rulerStartScreen: null,
                 deleteCycleDeletes: 0,
+                deleteCycleStartAt: 0,
             },
             touchState: {
                 longPressTimeout: null,
@@ -4138,6 +4139,7 @@
 
                 this.currentStroke = new Map();
                 this.mouseState.deleteCycleDeletes = 0;
+                this.mouseState.deleteCycleStartAt = performance.now();
                 this.isPointerDown = true;
                 this.activePointers.set(e.pointerId, { x: e.clientX, y: e.clientY });
 
@@ -5313,7 +5315,30 @@ const coords = { x: x, y: y, z: z };
             drawVoxelLinePaced: function (start, end, normal) {
                 if (this.currentMode === 'SELECT') return;
                 const now = performance.now();
-                const minGap = this.currentMode === 'DELETE' ? 30 : 22;
+                let minGap = 22;
+
+                if (this.currentMode === 'DELETE') {
+                    // Progressive delete speed (Apple-backspace style):
+                    // - time-based acceleration
+                    // - slightly boosted by actual delete count
+                    // - guarded: no acceleration until real deletes happened
+                    const baseGap = 34;
+                    const fastGap = 12;
+                    const cycleStart = this.mouseState.deleteCycleStartAt || now;
+                    const elapsed = Math.max(0, now - cycleStart);
+                    const deleted = this.mouseState.deleteCycleDeletes || 0;
+
+                    if (deleted <= 0) {
+                        minGap = baseGap; // guard: no blind speedup
+                    } else {
+                        const t = Math.min(1, elapsed / 1400); // reach near-max in ~1.4s
+                        const timeEase = 1 - Math.pow(1 - t, 2.2); // smooth progressive curve
+                        const qtyBoost = Math.min(0.22, deleted * 0.02); // mild quantity influence
+                        const accel = Math.min(1, timeEase + qtyBoost);
+                        minGap = baseGap - (baseGap - fastGap) * accel;
+                    }
+                }
+
                 if (now - this.mouseState.lastStrokeApplyAt < minGap) return;
                 this.mouseState.lastStrokeApplyAt = now;
 
