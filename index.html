@@ -8070,20 +8070,33 @@ const allMeshes = [...this.originalVoxelsGroup.children, this.groundPlaneMesh].f
                 }
             },
 
-            onModelChanged(reason = '') {
-                this.updateShadowPolicy();
-                // collapse multiple mutations into one rebuild
-                if (!this.isRoundedPreviewEnabled) return;
-                this.roundedPreviewDirty = true;
-                if (this._roundedRebuildRAF) return;
-                this._roundedRebuildRAF = requestAnimationFrame(() => {
-                    this._roundedRebuildRAF = null;
-                    if (!this.roundedPreviewDirty) return;
-                    this.roundedPreviewDirty = false;
-                    try { this.rebuildRoundedPreview(); }
-                    catch (e) { console.warn('Rounded rebuild failed (' + reason + '):', e); }
-                });
-            },
+           onModelChanged(reason = '') {
+    this.updateShadowPolicy();
+
+    // UI-Update (Slider-Bounds) immer ausführen, auch ohne abgerundete Ecken
+    if (!this._uiRebuildRAF) {
+        this._uiRebuildRAF = requestAnimationFrame(() => {
+            this._uiRebuildRAF = null;
+            this.updateAllControlInputs(); // Hier werden minSize & Slider-Min neu berechnet
+        });
+    }
+
+    // Ab hier nur weiter, wenn die abgerundete Vorschau wirklich aktiv ist
+    if (!this.isRoundedPreviewEnabled) return;
+
+    this.roundedPreviewDirty = true;
+    if (this._roundedRebuildRAF) return;
+    this._roundedRebuildRAF = requestAnimationFrame(() => {
+        this._roundedRebuildRAF = null;
+        if (!this.roundedPreviewDirty) return;
+        this.roundedPreviewDirty = false;
+        try { 
+            this.rebuildRoundedPreview(); 
+        } catch (e) { 
+            console.warn('Rounded rebuild failed (' + reason + '):', e); 
+        }
+    });
+},
 
             rebuildSceneFromVoxels: function () {
                 // Dispose of the original group children
