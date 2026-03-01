@@ -1846,7 +1846,7 @@
 
         <!-- RIGHT ZONE -->
         <div class="controls-zone zone-right">
-            <button id="soundToggleBtn" class="btn btn-sm btn-ghost btn-square" title="Sound: On" aria-label="Toggle sound">
+            <button id="soundToggleBtn" class="btn btn-sm btn-ghost btn-square shrink-0 self-center" title="Sound: On" aria-label="Toggle sound">
                 <i id="soundToggleIcon" class="fas fa-volume-up"></i>
             </button>
             <button id="generateHubBtn" class="btn btn-sm btn-accent" title="Morph World" style="box-shadow: 0 0 18px rgba(0,212,255,.45);">
@@ -1887,11 +1887,6 @@
         <input type="file" id="imageFileInput" accept="image/*" class="hidden">
     </div>
 
-    <div id="desktop-sound-overlay">
-        <button id="desktop-canvas-sound-toggle" class="btn btn-circle btn-ghost bg-base-200/80 backdrop-blur-sm shadow-lg" title="Sound: On" aria-label="Toggle sound in canvas">
-            <i id="desktop-canvas-sound-icon" class="fas fa-volume-up"></i>
-        </button>
-    </div>
 
     <!-- MOBILE UI CONTAINER -->
     <div id="mobile-ui-container" style="display: none;">
@@ -3904,7 +3899,6 @@
                 document.getElementById('openMorphSettingsBtn')?.addEventListener('click', () => this.openMorphSettingsModal());
                 document.getElementById('saveMorphSettingsBtn')?.addEventListener('click', () => this.saveMorphSettings());
                 document.getElementById('soundToggleBtn').addEventListener('click', () => this.toggleSound());
-                document.getElementById('desktop-canvas-sound-toggle').addEventListener('click', () => this.toggleSound());
                 document.getElementById('uploadToHubFromShareBtn').addEventListener('click', () => {
                     document.getElementById('shareModal').close();
                     document.getElementById('uploadProjectModal').showModal();
@@ -7288,21 +7282,11 @@ const coords = { x: x, y: y, z: z };
             updateSoundButtonUI: function () {
                 const btn = document.getElementById('soundToggleBtn');
                 const icon = document.getElementById('soundToggleIcon');
-                const canvasBtn = document.getElementById('desktop-canvas-sound-toggle');
-                const canvasIcon = document.getElementById('desktop-canvas-sound-icon');
                 if (!btn || !icon) return;
                 btn.title = this.soundEnabled ? 'Sound: On' : 'Sound: Off';
                 btn.classList.toggle('btn-success', this.soundEnabled);
                 btn.classList.toggle('btn-ghost', !this.soundEnabled);
                 icon.className = this.soundEnabled ? 'fas fa-volume-up' : 'fas fa-volume-mute';
-                if (canvasBtn) {
-                    canvasBtn.title = this.soundEnabled ? 'Sound: On' : 'Sound: Off';
-                    canvasBtn.classList.toggle('btn-success', this.soundEnabled);
-                    canvasBtn.classList.toggle('btn-ghost', !this.soundEnabled);
-                }
-                if (canvasIcon) {
-                    canvasIcon.className = this.soundEnabled ? 'fas fa-volume-up' : 'fas fa-volume-mute';
-                }
 
                 const soundToggleMenu = document.getElementById('soundToggleMenu');
                 if (soundToggleMenu) soundToggleMenu.checked = !!this.soundEnabled;
