@@ -2918,6 +2918,7 @@
             currentColor: '#ffffff',
             currentBlockType: (localStorage.getItem('voxelBlockType') || 'solid'),
             deleteBrushHintDisabled: true,
+            desktopMoveHintShown: localStorage.getItem('desktopMoveHintShown') === 'true',
             GRID: 10,
             flySpeed: 0.1,
             currentMode: 'FREE',
@@ -5045,13 +5046,21 @@
                     return;
                 }
 
-                // Desktop contract: while RMB is held, wheel adjusts fly speed.
-                // Also keep pointer-lock behavior for continuity.
+                // Desktop contract (legacy-compatible):
+                // Ctrl+Wheel OR RMB+Wheel OR PointerLock+Wheel => adjust fly speed.
                 const rmbHeld = (e.buttons & 2) === 2;
-                if (document.pointerLockElement === this.cvs || rmbHeld) {
+                const speedMode = e.ctrlKey || rmbHeld || document.pointerLockElement === this.cvs;
+                if (speedMode) {
                     const speedChange = e.deltaY > 0 ? -0.01 : 0.01;
                     this.setFlySpeed(this.flySpeed + speedChange);
                     return;
+                }
+
+                // Desktop coaching: wheel does zoom; forward/back movement is W/S.
+                if (!this.computeMobileMode() && !this.desktopMoveHintShown) {
+                    this.desktopMoveHintShown = true;
+                    localStorage.setItem('desktopMoveHintShown', 'true');
+                    this.showToast('Movement', 'Use W/S to move forward/back. Use Ctrl+Wheel (or RMB+Wheel) for fly speed.', 'info', 2200);
                 }
 
                 let zoomAmount = e.deltaY * 0.001 * this.PINCH_ZOOM_MULT;
