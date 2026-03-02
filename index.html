@@ -8,6 +8,9 @@
         const ANALYTICS_LAST_SEEN_KEY = 'vs_analytics_last_seen_ts';
         const ANALYTICS_SESSION_KEY = 'vs_analytics_session_id';
         const ANALYTICS_SESSION_INDEX_KEY = 'vs_analytics_session_index';
+        const ANALYTICS_FIRST_VALUE_KEY = 'vs_first_value_tracked';
+        const ANALYTICS_FIRST_INTERACTION_KEY = 'vs_first_interaction_tracked';
+        const ANALYTICS_FIRST_EDIT_KEY = 'vs_first_edit_tracked';
 
         window[`ga-disable-${GA_MEASUREMENT_ID}`] = false;
         window.dataLayer = window.dataLayer || [];
@@ -17,7 +20,9 @@
         gtag('js', new Date());
         gtag('config', GA_MEASUREMENT_ID, {
             anonymize_ip: true,
-            transport_type: 'beacon'
+            transport_type: 'beacon',
+            send_page_view: false,
+            linker: { domains: ['voxelshaper.com', 'hub.voxelshaper.com'] }
         });
 
         const SESSION_ID = (() => {
@@ -32,29 +37,77 @@
             }
         })();
 
-        function getAnalyticsContext() {
-            const uiMode = window.matchMedia('(pointer: coarse)').matches || navigator.maxTouchPoints > 0 ? 'mobile' : 'desktop';
+        function getSourceMarkers() {
+            const url = new URL(window.location.href);
+            const from = url.searchParams.get('from') || '';
+            const handoff = url.searchParams.get('handoff') || '';
             return {
-                session_id: SESSION_ID,
-                ui_mode: uiMode,
-                viewport_w: window.innerWidth,
-                viewport_h: window.innerHeight,
-                page_path: window.location.pathname
+                source: window.matchMedia('(display-mode: standalone)').matches ? 'pwa' : 'web',
+                source_from: from || undefined,
+                source_handoff: handoff || undefined,
+                page_referrer: document.referrer || undefined
             };
         }
 
+        function getAnalyticsContext() {
+            const deviceType = window.matchMedia('(pointer: coarse)').matches || navigator.maxTouchPoints > 0 ? 'mobile' : 'desktop';
+            const authState = (window.__voxelshaper_user?.id || window.VoxelApp?.user?.id) ? 'authenticated' : 'anonymous';
+            const modelId = (new URL(window.location.href)).searchParams.get('modelId') || undefined;
+            return {
+                session_id: SESSION_ID,
+                surface: 'app',
+                device_type: deviceType,
+                auth_state: authState,
+                model_id: modelId,
+                viewport_w: window.innerWidth,
+                viewport_h: window.innerHeight,
+                page_path: window.location.pathname,
+                ...getSourceMarkers()
+            };
+        }
+
+        // Analytics taxonomy (maintainer note): emit existing + canonical events for dashboard stability.
+        // Canonical app funnel: app_landing_view, app_first_interaction, app_first_edit,
+        // app_save_click, app_save_success, app_export_click, app_export_success.
+        const ANALYTICS_EVENT_MAP = {
+            landing_view: 'app_landing_view',
+            first_interaction: 'app_first_interaction',
+            first_edit: 'app_first_edit',
+            save_project: 'app_save_click',
+            upload_hub: 'app_save_success',
+            export_click: 'app_export_click',
+            export_success: 'app_export_success'
+        };
+
+        let __lastPageViewKey = '';
+        function trackPageView(force = false) {
+            const key = `${window.location.pathname}${window.location.search}${window.location.hash}`;
+            if (!force && key === __lastPageViewKey) return;
+            __lastPageViewKey = key;
+            gtag('event', 'page_view', {
+                ...getAnalyticsContext(),
+                page_location: window.location.href,
+                page_title: document.title
+            });
+        }
+
         function trackEvent(eventName, params = {}) {
+            const canonicalName = ANALYTICS_EVENT_MAP[eventName];
             const payload = { ...getAnalyticsContext(), ...params };
             if (typeof gtag === 'function') {
                 gtag('event', eventName, payload);
+                if (canonicalName && canonicalName !== eventName) {
+                    gtag('event', canonicalName, payload);
+                }
 
-                const isValueEvent = eventName === 'export_success' || eventName === 'share_success' || eventName === 'upload_hub';
+                const valueEventName = canonicalName || eventName;
+                const isValueEvent = valueEventName === 'app_export_success' || valueEventName === 'app_save_success';
                 if (isValueEvent) {
                     try {
-                        const firstValueKey = `vs_first_value_tracked_${SESSION_ID}`;
+                        const firstValueKey = `${ANALYTICS_FIRST_VALUE_KEY}_${SESSION_ID}`;
                         if (!sessionStorage.getItem(firstValueKey)) {
                             sessionStorage.setItem(firstValueKey, '1');
-                            gtag('event', 'first_value', { ...getAnalyticsContext(), trigger_event: eventName });
+                            gtag('event', 'first_value', { ...getAnalyticsContext(), trigger_event: valueEventName });
                         }
                     } catch { }
                 }
@@ -74,6 +127,7 @@
             localStorage.setItem(ANALYTICS_SESSION_INDEX_KEY, String(sessionIndex));
             localStorage.setItem(ANALYTICS_LAST_SEEN_KEY, String(Date.now()));
 
+            trackPageView(true);
             trackEvent('session_start', { source, session_index: sessionIndex });
             trackEvent('app_boot', { source });
             trackEvent('landing_view', { source });
@@ -83,6 +137,9 @@
                 trackEvent('return_session', { days_since_last: daysSinceLast, source });
             }
         }, { once: true });
+
+        window.addEventListener('popstate', () => trackPageView());
+        window.addEventListener('hashchange', () => trackPageView());
     </script>
 
 
@@ -4429,6 +4486,7 @@
                     try {
                         const user = await this.request('/api/user/me');
                         this.user = user;
+                        window.__voxelshaper_user = this.user;
                         this.updateLoginStateUI();
                         trackEvent('login_success', { user_id: this.user.id, method: 'oauth' });
                         this.showToast('Login Successful', 'You are now logged in via OAuth!', 'info');
@@ -4510,6 +4568,7 @@
                             body: JSON.stringify({ token: magicLinkToken })
                         });
                         this.user = response.user;
+                        window.__voxelshaper_user = this.user;
                         this.updateLoginStateUI();
                         trackEvent('login_success', { user_id: this.user.id, method: 'magic_link' });
                         this.showToast('Login Successful', 'You are now logged in!', 'info');
@@ -4526,6 +4585,7 @@
                     try {
                         const user = await this.request('/api/user/me');
                         this.user = user;
+                        window.__voxelshaper_user = this.user;
                         this.updateLoginStateUI();
                     } catch (e) {
                         // This is a normal case for non-logged-in users.
@@ -7706,6 +7766,7 @@ const allMeshes = [...this.originalVoxelsGroup.children, this.groundPlaneMesh].f
                     try {
                         await this.request('/auth/logout', { method: 'POST' });
                         this.user = null;
+                        window.__voxelshaper_user = null;
                         this.token = null;
                         this.updateLoginStateUI();
                         this.showToast('Logged Out', '', 'info');
