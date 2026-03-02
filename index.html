@@ -2606,7 +2606,13 @@
 
 <body class="bg-base-100 min-h-screen text-base-content flex flex-col rounded-lg">
 
-
+    <div id="bootLoadingOverlay" aria-live="polite" aria-label="Loading editor">
+        <div class="glass-panel rounded-2xl px-6 py-5 w-[min(92vw,360px)] text-center">
+            <div class="text-xs uppercase tracking-[0.25em] text-white/60 mb-2">Launching</div>
+            <div id="bootLoadingLabel" class="text-sm text-white/90 mb-3">Preparing editor…</div>
+            <progress id="bootLoadingProgress" class="progress progress-accent w-full" max="100" value="12"></progress>
+        </div>
+    </div>
 
     <div id="editor-theme-overlay" class="absolute inset-0 pointer-events-none z-[15]">
         <div class="vs-editor-stars"></div>
@@ -2833,12 +2839,6 @@
         <div id="desktop-overlay-controls" class="flex gap-2">
             <button id="desktop-overlay-mode-toggle"
                 class="btn btn-circle btn-ghost bg-base-200/80 backdrop-blur-sm shadow-lg" title="Cycle mode (Space)"><i
-                    class="fas fa-plus"></i></button>
-            <button id="desktop-overlay-brush-decrease"
-                class="btn btn-circle btn-ghost bg-base-200/80 backdrop-blur-sm shadow-lg" title="Brush -"><i
-                    class="fas fa-minus"></i></button>
-            <button id="desktop-overlay-brush-increase"
-                class="btn btn-circle btn-ghost bg-base-200/80 backdrop-blur-sm shadow-lg" title="Brush +"><i
                     class="fas fa-plus"></i></button>
         </div>
         <div id="desktop-undo-redo-overlay" class="flex gap-2">
@@ -4283,14 +4283,23 @@
                 this.tutorialStep = Math.min(this.tutorialStep, Math.max(0, this.tutorialSteps.length - 1));
             },
 
+            setBootLoadingProgress: function (value, label) {
+                const bar = document.getElementById('bootLoadingProgress');
+                const text = document.getElementById('bootLoadingLabel');
+                if (bar && Number.isFinite(value)) bar.value = Math.max(0, Math.min(100, value));
+                if (text && label) text.textContent = label;
+            },
+
             hideBootLoading: function () {
                 const el = document.getElementById('bootLoadingOverlay');
                 if (!el) return;
+                this.setBootLoadingProgress(100, 'Ready');
                 el.classList.add('hidden');
                 setTimeout(() => el.remove(), 220);
             },
 
             init: function () {
+                this.setBootLoadingProgress(18, 'Preparing interface…');
                 this.setupDOM();
                 this.loadMorphSettings();
                 if (typeof this.keyboard === 'undefined' || this.keyboard === null) {
@@ -4300,11 +4309,13 @@
                 this.refreshOnboardingContent();
                 trackEvent('ui_mode_detected', this.getAnalyticsContext());
                 this.setupThree();
+                this.setBootLoadingProgress(52, 'Starting 3D scene…');
                 this.ensureModalCloseButtons();
                 this.ensureFirstRunPalette();
                 this.renderColorHistory();
                 this.applyFirstRunColorIfNeeded();
                 this.rebuildFoundation();
+                this.setBootLoadingProgress(76, 'Binding controls…');
                 this.setupEventListeners();
                 this.initVisualHapticLayer();
 
@@ -4326,6 +4337,7 @@
                 this.renderColorHistory();
                 this.updateImageAxisUI();
                 this.authCheckAndInit();
+                this.setBootLoadingProgress(92, 'Finalizing…');
                 this.handleResize();
                 this.animate();
                 requestAnimationFrame(() => requestAnimationFrame(() => this.hideBootLoading()));
@@ -5021,8 +5033,6 @@
                 document.getElementById('desktop-overlay-mode-toggle')?.addEventListener('click', () => this.cycleMode());
                 document.getElementById('mobile-quick-brush-decrease').addEventListener('click', () => this.setBrushSize(this.brushSize - 1));
                 document.getElementById('mobile-quick-brush-increase').addEventListener('click', () => this.setBrushSize(this.brushSize + 1));
-                document.getElementById('desktop-overlay-brush-decrease')?.addEventListener('click', () => this.setBrushSize(this.brushSize - 1));
-                document.getElementById('desktop-overlay-brush-increase')?.addEventListener('click', () => this.setBrushSize(this.brushSize + 1));
                 document.getElementById('deleteHintGrowBtn')?.addEventListener('click', () => { this.setBrushSize(3); this.hideDeleteBrushHint(); });
                 document.getElementById('deleteHintDontShowBtn')?.addEventListener('click', () => {
                     this.deleteBrushHintDisabled = true;
