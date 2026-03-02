@@ -4004,6 +4004,8 @@
             activePointers: new Map(),
             isPointerDown: false,
             currentModelId: null,
+            hubUploadDirty: false,
+            lastHubUploadAt: 0,
             morphSettings: { type: 'random', seed: null, shape: 60, color: 80, palette: 'auto' },
             hapticLayer: null,
             soundEnabled: localStorage.getItem('voxelSoundEnabled') !== 'false',
@@ -4337,6 +4339,7 @@
                 this.renderColorHistory();
                 this.updateImageAxisUI();
                 this.authCheckAndInit();
+                this.updateHubSaveIndicator();
                 this.setBootLoadingProgress(92, 'Finalizing…');
                 this.handleResize();
                 this.animate();
@@ -6091,6 +6094,9 @@
                         body: JSON.stringify(hubDocument)
                     });
                     this.currentModelId = response.public_id;
+                    this.hubUploadDirty = false;
+                    this.lastHubUploadAt = Date.now();
+                    this.updateHubSaveIndicator();
                     this.updateUrlWithModelId();
                     this.showToast('Thanks for sharing', 'Your model is live on the Hub.', 'success', 2500);
                     trackEvent('upload_hub', { model_id: this.currentModelId, visibility: hubDocument.visibility });
@@ -6149,6 +6155,9 @@
                     this.rebuildSceneFromVoxels();
                     this.resetCamera();
                     this.currentModelId = modelId; // Keep track of the loaded ID
+                    this.hubUploadDirty = false;
+                    this.lastHubUploadAt = Date.now();
+                    this.updateHubSaveIndicator();
                     this.updateUrlWithModelId(); // Ensure URL is correct
                     this.showToast('Project Loaded', `Loaded "${data.name}"`, 'info');
 
@@ -8121,7 +8130,20 @@ const allMeshes = [...this.originalVoxelsGroup.children, this.groundPlaneMesh].f
                 }
             },
 
+            updateHubSaveIndicator: function () {
+                const el = document.getElementById('hubSaveIndicator');
+                if (!el) return;
+                const synced = !this.hubUploadDirty;
+                el.classList.toggle('is-synced', synced);
+                el.classList.toggle('is-unsynced', !synced);
+                const when = this.lastHubUploadAt ? ` • last upload ${new Date(this.lastHubUploadAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}` : '';
+                el.title = synced ? `Uploaded to Hub${when}` : 'Unsaved to Hub';
+                el.setAttribute('aria-label', el.title);
+            },
+
            onModelChanged(reason = '') {
+    this.hubUploadDirty = true;
+    this.updateHubSaveIndicator();
     this.updateShadowPolicy();
 
     // UI-Update (Slider-Bounds) immer ausführen, auch ohne abgerundete Ecken
@@ -9027,9 +9049,33 @@ this.roundedVoxelsGroup.visible = this.isRoundedPreviewEnabled;
     <a id="sideToHubPill" href="https://hub.voxelshaper.com" class="vs-nav-pill vs-pill-left"
         onclick="trackEvent('hub_open', { source: 'editor_pill_to_hub' })"><span class="vs-arrow">←</span><span
             class="vs-text">To Hub</span></a>
-
+    <button id="hubSaveIndicator" class="hub-save-indicator" type="button" title="Hub upload status" aria-label="Hub upload status">
+        <i class="fa-regular fa-floppy-disk"></i><span class="hub-save-star" aria-hidden="true">★</span>
+    </button>
 
     <style>
+        .hub-save-indicator {
+            position: fixed;
+            top: max(10px, env(safe-area-inset-top));
+            right: max(10px, env(safe-area-inset-right));
+            width: 34px;
+            height: 34px;
+            border-radius: 9999px;
+            border: 1px solid rgba(255, 255, 255, .2);
+            background: rgba(8, 12, 18, .58);
+            color: rgba(220, 240, 255, .78);
+            z-index: 85;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            backdrop-filter: blur(8px);
+            pointer-events: none;
+        }
+        .hub-save-indicator.is-synced { color: rgba(182, 244, 204, .9); border-color: rgba(74, 222, 128, .45); }
+        .hub-save-indicator.is-unsynced { color: rgba(255, 233, 166, .94); border-color: rgba(251, 191, 36, .46); }
+        .hub-save-star { position:absolute; top:2px; right:4px; font-size:9px; opacity:.85; display:none; }
+        .hub-save-indicator.is-unsynced .hub-save-star { display:block; }
+
         .vs-auth-panel {
             background: rgba(22, 27, 34, 0.92) !important;
             border: 1px solid rgba(255, 255, 255, 0.10) !important;
