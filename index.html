@@ -5014,15 +5014,31 @@
 
                     const trigger = () => dir === 'undo' ? this.undo() : this.redo();
                     let suppressClickUntil = 0;
+                    let activePointerId = null;
 
-                    // Touch/pen should execute exactly one step and must not also fire click.
+                    // Touch/pen: one immediate step on tap, then accelerated repeat on hold.
                     el.addEventListener('pointerdown', (ev) => {
                         if (ev.pointerType !== 'mouse') {
                             if (ev.cancelable) ev.preventDefault();
-                            suppressClickUntil = Date.now() + 500;
-                            trigger();
+                            activePointerId = ev.pointerId;
+                            try { el.setPointerCapture(ev.pointerId); } catch { }
+                            suppressClickUntil = Date.now() + 650;
+                            trigger(); // precise single-step tap behavior
+                            this.beginHistoryRepeat(dir); // same acceleration ramp as existing history repeat
+                            return;
                         }
+                        activePointerId = null;
                     });
+
+                    const stopRepeat = (ev) => {
+                        if (activePointerId !== null && ev.pointerId === activePointerId) {
+                            try { el.releasePointerCapture(ev.pointerId); } catch { }
+                            activePointerId = null;
+                            this.endHistoryRepeat();
+                        }
+                    };
+                    el.addEventListener('pointerup', stopRepeat);
+                    el.addEventListener('pointercancel', stopRepeat);
 
                     // Mouse/keyboard activation still uses click.
                     el.addEventListener('click', (ev) => {
