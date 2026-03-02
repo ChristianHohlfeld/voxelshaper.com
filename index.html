@@ -2625,10 +2625,18 @@
         <div class="controls-zone zone-left">
             <div class="dropdown">
                 <label tabindex="0" class="btn btn-sm btn-ghost">File</label>
-                <ul tabindex="0" class="dropdown-content z-[100] menu p-2 shadow bg-base-300 rounded-box w-52">
-                    <li><a id="saveBtn">Save Local (.json)</a></li>
+                <ul tabindex="0" class="dropdown-content z-[100] menu p-2 shadow bg-base-300 rounded-box w-56">
+                    <li><a id="saveBtn" class="text-accent font-semibold"><i class="fas fa-cloud-upload-alt mr-2"></i>Save to Hub</a></li>
                     <li><a id="loadBtn">Load Local (.json)</a></li>
-                    <li><a id="exportBtn">Export Options</a></li>
+                    <li>
+                        <details>
+                            <summary>Advanced Export / Local</summary>
+                            <ul>
+                                <li><a id="saveLocalBtn">Download Local (.json)</a></li>
+                                <li><a id="exportBtn">Export Options</a></li>
+                            </ul>
+                        </details>
+                    </li>
                     <div class="divider my-1"></div>
                     <li><a id="loadImageBtn">Load Reference Image</a></li>
                     <li><a id="removeImageBtn" class="hidden">Remove Reference Image</a></li>
@@ -2798,8 +2806,9 @@
                 style="box-shadow: 0 0 18px rgba(250,204,21,.45);">
                 <i class="fas fa-bolt"></i>
             </button>
-            <button id="shareBtn" class="btn btn-sm btn-warning btn-square" title="Share Project">
-                <i class="fas fa-share-alt"></i>
+            <button id="shareBtn" class="btn btn-sm btn-primary" title="Save to Hub"
+                style="min-width: 96px; box-shadow: 0 0 20px rgba(59,130,246,.35);">
+                <i class="fas fa-cloud-upload-alt mr-1"></i>Save
             </button>
             <button id="helpTutorialBtn" class="btn btn-sm btn-ghost btn-square" title="Show onboarding">
                 <i class="fas fa-question"></i>
@@ -2840,6 +2849,8 @@
             <button id="desktop-overlay-mode-toggle"
                 class="btn btn-circle btn-ghost bg-base-200/80 backdrop-blur-sm shadow-lg" title="Cycle mode (Space)"><i
                     class="fas fa-plus"></i></button>
+            <button id="desktop-overlay-generate" class="btn btn-circle btn-warning bg-base-200/90 backdrop-blur-sm shadow-lg" title="Morph World"><i class="fas fa-dice-d20"></i></button>
+            <button id="desktop-overlay-save" class="btn btn-primary bg-base-200/90 backdrop-blur-sm shadow-lg" title="Save to Hub"><i class="fas fa-cloud-upload-alt mr-1"></i>Save</button>
         </div>
         <div id="desktop-undo-redo-overlay" class="flex gap-2">
             <button id="desktop-overlay-undo" class="btn btn-circle btn-ghost bg-base-200/80 backdrop-blur-sm shadow-lg"
@@ -2865,6 +2876,15 @@
                 <i class="fas fa-redo"></i>
             </button>
         </div>
+        <div id="mobile-action-overlay" class="absolute bottom-24 left-4 z-50 flex flex-row gap-2"
+            style="bottom: calc(5.5rem + var(--safe-bottom));">
+            <button id="mobile-overlay-generate" class="btn btn-circle btn-warning shadow-lg" title="Morph World">
+                <i class="fas fa-dice-d20"></i>
+            </button>
+            <button id="mobile-overlay-save" class="btn btn-primary shadow-lg" title="Save to Hub">
+                <i class="fas fa-cloud-upload-alt mr-1"></i>Save
+            </button>
+        </div>
 
         <div id="mobile-canvas-color-picker-wrap" aria-label="Pick brush color on canvas">
             <input type="color" id="mobile-canvas-color-picker" value="#FFFFFF" aria-label="Pick color on canvas">
@@ -2879,11 +2899,19 @@
                     <i class="fas fa-folder-open"></i>
                 </label>
                 <ul tabindex="0"
-                    class="dropdown-content z-[60] menu p-2 shadow bg-base-300 rounded-box w-52 left-0 right-auto">
-                    <li><a id="saveBtnMobile">Save Local (.json)</a></li>
+                    class="dropdown-content z-[60] menu p-2 shadow bg-base-300 rounded-box w-56 left-0 right-auto">
+                    <li><a id="saveBtnMobile" class="text-accent font-semibold"><i class="fas fa-cloud-upload-alt mr-2"></i>Save to Hub</a></li>
                     <li><a id="loadBtnMobile">Load Local (.json)</a></li>
-                    <li><a id="exportBtnMobile">Export Options</a></li>
-                    <li><a id="mobile-share">Share Project</a></li>
+                    <li>
+                        <details>
+                            <summary>Advanced Export / Local</summary>
+                            <ul>
+                                <li><a id="saveLocalBtnMobile">Download Local (.json)</a></li>
+                                <li><a id="exportBtnMobile">Export Options</a></li>
+                            </ul>
+                        </details>
+                    </li>
+                    <li><a id="mobile-share">Share / Upload</a></li>
                     <li><a id="mobile-generate-hub" class="text-accent font-semibold"><i
                                 class="fas fa-dice-d20 mr-2"></i>Morph World</a></li>
                     <div class="divider my-1"></div>
@@ -3130,7 +3158,7 @@
     <dialog id="uploadProjectModal" class="modal">
         <div class="modal-box"><button type="button" class="btn btn-sm btn-ghost modal-close-x"
                 aria-label="Close dialog">×</button>
-            <h3 class="font-bold text-lg">Upload Project to Hub</h3>
+            <h3 class="font-bold text-lg">Save Project to Hub</h3>
             <form method="dialog" class="flex flex-col gap-4 py-4">
                 <input type="text" id="uploadTitle" placeholder="Project Title" class="input input-bordered w-full">
                 <textarea id="uploadDescription" placeholder="Description"
@@ -3172,7 +3200,7 @@
                         Private</label>
                 </div>
                 <div class="modal-action">
-                    <button id="uploadConfirmBtn" class="btn btn-success">Upload</button>
+                    <button id="uploadConfirmBtn" class="btn btn-success">Save to Hub</button>
                     <button class="btn">Cancel</button>
                 </div>
             </form>
@@ -3962,6 +3990,10 @@
             MAX_HISTORY_SIZE: 50,
             LONG_PRESS_DURATION: 100,
             DELETE_HOLD_DELAY_MS: 260,
+            GENERATOR_VOXEL_BUDGET_DESKTOP: 38000,
+            GENERATOR_VOXEL_BUDGET_MOBILE: 18000,
+            GENERATOR_MIN_GRID: 24,
+            GENERATOR_MAX_GRID: 72,
             BACKEND_URL: "https://api.voxelshaper.com",
             HUB_URL: "https://hub.voxelshaper.com",
             // --- State ---
@@ -4518,8 +4550,12 @@
                 if (!meta || !meta.type || !Number.isFinite(meta.seed)) return null;
                 const type = String(meta.type);
                 const seed = (meta.seed >>> 0);
-                const N = Math.max(24, Math.min(96, Math.round((meta.shape ?? 60) * 0.8 + 16)));
-                const mut = Math.max(0, Math.min(1, (meta.color ?? 80) / 100));
+                const desiredShape = Number.isFinite(meta.shape) ? meta.shape : 60;
+                const desiredColor = Number.isFinite(meta.color) ? meta.color : 80;
+                const baseN = Math.round(desiredShape * 0.72 + 16);
+                const N = Math.max(this.GENERATOR_MIN_GRID, Math.min(this.GENERATOR_MAX_GRID, baseN));
+                const mut = Math.max(0.08, Math.min(0.92, desiredColor / 100));
+                const voxelBudget = this.isMobile ? this.GENERATOR_VOXEL_BUDGET_MOBILE : this.GENERATOR_VOXEL_BUDGET_DESKTOP;
 
                 const hash = (n) => {
                     let h = Math.imul((n | 0) ^ seed, 374761393);
@@ -4635,7 +4671,8 @@
                     return (ny < h && ny > -0.85) ? -1 : 1;
                 };
 
-                for (let z = 0; z < N; z++) for (let y = 0; y < N; y++) for (let x = 0; x < N; x++) {
+                let budgetExceeded = false;
+                for (let z = 0; z < N && !budgetExceeded; z++) for (let y = 0; y < N && !budgetExceeded; y++) for (let x = 0; x < N; x++) {
                     const nx = (x - offs) / offs, ny = (y - offs) / offs, nz = (z - offs) / offs;
                     const d = evalSDF(nx, ny, nz);
                     if (d >= 0) continue;
@@ -4644,6 +4681,31 @@
                     const base = new THREE.Color(mat === 1 ? pal.c1 : (mat === 2 ? pal.c2 : pal.c3));
                     base.offsetHSL((n - 0.5) * 0.12 * mut, 0, (n - 0.5) * 0.12 * mut);
                     voxels.push({ x, y, z, color: `#${base.getHexString()}` });
+                    if (voxels.length >= voxelBudget) {
+                        budgetExceeded = true;
+                        break;
+                    }
+                }
+
+                if (budgetExceeded) {
+                    const stride = Math.max(2, Math.ceil(voxels.length / (voxelBudget * 0.9)));
+                    const reduced = [];
+                    for (let i = 0; i < voxels.length; i += stride) reduced.push(voxels[i]);
+                    voxels.length = 0;
+                    voxels.push(...reduced.slice(0, voxelBudget));
+                }
+
+                if (voxels.length < 48) {
+                    const fallback = [];
+                    const c = Math.floor(N / 2);
+                    const radius = Math.max(3, Math.floor(N * 0.12));
+                    for (let z = c - radius; z <= c + radius; z++) for (let y = c - radius; y <= c + radius; y++) for (let x = c - radius; x <= c + radius; x++) {
+                        const dx = x - c, dy = y - c, dz = z - c;
+                        if ((dx * dx + dy * dy + dz * dz) > radius * radius) continue;
+                        fallback.push({ x, y, z, color: '#7aa2ff' });
+                    }
+                    voxels.length = 0;
+                    voxels.push(...fallback);
                 }
 
                 return {
@@ -4916,7 +4978,8 @@
                 document.getElementById('onboardingModeSelect').addEventListener('click', () => this.setModeExplicit('SELECT', 'onboarding'));
                 document.getElementById('selectionLockToggle').addEventListener('click', () => this.toggleSelectionLock());
                 document.getElementById('clearBtn').addEventListener('click', () => document.getElementById('clearConfirmationModal').showModal());
-                document.getElementById('saveBtn').addEventListener('click', () => this.saveJSON());
+                document.getElementById('saveBtn').addEventListener('click', () => this.openShareModal());
+                document.getElementById('saveLocalBtn')?.addEventListener('click', () => this.saveJSON());
                 document.getElementById('loadBtn').addEventListener('click', () => document.getElementById('fileInput').click());
                 document.getElementById('exportBtn').addEventListener('click', () => document.getElementById('exportOptionsModal').showModal());
                 document.getElementById('fileInput').addEventListener('change', (e) => this.loadJSON(e));
@@ -5060,6 +5123,10 @@
                 bindHistoryButton('redoBtn', 'redo');
                 document.getElementById('mobile-mode-toggle').addEventListener('click', () => this.cycleMode());
                 document.getElementById('desktop-overlay-mode-toggle')?.addEventListener('click', () => this.cycleMode());
+                document.getElementById('desktop-overlay-generate')?.addEventListener('click', () => this.openHubGenerator());
+                document.getElementById('desktop-overlay-save')?.addEventListener('click', () => this.openShareModal());
+                document.getElementById('mobile-overlay-generate')?.addEventListener('click', () => this.openHubGenerator());
+                document.getElementById('mobile-overlay-save')?.addEventListener('click', () => this.openShareModal());
                 document.getElementById('mobile-quick-brush-decrease').addEventListener('click', () => this.setBrushSize(this.brushSize - 1));
                 document.getElementById('mobile-quick-brush-increase').addEventListener('click', () => this.setBrushSize(this.brushSize + 1));
                 document.getElementById('deleteHintGrowBtn')?.addEventListener('click', () => { this.setBrushSize(3); this.hideDeleteBrushHint(); });
@@ -5129,7 +5196,8 @@
 
                 const mobileLogoutBtn = document.getElementById('mobile-logout');
                 if (mobileLogoutBtn) mobileLogoutBtn.addEventListener('click', this.loginLogout.bind(this));
-                document.getElementById('saveBtnMobile').addEventListener('click', () => this.saveJSON());
+                document.getElementById('saveBtnMobile').addEventListener('click', () => this.openShareModal());
+                document.getElementById('saveLocalBtnMobile')?.addEventListener('click', () => this.saveJSON());
                 document.getElementById('loadBtnMobile').addEventListener('click', () => document.getElementById('fileInput').click());
                 document.getElementById('exportBtnMobile').addEventListener('click', () => document.getElementById('exportOptionsModal').showModal());
                 document.getElementById('mobile-share').addEventListener('click', () => this.openShareModal());
@@ -6038,6 +6106,10 @@
                     const afterSnapshot = this.createProjectSnapshot();
                     this.addHistoryStep({ type: 'MORPH', before: beforeSnapshot, after: afterSnapshot, meta: nextMeta });
                     this.showToast('Generate', `Morphed: ${nextMeta.type} • 0x${nextMeta.seed.toString(16).toUpperCase().padStart(8, '0')}`, 'success', 1400);
+                    const generatorBudget = this.isMobile ? this.GENERATOR_VOXEL_BUDGET_MOBILE : this.GENERATOR_VOXEL_BUDGET_DESKTOP;
+                    if (generated.voxels.length >= generatorBudget * 0.95) {
+                        this.showToast('Generator Guard', 'Complexity capped for smooth editing.', 'info', 1600);
+                    }
                     try {
                         const url = new URL(window.location.href);
                         const m = btoa(unescape(encodeURIComponent(JSON.stringify(nextMeta))));
