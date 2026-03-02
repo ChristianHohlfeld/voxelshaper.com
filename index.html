@@ -5011,17 +5011,27 @@
                 const bindHistoryButton = (id, dir) => {
                     const el = document.getElementById(id);
                     if (!el) return;
-                    el.addEventListener('click', () => dir === 'undo' ? this.undo() : this.redo());
-                    const start = (ev) => {
-                        if (ev.cancelable) ev.preventDefault(); // Nur blocken, wenn erlaubt
-                        this.beginHistoryRepeat(dir);
-                    }; const stop = () => this.endHistoryRepeat();
-                    el.addEventListener('mousedown', start);
-                    el.addEventListener('touchstart', start, { passive: false });
-                    el.addEventListener('mouseup', stop);
-                    el.addEventListener('mouseleave', stop);
-                    el.addEventListener('touchend', stop);
-                    el.addEventListener('touchcancel', stop);
+
+                    const trigger = () => dir === 'undo' ? this.undo() : this.redo();
+                    let suppressClickUntil = 0;
+
+                    // Touch/pen should execute exactly one step and must not also fire click.
+                    el.addEventListener('pointerdown', (ev) => {
+                        if (ev.pointerType !== 'mouse') {
+                            if (ev.cancelable) ev.preventDefault();
+                            suppressClickUntil = Date.now() + 500;
+                            trigger();
+                        }
+                    });
+
+                    // Mouse/keyboard activation still uses click.
+                    el.addEventListener('click', (ev) => {
+                        if (Date.now() < suppressClickUntil) {
+                            if (ev.cancelable) ev.preventDefault();
+                            return;
+                        }
+                        trigger();
+                    });
                 };
                 bindHistoryButton('mobile-overlay-undo', 'undo');
                 bindHistoryButton('mobile-overlay-redo', 'redo');
