@@ -9,6 +9,7 @@ export function initMobileControls(VS_APP) {
     // Touch-specific thresholds (copied from original as they were global)
     const PINCH_REL_TH = 0.08;
     const MOVE_PX = 15;
+    const PEN_MOVE_PX = 9;
     const ROTATE_SPEED_TOUCH_MOBILE = 0.008;
     const PAN_SPEED_TOUCH_MOBILE = 0.15;
     const PINCH_ZOOM_MULT_MOBILE = 80;
@@ -122,6 +123,11 @@ export function initMobileControls(VS_APP) {
         }
     }
 
+
+    function getDragStartThreshold(pointerType = 'touch') {
+        return pointerType === 'pen' ? PEN_MOVE_PX : MOVE_PX;
+    }
+
     function releasePointer(id, eventType) {
         activePointers.delete(id);
         if (activePointers.size < 2) {
@@ -144,8 +150,10 @@ export function initMobileControls(VS_APP) {
         if (activePointers.size === 1) {
             const currentTime = performance.now();
             const dist = Math.hypot(e.clientX - (gestureState.lastTapCoords ? gestureState.lastTapCoords.x : 0), e.clientY - (gestureState.lastTapCoords ? gestureState.lastTapCoords.y : 0));
+            const isDoubleTap = currentTime - (gestureState.lastTapTime || 0) < DOUBLE_TAP_TIME_THRESHOLD && dist < DOUBLE_TAP_DIST_THRESHOLD;
+            const isPenPointer = e.pointerType === 'pen';
 
-            if (currentTime - (gestureState.lastTapTime || 0) < DOUBLE_TAP_TIME_THRESHOLD && dist < DOUBLE_TAP_DIST_THRESHOLD) { 
+            if (isDoubleTap || isPenPointer) {
                 doubleTapDragActive = true;
                 pointerIsDown = true;
                 
@@ -196,7 +204,13 @@ export function initMobileControls(VS_APP) {
                         updatePreviewVoxel(0,0,0,false);
                     }
                 } else { updatePreviewVoxel(0,0,0,false); }
-                gestureState.lastTapTime = 0; gestureState.lastTapCoords = { x: 0, y: 0 };
+                if (isPenPointer) {
+                    gestureState.lastTapTime = currentTime;
+                    gestureState.lastTapCoords = { x: e.clientX, y: e.clientY };
+                } else {
+                    gestureState.lastTapTime = 0;
+                    gestureState.lastTapCoords = { x: 0, y: 0 };
+                }
             } else {
                 doubleTapDragActive = false;
                 pointerIsDown = false;
@@ -248,8 +262,10 @@ export function initMobileControls(VS_APP) {
                 currentTargetVoxelCoords = null;
             }
 
+            const activePointer = activePointers.get(e.pointerId);
+            const dragThresholdPx = getDragStartThreshold(activePointer?.pointerType || e.pointerType);
             const currentMovedDist = initialClickPos ? Math.hypot(e.clientX - initialClickPos.x, e.clientY - initialClickPos.y) : 0;
-            const shouldStartDrag = currentMovedDist > MOVE_PX;
+            const shouldStartDrag = currentMovedDist > dragThresholdPx;
 
             if (!isDragging && shouldStartDrag) { isDragging = true; }
 
