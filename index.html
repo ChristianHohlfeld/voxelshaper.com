@@ -4100,8 +4100,8 @@
             MAX_HISTORY_SIZE: 50,
             LONG_PRESS_DURATION: 100,
             DELETE_HOLD_DELAY_MS: 260,
-            GENERATOR_VOXEL_BUDGET_DESKTOP: 4200,
-            GENERATOR_VOXEL_BUDGET_MOBILE: 2200,
+            GENERATOR_VOXEL_BUDGET_DESKTOP: 4000,
+            GENERATOR_VOXEL_BUDGET_MOBILE: 4000,
             GENERATOR_MIN_GRID: 24,
             GENERATOR_MAX_GRID: 72,
             BACKEND_URL: "https://api.voxelshaper.com",
@@ -4646,7 +4646,11 @@
                 params.set('shape', String(meta.shape ?? 60));
                 params.set('color', String(meta.color ?? 80));
                 params.set('palette', meta.palette || 'auto');
-                params.set('maxVoxels', String(this.isMobile ? 2200 : 4200));
+                if (Number.isFinite(Number(meta.gridSize))) params.set('gridSize', String(Number(meta.gridSize)));
+                const maxVoxels = Number.isFinite(Number(meta.maxVoxels))
+                    ? Number(meta.maxVoxels)
+                    : (this.isMobile ? this.GENERATOR_VOXEL_BUDGET_MOBILE : this.GENERATOR_VOXEL_BUDGET_DESKTOP);
+                params.set('maxVoxels', String(maxVoxels));
                 const response = await this.request(`/api/generate?${params.toString()}`);
                 const project = response.project || response;
                 if (response.metadata && project && !project.metadata) project.metadata = response.metadata;

@@ -30,6 +30,7 @@ const tinyProjectFor = (url) => {
     shape: Number(params.get('shape') || 60),
     color: Number(params.get('color') || 80),
     palette: params.get('palette') || 'auto',
+    gridSize: Number(params.get('gridSize') || 20),
     maxVoxels: Number(params.get('maxVoxels') || 9000)
   };
   return {
@@ -38,7 +39,7 @@ const tinyProjectFor = (url) => {
     voxel_count: 4,
     budget_hit: false,
     project: {
-      gridSize: 32,
+      gridSize: 20,
       currentDrawingAxis: 'y',
       activeDrawingLevel: { x: 0, y: 0, z: 0 },
       metadata: meta,
@@ -269,8 +270,8 @@ for (const appPath of ['/', '/www/index.html']) {
 }
 
 const importCases = [
-  { name: 'desktop root', appPath: '/', context: { viewport: { width: 1280, height: 900 } }, expectedMaxVoxels: '4200' },
-  { name: 'mobile www', appPath: '/www/index.html', context: devices['iPhone 13'], expectedMaxVoxels: '2200' }
+  { name: 'desktop root', appPath: '/', context: { viewport: { width: 1280, height: 900 } }, expectedMaxVoxels: '4000' },
+  { name: 'mobile www', appPath: '/www/index.html', context: devices['iPhone 13'], expectedMaxVoxels: '4000' }
 ];
 
 for (const importCase of importCases) {
@@ -284,7 +285,7 @@ for (const importCase of importCases) {
     });
     await makeFirstRun(page, false);
 
-    const meta = { type: 'floating_island', seed: 123456, shape: 44, color: 70, palette: 'auto' };
+    const meta = { type: 'floating_island', seed: 123456, shape: 44, color: 70, palette: 'auto', gridSize: 20 };
     await page.goto(`${importCase.appPath}?from=hub&handoff=test-handoff&m=${encodeURIComponent(encodeHubMeta(meta))}`);
     await installStableUi(page);
 
@@ -292,6 +293,7 @@ for (const importCase of importCases) {
     expect(generateUrls[0].pathname).toBe('/api/generate');
     expect(generateUrls[0].searchParams.get('type')).toBe(meta.type);
     expect(generateUrls[0].searchParams.get('seed')).toBe(String(meta.seed));
+    expect(generateUrls[0].searchParams.get('gridSize')).toBe(String(meta.gridSize));
     expect(generateUrls[0].searchParams.get('maxVoxels')).toBe(importCase.expectedMaxVoxels);
 
     await waitForEvent(page, 'app_hub_import_success', (params) =>
