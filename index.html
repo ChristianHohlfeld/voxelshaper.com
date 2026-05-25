@@ -886,6 +886,73 @@
             backdrop-filter: blur(4px);
         }
 
+        body[data-camera-control-mode="orbit"] #flySpeedHud {
+            display: none;
+        }
+
+        body[data-camera-control-mode="fly"] #flySpeedHud {
+            right: 176px;
+        }
+
+        .camera-control-switch {
+            position: fixed;
+            top: calc(max(12px, env(safe-area-inset-top)) + 4.85rem);
+            right: max(14px, env(safe-area-inset-right));
+            z-index: 1001;
+            display: inline-flex;
+            align-items: center;
+            gap: 4px;
+            padding: 4px;
+            border-radius: 9999px;
+            border: 1px solid rgba(255, 255, 255, 0.22);
+            background: rgba(8, 12, 18, 0.78);
+            color: rgba(230, 245, 255, 0.86);
+            backdrop-filter: blur(12px);
+            box-shadow: 0 12px 32px rgba(0, 0, 0, 0.32);
+            pointer-events: auto;
+        }
+
+        .camera-control-switch button {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            gap: 6px;
+            min-width: 74px;
+            height: 34px;
+            border: 0;
+            border-radius: 9999px;
+            background: transparent;
+            color: inherit;
+            font-size: 12px;
+            font-weight: 800;
+            cursor: pointer;
+            white-space: nowrap;
+        }
+
+        .camera-control-switch button[aria-pressed="true"] {
+            background: #22d3ee;
+            color: #061118;
+            box-shadow: 0 0 18px rgba(34, 211, 238, 0.36);
+        }
+
+        .camera-control-switch button:focus-visible {
+            outline: 2px solid rgba(255, 255, 255, 0.9);
+            outline-offset: 2px;
+        }
+
+        body.has-mobile-bar .camera-control-switch {
+            top: calc(max(10px, env(safe-area-inset-top)));
+            right: calc(max(10px, env(safe-area-inset-right)) + 44px);
+            z-index: 64;
+            padding: 3px;
+        }
+
+        body.has-mobile-bar .camera-control-switch button {
+            min-width: 66px;
+            height: 32px;
+            font-size: 11px;
+        }
+
         #deleteBrushHint {
             position: absolute;
             left: 50%;
@@ -2941,6 +3008,15 @@
     </div>
     <div id="container">
         <div id="flySpeedHud">Fly <span id="flySpeedHudValue">0.81</span></div>
+        <div id="cameraControlSwitch" class="camera-control-switch" role="group" aria-label="Camera control mode"
+            title="Orbit is the default. Switch to Fly for right-mouse WASD controls.">
+            <button id="camera-control-orbit" type="button" data-camera-control-mode="orbit" aria-pressed="true">
+                <i class="fas fa-sync-alt" aria-hidden="true"></i><span>Orbit</span>
+            </button>
+            <button id="camera-control-fly" type="button" data-camera-control-mode="fly" aria-pressed="false">
+                <i class="fas fa-location-arrow" aria-hidden="true"></i><span>Fly</span>
+            </button>
+        </div>
         <div id="deleteBrushHint" role="status" aria-live="polite">
             <span>Fast delete on 1×1. Use bigger brush?</span>
             <button id="deleteHintGrowBtn" class="btn btn-xs btn-accent">Set 3×3</button>
@@ -4123,6 +4199,7 @@
             currentBlockType: (localStorage.getItem('voxelBlockType') || 'solid'),
             deleteBrushHintDisabled: true,
             desktopMoveHintShown: localStorage.getItem('desktopMoveHintShown') === 'true',
+            cameraControlMode: (localStorage.getItem('voxelCameraControlMode') === 'fly') ? 'fly' : 'orbit',
             GRID: 10,
             flySpeed: 0.1,
             currentMode: 'FREE',
@@ -4183,6 +4260,8 @@
             _ambientTick: 0,
             _tmpForward: new THREE.Vector3(),
             _tmpRight: new THREE.Vector3(),
+            _tmpUp: new THREE.Vector3(),
+            orbitTarget: null,
             firstInteractionTracked: false,
             firstEditTracked: false,
             onboardingStartedAt: 0,
@@ -4191,6 +4270,7 @@
             tutorialSteps: [],
             mouseState: {
                 isRotating: false, isPanning: false, isModifying: false, isDragging: false, isExtruding: false,
+                isOrbiting: false, orbitCandidate: false,
                 lastX: 0, lastY: 0, downX: 0, downY: 0,
                 lastActionCoords: null,
                 lastActionNormal: null,
@@ -4219,6 +4299,7 @@
                 isThreeFingerUndoCandidate: false,
                 lastPinchDist: null,
                 lastPinchCenter: null,
+                startedOnVoxel: false,
             },
             controls: {
                 invertLookX: false, invertLookY: false, invertZoom: true,
@@ -4341,9 +4422,169 @@
                 this.syncHubOverlayVisibility();
             },
 
+            isOrbitControlsMode: function () {
+                return this.cameraControlMode !== 'fly';
+            },
+
+            isFlyControlsMode: function () {
+                return this.cameraControlMode === 'fly';
+            },
+
+            setCameraControlMode: function (mode, options = {}) {
+                const nextMode = mode === 'fly' ? 'fly' : 'orbit';
+                const changed = this.cameraControlMode !== nextMode;
+                this.cameraControlMode = nextMode;
+                if (options.persist !== false) {
+                    localStorage.setItem('voxelCameraControlMode', nextMode);
+                }
+                if (nextMode === 'orbit' && document.pointerLockElement === this.cvs) {
+                    try { document.exitPointerLock(); } catch (_) { }
+                }
+                this.updateCameraControlUI();
+                if (changed && options.announce !== false) {
+                    const title = nextMode === 'orbit' ? 'Orbit Camera' : 'Fly Camera';
+                    const msg = nextMode === 'orbit'
+                        ? 'Drag empty space to rotate. Wheel or pinch to zoom.'
+                        : 'Right mouse to look. W/A/S/D moves, Q/E up and down.';
+                    this.showToast(title, msg, 'info', 1700);
+                    trackEvent('camera_control_mode_change', {
+                        camera_control_mode: nextMode,
+                        ...this.getAnalyticsContext()
+                    });
+                }
+            },
+
+            updateCameraControlUI: function () {
+                document.body.dataset.cameraControlMode = this.cameraControlMode === 'fly' ? 'fly' : 'orbit';
+                const orbitBtn = document.getElementById('camera-control-orbit');
+                const flyBtn = document.getElementById('camera-control-fly');
+                if (orbitBtn) orbitBtn.setAttribute('aria-pressed', String(this.isOrbitControlsMode()));
+                if (flyBtn) flyBtn.setAttribute('aria-pressed', String(this.isFlyControlsMode()));
+            },
+
+            ensureOrbitTarget: function () {
+                if (!this.orbitTarget) {
+                    this.orbitTarget = new THREE.Vector3();
+                    this.syncOrbitTargetToScene();
+                }
+                return this.orbitTarget;
+            },
+
+            syncOrbitTargetToScene: function () {
+                if (!this.orbitTarget) this.orbitTarget = new THREE.Vector3();
+                let minX = Infinity, minY = Infinity, minZ = Infinity;
+                let maxX = -Infinity, maxY = -Infinity, maxZ = -Infinity;
+                this.voxels.forEach((_, key) => {
+                    const [x, y, z] = this.parseKey(key);
+                    if (y < 0) return;
+                    const wx = x * this.VS + 0.5;
+                    const wy = y * this.VS + 0.5;
+                    const wz = z * this.VS + 0.5;
+                    minX = Math.min(minX, wx); minY = Math.min(minY, wy); minZ = Math.min(minZ, wz);
+                    maxX = Math.max(maxX, wx); maxY = Math.max(maxY, wy); maxZ = Math.max(maxZ, wz);
+                });
+                if (Number.isFinite(minX)) {
+                    this.orbitTarget.set((minX + maxX) * 0.5, (minY + maxY) * 0.5, (minZ + maxZ) * 0.5);
+                } else {
+                    const size = this.GRID * this.VS;
+                    this.orbitTarget.set(size * 0.5, size * 0.5, size * 0.5);
+                }
+                return this.orbitTarget;
+            },
+
+            syncEulerFromCamera: function () {
+                if (this.euler && this.cam) this.euler.setFromQuaternion(this.cam.quaternion, 'YXZ');
+            },
+
+            orbitCameraBy: function (deltaX, deltaY, speedMultiplier = 1) {
+                if (!this.cam) return;
+                const target = this.ensureOrbitTarget();
+                const offset = this.cam.position.clone().sub(target);
+                if (offset.lengthSq() < 0.0001) {
+                    const size = Math.max(this.GRID * this.VS, 4);
+                    offset.set(size, size * 0.8, size * 1.2);
+                }
+                const spherical = new THREE.Spherical().setFromVector3(offset);
+                const lookX = this.controls.invertLookX ? -1 : 1;
+                const lookY = this.controls.invertLookY ? -1 : 1;
+                spherical.theta -= deltaX * this.ROTATE_SPEED * speedMultiplier * lookX;
+                spherical.phi -= deltaY * this.ROTATE_SPEED * speedMultiplier * lookY;
+                spherical.phi = Math.max(0.06, Math.min(Math.PI - 0.06, spherical.phi));
+                offset.setFromSpherical(spherical);
+                this.cam.position.copy(target).add(offset);
+                this.cam.lookAt(target);
+                this.syncEulerFromCamera();
+            },
+
+            panOrbitCameraBy: function (deltaX, deltaY, speedMultiplier = 1) {
+                if (!this.cam) return;
+                const target = this.ensureOrbitTarget();
+                const distance = Math.max(1, this.cam.position.distanceTo(target));
+                const scale = Math.max(0.006, distance * 0.0018) * speedMultiplier;
+                this.cam.updateMatrixWorld();
+                const right = this._tmpRight.setFromMatrixColumn(this.cam.matrixWorld, 0).normalize();
+                const up = this._tmpUp.setFromMatrixColumn(this.cam.matrixWorld, 1).normalize();
+                const pan = new THREE.Vector3();
+                pan.addScaledVector(right, -deltaX * scale);
+                pan.addScaledVector(up, deltaY * scale);
+                this.cam.position.add(pan);
+                target.add(pan);
+            },
+
+            dollyOrbitCameraBy: function (distanceDelta) {
+                if (!this.cam) return;
+                const target = this.ensureOrbitTarget();
+                const offset = this.cam.position.clone().sub(target);
+                const distance = Math.max(0.001, offset.length());
+                const minDistance = Math.max(this.VS * 1.8, 1.25);
+                const maxDistance = Math.max(this.GRID * this.VS * 4, 24);
+                const nextDistance = Math.max(minDistance, Math.min(maxDistance, distance + distanceDelta));
+                offset.setLength(nextDistance);
+                this.cam.position.copy(target).add(offset);
+                this.cam.lookAt(target);
+                this.syncEulerFromCamera();
+            },
+
+            getPointerSceneStartInfo: function (clientX, clientY) {
+                const hit = this.getFaceAt(clientX, clientY);
+                const startsOnFoundation = !!(hit && hit.object && (hit.object === this.groundPlaneMesh || hit.object.userData?.isFoundation));
+                const startsOnVoxel = !!(hit && hit.object && !startsOnFoundation && this.findVoxelDataByMesh(hit.object));
+                return { hit, startsOnVoxel, startsOnFoundation };
+            },
+
+            prepareMobileModifyGesture: function (clientX, clientY) {
+                this.touchState.isInteracting = true;
+                this.touchState.isLookAround = false;
+
+                if (this.currentMode === 'SELECT') {
+                    this.selectionChange.before = new Set(this.selectedFaces);
+                    const target = this.getFaceTarget(clientX, clientY);
+                    this.mouseState.selectionDragStartTarget = target;
+
+                    if (target && this.selectedFaces.has(target.faceKey)) {
+                        const startNormalIdx = parseInt(target.faceKey.split(':')[1], 10);
+                        const sameOrientation = [...this.selectedFaces].every(k => parseInt(k.split(':')[1], 10) === startNormalIdx);
+                        if (sameOrientation) {
+                            this.mouseState.isExtruding = true;
+                            this.mouseState.extrudeNormal = target.normal.clone();
+                            const viewN = this.cam.getWorldDirection(new THREE.Vector3()).negate();
+                            this.mouseState.drawingPlane.setFromNormalAndCoplanarPoint(viewN, target.intersectionPoint);
+                            this.mouseState.dragStartPoint.copy(target.intersectionPoint);
+                        }
+                    }
+                } else if (this.currentMode === 'FREE') {
+                    this.mouseState.isModifying = true;
+                    const targetInfo = this.getRayTargetInfo(clientX, clientY);
+                    this.mouseState.dragStartPlaneY = targetInfo ? targetInfo.y : 0;
+                } else {
+                    this.mouseState.isModifying = true;
+                }
+            },
+
             getAnalyticsContext: function () {
                 return {
                     ui_mode: this.isMobile ? 'mobile' : 'desktop',
+                    camera_control_mode: this.cameraControlMode === 'fly' ? 'fly' : 'orbit',
                     viewport_w: window.innerWidth,
                     viewport_h: window.innerHeight
                 };
@@ -4392,8 +4633,8 @@
                     controls: [
                         '<b>Add:</b> left click / tap the model to place a voxel.',
                         '<b>Delete:</b> click / tap a voxel to remove it.',
-                        '<b>Camera default:</b> Look Y is pre-set to the expected direction.',
-                        '<b>Need to flip look?</b> Open View → Controls (Desktop) or Menu → Control Settings (Mobile).'
+                        '<b>Orbit camera:</b> drag empty space to rotate, wheel / pinch to zoom, two fingers / middle mouse to pan.',
+                        '<b>Need WASD?</b> Switch to Fly in the top-right camera toggle.'
                     ],
                     tutorialSteps: [
                         'Add mode: place 1 voxel.',
@@ -4992,6 +5233,7 @@
                 this.GRID = parseInt(localStorage.getItem('voxelEditorGridSize') || this.GRID_DEFAULT);
                 this.currentColor = localStorage.getItem('voxelEditorColor') || '#ffffff';
                 this.flySpeed = parseFloat(localStorage.getItem('voxelEditorFlySpeed') || 0.1);
+                this.cameraControlMode = localStorage.getItem('voxelCameraControlMode') === 'fly' ? 'fly' : 'orbit';
                 this.brushSize = parseInt(localStorage.getItem('voxelEditorBrushSize') || 1);
                 this.colorHistory = JSON.parse(localStorage.getItem('voxelColorHistory')) || ['#E52521', '#049CD8', '#43B047', '#FBD000'];
                 if (!Array.isArray(this.colorHistory) || this.colorHistory.length !== 4) {
@@ -5227,6 +5469,9 @@
                 document.getElementById('brush-size-increase').addEventListener('click', () => this.setBrushSize(this.brushSize + 1));
                 document.getElementById('fly-speed-setting').addEventListener('input', (e) => this.setFlySpeed(parseFloat(e.target.value)));
                 document.getElementById('mobile-fly-speed-setting').addEventListener('input', (e) => this.setFlySpeed(parseFloat(e.target.value)));
+                document.querySelectorAll('[data-camera-control-mode]').forEach((btn) => {
+                    btn.addEventListener('click', () => this.setCameraControlMode(btn.dataset.cameraControlMode));
+                });
                 document.getElementById('color-picker-input').addEventListener('input', (e) => this.setColor(e.target.value));
                 document.getElementById('blockTypeToggle')?.addEventListener('click', () => this.toggleBlockType());
                 document.getElementById('modeToggle').addEventListener('click', () => this.cycleMode());
@@ -5736,9 +5981,6 @@
                 this.mouseState.deleteCycleStartAt = performance.now();
                 this.isPointerDown = true;
                 this.activePointers.set(e.pointerId, { x: e.clientX, y: e.clientY });
-                if (this.currentMode === 'DELETE' && !this.isMobile) {
-                    this.startDeleteChargeSound();
-                }
 
                 if (this.isMobile && this.activePointers.size >= 2 && this.touchState.longPressTimeout) {
                     clearTimeout(this.touchState.longPressTimeout);
@@ -5754,6 +5996,32 @@
                 this.mouseState.deleteHoldArmed = false;
 
                 if (this.isMobile) {
+                    if (this.isOrbitControlsMode()) {
+                        if (this.activePointers.size >= 2) {
+                            this.touchState.isInteracting = false;
+                            this.touchState.isLookAround = false;
+                            this.mouseState.isOrbiting = false;
+                            this.mouseState.orbitCandidate = false;
+                        }
+
+                        if (this.activePointers.size === 1) {
+                            const startInfo = this.getPointerSceneStartInfo(e.clientX, e.clientY);
+                            this.touchState.startedOnVoxel = startInfo.startsOnVoxel;
+                            if (startInfo.startsOnVoxel) {
+                                this.prepareMobileModifyGesture(e.clientX, e.clientY);
+                            } else {
+                                this.touchState.isInteracting = false;
+                                this.touchState.isLookAround = false;
+                                this.mouseState.orbitCandidate = true;
+                            }
+                        } else if (this.activePointers.size === 3) {
+                            this.touchState.isThreeFingerUndoCandidate = true;
+                        } else {
+                            this.touchState.isThreeFingerUndoCandidate = false;
+                        }
+                        return;
+                    }
+
                     if (this.activePointers.size === 1) {
                         this.touchState.longPressTimeout = setTimeout(() => {
                             this.hapticOrVisualAt(this.mouseState.downX, this.mouseState.downY);
@@ -5797,8 +6065,10 @@
                 }
 
                 // --- Desktop Logic ---
+                const startInfo = this.getPointerSceneStartInfo(e.clientX, e.clientY);
                 this.mouseState.isModifying = (e.button === 0);
-                this.mouseState.isPanning = (e.button === 1);
+                this.mouseState.isPanning = (e.button === 1) || (this.isOrbitControlsMode() && e.button === 2);
+                this.mouseState.orbitCandidate = this.isOrbitControlsMode() && e.button === 0 && !startInfo.startsOnVoxel;
 
                 if (this.mouseState.isModifying && this.currentMode === 'SELECT') {
                     this.selectionChange.before = new Set(this.selectedFaces);
@@ -5875,7 +6145,11 @@
                     this.hideDragLengthHud();
                 }
 
-                if (e.button === 2) {
+                if (this.mouseState.isModifying && !this.mouseState.orbitCandidate && this.currentMode === 'DELETE' && !this.isMobile) {
+                    this.startDeleteChargeSound();
+                }
+
+                if (e.button === 2 && this.isFlyControlsMode()) {
                     this.cvs.focus();
                     this.cvs.requestPointerLock();
                 }
@@ -5883,6 +6157,10 @@
 
             onPointerMove: function (e) {
                 if (document.pointerLockElement === this.cvs) {
+                    if (!this.isFlyControlsMode()) {
+                        try { document.exitPointerLock(); } catch (_) { }
+                        return;
+                    }
                     this.mouseState.mouseMovementX += e.movementX;
                     this.mouseState.mouseMovementY += e.movementY;
                     return;
@@ -5921,7 +6199,11 @@
                             this.touchState.longPressTimeout = null;
                         }
                         if (this.activePointers.size === 1 && !this.touchState.isInteracting) {
-                            this.touchState.isLookAround = true;
+                            if (this.isOrbitControlsMode()) {
+                                this.mouseState.isOrbiting = true;
+                            } else {
+                                this.touchState.isLookAround = true;
+                            }
                         }
                     }
 
@@ -5976,31 +6258,47 @@
                         const PINCH_DEADZONE_PX = 1.5;
                         const PAN_DEADZONE_PX = 0.75;
 
-                        // Pinch = fly forward/backward along camera forward vector
+                        // Pinch = zoom
                         if (!this.touchState.lastPinchDist) this.touchState.lastPinchDist = newDist;
                         const pinchDelta = newDist - this.touchState.lastPinchDist;
                         if (Math.abs(pinchDelta) > PINCH_DEADZONE_PX) {
-                            // Mobile default: reverse pinch direction (desktop zoom stays unchanged).
-                            let zoomDelta = -pinchDelta * this.PINCH_ZOOM_MULT * 0.001;
-                            if (this.controls.invertZoom) zoomDelta *= -1;
-                            this.cam.position.addScaledVector(this.cam.getWorldDirection(new THREE.Vector3()), zoomDelta);
+                            if (this.isOrbitControlsMode()) {
+                                let distanceDelta = -pinchDelta * this.PINCH_ZOOM_MULT * 0.001;
+                                if (!this.controls.invertZoom) distanceDelta *= -1;
+                                this.dollyOrbitCameraBy(distanceDelta);
+                            } else {
+                                // Mobile default: reverse pinch direction (desktop zoom stays unchanged).
+                                let zoomDelta = -pinchDelta * this.PINCH_ZOOM_MULT * 0.001;
+                                if (this.controls.invertZoom) zoomDelta *= -1;
+                                this.cam.position.addScaledVector(this.cam.getWorldDirection(new THREE.Vector3()), zoomDelta);
+                            }
                         }
                         this.touchState.lastPinchDist = newDist;
 
-                        // Two-finger parallel slide = camera-oriented pan (legacy behavior)
+                        // Two-finger parallel slide = camera-oriented pan
                         if (this.touchState.lastPinchCenter) {
                             const deltaX = center.x - this.touchState.lastPinchCenter.x;
                             const deltaY = center.y - this.touchState.lastPinchCenter.y;
 
                             if (Math.abs(deltaX) > PAN_DEADZONE_PX || Math.abs(deltaY) > PAN_DEADZONE_PX) {
-                                const strafeX = this.controls.invertStrafeX ? deltaX : -deltaX;
-                                const strafeY = this.controls.invertStrafeY ? -deltaY : deltaY;
-                                const pan = new THREE.Vector3(strafeX * this.PAN_SPEED, strafeY * this.PAN_SPEED, 0);
-                                pan.applyQuaternion(this.cam.quaternion);
-                                this.cam.position.add(pan);
+                                if (this.isOrbitControlsMode()) {
+                                    const panX = this.controls.invertStrafeX ? -deltaX : deltaX;
+                                    const panY = this.controls.invertStrafeY ? -deltaY : deltaY;
+                                    this.panOrbitCameraBy(panX, panY, 1.25);
+                                } else {
+                                    const strafeX = this.controls.invertStrafeX ? deltaX : -deltaX;
+                                    const strafeY = this.controls.invertStrafeY ? -deltaY : deltaY;
+                                    const pan = new THREE.Vector3(strafeX * this.PAN_SPEED, strafeY * this.PAN_SPEED, 0);
+                                    pan.applyQuaternion(this.cam.quaternion);
+                                    this.cam.position.add(pan);
+                                }
                             }
                         }
                         this.touchState.lastPinchCenter = center;
+                    } else if (this.mouseState.isOrbiting && this.isOrbitControlsMode()) {
+                        const deltaX = e.clientX - this.mouseState.lastX;
+                        const deltaY = e.clientY - this.mouseState.lastY;
+                        this.orbitCameraBy(deltaX, deltaY, this.MOBILE_ROTATE_SPEED_MULT);
                     } else if (this.touchState.isLookAround) { // Single-finger drag for look
                         const deltaX = e.clientX - this.mouseState.lastX;
                         const deltaY = e.clientY - this.mouseState.lastY;
@@ -6011,75 +6309,93 @@
                 } else { // --- Desktop Logic ---
                     if (!this.mouseState.isDragging && dist > this.DRAG_THRESHOLD) {
                         this.mouseState.isDragging = true;
+                        if (this.isOrbitControlsMode() && this.mouseState.orbitCandidate) {
+                            this.mouseState.isOrbiting = true;
+                            this.mouseState.isModifying = false;
+                            this.currentStroke = new Map();
+                            this.selectionChange.before = null;
+                            this.stopDeleteChargeSound();
+                            this.hideDragLengthHud();
+                        }
                     }
-                    const targetInfo = this.getRayTargetInfo(e.clientX, e.clientY);
-                    this.updateToolPreview(targetInfo);
-                    if (this.mouseState.isExtruding) {
-                        const raycaster = new THREE.Raycaster();
-                        const mouse = new THREE.Vector2(((e.clientX - this.cvs.getBoundingClientRect().left) / this.cvs.clientWidth) * 2 - 1, -((e.clientY - this.cvs.getBoundingClientRect().top) / this.cvs.clientHeight) * 2 + 1);
-                        raycaster.setFromCamera(mouse, this.cam);
-                        const intersection = new THREE.Vector3();
-                        if (raycaster.ray.intersectPlane(this.mouseState.drawingPlane, intersection)) {
-                            const dragVector = intersection.clone().sub(this.mouseState.dragStartPoint);
-                            const extrusionDistance = dragVector.dot(this.mouseState.extrudeNormal);
-                            const voxelDistance = Math.round(extrusionDistance / this.VS);
-                            this.updateExtrudePreview(voxelDistance);
-                        }
-                    } else if (this.mouseState.isDragging && this.mouseState.isMoving && this.mouseState.movingVoxelsOriginal) {
-                        const raycaster = new THREE.Raycaster();
-                        const mouse = new THREE.Vector2(((e.clientX - this.cvs.getBoundingClientRect().left) / this.cvs.clientWidth) * 2 - 1, -((e.clientY - this.cvs.getBoundingClientRect().top) / this.cvs.clientHeight) * 2 + 1);
-                        raycaster.setFromCamera(mouse, this.cam);
-                        const intersection = new THREE.Vector3();
-                        if (raycaster.ray.intersectPlane(this.mouseState.drawingPlane, intersection)) {
-                            const delta = intersection.clone().sub(this.mouseState.dragStartPoint);
-                            const vDelta = {
-                                x: Math.round(delta.x / this.VS),
-                                y: Math.round(delta.y / this.VS),
-                                z: Math.round(delta.z / this.VS)
-                            };
-                            if (this.mouseState.moveAxisLock === 'x') { vDelta.y = 0; vDelta.z = 0; }
-                            if (this.mouseState.moveAxisLock === 'y') { vDelta.x = 0; vDelta.z = 0; }
-                            if (this.mouseState.moveAxisLock === 'z') { vDelta.x = 0; vDelta.y = 0; }
-                            for (const [vk, orig] of this.mouseState.movingVoxelsOriginal) {
-                                const v = this.voxels.get(vk);
-                                if (v) v.mesh.position.set(orig.pos.x + vDelta.x * this.VS, orig.pos.y + vDelta.y * this.VS, orig.pos.z + vDelta.z * this.VS);
-                            }
-                            this.updateSelectionVisuals();
-                        }
-                    } else if (this.mouseState.isDragging && this.mouseState.isModifying) {
-                        if (this.currentMode === 'SELECT') {
-                            this.handleDragSelection(e);
-                        } else if (this.currentMode === 'FREE') {
-                            if (targetInfo) {
-                                const coords = { x: targetInfo.x, y: targetInfo.y, z: targetInfo.z };
-                                this.updateDragLengthHud(this.mouseState.dragMeasureStartCoords || coords, coords);
-                                if (!this.mouseState.lastActionCoords || coords.x !== this.mouseState.lastActionCoords.x || coords.y !== this.mouseState.lastActionCoords.y || coords.z !== this.mouseState.lastActionCoords.z) {
-                                    this.drawVoxelLinePaced(this.mouseState.lastActionCoords || coords, coords, targetInfo.normal);
-                                    this.mouseState.lastActionCoords = coords;
-                                    this.mouseState.lastActionNormal = targetInfo.normal;
-                                }
-                            } else {
-                                this.hideDragLengthHud();
-                            }
-                        } else {
-                            if (targetInfo) {
-                                const coords = { x: targetInfo.x, y: targetInfo.y, z: targetInfo.z };
-                                this.updateDragLengthHud(this.mouseState.dragMeasureStartCoords || coords, coords);
-                                if (!this.mouseState.lastActionCoords || coords.x !== this.mouseState.lastActionCoords.x || coords.y !== this.mouseState.lastActionCoords.y || coords.z !== this.mouseState.lastActionCoords.z) {
-                                    this.drawVoxelLinePaced(this.mouseState.lastActionCoords || coords, coords, this.mouseState.lastActionNormal || targetInfo.normal);
-                                    this.mouseState.lastActionCoords = coords;
-                                    this.mouseState.lastActionNormal = targetInfo.normal;
-                                }
-                            } else {
-                                this.hideDragLengthHud();
-                            }
-                        }
-                    } else if (this.mouseState.isPanning) {
+                    if (this.mouseState.isOrbiting) {
                         const deltaX = e.clientX - this.mouseState.lastX;
                         const deltaY = e.clientY - this.mouseState.lastY;
-                        const pan = new THREE.Vector3(-deltaX * this.PAN_SPEED, deltaY * this.PAN_SPEED, 0);
-                        pan.applyQuaternion(this.cam.quaternion);
-                        this.cam.position.add(pan);
+                        this.orbitCameraBy(deltaX, deltaY, 1);
+                    } else {
+                        const targetInfo = this.getRayTargetInfo(e.clientX, e.clientY);
+                        this.updateToolPreview(targetInfo);
+                        if (this.mouseState.isExtruding) {
+                            const raycaster = new THREE.Raycaster();
+                            const mouse = new THREE.Vector2(((e.clientX - this.cvs.getBoundingClientRect().left) / this.cvs.clientWidth) * 2 - 1, -((e.clientY - this.cvs.getBoundingClientRect().top) / this.cvs.clientHeight) * 2 + 1);
+                            raycaster.setFromCamera(mouse, this.cam);
+                            const intersection = new THREE.Vector3();
+                            if (raycaster.ray.intersectPlane(this.mouseState.drawingPlane, intersection)) {
+                                const dragVector = intersection.clone().sub(this.mouseState.dragStartPoint);
+                                const extrusionDistance = dragVector.dot(this.mouseState.extrudeNormal);
+                                const voxelDistance = Math.round(extrusionDistance / this.VS);
+                                this.updateExtrudePreview(voxelDistance);
+                            }
+                        } else if (this.mouseState.isDragging && this.mouseState.isMoving && this.mouseState.movingVoxelsOriginal) {
+                            const raycaster = new THREE.Raycaster();
+                            const mouse = new THREE.Vector2(((e.clientX - this.cvs.getBoundingClientRect().left) / this.cvs.clientWidth) * 2 - 1, -((e.clientY - this.cvs.getBoundingClientRect().top) / this.cvs.clientHeight) * 2 + 1);
+                            raycaster.setFromCamera(mouse, this.cam);
+                            const intersection = new THREE.Vector3();
+                            if (raycaster.ray.intersectPlane(this.mouseState.drawingPlane, intersection)) {
+                                const delta = intersection.clone().sub(this.mouseState.dragStartPoint);
+                                const vDelta = {
+                                    x: Math.round(delta.x / this.VS),
+                                    y: Math.round(delta.y / this.VS),
+                                    z: Math.round(delta.z / this.VS)
+                                };
+                                if (this.mouseState.moveAxisLock === 'x') { vDelta.y = 0; vDelta.z = 0; }
+                                if (this.mouseState.moveAxisLock === 'y') { vDelta.x = 0; vDelta.z = 0; }
+                                if (this.mouseState.moveAxisLock === 'z') { vDelta.x = 0; vDelta.y = 0; }
+                                for (const [vk, orig] of this.mouseState.movingVoxelsOriginal) {
+                                    const v = this.voxels.get(vk);
+                                    if (v) v.mesh.position.set(orig.pos.x + vDelta.x * this.VS, orig.pos.y + vDelta.y * this.VS, orig.pos.z + vDelta.z * this.VS);
+                                }
+                                this.updateSelectionVisuals();
+                            }
+                        } else if (this.mouseState.isDragging && this.mouseState.isModifying) {
+                            if (this.currentMode === 'SELECT') {
+                                this.handleDragSelection(e);
+                            } else if (this.currentMode === 'FREE') {
+                                if (targetInfo) {
+                                    const coords = { x: targetInfo.x, y: targetInfo.y, z: targetInfo.z };
+                                    this.updateDragLengthHud(this.mouseState.dragMeasureStartCoords || coords, coords);
+                                    if (!this.mouseState.lastActionCoords || coords.x !== this.mouseState.lastActionCoords.x || coords.y !== this.mouseState.lastActionCoords.y || coords.z !== this.mouseState.lastActionCoords.z) {
+                                        this.drawVoxelLinePaced(this.mouseState.lastActionCoords || coords, coords, targetInfo.normal);
+                                        this.mouseState.lastActionCoords = coords;
+                                        this.mouseState.lastActionNormal = targetInfo.normal;
+                                    }
+                                } else {
+                                    this.hideDragLengthHud();
+                                }
+                            } else {
+                                if (targetInfo) {
+                                    const coords = { x: targetInfo.x, y: targetInfo.y, z: targetInfo.z };
+                                    this.updateDragLengthHud(this.mouseState.dragMeasureStartCoords || coords, coords);
+                                    if (!this.mouseState.lastActionCoords || coords.x !== this.mouseState.lastActionCoords.x || coords.y !== this.mouseState.lastActionCoords.y || coords.z !== this.mouseState.lastActionCoords.z) {
+                                        this.drawVoxelLinePaced(this.mouseState.lastActionCoords || coords, coords, this.mouseState.lastActionNormal || targetInfo.normal);
+                                        this.mouseState.lastActionCoords = coords;
+                                        this.mouseState.lastActionNormal = targetInfo.normal;
+                                    }
+                                } else {
+                                    this.hideDragLengthHud();
+                                }
+                            }
+                        } else if (this.mouseState.isPanning) {
+                            const deltaX = e.clientX - this.mouseState.lastX;
+                            const deltaY = e.clientY - this.mouseState.lastY;
+                            if (this.isOrbitControlsMode()) {
+                                this.panOrbitCameraBy(deltaX, deltaY, 1);
+                            } else {
+                                const pan = new THREE.Vector3(-deltaX * this.PAN_SPEED, deltaY * this.PAN_SPEED, 0);
+                                pan.applyQuaternion(this.cam.quaternion);
+                                this.cam.position.add(pan);
+                            }
+                        }
                     }
                 }
 
@@ -6103,6 +6419,9 @@
                     if (this.touchState.isThreeFingerUndoCandidate) {
                         this.undo();
                         this.showToast('Action', 'Undo', 'info', 1000);
+                    } else if (this.isOrbitControlsMode() && beforeCount === 1 && !this.mouseState.isDragging) {
+                        this.mouseState.isModifying = true;
+                        this.handleTapInteraction(e);
                     } else if (this.touchState.isInteracting && !this.mouseState.isDragging) { // Is a long press tap
                         this.handleTapInteraction(e);
                     }
@@ -6203,6 +6522,7 @@
                 this.touchState.isThreeFingerUndoCandidate = false;
                 this.touchState.lastPinchDist = null;
                 this.touchState.lastPinchCenter = null;
+                this.touchState.startedOnVoxel = false;
 
                 Object.keys(this.mouseState).forEach(key => { if (typeof this.mouseState[key] === 'boolean') this.mouseState[key] = false });
                 this.mouseState.lastActionCoords = null;
@@ -6508,6 +6828,10 @@
 
             onPointerLockChange: function () {
                 if (document.pointerLockElement === this.cvs) {
+                    if (!this.isFlyControlsMode()) {
+                        try { document.exitPointerLock(); } catch (_) { }
+                        return;
+                    }
                     this.mouseState.isRotating = true;
                     this.previewVoxel.visible = false;
                     this.previewBrush.visible = false;
@@ -6527,7 +6851,7 @@
                 // Desktop contract (legacy-compatible):
                 // Ctrl+Wheel OR RMB+Wheel OR PointerLock+Wheel => adjust fly speed.
                 const rmbHeld = (e.buttons & 2) === 2;
-                const speedMode = e.ctrlKey || rmbHeld || document.pointerLockElement === this.cvs;
+                const speedMode = this.isFlyControlsMode() && (e.ctrlKey || rmbHeld || document.pointerLockElement === this.cvs);
                 if (speedMode) {
                     const speedChange = e.deltaY > 0 ? -0.01 : 0.01;
                     this.setFlySpeed(this.flySpeed + speedChange);
@@ -6535,7 +6859,7 @@
                 }
 
                 // Desktop coaching: wheel does zoom; forward/back movement is W/S.
-                if (!this.computeMobileMode() && !this.desktopMoveHintShown) {
+                if (this.isFlyControlsMode() && !this.computeMobileMode() && !this.desktopMoveHintShown) {
                     this.desktopMoveHintShown = true;
                     localStorage.setItem('desktopMoveHintShown', 'true');
                     this.showToast('Movement', 'Use W/S to move forward/back. Use Ctrl+Wheel (or RMB+Wheel) for fly speed.', 'info', 2200);
@@ -6543,7 +6867,11 @@
 
                 let zoomAmount = e.deltaY * 0.001 * this.PINCH_ZOOM_MULT;
                 if (this.controls.invertZoom) zoomAmount *= -1;
-                this.cam.position.addScaledVector(this.cam.getWorldDirection(new THREE.Vector3()), zoomAmount);
+                if (this.isOrbitControlsMode()) {
+                    this.dollyOrbitCameraBy(zoomAmount);
+                } else {
+                    this.cam.position.addScaledVector(this.cam.getWorldDirection(new THREE.Vector3()), zoomAmount);
+                }
             },
 
             onKeyDown: function (e) {
@@ -6895,6 +7223,8 @@ setGridSize: function (newSize) {
                             mesh.receiveShadow = !this.lowPerfMode && this.voxels.size < 3500;
                             this.originalVoxelsGroup.add(mesh);
                             mesh.renderOrder = this.currentBlockType === 'glass' ? 2 : 1;
+                            mesh.userData.isVoxel = true;
+                            mesh.userData.isFoundation = false;
                             this.voxels.set(k, { color: this.currentColor, glass: this.currentBlockType === 'glass', mesh: mesh });
                             modified = true;
                             this.addColorToHistory(this.currentColor);
@@ -7019,7 +7349,7 @@ setGridSize: function (newSize) {
                 if (!this.isPointerDown) return;
                 if (this.currentMode !== 'DELETE') { this.stopDeleteChargeSound(); return; }
                 if (!this.mouseState.isModifying) return;
-                if (this.mouseState.isRotating || this.mouseState.isPanning || this.mouseState.isMoving || this.mouseState.isExtruding) return;
+                if (this.mouseState.isRotating || this.mouseState.isPanning || this.mouseState.isOrbiting || this.mouseState.isMoving || this.mouseState.isExtruding) return;
 
                 const now = performance.now();
                 const pointerDownAt = this.mouseState.pointerDownAt || 0;
@@ -7860,8 +8190,9 @@ const allMeshes = [...this.originalVoxelsGroup.children, this.groundPlaneMesh].f
                 this.updateAxisAndLevelUI();
                 this.rebuildHelpers();
                 const size = this.GRID * this.VS;
+                const target = this.syncOrbitTargetToScene();
                 this.cam.position.set(size, size * 1.2, size * 1.5);
-                this.cam.lookAt(size / 2, size / 2, size / 2);
+                this.cam.lookAt(target);
                 if (this.euler) this.euler.setFromQuaternion(this.cam.quaternion, 'YXZ');
             },
 
@@ -8399,7 +8730,7 @@ const allMeshes = [...this.originalVoxelsGroup.children, this.groundPlaneMesh].f
                     }
                 }
 
-                if (document.pointerLockElement === this.cvs) {
+                if (this.isFlyControlsMode() && document.pointerLockElement === this.cvs) {
                     const rotX = this.controls.invertLookX ? this.mouseState.mouseMovementX : -this.mouseState.mouseMovementX;
                     const rotY = this.controls.invertLookY ? this.mouseState.mouseMovementY : -this.mouseState.mouseMovementY;
                     this.euler.y += rotX * this.ROTATE_SPEED;
@@ -8739,6 +9070,7 @@ this.roundedVoxelsGroup.visible = this.isRoundedPreviewEnabled;
                 this.currentColor = '#ffffff';
                 this.currentBlockType = 'solid';
                 this.flySpeed = 0.1;
+                this.cameraControlMode = 'orbit';
                 this.lengthUnit = 'mm';
                 this.currentDrawingAxis = 'y';
                 this.activeDrawingLevel = { x: 0, y: 0, z: 0 };
@@ -8751,6 +9083,7 @@ this.roundedVoxelsGroup.visible = this.isRoundedPreviewEnabled;
                 localStorage.setItem('voxelEditorColor', this.currentColor);
                 localStorage.setItem('voxelBlockType', this.currentBlockType);
                 localStorage.setItem('voxelEditorFlySpeed', this.flySpeed);
+                localStorage.setItem('voxelCameraControlMode', this.cameraControlMode);
                 localStorage.setItem('voxelLengthUnit', this.lengthUnit);
                 localStorage.setItem('currentDrawingAxis', this.currentDrawingAxis);
                 localStorage.setItem('activeDrawingLevel', JSON.stringify(this.activeDrawingLevel));
@@ -8877,6 +9210,7 @@ this.roundedVoxelsGroup.visible = this.isRoundedPreviewEnabled;
     this.updateAxisAndLevelUI();
     this.updateImageAxisUI();
     this.updateModeUI();
+    this.updateCameraControlUI();
     this.updateInAppRoundnessUI();
 },
 
@@ -9409,6 +9743,7 @@ this.roundedVoxelsGroup.visible = this.isRoundedPreviewEnabled;
             },
         };
 
+        window.VoxelApp = VoxelApp;
         document.addEventListener('DOMContentLoaded', () => VoxelApp.init());
     </script>
     <a id="sideToHubPill" href="https://hub.voxelshaper.com" class="vs-nav-pill vs-pill-left"

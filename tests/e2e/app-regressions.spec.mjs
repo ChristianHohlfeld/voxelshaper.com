@@ -181,6 +181,7 @@ async function makeFirstRun(page, showOnboarding = true) {
   await page.addInitScript((shouldShow) => {
     localStorage.removeItem('voxelshaper_autosave');
     localStorage.removeItem('deleteBrushHintDisabled');
+    localStorage.removeItem('voxelCameraControlMode');
     sessionStorage.clear();
     if (shouldShow) {
       localStorage.removeItem('voxelshaper_onboarding_dont_show');
@@ -216,6 +217,39 @@ function collectPageErrors(page) {
   const errors = [];
   page.on('pageerror', (error) => errors.push(error.message));
   return errors;
+}
+
+async function waitForVoxelApp(page) {
+  await expect.poll(() => page.evaluate(() => Boolean(window.VoxelApp?.cam && window.VoxelApp?.cvs))).toBe(true);
+}
+
+async function getCameraPosition(page) {
+  return page.evaluate(() => {
+    const p = window.VoxelApp.cam.position;
+    return [p.x, p.y, p.z];
+  });
+}
+
+function vectorDistance(a, b) {
+  return Math.hypot(a[0] - b[0], a[1] - b[1], a[2] - b[2]);
+}
+
+async function dragCanvas(page, { button = 'left', from = [0.26, 0.36], to = [0.46, 0.40] } = {}) {
+  const box = await page.locator('#voxelCanvas').boundingBox();
+  expect(box).toBeTruthy();
+  await page.mouse.move(box.x + box.width * from[0], box.y + box.height * from[1]);
+  await page.mouse.down({ button });
+  await page.mouse.move(box.x + box.width * to[0], box.y + box.height * to[1], { steps: 8 });
+  await page.mouse.up({ button });
+}
+
+async function installPointerLockSpy(page) {
+  await page.addInitScript(() => {
+    window.__pointerLockRequested = 0;
+    Element.prototype.requestPointerLock = function requestPointerLockSpy() {
+      window.__pointerLockRequested = (window.__pointerLockRequested || 0) + 1;
+    };
+  });
 }
 
 for (const appPath of ['/', '/www/index.html']) {
@@ -281,6 +315,83 @@ for (const appPath of ['/', '/www/index.html']) {
     expect(pageErrors).toEqual([]);
   });
 }
+
+for (const appPath of ['/', '/www/index.html']) {
+  test(`camera controls default to orbit while fly remains opt-in on ${appPath}`, async ({ page }) => {
+    const pageErrors = collectPageErrors(page);
+    await installPointerLockSpy(page);
+    await mockBrowserDependencies(page);
+    await makeFirstRun(page, false);
+
+    await page.goto(appPath);
+    await installStableUi(page);
+    await waitForVoxelApp(page);
+
+    await expect(page.locator('#cameraControlSwitch')).toBeVisible();
+    await expect(page.locator('#camera-control-orbit')).toHaveAttribute('aria-pressed', 'true');
+    await expect(page.locator('#camera-control-fly')).toHaveAttribute('aria-pressed', 'false');
+    await expect.poll(() => page.evaluate(() => window.VoxelApp.cameraControlMode)).toBe('orbit');
+    await expect.poll(() => page.evaluate(() => document.body.dataset.cameraControlMode)).toBe('orbit');
+
+    await dragCanvas(page, { button: 'right', from: [0.42, 0.38], to: [0.50, 0.42] });
+    expect(await page.evaluate(() => window.__pointerLockRequested)).toBe(0);
+
+    await page.locator('#camera-control-fly').click();
+    await expect(page.locator('#camera-control-orbit')).toHaveAttribute('aria-pressed', 'false');
+    await expect(page.locator('#camera-control-fly')).toHaveAttribute('aria-pressed', 'true');
+    await expect.poll(() => page.evaluate(() => localStorage.getItem('voxelCameraControlMode'))).toBe('fly');
+
+    await dragCanvas(page, { button: 'right', from: [0.44, 0.38], to: [0.48, 0.42] });
+    expect(await page.evaluate(() => window.__pointerLockRequested)).toBeGreaterThan(0);
+    expect(pageErrors).toEqual([]);
+  });
+}
+
+for (const appPath of ['/', '/www/index.html']) {
+  test(`orbit drag moves the camera without entering fly controls on ${appPath}`, async ({ page }) => {
+    const pageErrors = collectPageErrors(page);
+    await installPointerLockSpy(page);
+    await mockBrowserDependencies(page);
+    await makeFirstRun(page, false);
+
+    await page.goto(appPath);
+    await installStableUi(page);
+    await waitForVoxelApp(page);
+
+    const before = await getCameraPosition(page);
+    await dragCanvas(page, { from: [0.20, 0.32], to: [0.50, 0.42] });
+    const after = await getCameraPosition(page);
+
+    expect(vectorDistance(before, after)).toBeGreaterThan(0.1);
+    await expect.poll(() => page.evaluate(() => window.VoxelApp.cameraControlMode)).toBe('orbit');
+    expect(await page.evaluate(() => window.__pointerLockRequested)).toBe(0);
+    expect(pageErrors).toEqual([]);
+  });
+}
+
+test('mobile first-start camera controls expose orbit and one-finger drag orbits', async ({ browser }) => {
+  const context = await browser.newContext(devices['iPhone 13']);
+  const page = await context.newPage();
+  const pageErrors = collectPageErrors(page);
+  await mockBrowserDependencies(page);
+  await makeFirstRun(page, false);
+
+  await page.goto('/www/index.html');
+  await installStableUi(page);
+  await waitForVoxelApp(page);
+
+  await expect(page.locator('#cameraControlSwitch')).toBeVisible();
+  await expect(page.locator('#camera-control-orbit')).toHaveAttribute('aria-pressed', 'true');
+  await expect.poll(() => page.evaluate(() => window.VoxelApp.isMobile)).toBe(true);
+
+  const before = await getCameraPosition(page);
+  await dragCanvas(page, { from: [0.22, 0.28], to: [0.58, 0.38] });
+  const after = await getCameraPosition(page);
+
+  expect(vectorDistance(before, after)).toBeGreaterThan(0.1);
+  expect(pageErrors).toEqual([]);
+  await context.close();
+});
 
 for (const appPath of ['/', '/www/index.html']) {
   test(`signed-in user area shows the personal license tier on ${appPath}`, async ({ page }) => {
