@@ -14,6 +14,7 @@
         const ANALYTICS_ACTIVE_TICK_MS = 60000;
         const ANALYTICS_ACTIVE_WINDOW_MS = 65000;
         const ANALYTICS_APP_START_TS = Date.now();
+        const ANALYTICS_ENTRY_URL = new URL(window.location.href);
 
         window[`ga-disable-${GA_MEASUREMENT_ID}`] = false;
         window.dataLayer = window.dataLayer || [];
@@ -42,7 +43,7 @@
         })();
 
         function getSourceMarkers() {
-            const url = new URL(window.location.href);
+            const url = ANALYTICS_ENTRY_URL;
             const from = url.searchParams.get('from') || '';
             const handoff = url.searchParams.get('handoff') || '';
             return {
@@ -54,7 +55,8 @@
         }
 
         function getAnalyticsPagePath() {
-            const url = new URL(window.location.href);
+            const entryHasHandoff = ['from', 'm', 'handoff', 'token'].some((key) => ANALYTICS_ENTRY_URL.searchParams.has(key));
+            const url = new URL(entryHasHandoff ? ANALYTICS_ENTRY_URL.href : window.location.href);
             ['m', 'handoff', 'token'].forEach((key) => {
                 if (url.searchParams.has(key)) url.searchParams.set(key, '1');
             });
@@ -2933,7 +2935,7 @@
             <div class="flex items-center gap-2 border-l border-base-content/10 pl-2">
                 <button id="loginLogoutBtn" class="btn btn-sm btn-info btn-outline">Login</button>
                 <div id="userIdDisplay"
-                    class="flex items-center gap-1 font-bold text-info text-sm max-w-[100px] truncate">Guest</div>
+                    class="flex items-center gap-1 font-bold text-info text-xs max-w-[220px] min-w-0">Guest</div>
             </div>
         </div>
     </div>
@@ -3033,6 +3035,9 @@
                     </li>
                     <li id="mobile-logout-li" class="">
                         <a><button id="mobile-logout" class="w-full text-left text-error">Logout</button></a>
+                    </li>
+                    <li id="mobile-license-li" class="hidden">
+                        <span id="mobile-license-display" class="text-xs opacity-70 px-4 py-1"></span>
                     </li>
                 </ul>
             </div>
@@ -3317,7 +3322,8 @@
         <div class="modal-box text-center vs-auth-panel max-w-md"><button type="button"
                 class="btn btn-sm btn-ghost modal-close-x" aria-label="Close dialog">×</button>
             <h3 class="font-bold text-lg vs-auth-title">Login to VoxelShaper Hub</h3>
-            <p class="py-4 vs-auth-sub">Choose a login method or use a magic link.</p>
+            <p class="pt-4 pb-1 vs-auth-sub">Sign in to get your FREE personal license.</p>
+            <p class="pb-3 text-xs opacity-70">Your license key is generated securely in your account.</p>
             <div class="py-4 flex flex-col gap-3">
                 <button id="signInGoogleBtn" class="btn btn-error text-white">With Google</button>
                 <button id="signInGithubBtn" class="btn bg-neutral text-neutral-content">With
@@ -7916,8 +7922,11 @@ const allMeshes = [...this.originalVoxelsGroup.children, this.groundPlaneMesh].f
                 document.getElementById('mobile-login-logout').textContent = isLoggedIn ? 'Logout' : 'Login';
                 const loginLi = document.getElementById('mobile-login-li');
                 const logoutLi = document.getElementById('mobile-logout-li');
+                const mobileLicenseLi = document.getElementById('mobile-license-li');
+                const mobileLicenseDisplay = document.getElementById('mobile-license-display');
                 if (loginLi) loginLi.classList.toggle('hidden', isLoggedIn);
                 if (logoutLi) logoutLi.classList.toggle('hidden', !isLoggedIn);
+                if (mobileLicenseLi) mobileLicenseLi.classList.toggle('hidden', !isLoggedIn);
                 const userIdDisplay = document.getElementById('userIdDisplay');
                 userIdDisplay.replaceChildren();
                 if (isLoggedIn && this.user) {
@@ -7932,8 +7941,25 @@ const allMeshes = [...this.originalVoxelsGroup.children, this.groundPlaneMesh].f
                         userIdDisplay.appendChild(img);
                     }
                     const span = document.createElement('span');
+                    span.className = 'max-w-full truncate';
                     span.textContent = this.user.name || this.user.email;
                     userIdDisplay.appendChild(span);
+                    const license = this.user.license || {};
+                    const tier = String(license.tier || 'free').toUpperCase();
+                    const licenseText = `${tier} license`;
+                    const licenseTitle = license.key || license.keyPreview || licenseText;
+                    const badge = document.createElement('span');
+                    badge.className = 'badge badge-xs badge-outline text-[9px] uppercase max-w-full truncate';
+                    badge.textContent = licenseText;
+                    badge.title = licenseTitle;
+                    userIdDisplay.appendChild(badge);
+                    if (mobileLicenseDisplay) {
+                        mobileLicenseDisplay.textContent = `${licenseText}: ${license.keyPreview || license.key || ''}`.trim();
+                        mobileLicenseDisplay.title = licenseTitle;
+                    }
+                } else if (mobileLicenseDisplay) {
+                    mobileLicenseDisplay.textContent = '';
+                    mobileLicenseDisplay.title = '';
                 }
             },
 

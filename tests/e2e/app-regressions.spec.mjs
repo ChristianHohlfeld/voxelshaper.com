@@ -64,6 +64,19 @@ async function mockBrowserDependencies(page, options = {}) {
     const pathname = url.pathname;
 
     if (url.hostname === 'api.voxelshaper.com') {
+      if (pathname === '/api/user/me' && options.user) {
+        await route.fulfill({
+          status: 200,
+          headers: {
+            ...corsHeaders(route),
+            'X-VoxelShaper-License-Tier': options.user.license?.tier || 'free'
+          },
+          contentType: 'application/json',
+          body: JSON.stringify(options.user)
+        });
+        return;
+      }
+
       if (pathname.startsWith('/api/generate')) {
         if (options.generateFailure) {
           await route.fulfill({
@@ -265,6 +278,37 @@ for (const appPath of ['/', '/www/index.html']) {
       await expect.poll(() => page.evaluate((id) => document.getElementById(id)?.open === false, dialogId)).toBe(true);
     }
 
+    expect(pageErrors).toEqual([]);
+  });
+}
+
+for (const appPath of ['/', '/www/index.html']) {
+  test(`signed-in user area shows the personal license tier on ${appPath}`, async ({ page }) => {
+    const pageErrors = collectPageErrors(page);
+    await mockBrowserDependencies(page, {
+      user: {
+        id: 12,
+        name: 'Chris',
+        email: 'chris@example.com',
+        role: 'user',
+        isAdmin: false,
+        license: {
+          tier: 'free',
+          status: 'active',
+          keyPreview: 'VS-PER...7K2Q',
+          key: 'VS-PER-ABCD-EFGH-JKLM-NPQR-STUV-WXYZ-2345-7K2Q'
+        }
+      }
+    });
+    await makeFirstRun(page, false);
+
+    await page.goto(appPath);
+    await installStableUi(page);
+
+    await expect.poll(() => page.evaluate(() => window.__voxelshaper_user?.license?.tier)).toBe('free');
+    await expect(page.locator('#userIdDisplay')).toContainText('Chris');
+    await expect(page.locator('#userIdDisplay')).toContainText('FREE license');
+    await expect(page.locator('#userIdDisplay .badge')).toHaveAttribute('title', /VS-PER-/);
     expect(pageErrors).toEqual([]);
   });
 }
