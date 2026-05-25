@@ -11,11 +11,15 @@
         const ANALYTICS_FIRST_VALUE_KEY = 'vs_first_value_tracked';
         const ANALYTICS_FIRST_INTERACTION_KEY = 'vs_first_interaction_tracked';
         const ANALYTICS_FIRST_EDIT_KEY = 'vs_first_edit_tracked';
+        const ANALYTICS_ACTIVE_TICK_MS = 60000;
+        const ANALYTICS_ACTIVE_WINDOW_MS = 65000;
+        const ANALYTICS_APP_START_TS = Date.now();
 
         window[`ga-disable-${GA_MEASUREMENT_ID}`] = false;
         window.dataLayer = window.dataLayer || [];
 
         function gtag() { dataLayer.push(arguments); }
+        window.gtag = gtag;
 
         gtag('js', new Date());
         gtag('config', GA_MEASUREMENT_ID, {
@@ -42,11 +46,19 @@
             const from = url.searchParams.get('from') || '';
             const handoff = url.searchParams.get('handoff') || '';
             return {
-                source: window.matchMedia('(display-mode: standalone)').matches ? 'pwa' : 'web',
-                source_from: from || undefined,
-                source_handoff: handoff || undefined,
+                launch_context: window.matchMedia('(display-mode: standalone)').matches ? 'pwa' : 'web',
+                entry_surface: from || undefined,
+                handoff_present: handoff ? true : undefined,
                 page_referrer: document.referrer || undefined
             };
+        }
+
+        function getAnalyticsPagePath() {
+            const url = new URL(window.location.href);
+            ['m', 'handoff', 'token'].forEach((key) => {
+                if (url.searchParams.has(key)) url.searchParams.set(key, '1');
+            });
+            return `${url.pathname}${url.search}`;
         }
 
         function getAnalyticsContext() {
@@ -61,7 +73,9 @@
                 model_id: modelId,
                 viewport_w: window.innerWidth,
                 viewport_h: window.innerHeight,
+                page_host: window.location.hostname,
                 page_path: window.location.pathname,
+                page_path_query: getAnalyticsPagePath(),
                 ...getSourceMarkers()
             };
         }
@@ -76,8 +90,30 @@
             save_project: 'app_save_click',
             upload_hub: 'app_save_success',
             export_click: 'app_export_click',
-            export_success: 'app_export_success'
+            export_success: 'app_export_success',
+            login_start: 'app_login_start',
+            login_success: 'app_login_success',
+            hub_open: 'app_hub_open',
+            hub_generate_in_editor: 'app_hub_generate_in_editor',
+            hub_import_start: 'app_hub_import_start',
+            hub_import_success: 'app_hub_import_success',
+            hub_import_failed: 'app_hub_import_failed',
+            start_blank: 'app_start_blank',
+            onboarding_start: 'app_onboarding_start',
+            onboarding_complete: 'app_onboarding_complete',
+            onboarding_dismiss: 'app_onboarding_dismiss',
+            save_blocked: 'app_save_blocked',
+            export_blocked: 'app_export_blocked'
         };
+
+        function normalizeAnalyticsParams(params = {}) {
+            const normalized = { ...params };
+            if (Object.prototype.hasOwnProperty.call(normalized, 'source')) {
+                normalized.interaction_source = normalized.interaction_source || normalized.source;
+                delete normalized.source;
+            }
+            return normalized;
+        }
 
         let __lastPageViewKey = '';
         function trackPageView(force = false) {
@@ -93,7 +129,11 @@
 
         function trackEvent(eventName, params = {}) {
             const canonicalName = ANALYTICS_EVENT_MAP[eventName];
-            const payload = { ...getAnalyticsContext(), ...params };
+            const payload = {
+                ...getAnalyticsContext(),
+                elapsed_ms: Date.now() - ANALYTICS_APP_START_TS,
+                ...normalizeAnalyticsParams(params)
+            };
             if (typeof gtag === 'function') {
                 gtag('event', eventName, payload);
                 if (canonicalName && canonicalName !== eventName) {
@@ -119,8 +159,22 @@
 
         window.trackEvent = trackEvent;
 
+        let __lastActiveUseAt = Date.now();
+        let __activeUseTicks = 0;
+        function markActiveUse() {
+            __lastActiveUseAt = Date.now();
+        }
+        ['pointerdown', 'keydown', 'wheel', 'touchstart'].forEach((eventName) => {
+            window.addEventListener(eventName, markActiveUse, { passive: true });
+        });
+        setInterval(() => {
+            if (Date.now() - __lastActiveUseAt > ANALYTICS_ACTIVE_WINDOW_MS) return;
+            __activeUseTicks += 1;
+            trackEvent('app_active_use_tick', { active_minutes: __activeUseTicks });
+        }, ANALYTICS_ACTIVE_TICK_MS);
+
         window.addEventListener('load', () => {
-            const source = window.matchMedia('(display-mode: standalone)').matches ? 'pwa' : 'web';
+            const launchContext = window.matchMedia('(display-mode: standalone)').matches ? 'pwa' : 'web';
             const prevSeen = Number(localStorage.getItem(ANALYTICS_LAST_SEEN_KEY) || 0);
             const previousSessionIndex = Number(localStorage.getItem(ANALYTICS_SESSION_INDEX_KEY) || 0);
             const sessionIndex = previousSessionIndex + 1;
@@ -128,13 +182,13 @@
             localStorage.setItem(ANALYTICS_LAST_SEEN_KEY, String(Date.now()));
 
             trackPageView(true);
-            trackEvent('session_start', { source, session_index: sessionIndex });
-            trackEvent('app_boot', { source });
-            trackEvent('landing_view', { source });
+            trackEvent('session_start', { launch_context: launchContext, session_index: sessionIndex });
+            trackEvent('app_boot', { launch_context: launchContext });
+            trackEvent('landing_view', { launch_context: launchContext });
 
             if (prevSeen > 0) {
                 const daysSinceLast = Math.max(0, Math.round((Date.now() - prevSeen) / 86400000));
-                trackEvent('return_session', { days_since_last: daysSinceLast, source });
+                trackEvent('return_session', { days_since_last: daysSinceLast, launch_context: launchContext });
             }
         }, { once: true });
 
@@ -3568,11 +3622,13 @@
         const VoxelApp3MFExporter = {
             exportBambuStudio3MF: async function (voxels, voxelSize, showToast, parseKey, scaleUnit, isRounded = false, roundnessFactor = 0) {
                 if (!voxels || voxels.size === 0) {
+                    trackEvent('export_blocked', { reason: 'empty_project', format: '3mf_bambu', voxel_count: 0 });
                     showToast('Export Error', 'Scene is empty.', 'warning');
                     return;
 
                 }
                 if (!window.JSZip || !window.saveAs) {
+                    trackEvent('export_blocked', { reason: 'library_unavailable', format: '3mf_bambu', voxel_count: voxels.size });
                     showToast('Export Error', 'Required libraries (JSZip, FileSaver) not found.', 'error');
                     return;
 
@@ -3593,6 +3649,7 @@
                     }).filter(v => v !== null);
 
                     if (voxelArray.length === 0) {
+                        trackEvent('export_blocked', { reason: 'no_exportable_voxels', format: '3mf_bambu', voxel_count: voxels.size });
                         showToast('Export Error', 'No voxels to export.', 'warning');
                         return;
 
@@ -4089,6 +4146,7 @@
             activePointers: new Map(),
             isPointerDown: false,
             currentModelId: null,
+            hubLaunchLoadedFromUrl: false,
             hubUploadDirty: false,
             lastHubUploadAt: 0,
             morphSettings: { type: 'random', seed: null, shape: 60, color: 80, palette: 'auto' },
@@ -4121,6 +4179,8 @@
             _tmpRight: new THREE.Vector3(),
             firstInteractionTracked: false,
             firstEditTracked: false,
+            onboardingStartedAt: 0,
+            onboardingCompletedThisOpen: false,
             tutorialStep: 0,
             tutorialSteps: [],
             mouseState: {
@@ -4337,19 +4397,43 @@
                 };
             },
 
+            closeDialog: function (dialog, returnValue = '') {
+                if (!dialog) return;
+                try {
+                    if (typeof dialog.close === 'function' && dialog.open) {
+                        dialog.close(returnValue);
+                        return;
+                    }
+                } catch (_) { }
+                dialog.removeAttribute('open');
+            },
+
             ensureModalCloseButtons: function () {
                 document.querySelectorAll('dialog.modal').forEach((dialog) => {
                     const box = dialog.querySelector('.modal-box');
                     if (!box) return;
-                    if (box.querySelector('.modal-close-x')) return;
+                    let closeBtn = box.querySelector('.modal-close-x');
 
-                    const closeBtn = document.createElement('button');
+                    if (!closeBtn) {
+                        closeBtn = document.createElement('button');
+                        closeBtn.className = 'btn btn-sm btn-ghost modal-close-x';
+                        closeBtn.textContent = '×';
+                        box.prepend(closeBtn);
+                    }
+
                     closeBtn.type = 'button';
-                    closeBtn.className = 'btn btn-sm btn-ghost modal-close-x';
                     closeBtn.setAttribute('aria-label', 'Close dialog');
-                    closeBtn.textContent = '×';
-                    closeBtn.addEventListener('click', () => dialog.close());
-                    box.prepend(closeBtn);
+                    closeBtn.dataset.modalClose = 'true';
+
+                    if (dialog.dataset.modalCloseBound === 'true') return;
+                    dialog.dataset.modalCloseBound = 'true';
+                    dialog.addEventListener('click', (event) => {
+                        const trigger = event.target.closest('[data-modal-close], .modal-close-x');
+                        if (!trigger || !dialog.contains(trigger)) return;
+                        event.preventDefault();
+                        event.stopPropagation();
+                        this.closeDialog(dialog);
+                    });
                 });
             },
 
@@ -4385,7 +4469,7 @@
                 setTimeout(() => el.remove(), 220);
             },
 
-            init: function () {
+            init: async function () {
                 this.setBootLoadingProgress(18, 'Preparing interface…');
                 this.setupDOM();
                 this.loadMorphSettings();
@@ -4410,13 +4494,14 @@
                 PolysliceWrapper.init();
 
                 const urlParams = new URLSearchParams(window.location.search);
+                const hubLaunchLoaded = urlParams.has('modelId') ? false : await this.loadHubLaunchFromUrl(urlParams);
 
                 // Onboarding logic
                 const fromHub = urlParams.get('from') === 'hub' || urlParams.has('m');
-                const shouldShowOnboarding = this.isFirstRunOnboardingActive();
+                const shouldShowOnboarding = this.isFirstRunOnboardingActive() && !hubLaunchLoaded;
                 if (shouldShowOnboarding && !urlParams.has('modelId') && !fromHub) {
                     this.startOnboarding();
-                } else if (!urlParams.has('modelId') && !window.location.hash.includes('#oauth_success') && !fromHub) {
+                } else if (!urlParams.has('modelId') && !window.location.hash.includes('#oauth_success') && !fromHub && !hubLaunchLoaded) {
                     this.loadAutosavedScene();
                 }
 
@@ -4500,50 +4585,158 @@
                     }
                 }
             },
-            authCheckAndInit: async function () {
+            normalizeHubProjectPayload: function (project) {
+                if (!project || !Array.isArray(project.voxels)) return null;
+                if (project.voxels.length && !project.voxels[0].color) {
+                    return {
+                        gridSize: project.gridSize || this.GRID_DEFAULT,
+                        currentDrawingAxis: project.currentDrawingAxis || 'y',
+                        activeDrawingLevel: project.activeDrawingLevel || { x: 0, y: 0, z: 0 },
+                        voxels: project.voxels.map(v => {
+                            let color = typeof v.color === 'string' ? v.color : '#ffffff';
+                            if ((!color || color[0] !== '#') && Array.isArray(v.c) && v.c.length >= 3) {
+                                const toHex = (n) => Math.max(0, Math.min(255, n | 0)).toString(16).padStart(2, '0');
+                                color = `#${toHex(v.c[0])}${toHex(v.c[1])}${toHex(v.c[2])}`;
+                            }
+                            return { x: v.x, y: v.y, z: v.z, color: String(color).toUpperCase() };
+                        }),
+                        metadata: project.metadata
+                    };
+                }
+                return project;
+            },
+
+            applyHubImportProject: function (project, options = {}) {
+                const normalized = this.normalizeHubProjectPayload(project);
+                const meta = project?.metadata || options.meta || {};
+                const method = options.method || 'unknown';
+                const modelType = meta.type ? String(meta.type) : undefined;
+                const voxelCount = Array.isArray(normalized?.voxels) ? normalized.voxels.length : 0;
+
+                if (!normalized || voxelCount === 0) {
+                    trackEvent('hub_import_failed', { handoff_method: method, reason: 'empty_payload', model_type: modelType });
+                    return false;
+                }
+
+                if (!this.loadFromData(normalized)) {
+                    trackEvent('hub_import_failed', { handoff_method: method, reason: 'load_failed', model_type: modelType, voxel_count: voxelCount });
+                    return false;
+                }
+
+                if (meta.type && Number.isFinite(meta.seed)) {
+                    window.__lastHubMeta = {
+                        type: meta.type,
+                        seed: meta.seed >>> 0,
+                        shape: meta.shape ?? 60,
+                        color: meta.color ?? 80,
+                        palette: meta.palette ?? 'auto'
+                    };
+                }
+                const ob = document.getElementById('onboardingModal');
+                if (ob && ob.open) ob.close();
+                this.showToast('Import', 'Hub model ready to edit', 'success');
+                trackEvent('hub_import_success', { handoff_method: method, model_type: modelType, voxel_count: voxelCount });
+                return true;
+            },
+
+            fetchGeneratedHubProjectFromApi: async function (meta) {
+                const params = new URLSearchParams();
+                params.set('type', meta.type || 'floating_island');
+                params.set('seed', String((meta.seed >>> 0) || 1));
+                params.set('shape', String(meta.shape ?? 60));
+                params.set('color', String(meta.color ?? 80));
+                params.set('palette', meta.palette || 'auto');
+                params.set('maxVoxels', String(this.isMobile ? 4500 : 9000));
+                const response = await this.request(`/api/generate?${params.toString()}`);
+                const project = response.project || response;
+                if (response.metadata && project && !project.metadata) project.metadata = response.metadata;
+                return project;
+            },
+
+            loadHubLaunchFromUrl: async function (urlParams = new URLSearchParams(window.location.search || '')) {
+                const encodedMeta = urlParams.get('m');
+                const hasHubContext = urlParams.get('from') === 'hub' || urlParams.has('handoff');
+                if (!encodedMeta) {
+                    if (hasHubContext) {
+                        trackEvent('hub_import_failed', { handoff_method: 'url_metadata', reason: 'missing_metadata' });
+                    }
+                    return false;
+                }
+
+                let meta;
+                try {
+                    meta = this.decodeHubMetadata(encodedMeta);
+                } catch (error) {
+                    console.error('Failed to decode Hub model metadata:', error);
+                    trackEvent('hub_import_failed', { handoff_method: 'url_metadata', reason: 'decode_failed' });
+                    return false;
+                }
+
+                const modelType = meta.type ? String(meta.type) : undefined;
+                trackEvent('hub_import_start', { handoff_method: 'api_generate', model_type: modelType });
+                this.setBootLoadingProgress(84, 'Opening Hub model...');
+
+                try {
+                    const project = await this.fetchGeneratedHubProjectFromApi(meta);
+                    const loaded = this.applyHubImportProject(project, { method: 'api_generate', meta });
+                    if (loaded) {
+                        this.hubLaunchLoadedFromUrl = true;
+                        if (urlParams.has('handoff')) {
+                            const clean = new URL(window.location.href);
+                            clean.searchParams.delete('handoff');
+                            window.history.replaceState({}, document.title, clean.toString());
+                        }
+                    }
+                    return loaded;
+                } catch (error) {
+                    console.error('API Hub model generation failed:', error);
+                    trackEvent('hub_import_failed', { handoff_method: 'api_generate', reason: 'api_failed', model_type: modelType });
+                    trackEvent('hub_import_start', { handoff_method: 'client_fallback', model_type: modelType });
+                    const generated = this.generateDeterministicHubProject(meta);
+                    if (generated) {
+                        generated.metadata = meta;
+                        const loaded = this.applyHubImportProject(generated, { method: 'client_fallback', meta });
+                        if (loaded) {
+                            this.hubLaunchLoadedFromUrl = true;
+                            if (urlParams.has('handoff')) {
+                                const clean = new URL(window.location.href);
+                                clean.searchParams.delete('handoff');
+                                window.history.replaceState({}, document.title, clean.toString());
+                            }
+                        }
+                        return loaded;
+                    }
+                    this.showToast('Hub Import', 'Could not open the Hub model. Try Morph World again.', 'warning');
+                    trackEvent('hub_import_failed', { handoff_method: 'client_fallback', reason: 'generation_failed', model_type: modelType });
+                    return false;
+                }
+            },
+
+            setupHubImportMessageListener: function () {
+                if (this._hubImportMessageListenerReady) return;
+                this._hubImportMessageListenerReady = true;
                 window.addEventListener('message', (event) => {
                     try {
                         const trustedOrigins = ['https://hub.voxelshaper.com', window.location.origin];
                         if (!trustedOrigins.includes(event.origin)) return;
                         if (!event.data || event.data.type !== 'voxelshaper_import_v1') return;
-                        const project = event.data.project;
-                        let normalized = project;
-                        if (project && Array.isArray(project.voxels) && project.voxels.length && !project.voxels[0].color) {
-                            normalized = {
-                                gridSize: this.GRID_DEFAULT,
-                                currentDrawingAxis: 'y',
-                                activeDrawingLevel: { x: 0, y: 0, z: 0 },
-                                voxels: project.voxels.map(v => {
-                                    let color = typeof v.color === 'string' ? v.color : '#ffffff';
-                                    if ((!color || color[0] !== '#') && Array.isArray(v.c) && v.c.length >= 3) {
-                                        const toHex = (n) => Math.max(0, Math.min(255, n | 0)).toString(16).padStart(2, '0');
-                                        color = `#${toHex(v.c[0])}${toHex(v.c[1])}${toHex(v.c[2])}`;
-                                    }
-                                    return { x: v.x, y: v.y, z: v.z, color: String(color).toUpperCase() };
-                                })
-                            };
-                        }
-                        if (normalized && this.loadFromData(normalized)) {
-                            if (project && project.metadata && project.metadata.type && Number.isFinite(project.metadata.seed)) {
-                                window.__lastHubMeta = {
-                                    type: project.metadata.type,
-                                    seed: project.metadata.seed >>> 0,
-                                    shape: project.metadata.shape ?? 60,
-                                    color: project.metadata.color ?? 80,
-                                    palette: project.metadata.palette ?? 'auto'
-                                };
-                            }
-                            const ob = document.getElementById('onboardingModal');
-                            if (ob && ob.open) ob.close();
-                            this.showToast('Import', 'Model opened from Hub', 'success');
+                        trackEvent('hub_import_start', { handoff_method: 'post_message' });
+                        if (this.applyHubImportProject(event.data.project, { method: 'post_message' })) {
                             try {
                                 event.source?.postMessage({ type: 'voxelshaper_import_ack_v1' }, event.origin);
                             } catch (_) { }
                         }
-                    } catch (_) { }
+                    } catch (error) {
+                        console.error('Hub postMessage import failed:', error);
+                        trackEvent('hub_import_failed', { handoff_method: 'post_message', reason: 'message_failed' });
+                    }
                 });
+            },
 
-                const unsavedData = sessionStorage.getItem('unsavedVoxelData');
+            authCheckAndInit: async function () {
+                this.setupHubImportMessageListener();
+
+                const unsavedData = this.hubLaunchLoadedFromUrl ? null : sessionStorage.getItem('unsavedVoxelData');
                 if (unsavedData) {
                     try {
                         const data = JSON.parse(unsavedData);
@@ -5291,6 +5484,16 @@
                 document.getElementById('startBlankBtn').addEventListener('click', () => {
                     trackEvent('start_blank', {});
                     this.markOnboardingComplete();
+                });
+                const onboardingModal = document.getElementById('onboardingModal');
+                onboardingModal?.addEventListener('close', () => {
+                    if (!this.onboardingStartedAt || this.onboardingCompletedThisOpen) return;
+                    trackEvent('onboarding_dismiss', {
+                        elapsed_in_modal_ms: Date.now() - this.onboardingStartedAt,
+                        voxel_count: this.voxels.size
+                    });
+                    this.onboardingStartedAt = 0;
+                    this.onboardingCompletedThisOpen = false;
                 });
                 document.getElementById('showOnboardingAgainBtn').addEventListener('click', () => {
                     this.startOnboarding();
@@ -6176,15 +6379,18 @@
 
             uploadProjectToHub: async function () {
                 if (!this.user) {
+                    trackEvent('save_blocked', { reason: 'auth_required', voxel_count: this.voxels.size });
                     this.showToast('Error', 'You must be logged in to upload.', 'error');
                     return;
                 }
                 if (this.voxels.size === 0) {
+                    trackEvent('save_blocked', { reason: 'empty_project', voxel_count: 0 });
                     this.showToast('Error', 'Cannot upload an empty project.', 'error');
                     return;
                 }
                 const title = document.getElementById('uploadTitle').value;
                 if (!title) {
+                    trackEvent('save_blocked', { reason: 'missing_title', voxel_count: this.voxels.size });
                     this.showToast('Error', 'Title is required.', 'error');
                     return;
                 }
@@ -8026,6 +8232,7 @@ const allMeshes = [...this.originalVoxelsGroup.children, this.groundPlaneMesh].f
 
             exportSTL: function (scaleUnit = 'mm', upAxis = 'Z', isRounded = false) {
                 if (this.voxels.size === 0) {
+                    trackEvent('export_blocked', { reason: 'empty_project', format: isRounded ? 'stl_rounded' : 'stl_blocky', voxel_count: 0 });
                     this.showToast('Export Error', 'Scene is empty.', 'warning');
                     return;
                 }
@@ -8062,10 +8269,12 @@ const allMeshes = [...this.originalVoxelsGroup.children, this.groundPlaneMesh].f
 
             exportGCodePolyslice: async function (scaleUnit = 'mm', isRounded = false) {
                 if (this.voxels.size === 0) {
+                    trackEvent('export_blocked', { reason: 'empty_project', format: isRounded ? 'gcode_rounded' : 'gcode_blocky', voxel_count: 0 });
                     this.showToast('Export Error', 'Scene is empty.', 'warning');
                     return;
                 }
                 if (!PolysliceWrapper.slicer) {
+                    trackEvent('export_blocked', { reason: 'slicer_unavailable', format: isRounded ? 'gcode_rounded' : 'gcode_blocky', voxel_count: this.voxels.size });
                     this.showToast('Slicer Error', 'Polyslice failed to initialize. Cannot generate G-Code.', 'error');
                     return;
                 }
@@ -8862,8 +9071,8 @@ this.roundedVoxelsGroup.visible = this.isRoundedPreviewEnabled;
                 doneBtn.classList.toggle('hidden', index !== total - 1);
             },
 
-            openQuickTutorial: function (source = 'unknown') {
-                trackEvent('tutorial_open', { source, ...this.getAnalyticsContext() });
+            openQuickTutorial: function (tutorialSource = 'unknown') {
+                trackEvent('tutorial_open', { interaction_source: tutorialSource, ...this.getAnalyticsContext() });
 
                 const modal = document.getElementById('quickTutorialModal');
                 if (modal?.open) modal.close();
@@ -8878,7 +9087,7 @@ this.roundedVoxelsGroup.visible = this.isRoundedPreviewEnabled;
                     setTimeout(() => {
                         this.showToast('Quick Tip', text, 'info', 1800);
                         if (i === steps.length - 1) {
-                            trackEvent('tutorial_complete', { source: `${source}_snack`, ...this.getAnalyticsContext() });
+                            trackEvent('tutorial_complete', { interaction_source: `${tutorialSource}_snack`, ...this.getAnalyticsContext() });
                         }
                     }, i * 1200);
                 });
@@ -8888,7 +9097,9 @@ this.roundedVoxelsGroup.visible = this.isRoundedPreviewEnabled;
                 const dontShow = localStorage.getItem('voxelshaper_onboarding_dont_show') === 'true';
                 const checkbox = document.getElementById('onboardingDontShowAgain');
                 if (checkbox) checkbox.checked = dontShow;
-                trackEvent('onboarding_start');
+                this.onboardingStartedAt = Date.now();
+                this.onboardingCompletedThisOpen = false;
+                trackEvent('onboarding_start', { voxel_count: this.voxels.size });
                 document.getElementById('onboardingModal').showModal();
             },
 
@@ -8903,10 +9114,16 @@ this.roundedVoxelsGroup.visible = this.isRoundedPreviewEnabled;
             },
 
             markOnboardingComplete: function () {
-                trackEvent('onboarding_complete', { action: 'start_blank' });
+                this.onboardingCompletedThisOpen = true;
+                trackEvent('onboarding_complete', {
+                    action: 'start_blank',
+                    elapsed_in_modal_ms: this.onboardingStartedAt ? Date.now() - this.onboardingStartedAt : undefined,
+                    voxel_count: this.voxels.size
+                });
                 const dontShow = !!document.getElementById('onboardingDontShowAgain')?.checked;
                 localStorage.setItem('voxelshaper_onboarding_dont_show', String(dontShow));
                 document.getElementById('onboardingModal').close();
+                this.onboardingStartedAt = 0;
             },
 
 
@@ -9165,7 +9382,7 @@ this.roundedVoxelsGroup.visible = this.isRoundedPreviewEnabled;
         document.addEventListener('DOMContentLoaded', () => VoxelApp.init());
     </script>
     <a id="sideToHubPill" href="https://hub.voxelshaper.com" class="vs-nav-pill vs-pill-left"
-        onclick="trackEvent('hub_open', { source: 'editor_pill_to_hub' })"><span class="vs-arrow">←</span><span
+        onclick="trackEvent('hub_open', { interaction_source: 'editor_pill_to_hub' })"><span class="vs-arrow">←</span><span
             class="vs-text">To Hub</span></a>
     <button id="hubSaveIndicator" class="hub-save-indicator" type="button" title="Save status" aria-label="Save status">
         <i class="fa-regular fa-floppy-disk"></i><span class="hub-save-star" aria-hidden="true">★</span>
@@ -9247,4 +9464,3 @@ this.roundedVoxelsGroup.visible = this.isRoundedPreviewEnabled;
 </body>
 
 </html>
-
