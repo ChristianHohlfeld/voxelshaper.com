@@ -269,8 +269,8 @@ for (const appPath of ['/', '/www/index.html']) {
 }
 
 const importCases = [
-  { name: 'desktop root', appPath: '/', context: { viewport: { width: 1280, height: 900 } }, expectedMaxVoxels: '9000' },
-  { name: 'mobile www', appPath: '/www/index.html', context: devices['iPhone 13'], expectedMaxVoxels: '4500' }
+  { name: 'desktop root', appPath: '/', context: { viewport: { width: 1280, height: 900 } }, expectedMaxVoxels: '4200' },
+  { name: 'mobile www', appPath: '/www/index.html', context: devices['iPhone 13'], expectedMaxVoxels: '2200' }
 ];
 
 for (const importCase of importCases) {
