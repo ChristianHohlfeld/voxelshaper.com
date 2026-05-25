@@ -3458,9 +3458,9 @@
                     <span class="label-text-alt uppercase opacity-60 font-bold">Ambient Occlusion (SSAO)</span>
                 </label>
                 <div class="flex items-center gap-3">
-                    <input type="range" id="ssaoIntensitySlider" min="0" max="0.05" step="0.001" value="0.006"
+                    <input type="range" id="ssaoIntensitySlider" min="0" max="0.05" step="0.001" value="0.014"
                         class="range range-xs range-primary flex-grow">
-                    <span id="ssaoIntensityValue" class="text-xs font-mono w-8 text-right">0.006</span>
+                    <span id="ssaoIntensityValue" class="text-xs font-mono w-8 text-right">0.014</span>
                 </div>
             </div>
 
@@ -4186,6 +4186,9 @@
             GENERATOR_VOXEL_BUDGET_MOBILE: 4000,
             GENERATOR_MIN_GRID: 24,
             GENERATOR_MAX_GRID: 72,
+            SHOWCASE_CAMERA_FOV: 45,
+            FLY_CAMERA_FOV: 75,
+            EDITOR_SHADOW_VOXEL_LIMIT: 4500,
             BACKEND_URL: "https://api.voxelshaper.com",
             HUB_URL: "https://hub.voxelshaper.com",
             // --- State ---
@@ -4245,6 +4248,8 @@
             seamDarkness: 0.0,
             isRoundedPreviewEnabled: localStorage.getItem('isRoundedPreviewEnabled') === 'true',
             previewRoundnessFactor: parseFloat(localStorage.getItem('previewRoundnessFactor') || 0.5),
+            renderMaterialProfile: null,
+            currentModelMeta: null,
             originalVoxelsGroup: null,
             roundedVoxelsGroup: null,
             _rayMouse: new THREE.Vector2(),
@@ -4257,11 +4262,16 @@
             _lastPreviewClientY: null,
             ambientParticles: null,
             ambientParticleAttr: null,
+            keyLight: null,
+            fillLight: null,
+            rimLight: null,
+            dynamicGlow: null,
             _ambientTick: 0,
             _tmpForward: new THREE.Vector3(),
             _tmpRight: new THREE.Vector3(),
             _tmpUp: new THREE.Vector3(),
             orbitTarget: null,
+            orbitFrameRadius: 0,
             firstInteractionTracked: false,
             firstEditTracked: false,
             onboardingStartedAt: 0,
@@ -4346,17 +4356,83 @@
                 return mat;
             },
 
+            getRenderMaterialProfile: function (meta = {}) {
+                const rawType = String(meta?.type || meta?.model_type || meta?.category || '').toLowerCase();
+                const type = rawType.replace(/[^a-z0-9_/-]/g, '');
+                const metallic = ['car', 'mech', 'spaceship'].includes(type);
+                const watery = type === 'waterfall' || type === 'crystal';
+                const glowByType = {
+                    spaceship: '#58E1FF',
+                    car: '#FFDD88',
+                    mech: '#F4A261',
+                    waterfall: '#00B4D8',
+                    crystal: '#8BE9FF',
+                    city: '#00E5FF'
+                };
+                const glowColor = glowByType[type] || meta?.accentColor || '#58E1FF';
+                const metalness = metallic ? 0.38 : (watery ? 0.12 : 0.07);
+                const roughness = watery ? 0.28 : (metallic ? 0.52 : 0.68);
+                return {
+                    type: type || 'default',
+                    metalness,
+                    roughness,
+                    envMapIntensity: metallic ? 1.25 : 0.95,
+                    glowColor,
+                    glowIntensity: this.lowPerfMode ? 0.28 : (metallic || watery ? 1.1 : 0.55),
+                    cacheKey: `${type || 'default'}:${metalness.toFixed(2)}:${roughness.toFixed(2)}`
+                };
+            },
+
+            applyRenderMaterialProfile: function (meta = {}) {
+                const previousKey = this.renderMaterialProfile?.cacheKey;
+                this.currentModelMeta = meta || {};
+                this.renderMaterialProfile = this.getRenderMaterialProfile(this.currentModelMeta);
+                if (previousKey !== this.renderMaterialProfile.cacheKey) {
+                    this.materialCache.forEach((mat) => {
+                        if (mat && typeof mat.dispose === 'function') mat.dispose();
+                    });
+                    this.materialCache.clear();
+                }
+                this.updateDynamicGlow();
+            },
+
+            applyCameraPresentationMode: function () {
+                if (!this.cam) return;
+                const nextFov = this.isFlyControlsMode() ? this.FLY_CAMERA_FOV : this.SHOWCASE_CAMERA_FOV;
+                if (Math.abs(this.cam.fov - nextFov) > 0.01) {
+                    this.cam.fov = nextFov;
+                    this.cam.updateProjectionMatrix();
+                }
+            },
+
+            updateDynamicGlow: function () {
+                if (!this.dynamicGlow) return;
+                const profile = this.renderMaterialProfile || this.getRenderMaterialProfile(this.currentModelMeta || {});
+                const size = Math.max(this.GRID * this.VS, 8);
+                const center = this.orbitTarget || new THREE.Vector3(size * 0.5, size * 0.5, size * 0.5);
+                this.dynamicGlow.color.set(profile.glowColor || '#58E1FF');
+                this.dynamicGlow.intensity = this.voxels.size > this.EDITOR_SHADOW_VOXEL_LIMIT ? profile.glowIntensity * 0.45 : profile.glowIntensity;
+                this.dynamicGlow.distance = Math.max(40, size * 3);
+                this.dynamicGlow.position.set(center.x + size * 0.15, center.y + Math.max(5, size * 0.55), center.z + size * 0.8);
+            },
+
+            shouldUseVoxelShadows: function () {
+                return !this.lowPerfMode && this.voxels.size < this.EDITOR_SHADOW_VOXEL_LIMIT;
+            },
+
             getMaterial: function (color, blockType = 'solid') {
-                const key = `${String(color).toUpperCase()}|${blockType}`;
+                const profile = this.renderMaterialProfile || this.getRenderMaterialProfile(this.currentModelMeta || {});
+                const key = `${String(color).toUpperCase()}|${blockType}|${profile.cacheKey}`;
                 if (!this.materialCache.has(key)) {
                     const isGlass = blockType === 'glass';
                     const mat = new THREE.MeshStandardMaterial({
                         color: color,
-                        roughness: isGlass ? 0.14 : 0.72,
-                        metalness: isGlass ? 0.18 : 0.12,
+                        roughness: isGlass ? 0.14 : profile.roughness,
+                        metalness: isGlass ? 0.18 : profile.metalness,
                         transparent: isGlass,
                         opacity: isGlass ? 0.48 : 1,
-                        depthWrite: !isGlass
+                        depthWrite: !isGlass,
+                        envMapIntensity: isGlass ? 1.15 : profile.envMapIntensity
                     });
                     if (isGlass) {
                         mat.envMapIntensity = 1.0;
@@ -4440,6 +4516,7 @@
                 if (nextMode === 'orbit' && document.pointerLockElement === this.cvs) {
                     try { document.exitPointerLock(); } catch (_) { }
                 }
+                this.applyCameraPresentationMode();
                 this.updateCameraControlUI();
                 if (changed && options.announce !== false) {
                     const title = nextMode === 'orbit' ? 'Orbit Camera' : 'Fly Camera';
@@ -4485,9 +4562,14 @@
                 });
                 if (Number.isFinite(minX)) {
                     this.orbitTarget.set((minX + maxX) * 0.5, (minY + maxY) * 0.5, (minZ + maxZ) * 0.5);
+                    const extentX = Math.max(this.VS, maxX - minX + this.VS);
+                    const extentY = Math.max(this.VS, maxY - minY + this.VS);
+                    const extentZ = Math.max(this.VS, maxZ - minZ + this.VS);
+                    this.orbitFrameRadius = Math.max(this.VS * 3, Math.sqrt(extentX * extentX + extentY * extentY + extentZ * extentZ) * 0.5);
                 } else {
                     const size = this.GRID * this.VS;
                     this.orbitTarget.set(size * 0.5, size * 0.5, size * 0.5);
+                    this.orbitFrameRadius = Math.max(this.VS * 4, size * 0.65);
                 }
                 return this.orbitTarget;
             },
@@ -4547,9 +4629,15 @@
 
             getPointerSceneStartInfo: function (clientX, clientY) {
                 const hit = this.getFaceAt(clientX, clientY);
+                const targetInfo = this.getRayTargetInfo(clientX, clientY);
+                const targetKey = targetInfo ? this.key(targetInfo.x, targetInfo.y, targetInfo.z) : null;
                 const startsOnFoundation = !!(hit && hit.object && (hit.object === this.groundPlaneMesh || hit.object.userData?.isFoundation));
-                const startsOnVoxel = !!(hit && hit.object && !startsOnFoundation && this.findVoxelDataByMesh(hit.object));
-                return { hit, startsOnVoxel, startsOnFoundation };
+                const startsOnVoxel = !!(hit && hit.object && !startsOnFoundation && this.findVoxelDataByMesh(hit.object)) ||
+                    (targetKey !== null && this.voxels.has(targetKey));
+                const startsOnBuildTarget = !!targetInfo && targetInfo.x >= 0 && targetInfo.x < this.GRID &&
+                    targetInfo.y >= 0 && targetInfo.y < this.GRID &&
+                    targetInfo.z >= 0 && targetInfo.z < this.GRID;
+                return { hit, targetInfo, startsOnVoxel, startsOnFoundation, startsOnBuildTarget };
             },
 
             prepareMobileModifyGesture: function (clientX, clientY) {
@@ -4855,7 +4943,7 @@
 
             applyHubImportProject: function (project, options = {}) {
                 const normalized = this.normalizeHubProjectPayload(project);
-                const meta = project?.metadata || options.meta || {};
+                const meta = { ...(project?.metadata || {}), ...(options.meta || {}) };
                 const method = options.method || 'unknown';
                 const modelType = meta.type ? String(meta.type) : undefined;
                 const voxelCount = Array.isArray(normalized?.voxels) ? normalized.voxels.length : 0;
@@ -4865,7 +4953,9 @@
                     return false;
                 }
 
-                if (!this.loadFromData(normalized)) {
+                normalized.metadata = { ...(normalized.metadata || {}), ...meta };
+
+                if (!this.loadFromData(normalized, { meta })) {
                     trackEvent('hub_import_failed', { handoff_method: method, reason: 'load_failed', model_type: modelType, voxel_count: voxelCount });
                     return false;
                 }
@@ -5282,10 +5372,11 @@
                 this.scene.add(this.originalVoxelsGroup);
                 this.scene.add(this.roundedVoxelsGroup);
 
-                this.cam = new THREE.PerspectiveCamera(75, this.containerDiv.clientWidth / this.containerDiv.clientHeight, 0.1, 1000);
+                this.lowPerfMode = this.computeMobileMode() || (navigator.hardwareConcurrency || 4) <= 4 || (navigator.deviceMemory || 4) <= 4;
+                const initialFov = this.isFlyControlsMode() ? this.FLY_CAMERA_FOV : this.SHOWCASE_CAMERA_FOV;
+                this.cam = new THREE.PerspectiveCamera(initialFov, this.containerDiv.clientWidth / this.containerDiv.clientHeight, 0.1, 1000);
                 this.euler = new THREE.Euler(0, 0, 0, 'YXZ');
                 this.resetCamera();
-                this.lowPerfMode = this.computeMobileMode() || (navigator.hardwareConcurrency || 4) <= 4 || (navigator.deviceMemory || 4) <= 4;
                 this.ren = new THREE.WebGLRenderer({ canvas: this.cvs, antialias: !this.lowPerfMode, alpha: true, powerPreference: 'high-performance' });
                 this.ren.setPixelRatio(Math.min(window.devicePixelRatio || 1, this.lowPerfMode ? 1.0 : 1.4));
                 this.ren.outputEncoding = THREE.sRGBEncoding;
@@ -5299,15 +5390,29 @@
                 const keyLight = new THREE.DirectionalLight(0xfff0e0, 1.25);
                 keyLight.position.set(30, 50, 40);
                 keyLight.castShadow = !this.lowPerfMode;
+                keyLight.shadow.mapSize.set(this.lowPerfMode ? 1024 : 2048, this.lowPerfMode ? 1024 : 2048);
+                keyLight.shadow.camera.near = 1;
+                keyLight.shadow.camera.far = 180;
+                keyLight.shadow.camera.left = -60;
+                keyLight.shadow.camera.right = 60;
+                keyLight.shadow.camera.top = 60;
+                keyLight.shadow.camera.bottom = -60;
+                this.keyLight = keyLight;
                 this.scene.add(keyLight);
 
                 const fillLight = new THREE.DirectionalLight(0x5070a0, 0.48);
                 fillLight.position.set(-40, 20, -20);
+                this.fillLight = fillLight;
                 this.scene.add(fillLight);
 
                 const rimLight = new THREE.DirectionalLight(0x2b62d6, 0.66);
                 rimLight.position.set(0, 10, -50);
+                this.rimLight = rimLight;
                 this.scene.add(rimLight);
+
+                this.dynamicGlow = new THREE.PointLight(0x58E1FF, this.lowPerfMode ? 0.28 : 0.55, 40);
+                this.scene.add(this.dynamicGlow);
+                this.applyRenderMaterialProfile(this.currentModelMeta || { type: 'default' });
 
                 // Keep visual baseline aligned with Hub (no scene fog washout).
                 this.scene.fog = null;
@@ -5396,7 +5501,7 @@
                     this.saoPass = new THREE.SAOPass(this.scene, this.cam, false, true);
                     this.saoPass.params.output = THREE.SAOPass.OUTPUT.Default;
                     this.saoPass.params.saoBias = 0.5;
-                    this.saoPass.params.saoIntensity = 0.006;
+                    this.saoPass.params.saoIntensity = parseFloat(document.getElementById('ssaoIntensitySlider')?.value || '0.014');
                     this.saoPass.params.saoScale = 15;
                     this.saoPass.params.saoKernelRadius = 100;
                     this.saoPass.params.saoMinResolution = 0;
@@ -5660,7 +5765,7 @@
                         try {
                             const response = await fetch(url);
                             const data = await response.json();
-                            this.loadFromData(data, true); // true = append to scene
+                            this.loadFromData(data, { meta: data.metadata || {} });
                             this.showToast('Import', 'Model added to scene', 'success');
                         } catch (err) {
                             this.showToast('Import Error', 'Failed to load model from URL', 'error');
@@ -5918,8 +6023,8 @@
                     if (list.length > 1) list.forEach(g => g.dispose());
 
                     const mesh = new THREE.Mesh(merged, this.getMaterial(hex));
-                    mesh.castShadow = !this.lowPerfMode && this.voxels.size < 3500;
-                    mesh.receiveShadow = !this.lowPerfMode && this.voxels.size < 3500;
+                    mesh.castShadow = this.shouldUseVoxelShadows();
+                    mesh.receiveShadow = this.shouldUseVoxelShadows();
                     this.roundedVoxelsGroup.add(mesh);
                 }
             },
@@ -6007,7 +6112,7 @@
                         if (this.activePointers.size === 1) {
                             const startInfo = this.getPointerSceneStartInfo(e.clientX, e.clientY);
                             this.touchState.startedOnVoxel = startInfo.startsOnVoxel;
-                            if (startInfo.startsOnVoxel) {
+                            if (startInfo.startsOnVoxel || (this.currentMode === 'FREE' && startInfo.startsOnBuildTarget)) {
                                 this.prepareMobileModifyGesture(e.clientX, e.clientY);
                             } else {
                                 this.touchState.isInteracting = false;
@@ -6066,9 +6171,10 @@
 
                 // --- Desktop Logic ---
                 const startInfo = this.getPointerSceneStartInfo(e.clientX, e.clientY);
+                const startsOnEditableGrid = this.currentMode === 'FREE' && startInfo.startsOnBuildTarget;
                 this.mouseState.isModifying = (e.button === 0);
                 this.mouseState.isPanning = (e.button === 1) || (this.isOrbitControlsMode() && e.button === 2);
-                this.mouseState.orbitCandidate = this.isOrbitControlsMode() && e.button === 0 && !startInfo.startsOnVoxel;
+                this.mouseState.orbitCandidate = this.isOrbitControlsMode() && e.button === 0 && !startInfo.startsOnVoxel && !startsOnEditableGrid;
 
                 if (this.mouseState.isModifying && this.currentMode === 'SELECT') {
                     this.selectionChange.before = new Set(this.selectedFaces);
@@ -6212,8 +6318,7 @@
                         this.updateToolPreview(targetInfo);
                         if (this.mouseState.isExtruding) {
                             const raycaster = new THREE.Raycaster();
-                            const mouse = new THREE.Vector2(((e.clientX - this.cvs.getBoundingClientRect().left) / this.cvs.clientWidth) * 2 - 1, -((e.clientY - this.cvs.getBoundingClientRect().top) / this.cvs.clientHeight) * 2 + 1);
-                            raycaster.setFromCamera(mouse, this.cam);
+                            if (!this.setRaycasterFromClient(raycaster, e.clientX, e.clientY)) return;
                             const intersection = new THREE.Vector3();
                             if (raycaster.ray.intersectPlane(this.mouseState.drawingPlane, intersection)) {
                                 const dragVector = intersection.clone().sub(this.mouseState.dragStartPoint);
@@ -6327,8 +6432,7 @@
                         this.updateToolPreview(targetInfo);
                         if (this.mouseState.isExtruding) {
                             const raycaster = new THREE.Raycaster();
-                            const mouse = new THREE.Vector2(((e.clientX - this.cvs.getBoundingClientRect().left) / this.cvs.clientWidth) * 2 - 1, -((e.clientY - this.cvs.getBoundingClientRect().top) / this.cvs.clientHeight) * 2 + 1);
-                            raycaster.setFromCamera(mouse, this.cam);
+                            if (!this.setRaycasterFromClient(raycaster, e.clientX, e.clientY)) return;
                             const intersection = new THREE.Vector3();
                             if (raycaster.ray.intersectPlane(this.mouseState.drawingPlane, intersection)) {
                                 const dragVector = intersection.clone().sub(this.mouseState.dragStartPoint);
@@ -6338,8 +6442,7 @@
                             }
                         } else if (this.mouseState.isDragging && this.mouseState.isMoving && this.mouseState.movingVoxelsOriginal) {
                             const raycaster = new THREE.Raycaster();
-                            const mouse = new THREE.Vector2(((e.clientX - this.cvs.getBoundingClientRect().left) / this.cvs.clientWidth) * 2 - 1, -((e.clientY - this.cvs.getBoundingClientRect().top) / this.cvs.clientHeight) * 2 + 1);
-                            raycaster.setFromCamera(mouse, this.cam);
+                            if (!this.setRaycasterFromClient(raycaster, e.clientX, e.clientY)) return;
                             const intersection = new THREE.Vector3();
                             if (raycaster.ray.intersectPlane(this.mouseState.drawingPlane, intersection)) {
                                 const delta = intersection.clone().sub(this.mouseState.dragStartPoint);
@@ -6441,8 +6544,7 @@
                     const changes = new Map();
                     const newSelectedFaces = new Set();
                     const raycaster = new THREE.Raycaster();
-                    const mouse = new THREE.Vector2(((e.clientX - this.cvs.getBoundingClientRect().left) / this.cvs.clientWidth) * 2 - 1, -((e.clientY - this.cvs.getBoundingClientRect().top) / this.cvs.clientHeight) * 2 + 1);
-                    raycaster.setFromCamera(mouse, this.cam);
+                    if (!this.setRaycasterFromClient(raycaster, e.clientX, e.clientY)) return;
                     const intersection = new THREE.Vector3();
                     let vDelta = { x: 0, y: 0, z: 0 };
                     if (raycaster.ray.intersectPlane(this.mouseState.drawingPlane, intersection)) {
@@ -6665,7 +6767,8 @@
                     templateImagePinnedY: this.templateImagePinnedY,
                     templateImageAxis: this.templateImageAxis,
                     isRoundedPreviewEnabled: this.isRoundedPreviewEnabled,
-                    previewRoundnessFactor: this.previewRoundnessFactor
+                    previewRoundnessFactor: this.previewRoundnessFactor,
+                    metadata: this.currentModelMeta || {}
                 };
             },
 
@@ -6682,7 +6785,8 @@
                 const beforeSnapshot = this.createProjectSnapshot();
                 window.__lastHubMeta = nextMeta;
                 const generated = this.generateDeterministicHubProject(nextMeta);
-                if (generated && this.loadFromData(generated, { preserveHistory: true })) {
+                if (generated) generated.metadata = nextMeta;
+                if (generated && this.loadFromData(generated, { preserveHistory: true, meta: nextMeta })) {
                     const afterSnapshot = this.createProjectSnapshot();
                     this.addHistoryStep({ type: 'MORPH', before: beforeSnapshot, after: afterSnapshot, meta: nextMeta });
                     this.showToast('Generate', `Morphed: ${nextMeta.type} • 0x${nextMeta.seed.toString(16).toUpperCase().padStart(8, '0')}`, 'success', 1400);
@@ -6931,6 +7035,7 @@
                 const height = this.containerDiv.clientHeight;
                 this.ren.setSize(width, height);
                 this.cam.aspect = width / height;
+                this.applyCameraPresentationMode();
                 this.cam.updateProjectionMatrix();
                 const maxPR = this.getDevicePixelRatioCap();
                 const pixelRatio = Math.min(window.devicePixelRatio || 1, maxPR);
@@ -7219,8 +7324,8 @@ setGridSize: function (newSize) {
                         if (!existingVoxel) {
                             const mesh = new THREE.Mesh(this.sharedBoxGeometry, this.getMaterial(this.currentColor, this.currentBlockType));
                             mesh.position.set(x * this.VS + 0.5, y * this.VS + 0.5, z * this.VS + 0.5);
-                            mesh.castShadow = !this.lowPerfMode && this.voxels.size < 3500;
-                            mesh.receiveShadow = !this.lowPerfMode && this.voxels.size < 3500;
+                            mesh.castShadow = this.shouldUseVoxelShadows();
+                            mesh.receiveShadow = this.shouldUseVoxelShadows();
                             this.originalVoxelsGroup.add(mesh);
                             mesh.renderOrder = this.currentBlockType === 'glass' ? 2 : 1;
                             mesh.userData.isVoxel = true;
@@ -7722,11 +7827,54 @@ setGridSize: function (newSize) {
                 return null;
             },
 
-            getFaceAt: function (clientX, clientY) {
+            setRaycasterFromClient: function (raycaster, clientX, clientY) {
                 const rect = this.cvs.getBoundingClientRect();
-                const mouse = new THREE.Vector2(((clientX - rect.left) / rect.width) * 2 - 1, -((clientY - rect.top) / this.cvs.clientHeight) * 2 + 1);
+                if (!rect.width || !rect.height) return false;
+                this._rayMouse.set(
+                    ((clientX - rect.left) / rect.width) * 2 - 1,
+                    -((clientY - rect.top) / rect.height) * 2 + 1
+                );
+                raycaster.setFromCamera(this._rayMouse, this.cam);
+                return true;
+            },
+
+            isGridCoordinateInBounds: function (x, y, z) {
+                return x >= 0 && x < this.GRID && y >= 0 && y < this.GRID && z >= 0 && z < this.GRID;
+            },
+
+            getDrawingPlaneTargetFromRay: function (raycaster, fixedY = null) {
+                const axis = this.currentDrawingAxis || 'y';
+                const level = {
+                    x: Math.max(0, Math.min(this.GRID - 1, Math.round(this.activeDrawingLevel?.x ?? 0))),
+                    y: Math.max(0, Math.min(this.GRID - 1, Math.round(fixedY ?? this.activeDrawingLevel?.y ?? 0))),
+                    z: Math.max(0, Math.min(this.GRID - 1, Math.round(this.activeDrawingLevel?.z ?? 0)))
+                };
+                let plane;
+                let normal;
+                if (axis === 'x') {
+                    normal = new THREE.Vector3(1, 0, 0);
+                    plane = new THREE.Plane(normal, -(level.x * this.VS));
+                } else if (axis === 'z') {
+                    normal = new THREE.Vector3(0, 0, 1);
+                    plane = new THREE.Plane(normal, -(level.z * this.VS));
+                } else {
+                    normal = new THREE.Vector3(0, 1, 0);
+                    plane = new THREE.Plane(normal, -(level.y * this.VS));
+                }
+
+                const point = new THREE.Vector3();
+                if (!raycaster.ray.intersectPlane(plane, point)) return null;
+
+                const x = axis === 'x' ? level.x : Math.floor(point.x / this.VS);
+                const y = axis === 'y' ? level.y : Math.floor(point.y / this.VS);
+                const z = axis === 'z' ? level.z : Math.floor(point.z / this.VS);
+                if (!this.isGridCoordinateInBounds(x, y, z)) return null;
+                return { x, y, z, normal, intersectionPoint: point.clone(), source: 'drawing_plane' };
+            },
+
+            getFaceAt: function (clientX, clientY) {
                 const raycaster = new THREE.Raycaster();
-                raycaster.setFromCamera(mouse, this.cam);
+                if (!this.setRaycasterFromClient(raycaster, clientX, clientY)) return null;
 
                 // Der Boden soll erkannt werden, auch wenn er für das Auge unsichtbar ist
                 const allMeshes = [...this.originalVoxelsGroup.children, this.groundPlaneMesh].filter(m => m && (m.visible || m === this.groundPlaneMesh));
@@ -7932,7 +8080,7 @@ setGridSize: function (newSize) {
 
                             const newMesh = new THREE.Mesh(this.sharedBoxGeometry, this.getMaterial(extrudeColor));
                             newMesh.position.set(newX * this.VS + 0.5, newY * this.VS + 0.5, newZ * this.VS + 0.5);
-                            newMesh.castShadow = !this.lowPerfMode && this.voxels.size < 3500; newMesh.receiveShadow = !this.lowPerfMode && this.voxels.size < 3500;
+                            newMesh.castShadow = this.shouldUseVoxelShadows(); newMesh.receiveShadow = this.shouldUseVoxelShadows();
                             this.originalVoxelsGroup.add(newMesh);
                             this.voxels.set(newKey, { color: extrudeColor, mesh: newMesh });
                             changes.get(newKey).after = { color: extrudeColor };
@@ -7977,34 +8125,20 @@ setGridSize: function (newSize) {
             },
 
             getRayTargetInfo: function (clientX, clientY) {
-                const rect = this.cvs.getBoundingClientRect();
-                this._rayMouse.set(((clientX - rect.left) / rect.width) * 2 - 1, -((clientY - rect.top) / rect.height) * 2 + 1);
                 const raycaster = this._raycaster;
-                raycaster.setFromCamera(this._rayMouse, this.cam);
+                if (!this.setRaycasterFromClient(raycaster, clientX, clientY)) return null;
+
+                if (this.currentMode === 'FREE' && this.mouseState.isModifying && this.mouseState.dragStartPlaneY !== null) {
+                    return this.getDrawingPlaneTargetFromRay(raycaster, this.mouseState.dragStartPlaneY);
+                }
 
                 // Target meshes are always the individual block meshes for accurate interaction
-const allMeshes = [...this.originalVoxelsGroup.children, this.groundPlaneMesh].filter(m => m !== null);
-                if (allMeshes.length === 0) return null;
+                const allMeshes = [...this.originalVoxelsGroup.children].filter(m => m && m.visible);
                 const intersects = raycaster.intersectObjects(allMeshes, false);
-                const skipGroundPlane = (this.cam?.position?.y ?? 0) < -0.25 && raycaster.ray.direction.y > 0.01;
-                let hit = null;
-                for (const candidate of intersects) {
-                    if (skipGroundPlane && candidate.object === this.groundPlaneMesh) continue;
-                    hit = candidate;
-                    break;
-                }
-
-                if (!hit && skipGroundPlane) {
-                    hit = intersects.find(c => c.object === this.groundPlaneMesh) || null;
-                }
+                let hit = intersects.length > 0 ? intersects[0] : null;
 
                 if (!hit) {
-                    const p = this._rayPlaneHit;
-                    if (raycaster.ray.intersectPlane(this._rayPlaneY0, p)) {
-                        hit = { point: p, object: this.groundPlaneMesh, face: { normal: new THREE.Vector3(0, 1, 0) } };
-                    } else {
-                        return null;
-                    }
+                    return this.currentMode === 'FREE' ? this.getDrawingPlaneTargetFromRay(raycaster) : null;
                 }
                 const pos = hit.point.clone();
                 let normal;
@@ -8033,21 +8167,7 @@ const allMeshes = [...this.originalVoxelsGroup.children, this.groundPlaneMesh].f
                 const y = Math.floor(pos.y / this.VS);
                 const z = Math.floor(pos.z / this.VS);
 
-                // Special handling for FREE mode's fixed Y plane during drag
-                if (this.currentMode === 'FREE' && this.mouseState.isModifying && this.mouseState.dragStartPlaneY !== null) {
-                    const planeHeight = (this.mouseState.dragStartPlaneY + 0.5) * this.VS;
-                    const horizontalPlane = new THREE.Plane(new THREE.Vector3(0, 1, 0), -planeHeight);
-                    const planeIntersect = new THREE.Vector3();
-                    if (raycaster.ray.intersectPlane(horizontalPlane, planeIntersect)) {
-                        return {
-                            x: Math.floor(planeIntersect.x / this.VS),
-                            y: this.mouseState.dragStartPlaneY,
-                            z: Math.floor(planeIntersect.z / this.VS),
-                            normal: new THREE.Vector3(0, 1, 0),
-                            intersectionPoint: planeIntersect.clone()
-                        };
-                    }
-                }
+                if (!this.isGridCoordinateInBounds(x, y, z)) return null;
 
                 return { x, y, z, normal, intersectionPoint: hit.point.clone() };
             },
@@ -8164,6 +8284,13 @@ const allMeshes = [...this.originalVoxelsGroup.children, this.groundPlaneMesh].f
                 if (this.boxHelper) this.scene.remove(this.boxHelper);
                 const size = this.GRID * this.VS;
                 this.gridHelper = new THREE.GridHelper(size, this.GRID);
+                const gridMaterials = Array.isArray(this.gridHelper.material) ? this.gridHelper.material : [this.gridHelper.material];
+                gridMaterials.forEach((mat) => {
+                    mat.color.set(0x7dd3fc);
+                    mat.transparent = true;
+                    mat.opacity = 0.18;
+                    mat.depthWrite = false;
+                });
                 if (this.currentDrawingAxis === 'y') {
                     this.gridHelper.position.set(size / 2, this.activeDrawingLevel.y * this.VS, size / 2);
                     this.gridHelper.rotation.set(0, 0, 0);
@@ -8177,7 +8304,7 @@ const allMeshes = [...this.originalVoxelsGroup.children, this.groundPlaneMesh].f
                 this.scene.add(this.gridHelper);
                 const boxGeom = new THREE.BoxGeometry(size, size, size);
                 const edges = new THREE.EdgesGeometry(boxGeom);
-                this.boxHelper = new THREE.LineSegments(edges, new THREE.LineBasicMaterial({ color: 0x4a5568 }));
+                this.boxHelper = new THREE.LineSegments(edges, new THREE.LineBasicMaterial({ color: 0x7dd3fc, transparent: true, opacity: 0.22 }));
                 this.boxHelper.position.set(size / 2, size / 2, size / 2);
                 this.scene.add(this.boxHelper);
                 boxGeom.dispose();
@@ -8191,9 +8318,18 @@ const allMeshes = [...this.originalVoxelsGroup.children, this.groundPlaneMesh].f
                 this.rebuildHelpers();
                 const size = this.GRID * this.VS;
                 const target = this.syncOrbitTargetToScene();
-                this.cam.position.set(size, size * 1.2, size * 1.5);
+                this.applyCameraPresentationMode();
+                const aspect = Math.max(0.35, this.containerDiv.clientWidth / Math.max(1, this.containerDiv.clientHeight));
+                const verticalFov = THREE.MathUtils.degToRad(this.cam.fov || this.SHOWCASE_CAMERA_FOV);
+                const horizontalFov = 2 * Math.atan(Math.tan(verticalFov * 0.5) * aspect);
+                const fitFov = Math.max(0.18, Math.min(verticalFov, horizontalFov));
+                const radius = Math.max(this.orbitFrameRadius || size * 0.65, this.VS * 3);
+                const distance = Math.max(radius / Math.sin(fitFov * 0.5) * 1.12, radius * 2.1, size * 0.9);
+                const direction = new THREE.Vector3(1, 0.72, 1.28).normalize();
+                this.cam.position.copy(target).addScaledVector(direction, distance);
                 this.cam.lookAt(target);
                 if (this.euler) this.euler.setFromQuaternion(this.cam.quaternion, 'YXZ');
+                this.updateDynamicGlow();
             },
 
             flashModeButtons: function () {
@@ -8432,6 +8568,7 @@ const allMeshes = [...this.originalVoxelsGroup.children, this.groundPlaneMesh].f
                     templateImageAxis: this.templateImageAxis,
                     isRoundedPreviewEnabled: false, // NEW: Include rounding state
                     previewRoundnessFactor: this.previewRoundnessFactor,   // NEW: Include rounding state
+                    metadata: this.currentModelMeta || {}
                 };
                 const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
                 const url = URL.createObjectURL(blob);
@@ -8458,6 +8595,8 @@ const allMeshes = [...this.originalVoxelsGroup.children, this.groundPlaneMesh].f
                     this.currentDrawingAxis = data.currentDrawingAxis || 'y';
                     this.activeDrawingLevel = data.activeDrawingLevel || { x: 0, y: 0, z: 0 };
                     this.templateImageAxis = data.templateImageAxis || 'z';
+                    const modelMeta = { ...(data.metadata || {}), ...(options.meta || {}) };
+                    this.applyRenderMaterialProfile(modelMeta);
 
                     // Load rounding state if available
                     this.isRoundedPreviewEnabled = false;
@@ -8779,13 +8918,19 @@ const allMeshes = [...this.originalVoxelsGroup.children, this.groundPlaneMesh].f
             _roundedRebuildRAF: null,
 
             updateShadowPolicy: function () {
-                const heavy = this.lowPerfMode || this.voxels.size >= 2200;
+                const heavy = !this.shouldUseVoxelShadows();
                 if (this.ren) this.ren.shadowMap.enabled = !heavy;
                 this.originalVoxelsGroup?.children?.forEach((m) => {
                     if (!m || !m.isMesh) return;
                     m.castShadow = !heavy;
                     m.receiveShadow = !heavy;
                 });
+                this.roundedVoxelsGroup?.children?.forEach((m) => {
+                    if (!m || !m.isMesh) return;
+                    m.castShadow = !heavy;
+                    m.receiveShadow = !heavy;
+                });
+                this.updateDynamicGlow();
             },
 
             updatePostProcessingParams: function () {
@@ -8879,8 +9024,8 @@ const allMeshes = [...this.originalVoxelsGroup.children, this.groundPlaneMesh].f
                     );
 
                     mesh.position.set(x * this.VS + 0.5, y * this.VS + 0.5, z * this.VS + 0.5);
-                    mesh.castShadow = !this.lowPerfMode && this.voxels.size < 3500;
-                    mesh.receiveShadow = !this.lowPerfMode && this.voxels.size < 3500;
+                    mesh.castShadow = this.shouldUseVoxelShadows();
+                    mesh.receiveShadow = this.shouldUseVoxelShadows();
                     mesh.renderOrder = voxelData.glass ? 2 : 1;
                     mesh.userData.isVoxel = true;
                     mesh.userData.isFoundation = false;
@@ -8935,8 +9080,8 @@ this.roundedVoxelsGroup.visible = this.isRoundedPreviewEnabled;
                                 } else {
                                     const voxelMesh = new THREE.Mesh(this.sharedBoxGeometry, this.getMaterial(change.before.color, change.before.glass ? 'glass' : 'solid'));
                                     voxelMesh.position.set(x * this.VS + 0.5, y * this.VS + 0.5, z * this.VS + 0.5);
-                                    voxelMesh.castShadow = !this.lowPerfMode && this.voxels.size < 3500;
-                                    voxelMesh.receiveShadow = !this.lowPerfMode && this.voxels.size < 3500;
+                                    voxelMesh.castShadow = this.shouldUseVoxelShadows();
+                                    voxelMesh.receiveShadow = this.shouldUseVoxelShadows();
                                     voxelMesh.renderOrder = change.before.glass ? 2 : 1;
                                     this.originalVoxelsGroup.add(voxelMesh);
                                     this.voxels.set(key, { color: change.before.color, glass: !!change.before.glass, mesh: voxelMesh });
@@ -8989,8 +9134,8 @@ this.roundedVoxelsGroup.visible = this.isRoundedPreviewEnabled;
                                 } else {
                                     const voxelMesh = new THREE.Mesh(this.sharedBoxGeometry, this.getMaterial(change.after.color, change.after.glass ? 'glass' : 'solid'));
                                     voxelMesh.position.set(x * this.VS + 0.5, y * this.VS + 0.5, z * this.VS + 0.5);
-                                    voxelMesh.castShadow = !this.lowPerfMode && this.voxels.size < 3500;
-                                    voxelMesh.receiveShadow = !this.lowPerfMode && this.voxels.size < 3500;
+                                    voxelMesh.castShadow = this.shouldUseVoxelShadows();
+                                    voxelMesh.receiveShadow = this.shouldUseVoxelShadows();
                                     voxelMesh.renderOrder = change.after.glass ? 2 : 1;
                                     this.originalVoxelsGroup.add(voxelMesh);
                                     this.voxels.set(key, { color: change.after.color, glass: !!change.after.glass, mesh: voxelMesh });
@@ -9394,6 +9539,7 @@ this.roundedVoxelsGroup.visible = this.isRoundedPreviewEnabled;
                         templateImageData: this.templateImageData,
                         templateImagePinnedY: this.templateImagePinnedY,
                         templateImageAxis: this.templateImageAxis,
+                        metadata: this.currentModelMeta || {}
                     };
                     localStorage.setItem('voxelshaper_autosave', JSON.stringify(data));
                 } catch (e) {
