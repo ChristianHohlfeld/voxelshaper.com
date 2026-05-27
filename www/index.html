@@ -885,6 +885,49 @@
             right: 176px;
         }
 
+        @keyframes printNowPulse {
+
+            0%,
+            100% {
+                transform: translateY(0);
+                box-shadow: 0 0 0 rgba(34, 197, 94, 0), 0 0 20px rgba(34, 197, 94, 0.34);
+            }
+
+            50% {
+                transform: translateY(-1px);
+                box-shadow: 0 0 0 5px rgba(34, 197, 94, 0.12), 0 0 28px rgba(34, 197, 94, 0.48);
+            }
+        }
+
+        .print-now-btn {
+            font-weight: 900;
+            letter-spacing: 0;
+            border: 1px solid rgba(187, 247, 208, 0.38);
+            animation: printNowPulse 2.4s ease-in-out infinite;
+        }
+
+        .desktop-save-btn {
+            color: #fff !important;
+            background-color: #2563eb !important;
+            background-image: linear-gradient(135deg, #2563eb 0%, #0ea5e9 100%) !important;
+            border: 1px solid rgba(191, 219, 254, 0.62) !important;
+            font-weight: 850;
+            text-shadow: 0 1px 1px rgba(15, 23, 42, 0.42);
+            box-shadow: 0 12px 30px rgba(37, 99, 235, 0.34), 0 0 0 1px rgba(255, 255, 255, 0.10) inset;
+        }
+
+        .desktop-save-btn:hover {
+            color: #fff !important;
+            background-color: #1d4ed8 !important;
+            background-image: linear-gradient(135deg, #1d4ed8 0%, #0284c7 100%) !important;
+        }
+
+        @media (max-width: 767px) {
+            .desktop-only-print {
+                display: none !important;
+            }
+        }
+
         .camera-control-switch {
             position: fixed;
             top: calc(max(12px, env(safe-area-inset-top)) + 4.85rem);
@@ -2986,7 +3029,11 @@
                 style="box-shadow: 0 0 18px rgba(250,204,21,.45);">
                 <i class="fas fa-bolt"></i>
             </button>
-            <button id="shareBtn" class="btn btn-sm btn-primary" title="Save to Hub"
+            <button id="printNowBtn" class="btn btn-sm btn-success print-now-btn desktop-only-print"
+                title="Download a Bambu Studio 3MF file">
+                <i class="fas fa-print mr-1"></i>DRUCKEN
+            </button>
+            <button id="shareBtn" class="btn btn-sm btn-primary desktop-save-btn" title="Save to Hub"
                 style="min-width: 96px; box-shadow: 0 0 20px rgba(59,130,246,.35);">
                 <i class="fas fa-cloud-upload-alt mr-1"></i>Save
             </button>
@@ -3038,8 +3085,11 @@
             <button id="desktop-overlay-mode-toggle"
                 class="btn btn-circle btn-ghost bg-base-200/80 backdrop-blur-sm shadow-lg" title="Cycle mode (Space)"><i
                     class="fas fa-plus"></i></button>
+            <button id="desktop-overlay-print-now"
+                class="btn btn-success print-now-btn desktop-only-print bg-base-200/90 backdrop-blur-sm shadow-lg"
+                title="Download a Bambu Studio 3MF file"><i class="fas fa-print mr-1"></i>DRUCKEN</button>
             <button id="desktop-overlay-generate" class="btn btn-circle btn-warning bg-base-200/90 backdrop-blur-sm shadow-lg" title="Morph World"><i class="fas fa-dice-d20"></i></button>
-            <button id="desktop-overlay-save" class="btn btn-primary bg-base-200/90 backdrop-blur-sm shadow-lg" title="Save to Hub"><i class="fas fa-cloud-upload-alt mr-1"></i>Save</button>
+            <button id="desktop-overlay-save" class="btn btn-primary desktop-save-btn backdrop-blur-sm shadow-lg" title="Save to Hub"><i class="fas fa-cloud-upload-alt mr-1"></i>Save</button>
         </div>
         <div id="desktop-undo-redo-overlay" class="flex gap-2">
             <button id="desktop-overlay-undo" class="btn btn-circle btn-ghost bg-base-200/80 backdrop-blur-sm shadow-lg"
@@ -3471,7 +3521,7 @@
             <div class="form-control w-full mb-4">
                 <label class="label py-1 cursor-pointer">
                     <span class="label-text-alt uppercase opacity-60 font-bold">Anti-Aliasing (FXAA)</span>
-                    <input type="checkbox" id="fxaaToggle" class="toggle toggle-xs toggle-primary" checked="">
+                    <input type="checkbox" id="fxaaToggle" class="toggle toggle-xs toggle-primary">
                 </label>
             </div>
 
@@ -4186,6 +4236,8 @@
             MAX_HISTORY_SIZE: 50,
             LONG_PRESS_DURATION: 100,
             DELETE_HOLD_DELAY_MS: 260,
+            DELETE_HOLD_MOVE_PX: 8,
+            ADD_HOLD_DELAY_MS: 260,
             GENERATOR_VOXEL_BUDGET_DESKTOP: 4000,
             GENERATOR_VOXEL_BUDGET_MOBILE: 4000,
             GENERATOR_MIN_GRID: 24,
@@ -4305,6 +4357,12 @@
                 deleteChargeAccel: 0,
                 pointerDownAt: null,
                 deleteHoldArmed: false,
+                holdActionApplied: false,
+                heldDeleteConsumed: false,
+                lastHeldDeleteScreen: null,
+                lastHeldDeleteKey: null,
+                buildHoldArmed: false,
+                lastHeldBuildKey: null,
             },
             touchState: {
                 longPressTimeout: null,
@@ -4945,6 +5003,43 @@
                 return project;
             },
 
+            getHubAutosaveKey: function (meta = {}) {
+                if (!meta || typeof meta !== 'object') return '';
+                const seed = Number(meta.seed);
+                const type = String(meta.type || '').trim();
+                if (!type || !Number.isFinite(seed)) return '';
+                const shape = Number.isFinite(Number(meta.shape)) ? Number(meta.shape) : 60;
+                const color = Number.isFinite(Number(meta.color)) ? Number(meta.color) : 80;
+                const gridSize = Number.isFinite(Number(meta.gridSize)) ? Number(meta.gridSize) : null;
+                return JSON.stringify({
+                    type,
+                    seed: seed >>> 0,
+                    shape,
+                    color,
+                    palette: meta.palette || 'auto',
+                    gridSize
+                });
+            },
+
+            autosaveMatchesHubMetadata: function (data, expectedMeta) {
+                const expectedKey = this.getHubAutosaveKey(expectedMeta);
+                if (!expectedKey || !data) return false;
+                const savedKey = data.hubAutosaveKey || this.getHubAutosaveKey(data.metadata || {});
+                if (savedKey === expectedKey) return true;
+                try {
+                    const expected = JSON.parse(expectedKey);
+                    const saved = JSON.parse(savedKey || '{}');
+                    return expected.type === saved.type &&
+                        expected.seed === saved.seed &&
+                        expected.shape === saved.shape &&
+                        expected.color === saved.color &&
+                        expected.palette === saved.palette &&
+                        (expected.gridSize == null || saved.gridSize == null || expected.gridSize === saved.gridSize);
+                } catch (_) {
+                    return false;
+                }
+            },
+
             applyHubImportProject: function (project, options = {}) {
                 const normalized = this.normalizeHubProjectPayload(project);
                 const meta = { ...(project?.metadata || {}), ...(options.meta || {}) };
@@ -4959,23 +5054,29 @@
 
                 normalized.metadata = { ...(normalized.metadata || {}), ...meta };
 
-                if (!this.loadFromData(normalized, { meta })) {
+                if (!this.loadFromData(normalized, { meta, preserveHistory: !!options.preserveHistory })) {
                     trackEvent('hub_import_failed', { handoff_method: method, reason: 'load_failed', model_type: modelType, voxel_count: voxelCount });
                     return false;
                 }
 
+                this.currentModelId = null;
+                this.hubUploadDirty = true;
+                this.lastHubUploadAt = 0;
                 if (meta.type && Number.isFinite(meta.seed)) {
                     window.__lastHubMeta = {
                         type: meta.type,
                         seed: meta.seed >>> 0,
                         shape: meta.shape ?? 60,
                         color: meta.color ?? 80,
-                        palette: meta.palette ?? 'auto'
+                        palette: meta.palette ?? 'auto',
+                        gridSize: meta.gridSize ?? normalized.gridSize ?? this.GRID
                     };
                 }
                 const ob = document.getElementById('onboardingModal');
                 if (ob && ob.open) ob.close();
-                this.showToast('Import', 'Hub model ready to edit', 'success');
+                this.autosaveScene();
+                this.updateHubSaveIndicator();
+                if (!options.skipToast) this.showToast('Import', 'Hub model ready to edit', 'success');
                 trackEvent('hub_import_success', { handoff_method: method, model_type: modelType, voxel_count: voxelCount });
                 return true;
             },
@@ -5018,6 +5119,20 @@
                 }
 
                 const modelType = meta.type ? String(meta.type) : undefined;
+                if (this.loadAutosavedScene({ expectedHubMeta: meta, silent: true })) {
+                    this.hubLaunchLoadedFromUrl = true;
+                    this.hubUploadDirty = true;
+                    this.updateHubSaveIndicator();
+                    if (urlParams.has('handoff')) {
+                        const clean = new URL(window.location.href);
+                        clean.searchParams.delete('handoff');
+                        window.history.replaceState({}, document.title, clean.toString());
+                    }
+                    this.showToast('Scene Restored', 'Your edited Hub model was restored.', 'info');
+                    trackEvent('hub_import_success', { handoff_method: 'autosave_restore', model_type: modelType, voxel_count: this.voxels.size });
+                    return true;
+                }
+
                 trackEvent('hub_import_start', { handoff_method: 'api_generate', model_type: modelType });
                 this.setBootLoadingProgress(84, 'Opening Hub model...');
 
@@ -5382,7 +5497,7 @@
                 this.euler = new THREE.Euler(0, 0, 0, 'YXZ');
                 this.resetCamera();
                 this.ren = new THREE.WebGLRenderer({ canvas: this.cvs, antialias: !this.lowPerfMode, alpha: true, powerPreference: 'high-performance' });
-                this.ren.setPixelRatio(Math.min(window.devicePixelRatio || 1, this.lowPerfMode ? 1.0 : 1.4));
+                this.ren.setPixelRatio(Math.min(window.devicePixelRatio || 1, this.lowPerfMode ? 1.25 : 2.0));
                 this.ren.outputEncoding = THREE.sRGBEncoding;
                 this.ren.toneMapping = THREE.ACESFilmicToneMapping;
                 this.ren.toneMappingExposure = 0.96;
@@ -5522,6 +5637,7 @@
                     const pixelRatio = this.ren.getPixelRatio();
                     this.fxaaPass.material.uniforms['resolution'].value.x = 1 / (this.containerDiv.clientWidth * pixelRatio);
                     this.fxaaPass.material.uniforms['resolution'].value.y = 1 / (this.containerDiv.clientHeight * pixelRatio);
+                    this.fxaaPass.enabled = !!document.getElementById('fxaaToggle')?.checked;
                     this.composer.addPass(this.fxaaPass);
                 } catch (e) { console.error("FXAAPass failed:", e); }
 
@@ -5672,6 +5788,9 @@
                 document.getElementById('filletRoundnessSlider').addEventListener('input', this.updateExportRoundnessUI.bind(this));
                 document.querySelectorAll('[data-print-ready]').forEach((btn) => {
                     btn.addEventListener('click', () => this.applyPrintReadyPreset(btn.dataset.printReady));
+                });
+                ['printNowBtn', 'desktop-overlay-print-now'].forEach((id) => {
+                    document.getElementById(id)?.addEventListener('click', () => this.printNow3MF());
                 });
 
                 // NEW: In-App Preview Controls
@@ -5952,6 +6071,35 @@
                 this.updateExportRoundnessUI();
             },
 
+            printNow3MF: async function () {
+                if (this.isMobile || window.matchMedia('(max-width: 767px)').matches) {
+                    this.showToast('Print', '3MF export is ready on desktop.', 'info', 1600);
+                    trackEvent('print_now_blocked', { reason: 'mobile', voxel_count: this.voxels.size });
+                    return;
+                }
+
+                this.applyPrintReadyPreset('balanced');
+                const scaleUnit = document.querySelector('input[name="exportScaleUnit"]:checked')?.value || 'mm';
+                const shapeType = document.querySelector('input[name="exportShapeType"]:checked')?.value || 'rounded';
+                const isRounded = shapeType === 'rounded';
+                const roundnessFactor = isRounded ? parseFloat(document.getElementById('filletRoundnessSlider')?.value || '0.35') : 0;
+
+                trackEvent('print_now_click', {
+                    format: '3mf_bambu',
+                    voxel_count: this.voxels.size,
+                    rounded: isRounded
+                });
+                await VoxelApp3MFExporter.exportBambuStudio3MF(
+                    this.voxels,
+                    this.VS,
+                    this.showToast.bind(this),
+                    this.parseKey.bind(this),
+                    scaleUnit,
+                    isRounded,
+                    roundnessFactor
+                );
+            },
+
             toggleRoundedPreview: function (e) {
                 this.isRoundedPreviewEnabled = e ? e.target.checked : !this.isRoundedPreviewEnabled;
                 localStorage.setItem('isRoundedPreviewEnabled', this.isRoundedPreviewEnabled);
@@ -6112,6 +6260,12 @@
                 this.mouseState.lastStrokeApplyAt = 0;
                 this.mouseState.pointerDownAt = performance.now();
                 this.mouseState.deleteHoldArmed = false;
+                this.mouseState.holdActionApplied = false;
+                this.mouseState.heldDeleteConsumed = false;
+                this.mouseState.lastHeldDeleteScreen = null;
+                this.mouseState.lastHeldDeleteKey = null;
+                this.mouseState.buildHoldArmed = false;
+                this.mouseState.lastHeldBuildKey = null;
 
                 if (this.isMobile) {
                     if (this.isOrbitControlsMode()) {
@@ -6287,8 +6441,10 @@
 
                 if (!this.isPointerDown) {
                     const now = performance.now();
-                    const movedLittle = this._lastPreviewClientX != null && Math.abs(e.clientX - this._lastPreviewClientX) < 1 && Math.abs(e.clientY - this._lastPreviewClientY) < 1;
-                    if (!movedLittle && (now - this._lastPreviewRayAt > (this.lowPerfMode ? 42 : 20))) {
+                    const dx = this._lastPreviewClientX == null ? Infinity : Math.abs(e.clientX - this._lastPreviewClientX);
+                    const dy = this._lastPreviewClientY == null ? Infinity : Math.abs(e.clientY - this._lastPreviewClientY);
+                    const movedLittle = dx < 1 && dy < 1;
+                    if (!movedLittle) {
                         this._lastPreviewRayAt = now;
                         this._lastPreviewClientX = e.clientX;
                         this._lastPreviewClientY = e.clientY;
@@ -6535,13 +6691,13 @@
                     if (this.touchState.isThreeFingerUndoCandidate) {
                         this.undo();
                         this.showToast('Action', 'Undo', 'info', 1000);
-                    } else if (this.isOrbitControlsMode() && beforeCount === 1 && !this.mouseState.isDragging) {
+                    } else if (this.isOrbitControlsMode() && beforeCount === 1 && !this.mouseState.isDragging && !this.mouseState.holdActionApplied) {
                         this.mouseState.isModifying = true;
                         this.handleTapInteraction(e);
-                    } else if (this.touchState.isInteracting && !this.mouseState.isDragging) { // Is a long press tap
+                    } else if (this.touchState.isInteracting && !this.mouseState.isDragging && !this.mouseState.holdActionApplied) { // Is a long press tap
                         this.handleTapInteraction(e);
                     }
-                } else if (!this.mouseState.isDragging && this.mouseState.isModifying) { // Desktop tap
+                } else if (!this.mouseState.isDragging && this.mouseState.isModifying && !this.mouseState.holdActionApplied) { // Desktop tap
                     this.handleTapInteraction(e);
                 }
 
@@ -6650,6 +6806,12 @@
                 this.hideRulerOverlay();
                 this.mouseState.pointerDownAt = null;
                 this.mouseState.deleteHoldArmed = false;
+                this.mouseState.holdActionApplied = false;
+                this.mouseState.heldDeleteConsumed = false;
+                this.mouseState.lastHeldDeleteScreen = null;
+                this.mouseState.lastHeldDeleteKey = null;
+                this.mouseState.buildHoldArmed = false;
+                this.mouseState.lastHeldBuildKey = null;
                 this.mouseState.selectionAxisLock = null;
                 this.mouseState.moveAxisLock = null;
                 this.mouseState.dragStartPlaneY = null;
@@ -6785,7 +6947,8 @@
                 };
             },
 
-            openHubGenerator: function () {
+            openHubGenerator: async function () {
+                if (this._hubGeneratorBusy) return;
                 const types = ['city', 'car', 'spaceship', 'ruins', 'mech', 'castle', 'waterfall', 'ifs_tree', 'floating_island', 'tree', 'sponge', 'asteroid', 'crystal', 'knot'];
                 const cfg = this.morphSettings || { type: 'random', seed: null, shape: 60, color: 80, palette: 'auto' };
                 const nextMeta = {
@@ -6797,23 +6960,50 @@
                 };
                 const beforeSnapshot = this.createProjectSnapshot();
                 window.__lastHubMeta = nextMeta;
-                const generated = this.generateDeterministicHubProject(nextMeta);
-                if (generated) generated.metadata = nextMeta;
-                if (generated && this.loadFromData(generated, { preserveHistory: true, meta: nextMeta })) {
+                let generated = null;
+                let method = 'api_generate';
+                this._hubGeneratorBusy = true;
+                this.showToast('Generate', 'Creating model with Hub generator...', 'info', 1200);
+                trackEvent('hub_generate_start', { type: nextMeta.type, handoff_method: method });
+
+                try {
+                    generated = await this.fetchGeneratedHubProjectFromApi(nextMeta);
+                } catch (error) {
+                    console.error('Editor Hub generation API failed:', error);
+                    method = 'client_fallback';
+                    trackEvent('hub_import_failed', { handoff_method: 'api_generate', reason: 'api_failed', model_type: nextMeta.type });
+                    generated = this.generateDeterministicHubProject(nextMeta);
+                } finally {
+                    this._hubGeneratorBusy = false;
+                }
+
+                if (generated) generated.metadata = { ...(generated.metadata || {}), ...nextMeta };
+                const normalized = generated ? this.normalizeHubProjectPayload(generated) : null;
+                if (normalized && Number.isFinite(Number(normalized.gridSize)) && !Number.isFinite(Number(nextMeta.gridSize))) {
+                    nextMeta.gridSize = Number(normalized.gridSize);
+                }
+                if (normalized) normalized.metadata = { ...(normalized.metadata || {}), ...nextMeta };
+                if (normalized && this.loadFromData(normalized, { preserveHistory: true, meta: nextMeta })) {
                     const afterSnapshot = this.createProjectSnapshot();
                     this.addHistoryStep({ type: 'MORPH', before: beforeSnapshot, after: afterSnapshot, meta: nextMeta });
+                    this.currentModelId = null;
+                    this.hubUploadDirty = true;
+                    this.lastHubUploadAt = 0;
+                    this.updateHubSaveIndicator();
+                    this.autosaveScene();
                     this.showToast('Generate', `Morphed: ${nextMeta.type} • 0x${nextMeta.seed.toString(16).toUpperCase().padStart(8, '0')}`, 'success', 1400);
                     const generatorBudget = this.isMobile ? this.GENERATOR_VOXEL_BUDGET_MOBILE : this.GENERATOR_VOXEL_BUDGET_DESKTOP;
-                    if (generated.voxels.length >= generatorBudget * 0.95) {
+                    if (normalized.voxels.length >= generatorBudget * 0.95) {
                         this.showToast('Generator Guard', 'Complexity capped for smooth editing.', 'info', 1600);
                     }
                     try {
                         const url = new URL(window.location.href);
                         const m = btoa(unescape(encodeURIComponent(JSON.stringify(nextMeta))));
                         url.searchParams.set('m', m);
+                        url.searchParams.delete('modelId');
                         window.history.replaceState({}, document.title, url.toString());
                     } catch (_) { }
-                    trackEvent('hub_generate_in_editor', { type: nextMeta.type });
+                    trackEvent('hub_generate_in_editor', { type: nextMeta.type, handoff_method: method, voxel_count: normalized.voxels.length });
                 } else {
                     this.showToast('Generate Error', 'Could not generate scene.', 'error');
                 }
@@ -7036,9 +7226,10 @@
             getDevicePixelRatioCap: function () {
                 const hw = navigator.hardwareConcurrency || 4;
                 const mem = navigator.deviceMemory || 4;
+                if (!this.isMobile) return 2.0;
                 const isLowTier = this.isMobile && (hw <= 4 || mem <= 4);
                 const isMidTier = this.isMobile || hw <= 8 || mem <= 8;
-                if (isLowTier) return 1.2;
+                if (isLowTier) return 1.25;
                 if (isMidTier) return 1.5;
                 return 2.0;
             },
@@ -7046,15 +7237,18 @@
             handleResize: function () {
                 const width = this.containerDiv.clientWidth;
                 const height = this.containerDiv.clientHeight;
-                this.ren.setSize(width, height);
-                this.cam.aspect = width / height;
-                this.applyCameraPresentationMode();
-                this.cam.updateProjectionMatrix();
                 const maxPR = this.getDevicePixelRatioCap();
                 const pixelRatio = Math.min(window.devicePixelRatio || 1, maxPR);
                 this.ren.setPixelRatio(pixelRatio);
+                this.ren.setSize(width, height, false);
+                this.cam.aspect = width / height;
+                this.applyCameraPresentationMode();
+                this.cam.updateProjectionMatrix();
 
                 if (this.composer) {
+                    if (typeof this.composer.setPixelRatio === 'function') {
+                        this.composer.setPixelRatio(pixelRatio);
+                    }
                     this.composer.setSize(width, height);
                 }
                 if (this.fxaaPass) {
@@ -7422,12 +7616,12 @@ setGridSize: function (newSize) {
             },
 
             getDeleteRamp: function (now = performance.now()) {
-                const baseGap = 34;
-                const fastGap = 12;
-                const warmupDelay = 250;
-                const warmupWindow = 1600;
-                const qtyThreshold = 8;
-                const qtyWindow = 60;
+                const baseGap = 110;
+                const fastGap = 70;
+                const warmupDelay = 700;
+                const warmupWindow = 2200;
+                const qtyThreshold = 12;
+                const qtyWindow = 80;
 
                 const cycleStart = this.mouseState.deleteCycleStartAt || now;
                 const elapsed = Math.max(0, now - cycleStart);
@@ -7486,6 +7680,47 @@ setGridSize: function (newSize) {
                 if (!targetInfo) return;
 
                 const coords = { x: targetInfo.x, y: targetInfo.y, z: targetInfo.z };
+                const targetKey = this.key(coords.x, coords.y, coords.z);
+                const lastScreen = this.mouseState.lastHeldDeleteScreen;
+                const movedSinceLastDelete = !lastScreen || Math.hypot(x - lastScreen.x, y - lastScreen.y) >= (this.DELETE_HOLD_MOVE_PX || 8);
+                if (this.mouseState.heldDeleteConsumed && !movedSinceLastDelete) return;
+                if (this.mouseState.lastHeldDeleteKey === targetKey && !movedSinceLastDelete) return;
+
+                this.mouseState.holdActionApplied = true;
+                this.mouseState.heldDeleteConsumed = true;
+                this.mouseState.lastHeldDeleteKey = targetKey;
+                this.mouseState.lastHeldDeleteScreen = { x, y };
+                this.mouseState.lastActionCoords = coords;
+                this.mouseState.lastActionNormal = targetInfo.normal;
+                this.drawVoxelLinePaced(coords, coords, targetInfo.normal);
+            },
+
+            continueHeldBuildTick: function () {
+                if (!this.isPointerDown) return;
+                if (this.currentMode !== 'FREE') return;
+                if (!this.mouseState.isModifying) return;
+                if (this.mouseState.isRotating || this.mouseState.isPanning || this.mouseState.isOrbiting || this.mouseState.isMoving || this.mouseState.isExtruding) return;
+
+                const now = performance.now();
+                const pointerDownAt = this.mouseState.pointerDownAt || 0;
+                const holdDelay = this.ADD_HOLD_DELAY_MS || 260;
+                if (!this.mouseState.buildHoldArmed) {
+                    if (!pointerDownAt || (now - pointerDownAt) < holdDelay) return;
+                    this.mouseState.buildHoldArmed = true;
+                }
+
+                const x = this.mouseState.lastX || this.mouseState.downX;
+                const y = this.mouseState.lastY || this.mouseState.downY;
+                if (!Number.isFinite(x) || !Number.isFinite(y)) return;
+
+                const targetInfo = this.getRayTargetInfo(x, y);
+                if (!targetInfo) return;
+                const coords = { x: targetInfo.x, y: targetInfo.y, z: targetInfo.z };
+                const targetKey = this.key(coords.x, coords.y, coords.z);
+                if (this.mouseState.lastHeldBuildKey === targetKey) return;
+
+                this.mouseState.holdActionApplied = true;
+                this.mouseState.lastHeldBuildKey = targetKey;
                 this.mouseState.lastActionCoords = coords;
                 this.mouseState.lastActionNormal = targetInfo.normal;
                 this.drawVoxelLinePaced(coords, coords, targetInfo.normal);
@@ -8635,9 +8870,10 @@ setGridSize: function (newSize) {
                             if (x > maxX) maxX = x; if (y > maxY) maxY = y; if (z > maxZ) maxZ = z;
                         });
                     }
-                    const shiftX = Number.isFinite(minX) ? minX : 0;
-                    const shiftY = Number.isFinite(minY) ? minY : 0;
-                    const shiftZ = Number.isFinite(minZ) ? minZ : 0;
+                    const preserveCoordinates = !!options.preserveCoordinates;
+                    const shiftX = preserveCoordinates ? 0 : (Number.isFinite(minX) ? minX : 0);
+                    const shiftY = preserveCoordinates ? 0 : (Number.isFinite(minY) ? minY : 0);
+                    const shiftZ = preserveCoordinates ? 0 : (Number.isFinite(minZ) ? minZ : 0);
                     raw.forEach(v => {
                         const nx = v.x - shiftX;
                         const ny = v.y - shiftY;
@@ -8649,7 +8885,10 @@ setGridSize: function (newSize) {
                     const extentX = Number.isFinite(maxX) ? (maxX - shiftX + 1) : this.GRID_DEFAULT;
                     const extentY = Number.isFinite(maxY) ? (maxY - shiftY + 1) : this.GRID_DEFAULT;
                     const extentZ = Number.isFinite(maxZ) ? (maxZ - shiftZ + 1) : this.GRID_DEFAULT;
-                    this.GRID = Math.max(extentX, extentY, extentZ, this.GRID_DEFAULT);
+                    const coordinateMax = preserveCoordinates && Number.isFinite(maxX)
+                        ? Math.max(maxX + 1, maxY + 1, maxZ + 1)
+                        : 0;
+                    this.GRID = Math.max(extentX, extentY, extentZ, coordinateMax, this.GRID, this.GRID_DEFAULT);
                     this.renderColorHistory();
 
                     this.templateImagePinnedY = (data.templateImagePinnedY ?? null);
@@ -8920,6 +9159,7 @@ setGridSize: function (newSize) {
                     this._flyAccel = 0;
                 }
                 this.continueHeldDeleteTick();
+                this.continueHeldBuildTick();
 
                 if (this.composer && !this.lowPerfMode) {
                     this.composer.render();
@@ -8991,6 +9231,7 @@ setGridSize: function (newSize) {
 
            onModelChanged(reason = '') {
     this.hubUploadDirty = true;
+    this.autosaveScene();
     this.updateHubSaveIndicator();
     this.updateShadowPolicy();
 
@@ -9538,12 +9779,17 @@ this.roundedVoxelsGroup.visible = this.isRoundedPreviewEnabled;
             },
 
             autosaveScene: function () {
-                if (this.voxels.size === 0 && !this.templateImageData) {
+                const metadata = this.currentModelMeta || {};
+                const hubAutosaveKey = this.getHubAutosaveKey(metadata);
+                if (this.voxels.size === 0 && !this.templateImageData && !hubAutosaveKey) {
                     localStorage.removeItem('voxelshaper_autosave');
                     return;
                 }
                 try {
                     const data = {
+                        autosaveVersion: 2,
+                        savedAt: new Date().toISOString(),
+                        hubAutosaveKey,
                         gridSize: this.GRID,
                         currentDrawingAxis: this.currentDrawingAxis,
                         activeDrawingLevel: this.activeDrawingLevel,
@@ -9554,7 +9800,7 @@ this.roundedVoxelsGroup.visible = this.isRoundedPreviewEnabled;
                         templateImageData: this.templateImageData,
                         templateImagePinnedY: this.templateImagePinnedY,
                         templateImageAxis: this.templateImageAxis,
-                        metadata: this.currentModelMeta || {}
+                        metadata
                     };
                     localStorage.setItem('voxelshaper_autosave', JSON.stringify(data));
                 } catch (e) {
@@ -9562,19 +9808,24 @@ this.roundedVoxelsGroup.visible = this.isRoundedPreviewEnabled;
                 }
             },
 
-            loadAutosavedScene: function () {
+            loadAutosavedScene: function (options = {}) {
                 const savedData = localStorage.getItem('voxelshaper_autosave');
                 if (savedData) {
                     try {
                         const data = JSON.parse(savedData);
-                        if (this.loadFromData(data)) {
-                            this.showToast('Scene Restored', 'Your last session was loaded.', 'info');
+                        if (options.expectedHubMeta && !this.autosaveMatchesHubMetadata(data, options.expectedHubMeta)) {
+                            return false;
+                        }
+                        if (this.loadFromData(data, { meta: data.metadata || {}, preserveCoordinates: true })) {
+                            if (!options.silent) this.showToast('Scene Restored', 'Your last session was loaded.', 'info');
+                            return true;
                         }
                     } catch (e) {
                         console.error("Failed to load autosaved scene:", e);
                         localStorage.removeItem('voxelshaper_autosave');
                     }
                 }
+                return false;
             },
 
 

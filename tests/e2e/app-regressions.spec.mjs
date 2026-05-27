@@ -139,7 +139,22 @@ async function mockBrowserDependencies(page, options = {}) {
     if (url.hostname === 'cdnjs.cloudflare.com' && pathname.endsWith('/jszip.min.js')) {
       await route.fulfill({
         contentType: 'application/javascript; charset=utf-8',
-        body: 'window.JSZip = window.JSZip || function JSZip() {};'
+        body: `
+          window.JSZip = window.JSZip || function JSZip() {
+            const root = { files: [] };
+            const makeFolder = (prefix) => ({
+              file(name, content) { root.files.push(prefix + name); return this; },
+              folder(name) { return makeFolder(prefix + name + '/'); }
+            });
+            return {
+              file(name, content) { root.files.push(name); return this; },
+              folder(name) { return makeFolder(name + '/'); },
+              generateAsync() {
+                return Promise.resolve(new Blob(['fake-3mf:' + root.files.join('|')], { type: 'application/octet-stream' }));
+              }
+            };
+          };
+        `
       });
       return;
     }
@@ -221,6 +236,10 @@ function collectPageErrors(page) {
 
 async function waitForVoxelApp(page) {
   await expect.poll(() => page.evaluate(() => Boolean(window.VoxelApp?.cam && window.VoxelApp?.cvs))).toBe(true);
+  await expect.poll(() => page.evaluate(() => {
+    const overlay = document.getElementById('bootLoadingOverlay');
+    return !overlay || getComputedStyle(overlay).pointerEvents === 'none';
+  })).toBe(true);
 }
 
 async function getCameraPosition(page) {
@@ -240,6 +259,137 @@ async function projectWorldToPage(page, { x, y, z }) {
       y: rect.top + ((1 - projected.y) * 0.5 * rect.height)
     };
   }, { x, y, z });
+}
+
+async function findScreenPointForTarget(page, { x, y, z, radius = 70 } = {}) {
+  return page.evaluate((desired) => {
+    const app = window.VoxelApp;
+    const rect = app.cvs.getBoundingClientRect();
+    const isReachableCanvasPoint = (point) => {
+      if (point.x < rect.left + 2 || point.x > rect.right - 2) return false;
+      if (point.y < rect.top + 2 || point.y > rect.bottom - 2) return false;
+      if (point.x < 2 || point.x > window.innerWidth - 2) return false;
+      if (point.y < 2 || point.y > window.innerHeight - 2) return false;
+      return document.elementFromPoint(point.x, point.y) === app.cvs;
+    };
+    const projected = new window.THREE.Vector3(desired.x + 0.5, desired.y, desired.z + 0.5).project(app.cam);
+    const center = {
+      x: rect.left + ((projected.x + 1) * 0.5 * rect.width),
+      y: rect.top + ((1 - projected.y) * 0.5 * rect.height)
+    };
+    const candidates = [center];
+    for (let r = 4; r <= desired.radius; r += 4) {
+      for (const dx of [-r, 0, r]) {
+        for (const dy of [-r, 0, r]) {
+          candidates.push({ x: center.x + dx, y: center.y + dy });
+        }
+      }
+    }
+    return candidates.find((point) => {
+      if (!isReachableCanvasPoint(point)) return false;
+      const target = app.getRayTargetInfo(point.x, point.y);
+      return target && target.x === desired.x && target.y === desired.y && target.z === desired.z;
+    }) || null;
+  }, { x, y, z, radius });
+}
+
+async function findEditableGridPoint(page) {
+  return page.evaluate(() => {
+    const app = window.VoxelApp;
+    const rect = app.cvs.getBoundingClientRect();
+    const left = Math.max(rect.left + 8, 8);
+    const right = Math.min(rect.right - 8, window.innerWidth - 8);
+    const top = Math.max(rect.top + 8, 8);
+    const bottom = Math.min(rect.bottom - 8, window.innerHeight - 8);
+    const candidates = [];
+
+    for (let yi = 0; yi <= 20; yi++) {
+      for (let xi = 0; xi <= 26; xi++) {
+        const point = {
+          x: left + ((right - left) * xi / 26),
+          y: top + ((bottom - top) * yi / 20)
+        };
+        if (document.elementFromPoint(point.x, point.y) !== app.cvs) continue;
+        const target = app.getRayTargetInfo(point.x, point.y);
+        if (!target) continue;
+        if (target.x < 0 || target.x >= app.GRID || target.y < 0 || target.y >= app.GRID || target.z < 0 || target.z >= app.GRID) continue;
+        const centerBias = Math.hypot(point.x - (left + right) / 2, point.y - (top + bottom) / 2);
+        candidates.push({
+          x: point.x,
+          y: point.y,
+          target: { x: target.x, y: target.y, z: target.z, source: target.source || 'mesh' },
+          score: centerBias
+        });
+      }
+    }
+
+    candidates.sort((a, b) => a.score - b.score);
+    return candidates[0] || null;
+  });
+}
+
+async function findEditableGridDrag(page) {
+  return page.evaluate(() => {
+    const app = window.VoxelApp;
+    const rect = app.cvs.getBoundingClientRect();
+    const left = Math.max(rect.left + 10, 10);
+    const right = Math.min(rect.right - 10, window.innerWidth - 10);
+    const top = Math.max(rect.top + 10, 10);
+    const bottom = Math.min(rect.bottom - 10, window.innerHeight - 10);
+    const candidates = [];
+
+    for (let yi = 0; yi <= 18; yi++) {
+      for (let xi = 0; xi <= 30; xi++) {
+        const x = left + ((right - left) * xi / 30);
+        const y = top + ((bottom - top) * yi / 18);
+        if (document.elementFromPoint(x, y) !== app.cvs) continue;
+        const target = app.getRayTargetInfo(x, y);
+        if (!target) continue;
+        if (target.x < 0 || target.x >= app.GRID || target.y < 0 || target.y >= app.GRID || target.z < 0 || target.z >= app.GRID) continue;
+        candidates.push({ x, y, target: { x: target.x, y: target.y, z: target.z } });
+      }
+    }
+
+    let best = null;
+    let bestScore = -Infinity;
+    for (const start of candidates) {
+      for (const end of candidates) {
+        const screenDistance = Math.hypot(end.x - start.x, end.y - start.y);
+        const gridDistance = Math.abs(end.target.x - start.target.x) + Math.abs(end.target.y - start.target.y) + Math.abs(end.target.z - start.target.z);
+        if (screenDistance < 120 || gridDistance < 3) continue;
+        const score = gridDistance * 1000 + screenDistance;
+        if (score > bestScore) {
+          bestScore = score;
+          best = { start, end };
+        }
+      }
+    }
+    return best;
+  });
+}
+
+async function findVisibleVoxelPoint(page) {
+  return page.evaluate(() => {
+    const app = window.VoxelApp;
+    const rect = app.cvs.getBoundingClientRect();
+    const left = Math.max(rect.left + 8, 8);
+    const right = Math.min(rect.right - 8, window.innerWidth - 8);
+    const top = Math.max(rect.top + 8, 8);
+    const bottom = Math.min(rect.bottom - 8, window.innerHeight - 8);
+
+    for (let yi = 0; yi <= 24; yi++) {
+      for (let xi = 0; xi <= 30; xi++) {
+        const point = {
+          x: left + ((right - left) * xi / 30),
+          y: top + ((bottom - top) * yi / 24)
+        };
+        if (document.elementFromPoint(point.x, point.y) !== app.cvs) continue;
+        const target = app.getRayTargetInfo(point.x, point.y);
+        if (target && app.voxels.has(app.key(target.x, target.y, target.z))) return point;
+      }
+    }
+    return null;
+  });
 }
 
 async function prepareEmptyFreeBuildScene(page, cameraMode = 'orbit') {
@@ -417,8 +567,15 @@ for (const appPath of ['/', '/www/index.html']) {
         gridOpacity: gridMaterial?.opacity,
         boxOpacity: app.boxHelper?.material?.opacity,
         ssaoValue: document.getElementById('ssaoIntensitySlider')?.value,
+        fxaaDefault: document.getElementById('fxaaToggle')?.checked,
+        pixelRatioCap: app.getDevicePixelRatioCap(),
         profileType: app.renderMaterialProfile?.type,
-        glowReady: !!app.dynamicGlow
+        glowReady: !!app.dynamicGlow,
+        desktopSaveStyle: (() => {
+          const el = document.getElementById('desktop-overlay-save');
+          const cs = el ? getComputedStyle(el) : null;
+          return cs ? { color: cs.color, backgroundImage: cs.backgroundImage, backgroundColor: cs.backgroundColor } : null;
+        })()
       };
     });
 
@@ -430,8 +587,12 @@ for (const appPath of ['/', '/www/index.html']) {
     expect(state.gridOpacity).toBeLessThanOrEqual(0.22);
     expect(state.boxOpacity).toBeLessThanOrEqual(0.25);
     expect(state.ssaoValue).toBe('0.014');
+    expect(state.fxaaDefault).toBe(false);
+    expect(state.pixelRatioCap).toBe(2);
     expect(state.profileType).toBe('default');
     expect(state.glowReady).toBe(true);
+    expect(state.desktopSaveStyle?.color).toBe('rgb(255, 255, 255)');
+    expect(state.desktopSaveStyle?.backgroundImage).toContain('linear-gradient');
     expect(pageErrors).toEqual([]);
   });
 }
@@ -502,12 +663,14 @@ for (const appPath of ['/', '/www/index.html']) {
       await waitForVoxelApp(page);
       await prepareEmptyFreeBuildScene(page, cameraMode);
 
-      const target = await projectWorldToPage(page, { x: 5.5, y: 0, z: 5.5 });
+      const target = await findScreenPointForTarget(page, { x: 5, y: 0, z: 5 }) || await findEditableGridPoint(page);
+      expect(target).toBeTruthy();
       const rayTarget = await page.evaluate(({ x, y }) => {
         const targetInfo = window.VoxelApp.getRayTargetInfo(x, y);
         return targetInfo ? { x: targetInfo.x, y: targetInfo.y, z: targetInfo.z, source: targetInfo.source || 'mesh' } : null;
       }, target);
-      expect(rayTarget).toMatchObject({ x: 5, y: 0, z: 5 });
+      expect(rayTarget).toBeTruthy();
+      const expectedPreview = `${(rayTarget.x + 0.5).toFixed(1)},${(rayTarget.y + 0.5).toFixed(1)},${(rayTarget.z + 0.5).toFixed(1)}`;
 
       await page.mouse.move(target.x - 80, target.y - 80);
       await page.mouse.move(target.x, target.y, { steps: 4 });
@@ -515,20 +678,94 @@ for (const appPath of ['/', '/www/index.html']) {
         const app = window.VoxelApp;
         const p = app.previewVoxel.position;
         return app.previewVoxel.visible ? `${p.x.toFixed(1)},${p.y.toFixed(1)},${p.z.toFixed(1)}` : 'hidden';
-      })).toBe('5.5,0.5,5.5');
+      })).toBe(expectedPreview);
 
       const beforeCamera = await getCameraPosition(page);
       await page.mouse.click(target.x, target.y);
 
-      await expect.poll(() => page.evaluate(() => {
+      const expectedCoords = rayTarget;
+      await expect.poll(() => page.evaluate((targetCoords) => {
         const app = window.VoxelApp;
-        return app.voxels.has(app.key(5, 0, 5));
-      })).toBe(true);
+        return app.voxels.has(app.key(targetCoords.x, targetCoords.y, targetCoords.z));
+      }, expectedCoords)).toBe(true);
       expect(vectorDistance(beforeCamera, await getCameraPosition(page))).toBeLessThan(0.01);
       expect(await page.evaluate(() => window.__pointerLockRequested)).toBe(0);
       expect(pageErrors).toEqual([]);
     });
   }
+}
+
+for (const appPath of ['/', '/www/index.html']) {
+  test(`orbit free-drag draws across empty grid without moving the camera on ${appPath}`, async ({ page }) => {
+    const pageErrors = collectPageErrors(page);
+    await installPointerLockSpy(page);
+    await mockBrowserDependencies(page);
+    await makeFirstRun(page, false);
+
+    await page.goto(appPath);
+    await installStableUi(page);
+    await waitForVoxelApp(page);
+    await prepareEmptyFreeBuildScene(page, 'orbit');
+
+    const drag = await findEditableGridDrag(page);
+    expect(drag).toBeTruthy();
+    const { start, end } = drag;
+    const beforeCamera = await getCameraPosition(page);
+
+    await page.mouse.move(start.x, start.y);
+    await page.mouse.down();
+    for (let i = 1; i <= 8; i++) {
+      const t = i / 8;
+      await page.mouse.move(start.x + (end.x - start.x) * t, start.y + (end.y - start.y) * t);
+      await page.waitForTimeout(45);
+    }
+    await page.mouse.up();
+
+    await expect.poll(() => page.evaluate(() => window.VoxelApp.voxels.size)).toBeGreaterThanOrEqual(2);
+    expect(vectorDistance(beforeCamera, await getCameraPosition(page))).toBeLessThan(0.03);
+    expect(await page.evaluate(() => window.__pointerLockRequested)).toBe(0);
+    expect(pageErrors).toEqual([]);
+  });
+}
+
+for (const appPath of ['/', '/www/index.html']) {
+  test(`stationary delete hold removes only one voxel on ${appPath}`, async ({ page }) => {
+    const pageErrors = collectPageErrors(page);
+    await mockBrowserDependencies(page);
+    await makeFirstRun(page, false);
+
+    await page.goto(appPath);
+    await installStableUi(page);
+    await waitForVoxelApp(page);
+
+    await page.evaluate(() => {
+      const app = window.VoxelApp;
+      app.loadFromData({
+        gridSize: 10,
+        currentDrawingAxis: 'y',
+        activeDrawingLevel: { x: 0, y: 0, z: 0 },
+        metadata: { type: 'delete_hold_test' },
+        voxels: [
+          { x: 5, y: 0, z: 5, color: '#FF0000' },
+          { x: 5, y: 1, z: 5, color: '#00FF00' },
+          { x: 5, y: 2, z: 5, color: '#0000FF' }
+        ]
+      }, { preserveHistory: true, meta: { type: 'delete_hold_test' } });
+      app.setModeExplicit('DELETE', 'test');
+      app.setCameraControlMode('orbit', { persist: false, announce: false });
+      app.resetCamera();
+    });
+    const target = await findVisibleVoxelPoint(page);
+    expect(target).toBeTruthy();
+
+    await page.mouse.move(target.x, target.y);
+    await page.mouse.down();
+    await page.waitForTimeout(900);
+    await page.mouse.up();
+
+    await expect.poll(() => page.evaluate(() => window.VoxelApp.voxels.size)).toBe(2);
+    expect(pageErrors).toEqual([]);
+  });
 }
 
 test('mobile first-start camera controls expose orbit and one-finger drag orbits', async ({ browser }) => {
@@ -660,6 +897,123 @@ for (const importCase of importCases) {
     expect(events.some((event) => Object.prototype.hasOwnProperty.call(event.params || {}, 'source'))).toBe(false);
     expect(pageErrors).toEqual([]);
     await context.close();
+  });
+}
+
+test('hub launch reload restores edited autosave instead of regenerating', async ({ page }) => {
+  const pageErrors = collectPageErrors(page);
+  const generateUrls = [];
+  await mockBrowserDependencies(page, {
+    onGenerateRequest: (url) => generateUrls.push(url)
+  });
+  await page.addInitScript(() => {
+    if (!sessionStorage.getItem('__autosave_reload_test_initialized')) {
+      localStorage.removeItem('voxelshaper_autosave');
+      sessionStorage.setItem('__autosave_reload_test_initialized', 'true');
+    }
+    localStorage.setItem('voxelshaper_onboarding_dont_show', 'true');
+  });
+
+  const meta = { type: 'spaceship', seed: 999, shape: 44, color: 70, palette: 'auto', gridSize: 20 };
+  await page.goto(`/?from=hub&handoff=autosave&m=${encodeURIComponent(encodeHubMeta(meta))}`);
+  await installStableUi(page);
+  await waitForVoxelApp(page);
+  await expect.poll(() => generateUrls.length).toBe(1);
+
+  await page.evaluate(() => {
+    const app = window.VoxelApp;
+    app.currentColor = '#FF00AA';
+    app.currentStroke = new Map();
+    app.modifyVoxel(4, 0, 4, new window.THREE.Vector3(0, 1, 0), 'ADD');
+    app.commitCurrentStroke();
+  });
+  await expect.poll(() => page.evaluate(() => {
+    const saved = JSON.parse(localStorage.getItem('voxelshaper_autosave') || '{}');
+    return saved.voxels?.some((v) => v.x === 4 && v.y === 0 && v.z === 4 && v.color === '#FF00AA');
+  })).toBe(true);
+
+  await page.reload();
+  await installStableUi(page);
+  await waitForVoxelApp(page);
+
+  await expect.poll(() => generateUrls.length).toBe(1);
+  await expect.poll(() => page.evaluate(() => {
+    const app = window.VoxelApp;
+    const voxel = app.voxels.get(app.key(4, 0, 4));
+    return voxel?.color || null;
+  })).toBe('#FF00AA');
+  await waitForEvent(page, 'app_hub_import_success', (params) => params.handoff_method === 'autosave_restore');
+  expect(pageErrors).toEqual([]);
+});
+
+for (const appPath of ['/', '/www/index.html']) {
+  test(`morph generator button imports the same API payload as Hub on ${appPath}`, async ({ page }) => {
+    const pageErrors = collectPageErrors(page);
+    const generateUrls = [];
+    await mockBrowserDependencies(page, {
+      onGenerateRequest: (url) => generateUrls.push(url)
+    });
+    await makeFirstRun(page, false);
+
+    await page.goto(appPath);
+    await installStableUi(page);
+    await waitForVoxelApp(page);
+    await page.evaluate(() => {
+      window.VoxelApp.morphSettings = { type: 'spaceship', seed: 4242, shape: 51, color: 73, palette: 'auto' };
+    });
+
+    await page.evaluate(() => window.VoxelApp.openHubGenerator());
+
+    await expect.poll(() => generateUrls.length).toBe(1);
+    expect(generateUrls[0].pathname).toBe('/api/generate');
+    expect(generateUrls[0].searchParams.get('type')).toBe('spaceship');
+    expect(generateUrls[0].searchParams.get('seed')).toBe('4242');
+    await expect.poll(() => page.evaluate(() => window.VoxelApp.currentModelMeta?.seed)).toBe(4242);
+    await expect.poll(() => page.evaluate(() => {
+      const app = window.VoxelApp;
+      return app.originalVoxelsGroup.children.some((child) => child.material?.color?.getHexString()?.toUpperCase() === '58E1FF');
+    })).toBe(true);
+    await waitForEvent(page, 'app_hub_generate_in_editor', (params) =>
+      params.handoff_method === 'api_generate' &&
+      params.type === 'spaceship' &&
+      params.voxel_count === 4
+    );
+    expect(pageErrors).toEqual([]);
+  });
+}
+
+for (const appPath of ['/', '/www/index.html']) {
+  test(`desktop print button downloads a 3MF file on ${appPath}`, async ({ page }) => {
+    const pageErrors = collectPageErrors(page);
+    await mockBrowserDependencies(page);
+    await makeFirstRun(page, false);
+
+    await page.goto(appPath);
+    await installStableUi(page);
+    await waitForVoxelApp(page);
+    await page.evaluate(() => {
+      window.__savedFiles = [];
+      window.saveAs = (blob, name) => {
+        window.__savedFiles.push({ name, size: blob?.size || 0, type: blob?.type || '' });
+      };
+      window.VoxelApp.loadFromData({
+        gridSize: 10,
+        currentDrawingAxis: 'y',
+        activeDrawingLevel: { x: 0, y: 0, z: 0 },
+        metadata: { type: 'print_test' },
+        voxels: [{ x: 1, y: 0, z: 1, color: '#58E1FF' }]
+      }, { preserveHistory: true, meta: { type: 'print_test' } });
+    });
+
+    await expect(page.locator('#desktop-overlay-print-now')).toBeVisible();
+    await page.locator('#desktop-overlay-print-now').click();
+
+    await expect.poll(() => page.evaluate(() => window.__savedFiles?.length || 0)).toBe(1);
+    const saved = await page.evaluate(() => window.__savedFiles[0]);
+    expect(saved.name.endsWith('.3mf')).toBe(true);
+    expect(saved.size).toBeGreaterThan(0);
+    await waitForEvent(page, 'print_now_click', (params) => params.format === '3mf_bambu');
+    expect(pageErrors).toEqual([]);
   });
 }
 
