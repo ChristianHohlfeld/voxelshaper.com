@@ -4400,9 +4400,27 @@
                     this.glassInstancedMesh.instanceMatrix.needsUpdate = true;
                     if (this.glassInstancedMesh.instanceColor) this.glassInstancedMesh.instanceColor.needsUpdate = true;
                 }
-                this.voxelToInstanceMap.clear();
+                if (this.voxelToInstanceMap) this.voxelToInstanceMap.clear();
                 this.instanceToVoxelMapSolid = [];
                 this.instanceToVoxelMapGlass = [];
+            },
+
+            updateInstancedVoxels: function() {
+                this.clearInstancedVoxels();
+                for (const [key, v] of this.voxels.entries()) {
+                    const [x, y, z] = this.parseKey(key);
+                    this.addInstancedVoxel(key, x, y, z, v.color, v.glass);
+                }
+                if (this.solidInstancedMesh) {
+                    this.solidInstancedMesh.instanceMatrix.needsUpdate = true;
+                    this.solidInstancedMesh.instanceColor.needsUpdate = true;
+                    this.solidInstancedMesh.computeBoundingSphere();
+                }
+                if (this.glassInstancedMesh) {
+                    this.glassInstancedMesh.instanceMatrix.needsUpdate = true;
+                    this.glassInstancedMesh.instanceColor.needsUpdate = true;
+                    this.glassInstancedMesh.computeBoundingSphere();
+                }
             },
             sharedBoxGeometry: null,
             materialCache: new Map(),
@@ -7712,23 +7730,26 @@ setGridSize: function (newSize) {
                     case 'DELETE':
                         if (existingVoxel) {
                             this.spawnVacuumParticles(x, y, z, 4);
-                            this.originalVoxelsGroup.remove(existingVoxel.mesh);
                             this.voxels.delete(k);
+                            this.updateInstancedVoxels();
                             modified = true;
                         }
                         break;
                     case 'FREE':
                     case 'ADD':
                         if (!existingVoxel) {
-                            const mesh = new THREE.Mesh(this.sharedBoxGeometry, this.getMaterial(this.currentColor, this.currentBlockType));
-                            mesh.position.set(x * this.VS + 0.5, y * this.VS + 0.5, z * this.VS + 0.5);
-                            mesh.castShadow = this.shouldUseVoxelShadows();
-                            mesh.receiveShadow = this.shouldUseVoxelShadows();
-                            this.originalVoxelsGroup.add(mesh);
-                            mesh.renderOrder = this.currentBlockType === 'glass' ? 2 : 1;
-                            mesh.userData.isVoxel = true;
-                            mesh.userData.isFoundation = false;
-                            this.voxels.set(k, { color: this.currentColor, glass: this.currentBlockType === 'glass', mesh: mesh });
+                            const isGlass = this.currentBlockType === 'glass';
+                            this.voxels.set(k, { color: this.currentColor, glass: isGlass });
+                            
+                            this.addInstancedVoxel(k, x, y, z, this.currentColor, isGlass);
+                            
+                            const targetMesh = isGlass ? this.glassInstancedMesh : this.solidInstancedMesh;
+                            if (targetMesh) {
+                                targetMesh.instanceMatrix.needsUpdate = true;
+                                targetMesh.instanceColor.needsUpdate = true;
+                                targetMesh.computeBoundingSphere();
+                            }
+                            
                             modified = true;
                             this.addColorToHistory(this.currentColor);
                         }
