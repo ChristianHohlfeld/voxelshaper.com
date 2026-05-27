@@ -6518,8 +6518,11 @@
                 const startInfo = this.getPointerSceneStartInfo(e.clientX, e.clientY);
                 const startsOnEditableGrid = this.currentMode === 'FREE' && startInfo.startsOnBuildTarget;
                 this.mouseState.isModifying = (e.button === 0);
-                this.mouseState.isPanning = (e.button === 1) || (this.isOrbitControlsMode() && e.button === 2);
-                this.mouseState.orbitCandidate = this.isOrbitControlsMode() && e.button === 0 && !startInfo.startsOnVoxel && !startsOnEditableGrid;
+                this.mouseState.isPanning = (e.button === 1) || (this.isOrbitControlsMode() && e.button === 2 && e.shiftKey);
+                this.mouseState.orbitCandidate = this.isOrbitControlsMode() && !this.mouseState.isPanning && (
+                    e.button === 2 || 
+                    (e.button === 0 && !startInfo.startsOnVoxel && !startsOnEditableGrid)
+                );
 
                 if (this.mouseState.isModifying && this.currentMode === 'SELECT') {
                     this.selectionChange.before = new Set(this.selectedFaces);
@@ -6869,13 +6872,13 @@
                     if (this.touchState.isThreeFingerUndoCandidate) {
                         this.undo();
                         this.showToast('Action', 'Undo', 'info', 1000);
-                    } else if (this.isOrbitControlsMode() && beforeCount === 1 && !this.mouseState.isDragging && !this.mouseState.holdActionApplied) {
+                    } else if (this.isOrbitControlsMode() && beforeCount === 1 && !this.mouseState.isDragging && !this.mouseState.holdActionApplied && (this.isMobile || e.button === 0)) {
                         this.mouseState.isModifying = true;
                         this.handleTapInteraction(e);
                     } else if (this.touchState.isInteracting && !this.mouseState.isDragging && !this.mouseState.holdActionApplied) { // Is a long press tap
                         this.handleTapInteraction(e);
                     }
-                } else if (!this.mouseState.isDragging && this.mouseState.isModifying && !this.mouseState.holdActionApplied) { // Desktop tap
+                } else if (!this.mouseState.isDragging && this.mouseState.isModifying && !this.mouseState.holdActionApplied && e.button === 0) { // Desktop tap
                     this.handleTapInteraction(e);
                 }
 
