@@ -690,6 +690,7 @@
         }
 
         #mobile-canvas-color-picker-wrap {
+            --active-picker-color: #FFFFFF;
             position: fixed;
             right: calc(env(safe-area-inset-right) + 0.75rem);
             bottom: calc(var(--safe-bottom) + 4.9rem);
@@ -712,8 +713,19 @@
             border: 0;
             border-radius: 9999px;
             padding: 0;
-            opacity: 0.94;
+            opacity: 0;
             cursor: pointer;
+            z-index: 3;
+        }
+
+        #mobile-canvas-color-picker-swatch {
+            position: absolute;
+            inset: 0.42rem;
+            border-radius: 9999px;
+            background: var(--active-picker-color);
+            pointer-events: none;
+            box-shadow: inset 0 1px 4px rgba(255, 255, 255, 0.35), inset 0 -8px 14px rgba(15, 23, 42, 0.22), 0 0 0 1px rgba(255, 255, 255, 0.42);
+            z-index: 1;
         }
 
         #mobile-canvas-color-picker-badge {
@@ -732,6 +744,7 @@
             font-size: 0.72rem;
             pointer-events: none;
             box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.35);
+            z-index: 2;
         }
 
         #mobile-undo-redo-overlay {
@@ -758,6 +771,7 @@
         }
 
         #desktop-canvas-color-picker-wrap {
+            --active-picker-color: #FFFFFF;
             width: 3rem;
             height: 3rem;
             border-radius: 9999px;
@@ -775,6 +789,28 @@
         #desktop-canvas-color-picker-wrap:hover {
             transform: scale(1.05);
             border-color: rgba(255, 255, 255, 0.8);
+        }
+
+        #desktop-canvas-color-picker {
+            position: absolute;
+            inset: 0;
+            width: 100%;
+            height: 100%;
+            border: 0;
+            border-radius: 9999px;
+            padding: 0;
+            opacity: 0;
+            cursor: pointer;
+            z-index: 2;
+        }
+
+        #desktop-canvas-color-picker-swatch {
+            width: 2.2rem;
+            height: 2.2rem;
+            border-radius: 9999px;
+            background: var(--active-picker-color);
+            pointer-events: none;
+            box-shadow: inset 0 1px 4px rgba(255, 255, 255, 0.35), inset 0 -8px 14px rgba(15, 23, 42, 0.22), 0 0 0 1px rgba(255, 255, 255, 0.42);
         }
 
         @media (min-width: 768px) {
@@ -3065,8 +3101,7 @@
             <button id="deleteHintDontShowBtn" class="btn btn-xs btn-ghost">Don’t show again</button>
             <button id="deleteHintCloseBtn" class="btn btn-xs btn-ghost">×</button>
         </div>
-        <canvas id="voxelCanvas" tabindex="0" width="1728" height="1129" style="width: 1152px; height: 753px;"
-            }=""></canvas>
+        <canvas id="voxelCanvas" tabindex="0" aria-label="Voxel editor canvas"></canvas>
         <div id="marquee" class="marquee"></div>
         <div id="haptic-layer"></div>
         <div id="ruler-overlay" aria-hidden="true">
@@ -3098,6 +3133,7 @@
                 title="Redo"><i class="fas fa-redo"></i></button>
         </div>
         <div id="desktop-canvas-color-picker-wrap" aria-label="Pick brush color on canvas (desktop)">
+            <span id="desktop-canvas-color-picker-swatch" aria-hidden="true"></span>
             <input type="color" id="desktop-canvas-color-picker" value="#FFFFFF"
                 aria-label="Pick color on canvas desktop">
         </div>
@@ -3127,6 +3163,7 @@
 
         <div id="mobile-canvas-color-picker-wrap" aria-label="Pick brush color on canvas">
             <input type="color" id="mobile-canvas-color-picker" value="#FFFFFF" aria-label="Pick color on canvas">
+            <span id="mobile-canvas-color-picker-swatch" aria-hidden="true"></span>
             <span id="mobile-canvas-color-picker-badge" aria-hidden="true"><i class="fas fa-brush"></i></span>
         </div>
 
