@@ -7347,12 +7347,19 @@
             },
 
             onMouseWheel: function (e) {
-                e.preventDefault();
                 if (e.altKey) {
+                    e.preventDefault();
                     const direction = -Math.sign(e.deltaY);
                     this.moveDrawingLevel(direction);
                     return;
                 }
+
+                if (this.isOrbitControlsMode()) {
+                    // Let THREE.OrbitControls handle zoom natively. It prevents default internally.
+                    return;
+                }
+
+                e.preventDefault();
 
                 // Desktop contract (legacy-compatible):
                 // Ctrl+Wheel OR RMB+Wheel OR PointerLock+Wheel => adjust fly speed.
@@ -7373,11 +7380,8 @@
 
                 let zoomAmount = -e.deltaY * 0.001 * this.PINCH_ZOOM_MULT;
                 if (this.controls.invertZoom) zoomAmount *= -1;
-                if (this.isOrbitControlsMode()) {
-                    this.dollyOrbitCameraBy(zoomAmount);
-                } else {
-                    this.cam.position.addScaledVector(this.cam.getWorldDirection(new THREE.Vector3()), zoomAmount);
-                }
+                
+                this.cam.position.addScaledVector(this.cam.getWorldDirection(new THREE.Vector3()), zoomAmount);
             },
 
             onKeyDown: function (e) {
