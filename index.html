@@ -6079,57 +6079,67 @@
             },
 
             applyPrintReadyPreset: function (presetName) {
-                const presets = {
-                    fast: { rounded: false, roundness: 0.18, unit: 'mm', upAxis: 'Z', hint: 'Fast = blocky export for quickest slicing/printing.' },
-                    balanced: { rounded: true, roundness: 0.35, unit: 'mm', upAxis: 'Z', hint: 'Balanced = rounded details with moderate file size.' },
-                    smooth: { rounded: true, roundness: 0.62, unit: 'mm', upAxis: 'Z', hint: 'Smooth = highest rounded quality (heavier mesh).' }
-                };
-                const preset = presets[presetName] || presets.balanced;
+                try {
+                    const presets = {
+                        fast: { rounded: false, roundness: 0.18, unit: 'mm', upAxis: 'Z', hint: 'Fast = blocky export for quickest slicing/printing.' },
+                        balanced: { rounded: true, roundness: 0.35, unit: 'mm', upAxis: 'Z', hint: 'Balanced = rounded details with moderate file size.' },
+                        smooth: { rounded: true, roundness: 0.62, unit: 'mm', upAxis: 'Z', hint: 'Smooth = highest rounded quality (heavier mesh).' }
+                    };
+                    const preset = presets[presetName] || presets.balanced;
 
-                const blockyRadio = document.querySelector('input[name="exportShapeType"][value="blocky"]');
-                const roundedRadio = document.getElementById('roundedExportRadio');
-                const slider = document.getElementById('filletRoundnessSlider');
-                const unitRadio = document.querySelector(`input[name="exportScaleUnit"][value="${preset.unit}"]`);
-                const axisRadio = document.querySelector(`input[name="exportUpAxis"][value="${preset.upAxis}"]`);
-                const hint = document.getElementById('printReadyHint');
+                    const blockyRadio = document.querySelector('input[name="exportShapeType"][value="blocky"]');
+                    const roundedRadio = document.getElementById('roundedExportRadio');
+                    const slider = document.getElementById('filletRoundnessSlider');
+                    const unitRadio = document.querySelector(`input[name="exportScaleUnit"][value="${preset.unit}"]`);
+                    const axisRadio = document.querySelector(`input[name="exportUpAxis"][value="${preset.upAxis}"]`);
+                    const hint = document.getElementById('printReadyHint');
 
-                if (preset.rounded && roundedRadio) roundedRadio.checked = true;
-                if (!preset.rounded && blockyRadio) blockyRadio.checked = true;
-                if (slider) slider.value = String(preset.roundness);
-                if (unitRadio) unitRadio.checked = true;
-                if (axisRadio) axisRadio.checked = true;
-                if (hint) hint.textContent = preset.hint;
+                    if (preset.rounded && roundedRadio) roundedRadio.checked = true;
+                    if (!preset.rounded && blockyRadio) blockyRadio.checked = true;
+                    if (slider) slider.value = String(preset.roundness);
+                    if (unitRadio) unitRadio.checked = true;
+                    if (axisRadio) axisRadio.checked = true;
+                    if (hint) hint.textContent = preset.hint;
 
-                this.updateExportRoundnessUI();
+                    this.updateExportRoundnessUI();
+                } catch (e) {
+                    console.error('applyPrintReadyPreset error:', e);
+                    if (this.showToast) this.showToast('Error', 'applyPrintReadyPreset: ' + e.message, 'error');
+                }
             },
 
             printNow3MF: async function () {
-                if (this.isMobile || window.matchMedia('(max-width: 767px)').matches) {
-                    this.showToast('Print', '3MF export is ready on desktop.', 'info', 1600);
-                    trackEvent('print_now_blocked', { reason: 'mobile', voxel_count: this.voxels.size });
-                    return;
+                try {
+                    if (this.isMobile || window.matchMedia('(max-width: 767px)').matches) {
+                        this.showToast('Print', '3MF export is ready on desktop.', 'info', 1600);
+                        trackEvent('print_now_blocked', { reason: 'mobile', voxel_count: this.voxels.size });
+                        return;
+                    }
+
+                    this.applyPrintReadyPreset('balanced');
+                    const scaleUnit = document.querySelector('input[name="exportScaleUnit"]:checked')?.value || 'mm';
+                    const shapeType = document.querySelector('input[name="exportShapeType"]:checked')?.value || 'rounded';
+                    const isRounded = shapeType === 'rounded';
+                    const roundnessFactor = isRounded ? parseFloat(document.getElementById('filletRoundnessSlider')?.value || '0.35') : 0;
+
+                    trackEvent('print_now_click', {
+                        format: '3mf_bambu',
+                        voxel_count: this.voxels.size,
+                        rounded: isRounded
+                    });
+                    await VoxelApp3MFExporter.exportBambuStudio3MF(
+                        this.voxels,
+                        this.VS,
+                        this.showToast.bind(this),
+                        this.parseKey.bind(this),
+                        scaleUnit,
+                        isRounded,
+                        roundnessFactor
+                    );
+                } catch (e) {
+                    console.error('printNow3MF error:', e);
+                    if (this.showToast) this.showToast('Error', 'printNow3MF: ' + e.message, 'error', 5000);
                 }
-
-                this.applyPrintReadyPreset('balanced');
-                const scaleUnit = document.querySelector('input[name="exportScaleUnit"]:checked')?.value || 'mm';
-                const shapeType = document.querySelector('input[name="exportShapeType"]:checked')?.value || 'rounded';
-                const isRounded = shapeType === 'rounded';
-                const roundnessFactor = isRounded ? parseFloat(document.getElementById('filletRoundnessSlider')?.value || '0.35') : 0;
-
-                trackEvent('print_now_click', {
-                    format: '3mf_bambu',
-                    voxel_count: this.voxels.size,
-                    rounded: isRounded
-                });
-                await VoxelApp3MFExporter.exportBambuStudio3MF(
-                    this.voxels,
-                    this.VS,
-                    this.showToast.bind(this),
-                    this.parseKey.bind(this),
-                    scaleUnit,
-                    isRounded,
-                    roundnessFactor
-                );
             },
 
             toggleRoundedPreview: function (e) {
