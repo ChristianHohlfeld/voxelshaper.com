@@ -4280,6 +4280,130 @@
             HUB_URL: "https://hub.voxelshaper.com",
             // --- State ---
             scene: null, cam: null, ren: null, gridHelper: null, boxHelper: null,
+
+            // InstancedMesh setup
+            maxInstances: 262144,
+            solidInstancedMesh: null,
+            glassInstancedMesh: null,
+            voxelToInstanceMap: new Map(),
+            instanceToVoxelMapSolid: [],
+            instanceToVoxelMapGlass: [],
+            
+            initInstancedMeshes: function() {
+                const geometry = this.sharedBoxGeometry;
+                const solidMat = this.getMaterial(0xffffff, 'solid');
+                const glassMat = this.getMaterial(0xffffff, 'glass');
+                
+                this.solidInstancedMesh = new THREE.InstancedMesh(geometry, solidMat, this.maxInstances);
+                this.solidInstancedMesh.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
+                this.solidInstancedMesh.instanceColor = new THREE.InstancedBufferAttribute(new Float32Array(this.maxInstances * 3), 3);
+                this.solidInstancedMesh.instanceColor.setUsage(THREE.DynamicDrawUsage);
+                this.solidInstancedMesh.castShadow = this.shouldUseVoxelShadows();
+                this.solidInstancedMesh.receiveShadow = this.shouldUseVoxelShadows();
+                this.solidInstancedMesh.count = 0;
+                
+                this.glassInstancedMesh = new THREE.InstancedMesh(geometry, glassMat, this.maxInstances);
+                this.glassInstancedMesh.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
+                this.glassInstancedMesh.instanceColor = new THREE.InstancedBufferAttribute(new Float32Array(this.maxInstances * 3), 3);
+                this.glassInstancedMesh.instanceColor.setUsage(THREE.DynamicDrawUsage);
+                this.glassInstancedMesh.castShadow = this.shouldUseVoxelShadows();
+                this.glassInstancedMesh.receiveShadow = this.shouldUseVoxelShadows();
+                this.glassInstancedMesh.count = 0;
+                this.glassInstancedMesh.renderOrder = 2;
+
+                this.originalVoxelsGroup.add(this.solidInstancedMesh);
+                this.originalVoxelsGroup.add(this.glassInstancedMesh);
+                
+                this.voxelToInstanceMap.clear();
+                this.instanceToVoxelMapSolid = [];
+                this.instanceToVoxelMapGlass = [];
+            },
+
+            addInstancedVoxel: function(key, x, y, z, colorStr, isGlass) {
+                const mesh = isGlass ? this.glassInstancedMesh : this.solidInstancedMesh;
+                const arr = isGlass ? this.instanceToVoxelMapGlass : this.instanceToVoxelMapSolid;
+                if (mesh.count >= this.maxInstances) return;
+                
+                const index = mesh.count++;
+                
+                const matrix = new THREE.Matrix4();
+                matrix.setPosition(x * this.VS + 0.5, y * this.VS + 0.5, z * this.VS + 0.5);
+                mesh.setMatrixAt(index, matrix);
+                
+                const color = new THREE.Color(colorStr);
+                mesh.setColorAt(index, color);
+                
+                arr[index] = key;
+                this.voxelToInstanceMap.set(key, { type: isGlass ? 'glass' : 'solid', index: index });
+                
+                mesh.instanceMatrix.needsUpdate = true;
+                if (mesh.instanceColor) mesh.instanceColor.needsUpdate = true;
+            },
+
+            removeInstancedVoxel: function(key) {
+                const info = this.voxelToInstanceMap.get(key);
+                if (!info) return;
+                
+                const mesh = info.type === 'glass' ? this.glassInstancedMesh : this.solidInstancedMesh;
+                const arr = info.type === 'glass' ? this.instanceToVoxelMapGlass : this.instanceToVoxelMapSolid;
+                
+                const removedIndex = info.index;
+                const lastIndex = mesh.count - 1;
+                
+                if (removedIndex !== lastIndex) {
+                    const lastKey = arr[lastIndex];
+                    
+                    const tempMatrix = new THREE.Matrix4();
+                    mesh.getMatrixAt(lastIndex, tempMatrix);
+                    mesh.setMatrixAt(removedIndex, tempMatrix);
+                    
+                    const tempColor = new THREE.Color();
+                    mesh.getColorAt(lastIndex, tempColor);
+                    mesh.setColorAt(removedIndex, tempColor);
+                    
+                    arr[removedIndex] = lastKey;
+                    this.voxelToInstanceMap.set(lastKey, { type: info.type, index: removedIndex });
+                }
+                
+                mesh.count--;
+                arr.pop();
+                this.voxelToInstanceMap.delete(key);
+                
+                mesh.instanceMatrix.needsUpdate = true;
+                if (mesh.instanceColor) mesh.instanceColor.needsUpdate = true;
+            },
+            
+            updateInstancedVoxelColor: function(key, newColorStr, newIsGlass) {
+                const info = this.voxelToInstanceMap.get(key);
+                if (!info) return;
+                
+                if (info.type === (newIsGlass ? 'glass' : 'solid')) {
+                    const mesh = info.type === 'glass' ? this.glassInstancedMesh : this.solidInstancedMesh;
+                    const color = new THREE.Color(newColorStr);
+                    mesh.setColorAt(info.index, color);
+                    if (mesh.instanceColor) mesh.instanceColor.needsUpdate = true;
+                } else {
+                    const [x, y, z] = this.parseKey(key);
+                    this.removeInstancedVoxel(key);
+                    this.addInstancedVoxel(key, x, y, z, newColorStr, newIsGlass);
+                }
+            },
+            
+            clearInstancedVoxels: function() {
+                if (this.solidInstancedMesh) {
+                    this.solidInstancedMesh.count = 0;
+                    this.solidInstancedMesh.instanceMatrix.needsUpdate = true;
+                    if (this.solidInstancedMesh.instanceColor) this.solidInstancedMesh.instanceColor.needsUpdate = true;
+                }
+                if (this.glassInstancedMesh) {
+                    this.glassInstancedMesh.count = 0;
+                    this.glassInstancedMesh.instanceMatrix.needsUpdate = true;
+                    if (this.glassInstancedMesh.instanceColor) this.glassInstancedMesh.instanceColor.needsUpdate = true;
+                }
+                this.voxelToInstanceMap.clear();
+                this.instanceToVoxelMapSolid = [];
+                this.instanceToVoxelMapGlass = [];
+            },
             sharedBoxGeometry: null,
             materialCache: new Map(),
             euler: null, voxels: new Map(),
@@ -4485,6 +4609,10 @@
                         if (mat && typeof mat.dispose === 'function') mat.dispose();
                     });
                     this.materialCache.clear();
+                    if (this.solidInstancedMesh && this.glassInstancedMesh) {
+                        this.solidInstancedMesh.material = this.getMaterial(0xffffff, 'solid');
+                        this.glassInstancedMesh.material = this.getMaterial(0xffffff, 'glass');
+                    }
                 }
                 this.updateDynamicGlow();
             },
@@ -5521,6 +5649,7 @@
                 this.roundedVoxelsGroup = new THREE.Group();
                 this.scene.add(this.originalVoxelsGroup);
                 this.scene.add(this.roundedVoxelsGroup);
+                this.initInstancedMeshes();
 
                 this.lowPerfMode = this.computeMobileMode() || (navigator.hardwareConcurrency || 4) <= 4 || (navigator.deviceMemory || 4) <= 4;
                 const initialFov = this.isFlyControlsMode() ? this.FLY_CAMERA_FOV : this.SHOWCASE_CAMERA_FOV;
@@ -6767,7 +6896,7 @@
                         for (const [vk, orig] of this.mouseState.movingVoxelsOriginal) {
                             changes.set(vk, { before: { color: orig.color }, after: null });
                             const v = this.voxels.get(vk);
-                            if (v) { this.scene.remove(v.mesh); this.voxels.delete(vk); }
+                            if (v) { this.removeInstancedVoxel(vk); this.voxels.delete(vk); }
                         }
                         for (const [vk, orig] of this.mouseState.movingVoxelsOriginal) {
                             const [nX, nY, nZ] = [orig.coords[0] + vDelta.x, orig.coords[1] + vDelta.y, orig.coords[2] + vDelta.z];
@@ -7545,17 +7674,14 @@ setGridSize: function (newSize) {
 
                 switch (mode) {
                     case 'PAINT':
-                        // Always show paint color feedback in the topbar for paint attempts.
                         this.pulseColorControls();
                         if (existingVoxel) {
-                            // Paint sound only when painting an actual cube (also for same-color repaint).
                             this.playVoxelBlub('PAINT');
                             const targetIsGlass = this.currentBlockType === 'glass';
                             if (existingVoxel.color !== this.currentColor || !!existingVoxel.glass !== targetIsGlass) {
-                                existingVoxel.mesh.material = this.getMaterial(this.currentColor, this.currentBlockType);
+                                this.updateInstancedVoxelColor(k, this.currentColor, targetIsGlass);
                                 this.voxels.get(k).color = this.currentColor;
                                 this.voxels.get(k).glass = targetIsGlass;
-                                existingVoxel.mesh.renderOrder = targetIsGlass ? 2 : 1;
                                 modified = true;
                                 this.addColorToHistory(this.currentColor);
                             }
@@ -8369,11 +8495,8 @@ setGridSize: function (newSize) {
 
                             if (!changes.has(newKey)) changes.set(newKey, { before: null });
 
-                            const newMesh = new THREE.Mesh(this.sharedBoxGeometry, this.getMaterial(extrudeColor));
-                            newMesh.position.set(newX * this.VS + 0.5, newY * this.VS + 0.5, newZ * this.VS + 0.5);
-                            newMesh.castShadow = this.shouldUseVoxelShadows(); newMesh.receiveShadow = this.shouldUseVoxelShadows();
-                            this.originalVoxelsGroup.add(newMesh);
-                            this.voxels.set(newKey, { color: extrudeColor, mesh: newMesh });
+                            this.addInstancedVoxel(newKey, newX, newY, newZ, extrudeColor, false);
+                            this.voxels.set(newKey, { color: extrudeColor, glass: false });
                             changes.get(newKey).after = { color: extrudeColor };
                             this.addColorToHistory(extrudeColor);
                             if (i === distanceAbs) newFacesToSelect.add(`${newKey}:${normalIndex}`);
@@ -8388,7 +8511,7 @@ setGridSize: function (newSize) {
 
                             if (voxelToDelete && delY >= 0) {
                                 if (!changes.has(delKey)) changes.set(delKey, { before: { color: voxelToDelete.color }, after: null });
-                                this.originalVoxelsGroup.remove(voxelToDelete.mesh);
+                                this.removeInstancedVoxel(delKey);
                                 this.voxels.delete(delKey);
                             }
                         }
@@ -8546,7 +8669,7 @@ setGridSize: function (newSize) {
                     if (v.geometry) v.geometry.dispose();
                     if (v.material) v.material.dispose();
                 });
-                this.originalVoxelsGroup.remove(...this.originalVoxelsGroup.children);
+                this.clearInstancedVoxels();
                 this.disposeRoundedPreview();
 
                 this.voxels.clear();
@@ -8879,7 +9002,7 @@ setGridSize: function (newSize) {
                         if (v.geometry) v.geometry.dispose();
                         if (v.material) v.material.dispose();
                     });
-                    this.originalVoxelsGroup.remove(...this.originalVoxelsGroup.children);
+                    this.clearInstancedVoxels();
                     this.disposeRoundedPreview();
                     this.voxels.clear();
 
@@ -9308,7 +9431,7 @@ setGridSize: function (newSize) {
                     if (v.geometry) v.geometry.dispose();
                     if (v.material) v.material.dispose();
                 });
-                this.originalVoxelsGroup.remove(...this.originalVoxelsGroup.children);
+                this.clearInstancedVoxels();
                 this.disposeRoundedPreview(); // Always dispose rounded preview
 
                 this.voxels.forEach((voxelData, key) => {
@@ -9316,19 +9439,7 @@ setGridSize: function (newSize) {
 
                     if (y < 0) return;
 
-                    const mesh = new THREE.Mesh(
-                        this.sharedBoxGeometry,
-                        this.getMaterial(voxelData.color, voxelData.glass ? 'glass' : 'solid')
-                    );
-
-                    mesh.position.set(x * this.VS + 0.5, y * this.VS + 0.5, z * this.VS + 0.5);
-                    mesh.castShadow = this.shouldUseVoxelShadows();
-                    mesh.receiveShadow = this.shouldUseVoxelShadows();
-                    mesh.renderOrder = voxelData.glass ? 2 : 1;
-                    mesh.userData.isVoxel = true;
-                    mesh.userData.isFoundation = false;
-                    this.originalVoxelsGroup.add(mesh);
-                    voxelData.mesh = mesh; // Attach to the original group's mesh
+                    this.addInstancedVoxel(packedKey, x, y, z, voxelData.color, !!voxelData.glass);
                 });
 
                 // 1. Ensure the correct group is visible
@@ -9365,7 +9476,7 @@ this.roundedVoxelsGroup.visible = this.isRoundedPreviewEnabled;
                             if (change.before === null) {
                                 const existingVoxel = this.voxels.get(key);
                                 if (existingVoxel) {
-                                    this.originalVoxelsGroup.remove(existingVoxel.mesh);
+                                    this.removeInstancedVoxel(key);
                                     this.voxels.delete(key);
                                 }
                             } else {
@@ -9376,13 +9487,8 @@ this.roundedVoxelsGroup.visible = this.isRoundedPreviewEnabled;
                                     existingVoxel.glass = !!change.before.glass;
                                     existingVoxel.mesh.renderOrder = existingVoxel.glass ? 2 : 1;
                                 } else {
-                                    const voxelMesh = new THREE.Mesh(this.sharedBoxGeometry, this.getMaterial(change.before.color, change.before.glass ? 'glass' : 'solid'));
-                                    voxelMesh.position.set(x * this.VS + 0.5, y * this.VS + 0.5, z * this.VS + 0.5);
-                                    voxelMesh.castShadow = this.shouldUseVoxelShadows();
-                                    voxelMesh.receiveShadow = this.shouldUseVoxelShadows();
-                                    voxelMesh.renderOrder = change.before.glass ? 2 : 1;
-                                    this.originalVoxelsGroup.add(voxelMesh);
-                                    this.voxels.set(key, { color: change.before.color, glass: !!change.before.glass, mesh: voxelMesh });
+                                    this.addInstancedVoxel(key, x, y, z, change.before.color, !!change.before.glass);
+                                    this.voxels.set(key, { color: change.before.color, glass: !!change.before.glass });
                                 }
                             }
                         });
@@ -9419,7 +9525,7 @@ this.roundedVoxelsGroup.visible = this.isRoundedPreviewEnabled;
                             else if (change.after === null) {
                                 const existingVoxel = this.voxels.get(key);
                                 if (existingVoxel) {
-                                    this.originalVoxelsGroup.remove(existingVoxel.mesh);
+                                    this.removeInstancedVoxel(key);
                                     this.voxels.delete(key);
                                 }
                             } else {
@@ -9430,13 +9536,8 @@ this.roundedVoxelsGroup.visible = this.isRoundedPreviewEnabled;
                                     existingVoxel.glass = !!change.after.glass;
                                     existingVoxel.mesh.renderOrder = existingVoxel.glass ? 2 : 1;
                                 } else {
-                                    const voxelMesh = new THREE.Mesh(this.sharedBoxGeometry, this.getMaterial(change.after.color, change.after.glass ? 'glass' : 'solid'));
-                                    voxelMesh.position.set(x * this.VS + 0.5, y * this.VS + 0.5, z * this.VS + 0.5);
-                                    voxelMesh.castShadow = this.shouldUseVoxelShadows();
-                                    voxelMesh.receiveShadow = this.shouldUseVoxelShadows();
-                                    voxelMesh.renderOrder = change.after.glass ? 2 : 1;
-                                    this.originalVoxelsGroup.add(voxelMesh);
-                                    this.voxels.set(key, { color: change.after.color, glass: !!change.after.glass, mesh: voxelMesh });
+                                    this.addInstancedVoxel(key, x, y, z, change.after.color, !!change.after.glass);
+                                    this.voxels.set(key, { color: change.after.color, glass: !!change.after.glass });
                                 }
                             }
                         });
