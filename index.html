@@ -9442,25 +9442,12 @@ setGridSize: function (newSize) {
 },
 
             rebuildSceneFromVoxels: function () {
-                // Dispose of the original group children
-                this.originalVoxelsGroup.children.forEach(v => {
-                    if (v.geometry) v.geometry.dispose();
-                    if (v.material) v.material.dispose();
-                });
-                this.clearInstancedVoxels();
-                this.disposeRoundedPreview(); // Always dispose rounded preview
-
-                this.voxels.forEach((voxelData, key) => {
-                    const [x, y, z] = this.parseKey(key);
-
-                    if (y < 0) return;
-
-                    this.addInstancedVoxel(packedKey, x, y, z, voxelData.color, !!voxelData.glass);
-                });
+                this.disposeRoundedPreview();
+                this.updateInstancedVoxels();
 
                 // 1. Ensure the correct group is visible
-this.originalVoxelsGroup.visible = !this.isRoundedPreviewEnabled;
-this.roundedVoxelsGroup.visible = this.isRoundedPreviewEnabled;
+                this.originalVoxelsGroup.visible = !this.isRoundedPreviewEnabled;
+                this.roundedVoxelsGroup.visible = this.isRoundedPreviewEnabled;
 
                 // 2. Rebuild the rounded preview if enabled
                 if (this.isRoundedPreviewEnabled) {
