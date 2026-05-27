@@ -4737,6 +4737,12 @@
                 if (nextMode === 'orbit' && document.pointerLockElement === this.cvs) {
                     try { document.exitPointerLock(); } catch (_) { }
                 }
+                if (changed && nextMode === 'orbit') {
+                    this.orbitTarget = null;
+                    this.syncOrbitTargetToScene();
+                    this.cam.lookAt(this.orbitTarget);
+                    this.syncEulerFromCamera();
+                }
                 this.applyCameraPresentationMode();
                 this.updateCameraControlUI();
                 if (changed && options.announce !== false) {
@@ -4853,7 +4859,7 @@
                 const targetInfo = this.getRayTargetInfo(clientX, clientY);
                 const targetKey = targetInfo ? this.key(targetInfo.x, targetInfo.y, targetInfo.z) : null;
                 const startsOnFoundation = !!(hit && hit.object && (hit.object === this.groundPlaneMesh || hit.object.userData?.isFoundation));
-                const startsOnVoxel = !!(hit && hit.object && !startsOnFoundation && this.findVoxelDataByMesh(hit.object)) ||
+                const startsOnVoxel = !!(hit && hit.object && !startsOnFoundation && this.getVoxelKeyFromHit(hit)) ||
                     (targetKey !== null && this.voxels.has(targetKey));
                 const startsOnBuildTarget = !!targetInfo && targetInfo.x >= 0 && targetInfo.x < this.GRID &&
                     targetInfo.y >= 0 && targetInfo.y < this.GRID &&
@@ -7344,7 +7350,7 @@
                     this.showToast('Movement', 'Use W/S to move forward/back. Use Ctrl+Wheel (or RMB+Wheel) for fly speed.', 'info', 2200);
                 }
 
-                let zoomAmount = e.deltaY * 0.001 * this.PINCH_ZOOM_MULT;
+                let zoomAmount = -e.deltaY * 0.001 * this.PINCH_ZOOM_MULT;
                 if (this.controls.invertZoom) zoomAmount *= -1;
                 if (this.isOrbitControlsMode()) {
                     this.dollyOrbitCameraBy(zoomAmount);
@@ -7354,6 +7360,19 @@
             },
 
             onKeyDown: function (e) {
+                if (e.code === 'KeyF') {
+                    if (e.target.tagName !== 'INPUT' && e.target.tagName !== 'TEXTAREA' && e.target.tagName !== 'SELECT' && !document.querySelector('dialog[open]')) {
+                        e.preventDefault();
+                        if (this.isOrbitControlsMode()) {
+                            this.orbitTarget = null;
+                            this.syncOrbitTargetToScene();
+                            this.cam.lookAt(this.orbitTarget);
+                            this.syncEulerFromCamera();
+                            this.showToast('Camera', 'Focused on model center', 'info', 1000);
+                        }
+                    }
+                    return;
+                }
                 if (e.code === 'Space') {
                     if (e.target.tagName !== 'INPUT' && e.target.tagName !== 'TEXTAREA' && e.target.tagName !== 'SELECT' && !document.querySelector('dialog[open]')) {
                         e.preventDefault();
@@ -8234,12 +8253,12 @@ setGridSize: function (newSize) {
                 return normals[index];
             },
 
-            findVoxelDataByMesh: function (mesh) {
-                if (mesh.userData.isFoundation) {
-                    return { mesh: this.groundPlaneMesh, isFoundation: true };
-                }
-                for (const voxelData of this.voxels.values()) {
-                    if (voxelData.mesh === mesh) return voxelData;
+            getVoxelKeyFromHit: function (hit) {
+                if (!hit || !hit.object) return null;
+                if (hit.instanceId !== undefined && (hit.object === this.solidInstancedMesh || hit.object === this.glassInstancedMesh)) {
+                    const isGlass = hit.object === this.glassInstancedMesh;
+                    const map = isGlass ? this.instanceToVoxelMapGlass : this.instanceToVoxelMapSolid;
+                    return map[hit.instanceId] || null;
                 }
                 return null;
             },
@@ -8386,17 +8405,12 @@ setGridSize: function (newSize) {
                     const z = Math.floor(worldPos.z / this.VS);
                     if (x < 0 || x >= this.GRID || z < 0 || z >= this.GRID) return null;
                     voxelKey = this.key(x, -1, z);
-                } else {
-                    // --- Voxel Hit (guaranteed to be an individual block mesh now) ---
-                    const voxelData = this.findVoxelDataByMesh(hit.object);
-                    if (!voxelData) return null;
-                    const basePos = hit.object.position;
-                    const x = Math.round(basePos.x / this.VS - 0.5);
-                    const y = Math.round(basePos.y / this.VS - 0.5);
-                    const z = Math.round(basePos.z / this.VS - 0.5);
-                    voxelKey = this.key(x, y, z);
+                } else if (hit.instanceId !== undefined && (hit.object === this.solidInstancedMesh || hit.object === this.glassInstancedMesh)) {
+                    // --- Voxel Hit (InstancedMesh) ---
+                    voxelKey = this.getVoxelKeyFromHit(hit);
+                    if (!voxelKey) return null;
 
-                    // Get the face normal, transform it by the object's world matrix
+                    // Get the face normal
                     nrm = hit.face.normal.clone();
                     const nMat = new THREE.Matrix3().getNormalMatrix(hit.object.matrixWorld);
                     nrm.applyNormalMatrix(nMat).normalize();
@@ -8406,6 +8420,8 @@ setGridSize: function (newSize) {
                     if (ax >= ay && ax >= az) nrm.set(Math.sign(nrm.x), 0, 0);
                     else if (ay >= ax && ay >= az) nrm.set(0, Math.sign(nrm.y), 0);
                     else nrm.set(0, 0, Math.sign(nrm.z));
+                } else {
+                    return null;
                 }
 
                 const normalIndex = this.getNormalIndex(nrm);
@@ -8997,11 +9013,8 @@ setGridSize: function (newSize) {
                 try {
                     this.clearSelection();
 
-                    // Dispose of existing meshes before clearing the map
-                    this.originalVoxelsGroup.children.forEach(v => {
-                        if (v.geometry) v.geometry.dispose();
-                        if (v.material) v.material.dispose();
-                    });
+                    // Do not dispose InstancedMesh geometry/materials here!
+                    this.clearInstancedVoxels();
                     this.clearInstancedVoxels();
                     this.disposeRoundedPreview();
                     this.voxels.clear();
