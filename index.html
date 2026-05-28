@@ -6261,7 +6261,16 @@
             },
 
             printNow3MF: async function () {
+                const btnIds = ['printNowBtn', 'desktop-overlay-print-now'];
+                const btns = btnIds.map(id => document.getElementById(id)).filter(b => b);
+                
                 try {
+                    btns.forEach(btn => {
+                        if (!btn.dataset.originalHtml) btn.dataset.originalHtml = btn.innerHTML;
+                        btn.innerHTML = '<span class="loading loading-spinner loading-xs"></span>';
+                        btn.disabled = true;
+                    });
+
                     if (this.isMobile || window.matchMedia('(max-width: 767px)').matches) {
                         this.showToast('Print', '3MF export is ready on desktop.', 'info', 1600);
                         trackEvent('print_now_blocked', { reason: 'mobile', voxel_count: this.voxels.size });
@@ -6297,6 +6306,11 @@
                 } catch (e) {
                     console.error('printNow3MF error:', e);
                     if (this.showToast) this.showToast('Error', 'printNow3MF: ' + e.message, 'error', 5000);
+                } finally {
+                    btns.forEach(btn => {
+                        if (btn.dataset.originalHtml) btn.innerHTML = btn.dataset.originalHtml;
+                        btn.disabled = false;
+                    });
                 }
             },
 
