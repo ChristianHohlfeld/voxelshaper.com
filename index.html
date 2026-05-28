@@ -4414,12 +4414,14 @@
                 if (this.solidInstancedMesh) {
                     this.solidInstancedMesh.instanceMatrix.needsUpdate = true;
                     this.solidInstancedMesh.instanceColor.needsUpdate = true;
-                    this.solidInstancedMesh.computeBoundingSphere();
+                    if(this.solidInstancedMesh.computeBoundingSphere) this.solidInstancedMesh.computeBoundingSphere();
+                    else this.solidInstancedMesh.boundingSphere = new THREE.Sphere(new THREE.Vector3(0,0,0), 10000);
                 }
                 if (this.glassInstancedMesh) {
                     this.glassInstancedMesh.instanceMatrix.needsUpdate = true;
                     this.glassInstancedMesh.instanceColor.needsUpdate = true;
-                    this.glassInstancedMesh.computeBoundingSphere();
+                    if(this.glassInstancedMesh.computeBoundingSphere) this.glassInstancedMesh.computeBoundingSphere();
+                    else this.glassInstancedMesh.boundingSphere = new THREE.Sphere(new THREE.Vector3(0,0,0), 10000);
                 }
             },
             sharedBoxGeometry: null,
@@ -7751,7 +7753,8 @@ setGridSize: function (newSize) {
                             if (targetMesh) {
                                 targetMesh.instanceMatrix.needsUpdate = true;
                                 targetMesh.instanceColor.needsUpdate = true;
-                                targetMesh.computeBoundingSphere();
+                                if(targetMesh.computeBoundingSphere) targetMesh.computeBoundingSphere();
+                                else targetMesh.boundingSphere = new THREE.Sphere(new THREE.Vector3(0,0,0), 10000);
                             }
                             
                             modified = true;
@@ -9238,6 +9241,9 @@ setGridSize: function (newSize) {
                     this.showToast('Slicer Error', 'Polyslice failed to initialize. Cannot generate G-Code.', 'error');
                     return;
                 }
+
+                this.showToast('Slicing Model', 'Generating G-Code. This may take up to 10 seconds...', 'info', 15000);
+                await new Promise(resolve => setTimeout(resolve, 50));
 
                 // Polyslice requires geometry to be centered/zeroed for slicing, 
                 // so we must build the mesh first.
