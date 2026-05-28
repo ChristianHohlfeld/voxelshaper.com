@@ -5943,9 +5943,15 @@
                 });
 
                 // Export Modal Controls (Updated for Polyslice and 3MF)
-                document.getElementById('exportBambuStudioBtn').addEventListener('click', () => {
+                document.getElementById('exportBambuStudioBtn').addEventListener('click', async () => {
                     trackEvent('export_click', { format: '3mf_bambu', voxel_count: this.voxels.size });
                     const scaleUnit = document.querySelector('input[name="exportScaleUnit"]:checked').value;
+                    
+                    if (this.showToast) {
+                        this.showToast('Generating 3MF', 'Preparing 3D Print file. This may take up to 10 seconds...', 'info', 15000);
+                        await new Promise(resolve => setTimeout(resolve, 50));
+                    }
+                    
                     VoxelApp3MFExporter.exportBambuStudio3MF(this.voxels, this.VS, this.showToast.bind(this), this.parseKey.bind(this), scaleUnit);
                     document.getElementById('exportOptionsModal').close();
                 });
@@ -6273,6 +6279,12 @@
                         voxel_count: this.voxels.size,
                         rounded: isRounded
                     });
+                    
+                    if (this.showToast) {
+                        this.showToast('Generating 3MF', 'Preparing 3D Print file. This may take up to 10 seconds...', 'info', 15000);
+                        await new Promise(resolve => setTimeout(resolve, 50));
+                    }
+
                     await VoxelApp3MFExporter.exportBambuStudio3MF(
                         this.voxels,
                         this.VS,
