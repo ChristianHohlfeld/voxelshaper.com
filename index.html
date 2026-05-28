@@ -279,6 +279,20 @@
             background-color: #05070a !important;
             color: #ffffff !important;
         }
+
+        /* 3MF Generation Glow Pulse */
+        @keyframes printGlowPulse {
+            0% { box-shadow: 0 0 0 0 rgba(0, 229, 255, 0.6); background-color: rgba(0, 229, 255, 0.3); }
+            50% { box-shadow: 0 0 20px 8px rgba(0, 229, 255, 0.1); background-color: rgba(0, 229, 255, 0.7); }
+            100% { box-shadow: 0 0 0 0 rgba(0, 229, 255, 0); background-color: rgba(0, 229, 255, 0.3); }
+        }
+        .btn-generating-pulse {
+            animation: printGlowPulse 1.5s infinite ease-in-out !important;
+            pointer-events: none !important;
+            color: #ffffff !important;
+            border-color: transparent !important;
+        }
+
         /* Pre-Tailwind fallback styles for the boot loader */
         #bootLoadingOverlay {
             position: fixed !important;
@@ -6319,8 +6333,9 @@
                 try {
                     btns.forEach(btn => {
                         if (!btn.dataset.originalHtml) btn.dataset.originalHtml = btn.innerHTML;
-                        // Use a GPU-accelerated FontAwesome spinner so it doesn't freeze when the main thread blocks
-                        btn.innerHTML = '<i class="fas fa-circle-notch fa-spin" style="will-change: transform;"></i>';
+                        // Use a custom CSS glow pulse instead of a spinner
+                        btn.innerHTML = 'Generating...';
+                        btn.classList.add('btn-generating-pulse');
                         btn.disabled = true;
                     });
 
@@ -6366,6 +6381,7 @@
                 } finally {
                     btns.forEach(btn => {
                         if (btn.dataset.originalHtml) btn.innerHTML = btn.dataset.originalHtml;
+                        btn.classList.remove('btn-generating-pulse');
                         btn.disabled = false;
                     });
                 }
