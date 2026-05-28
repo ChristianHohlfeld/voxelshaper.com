@@ -6319,9 +6319,14 @@
                 try {
                     btns.forEach(btn => {
                         if (!btn.dataset.originalHtml) btn.dataset.originalHtml = btn.innerHTML;
-                        btn.innerHTML = '<span class="loading loading-spinner loading-xs"></span>';
+                        // Use a GPU-accelerated FontAwesome spinner so it doesn't freeze when the main thread blocks
+                        btn.innerHTML = '<i class="fas fa-circle-notch fa-spin" style="will-change: transform;"></i>';
                         btn.disabled = true;
                     });
+
+                    // Force a double requestAnimationFrame to ensure the browser paints the spinner before the main thread locks
+                    await new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)));
+                    await new Promise(resolve => setTimeout(resolve, 50));
 
                     if (this.isMobile || window.matchMedia('(max-width: 767px)').matches) {
                         this.showToast('Print', '3MF export is ready on desktop.', 'info', 1600);
@@ -6343,7 +6348,7 @@
                     
                     if (this.showToast) {
                         this.showToast('Generating 3MF', 'Preparing 3D Print file. This may take up to 10 seconds...', 'info', 15000);
-                        await new Promise(resolve => setTimeout(resolve, 50));
+                        await new Promise(resolve => setTimeout(resolve, 100)); // Extra yield
                     }
 
                     await VoxelApp3MFExporter.exportBambuStudio3MF(
