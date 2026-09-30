@@ -5482,6 +5482,13 @@
                     return false;
                 }
 
+                const catalogId = meta.modelId || meta.public_id || meta.model_id || urlParams.get('modelId');
+                if (catalogId) {
+                    await this.loadProjectFromModelId(String(catalogId));
+                    this.hubLaunchLoadedFromUrl = true;
+                    return true;
+                }
+
                 const modelType = meta.type ? String(meta.type) : undefined;
                 if (this.loadAutosavedScene({ expectedHubMeta: meta, silent: true })) {
                     this.hubLaunchLoadedFromUrl = true;
