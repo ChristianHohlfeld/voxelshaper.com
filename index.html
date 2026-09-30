@@ -5233,24 +5233,42 @@
                 }
             },
             normalizeHubProjectPayload: function (project) {
-                if (!project || !Array.isArray(project.voxels)) return null;
-                if (project.voxels.length && !project.voxels[0].color) {
-                    return {
-                        gridSize: project.gridSize || this.GRID_DEFAULT,
-                        currentDrawingAxis: project.currentDrawingAxis || 'y',
-                        activeDrawingLevel: project.activeDrawingLevel || { x: 0, y: 0, z: 0 },
-                        voxels: project.voxels.map(v => {
-                            let color = typeof v.color === 'string' ? v.color : '#ffffff';
-                            if ((!color || color[0] !== '#') && Array.isArray(v.c) && v.c.length >= 3) {
-                                const toHex = (n) => Math.max(0, Math.min(255, n | 0)).toString(16).padStart(2, '0');
-                                color = `#${toHex(v.c[0])}${toHex(v.c[1])}${toHex(v.c[2])}`;
-                            }
-                            return { x: v.x, y: v.y, z: v.z, color: String(color).toUpperCase() };
-                        }),
-                        metadata: project.metadata
-                    };
+                if (!project || typeof project !== 'object') return null;
+                let voxels = project.voxels;
+                if (!Array.isArray(voxels) && project.voxelMap && typeof project.voxelMap === 'object' && !Array.isArray(project.voxelMap)) {
+                    voxels = Object.entries(project.voxelMap).map(([key, color]) => {
+                        const [x, y, z] = String(key).split(',').map(Number);
+                        const hex = typeof color === 'string' ? color : (color && (color.color || color.hex)) || '#FFFFFF';
+                        return { x, y, z, color: hex };
+                    });
+                } else if (voxels && typeof voxels === 'object' && !Array.isArray(voxels)) {
+                    voxels = Object.entries(voxels).map(([key, color]) => {
+                        const [x, y, z] = String(key).split(',').map(Number);
+                        const hex = typeof color === 'string' ? color : (color && (color.color || color.hex)) || '#FFFFFF';
+                        return { x, y, z, color: hex };
+                    });
                 }
-                return project;
+                if (!Array.isArray(voxels) || !voxels.length) return null;
+                const cleaned = voxels.map((v) => {
+                    if (!v || typeof v !== 'object') return null;
+                    let color = typeof v.color === 'string' ? v.color : (v.hex || '#FFFFFF');
+                    if ((!color || color[0] !== '#') && Array.isArray(v.c) && v.c.length >= 3) {
+                        const toHex = (n) => Math.max(0, Math.min(255, n | 0)).toString(16).padStart(2, '0');
+                        color = `#${toHex(v.c[0])}${toHex(v.c[1])}${toHex(v.c[2])}`;
+                    }
+                    const x = Number(v.x), y = Number(v.y), z = Number(v.z);
+                    if (!Number.isFinite(x) || !Number.isFinite(y) || !Number.isFinite(z)) return null;
+                    return { x, y, z, color: String(color || '#FFFFFF').toUpperCase() };
+                }).filter(Boolean);
+                if (!cleaned.length) return null;
+                return {
+                    ...project,
+                    gridSize: project.gridSize || this.GRID_DEFAULT,
+                    currentDrawingAxis: project.currentDrawingAxis || 'y',
+                    activeDrawingLevel: project.activeDrawingLevel || { x: 0, y: 0, z: 0 },
+                    voxels: cleaned,
+                    metadata: project.metadata
+                };
             },
 
             getHubAutosaveKey: function (meta = {}) {
@@ -7377,9 +7395,12 @@
                 try {
                     const data = await this.request(`/api/models/${modelId}`);
                     const project = data.projectData || data.project_json || data.project || data;
-                    if (!this.applyHubImportProject(project, { method: 'modelId' })) {
+                    const before = this.createProjectSnapshot();
+                    if (!this.applyHubImportProject(project, { method: 'modelId', preserveHistory: true })) {
                         throw new Error('Invalid or empty project data received from API.');
                     }
+                    const after = this.createProjectSnapshot();
+                    this.addHistoryStep({ type: 'MORPH', before, after, meta: { source: 'modelId', modelId } });
                     this.currentModelId = modelId;
                     this.hubUploadDirty = false;
                     this.lastHubUploadAt = Date.now();
