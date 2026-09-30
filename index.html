@@ -3705,8 +3705,7 @@
             <p class="py-2">Your project is saved and synced.</p>
             <p class="text-sm opacity-80">Open <b>Hub → My Models</b> to manage sharing and status.</p>
             <div class="modal-action">
-                <a href="https://hub.voxelshaper.com/" target="_blank" rel="noopener" class="btn btn-primary">Open
-                    Hub</a>
+                <a id="openHubModelBtn" href="https://hub.voxelshaper.com/?view=models" target="_blank" rel="noopener" class="btn btn-primary">Open model in Hub</a>
                 <form method="dialog"><button class="btn">Close</button></form>
             </div>
         </div>
@@ -7363,7 +7362,11 @@
                     this.showToast('Saved', 'Project saved to Hub.', 'success', 2200);
                     trackEvent('upload_hub', { model_id: this.currentModelId, visibility: hubDocument.visibility });
 
-                    document.getElementById('shareSuccessModal').showModal();
+                    const hubBtn = document.getElementById('openHubModelBtn');
+          if (hubBtn && this.currentModelId) {
+              hubBtn.href = 'https://hub.voxelshaper.com/?modelId=' + encodeURIComponent(this.currentModelId) + '&view=models';
+          }
+          document.getElementById('shareSuccessModal').showModal();
                 } catch (error) {
                     this.showToast('Upload Failed', error.message, 'error');
                 }
