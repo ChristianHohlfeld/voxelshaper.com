@@ -7456,7 +7456,12 @@
                 }
 
                 if (this.isOrbitControlsMode()) {
-                    // Let THREE.OrbitControls handle zoom natively. It prevents default internally.
+                    e.preventDefault();
+                    const target = this.ensureOrbitTarget();
+                    const distance = Math.max(1, this.cam.position.distanceTo(target));
+                    let distanceDelta = e.deltaY * Math.max(0.15, distance * 0.0028);
+                    if (this.controls && this.controls.invertZoom) distanceDelta *= -1;
+                    this.dollyOrbitCameraBy(distanceDelta);
                     return;
                 }
 
@@ -10515,6 +10520,7 @@ setGridSize: function (newSize) {
 
 
 <script src="mcp-import.js" defer></script>
+<script src="orbit-zoom.js"></script>
 </body>
 
 </html>
