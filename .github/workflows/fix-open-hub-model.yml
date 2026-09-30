@@ -1,0 +1,53 @@
+name: Open Hub model page
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - '.github/workflows/fix-open-hub-model.yml'
+permissions:
+  contents: write
+jobs:
+  patch:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Point Open Hub at modelId
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          changed=False
+          for path in ['index.html','www/index.html']:
+              p=Path(path)
+              if not p.exists():
+                  continue
+              t=p.read_text(encoding='utf-8')
+              old='<a href="https://hub.voxelshaper.com/" target="_blank" rel="noopener" class="btn btn-primary">Open\n                    Hub</a>'
+              new='<a id="openHubModelBtn" href="https://hub.voxelshaper.com/?view=models" target="_blank" rel="noopener" class="btn btn-primary">Open model in Hub</a>'
+              if old in t:
+                  t=t.replace(old,new,1)
+                  print('modal link', path)
+              else:
+                  old2='href="https://hub.voxelshaper.com/" target="_blank" rel="noopener" class="btn btn-primary">Open'
+                  if old2 in t:
+                      t=t.replace(old2,'id="openHubModelBtn" href="https://hub.voxelshaper.com/?view=models" target="_blank" rel="noopener" class="btn btn-primary">Open model in Hub</a><!--',1)
+                      print('modal link loose', path)
+              old3='''                    document.getElementById('shareSuccessModal').showModal();'''
+              new3='''                    const hubBtn = document.getElementById('openHubModelBtn');
+                    if (hubBtn && this.currentModelId) {
+                        hubBtn.href = 'https://hub.voxelshaper.com/?modelId=' + encodeURIComponent(this.currentModelId) + '&view=models';
+                    }
+                    document.getElementById('shareSuccessModal').showModal();'''
+              if old3 in t and 'openHubModelBtn' in new3:
+                  t=t.replace(old3,new3,1)
+                  print('href setter', path)
+              p.write_text(t, encoding='utf-8')
+              changed=True
+          if not changed:
+              raise SystemExit('nothing written')
+          PY
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add index.html www/index.html || true
+          if git diff --cached --quiet; then echo no change; exit 0; fi
+          git commit -m "fix: Open Hub deep-links to the shared model"
+          git push
