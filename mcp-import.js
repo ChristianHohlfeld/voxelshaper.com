@@ -1,4 +1,7 @@
-/* Load MCP share (?from=mcp&s=TOKEN) or catalog model (?from=mcp&modelId=ID) into VoxelApp. Remap Z-up → editor Y-up. */
+/* MCP editor handoff.
+ * Share JSON (/mcp/share/:id) is Z-up — remap to editor Y-up.
+ * Catalog JSON (/api/models/:id) is already remapped on publish — load as-is.
+ */
 (function () {
   const params = new URLSearchParams(location.search);
   const token = (params.get('s') || params.get('share') || '').trim();
@@ -6,7 +9,7 @@
   const from = (params.get('from') || '').trim();
   if ((!token && !modelId) || (from && from !== 'mcp' && from !== 'hub')) return;
 
-  function remap(project) {
+  function remapZupToYup(project) {
     const src = project && typeof project === 'object' ? project : {};
     const raw = Array.isArray(src.voxels) ? src.voxels : [];
     const voxels = raw.map((v) => ({
@@ -19,8 +22,13 @@
       ...src,
       currentDrawingAxis: 'y',
       voxels,
-      metadata: { ...(src.metadata || {}), source: 'mcp', up: 'y' }
+      metadata: { ...(src.metadata || {}), source: 'mcp', up: 'y', mappedFrom: 'z-up' }
     };
+  }
+
+  function alreadyEditorYup(project) {
+    const meta = project && project.metadata && typeof project.metadata === 'object' ? project.metadata : {};
+    return meta.up === 'y' || meta.mappedFrom === 'z-up';
   }
 
   function projectFrom(payload) {
@@ -29,31 +37,27 @@
     return payload.project_json || payload.projectData || payload.project || null;
   }
 
-  async function fetchProject() {
-    const urls = [];
-    if (token) urls.push('https://api.voxelshaper.com/mcp/share/' + encodeURIComponent(token));
-    if (modelId) urls.push('https://api.voxelshaper.com/api/models/' + encodeURIComponent(modelId));
-    let lastErr = null;
-    for (const url of urls) {
-      try {
-        const res = await fetch(url, { cache: 'no-store' });
-        if (!res.ok) {
-          lastErr = new Error(url + ' ' + res.status);
-          continue;
-        }
-        const payload = await res.json();
-        const project = projectFrom(payload);
-        if (project && Array.isArray(project.voxels) && project.voxels.length) return project;
-        lastErr = new Error(url + ' empty project');
-      } catch (err) {
-        lastErr = err;
-      }
+  async function fetchOne(url) {
+    const res = await fetch(url, { cache: 'no-store' });
+    if (!res.ok) throw new Error(url + ' ' + res.status);
+    const payload = await res.json();
+    const project = projectFrom(payload);
+    if (!project || !Array.isArray(project.voxels) || !project.voxels.length) {
+      throw new Error(url + ' empty project');
     }
-    throw lastErr || new Error('MCP import source missing');
+    return project;
   }
 
   async function load() {
-    const project = remap(await fetchProject());
+    let project = null;
+    let fromShare = false;
+    if (token) {
+      project = await fetchOne('https://api.voxelshaper.com/mcp/share/' + encodeURIComponent(token));
+      fromShare = true;
+    } else {
+      project = await fetchOne('https://api.voxelshaper.com/api/models/' + encodeURIComponent(modelId));
+    }
+    if (fromShare && !alreadyEditorYup(project)) project = remapZupToYup(project);
     const start = Date.now();
     const tick = () => {
       const app = window.VoxelApp;
