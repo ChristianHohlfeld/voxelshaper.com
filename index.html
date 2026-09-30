@@ -7432,12 +7432,9 @@
                 try {
                     const data = await this.request(`/api/models/${modelId}`);
                     const project = data.projectData || data.project_json || data.project || data;
-                    const before = this.createProjectSnapshot();
-                    if (!this.applyHubImportProject(project, { method: 'modelId', preserveHistory: true })) {
+                    if (!this.applyHubImportProject(project, { method: 'modelId', preserveHistory: false })) {
                         throw new Error('Invalid or empty project data received from API.');
                     }
-                    const after = this.createProjectSnapshot();
-                    this.addHistoryStep({ type: 'MORPH', before, after, meta: { source: 'modelId', modelId } });
                     this.currentModelId = modelId;
                     this.hubUploadDirty = false;
                     this.lastHubUploadAt = Date.now();
@@ -9640,10 +9637,14 @@ setGridSize: function (newSize) {
                             } else {
                                 const existingVoxel = this.voxels.get(key);
                                 if (existingVoxel) {
-                                    existingVoxel.mesh.material = this.getMaterial(change.before.color, change.before.glass ? 'glass' : 'solid');
                                     existingVoxel.color = change.before.color;
                                     existingVoxel.glass = !!change.before.glass;
-                                    existingVoxel.mesh.renderOrder = existingVoxel.glass ? 2 : 1;
+                                    if (existingVoxel.mesh) {
+                                        existingVoxel.mesh.material = this.getMaterial(change.before.color, change.before.glass ? 'glass' : 'solid');
+                                        existingVoxel.mesh.renderOrder = existingVoxel.glass ? 2 : 1;
+                                    } else if (typeof this.updateInstancedVoxelColor === 'function') {
+                                        this.updateInstancedVoxelColor(key, change.before.color, !!change.before.glass);
+                                    }
                                 } else {
                                     this.addInstancedVoxel(key, x, y, z, change.before.color, !!change.before.glass);
                                     this.voxels.set(key, { color: change.before.color, glass: !!change.before.glass });
@@ -9689,10 +9690,14 @@ setGridSize: function (newSize) {
                             } else {
                                 const existingVoxel = this.voxels.get(key);
                                 if (existingVoxel) {
-                                    existingVoxel.mesh.material = this.getMaterial(change.after.color, change.after.glass ? 'glass' : 'solid');
                                     existingVoxel.color = change.after.color;
                                     existingVoxel.glass = !!change.after.glass;
-                                    existingVoxel.mesh.renderOrder = existingVoxel.glass ? 2 : 1;
+                                    if (existingVoxel.mesh) {
+                                        existingVoxel.mesh.material = this.getMaterial(change.after.color, change.after.glass ? 'glass' : 'solid');
+                                        existingVoxel.mesh.renderOrder = existingVoxel.glass ? 2 : 1;
+                                    } else if (typeof this.updateInstancedVoxelColor === 'function') {
+                                        this.updateInstancedVoxelColor(key, change.after.color, !!change.after.glass);
+                                    }
                                 } else {
                                     this.addInstancedVoxel(key, x, y, z, change.after.color, !!change.after.glass);
                                     this.voxels.set(key, { color: change.after.color, glass: !!change.after.glass });
