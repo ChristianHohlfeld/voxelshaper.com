@@ -1,13 +1,11 @@
 /* MCP editor handoff.
  * Share JSON (/mcp/share/:id) is Z-up — remap to editor Y-up.
- * Catalog JSON (/api/models/:id) is already remapped on publish — load as-is.
+ * Catalog models (?modelId=) are loaded by VoxelApp.loadProjectFromModelId — do not double-fetch.
  */
 (function () {
   const params = new URLSearchParams(location.search);
   const token = (params.get('s') || params.get('share') || '').trim();
-  const modelId = (params.get('modelId') || params.get('m') || '').trim();
-  const from = (params.get('from') || '').trim();
-  if ((!token && !modelId) || (from && from !== 'mcp' && from !== 'hub')) return;
+  if (!token) return;
 
   function remapZupToYup(project) {
     const src = project && typeof project === 'object' ? project : {};
@@ -37,27 +35,13 @@
     return payload.project_json || payload.projectData || payload.project || null;
   }
 
-  async function fetchOne(url) {
-    const res = await fetch(url, { cache: 'no-store' });
-    if (!res.ok) throw new Error(url + ' ' + res.status);
-    const payload = await res.json();
-    const project = projectFrom(payload);
-    if (!project || !Array.isArray(project.voxels) || !project.voxels.length) {
-      throw new Error(url + ' empty project');
-    }
-    return project;
-  }
-
   async function load() {
-    let project = null;
-    let fromShare = false;
-    if (token) {
-      project = await fetchOne('https://api.voxelshaper.com/mcp/share/' + encodeURIComponent(token));
-      fromShare = true;
-    } else {
-      project = await fetchOne('https://api.voxelshaper.com/api/models/' + encodeURIComponent(modelId));
-    }
-    if (fromShare && !alreadyEditorYup(project)) project = remapZupToYup(project);
+    const res = await fetch('https://api.voxelshaper.com/mcp/share/' + encodeURIComponent(token), { cache: 'no-store' });
+    if (!res.ok) throw new Error('share ' + res.status);
+    const payload = await res.json();
+    let project = projectFrom(payload);
+    if (!project || !Array.isArray(project.voxels) || !project.voxels.length) throw new Error('empty share');
+    if (!alreadyEditorYup(project)) project = remapZupToYup(project);
     const start = Date.now();
     const tick = () => {
       const app = window.VoxelApp;

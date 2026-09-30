@@ -1,37 +1,35 @@
 from pathlib import Path
 p = Path('index.html')
 t = p.read_text(encoding='utf-8')
-old = """                    } else {
-                    for (const key in srcVoxels) {
-                        if (Object.prototype.hasOwnProperty.call(srcVoxels, key)) {
-                            const coords = String(key).split(',').map(Number);
-                            if (coords.length === 3) {
-                                const [x, y, z] = coords;
-                                pushVoxel(x, y, z, srcVoxels[key]);
-                                if (x < minX) minX = x; if (y < minY) minY = y; if (z < minZ) minZ = z;
-                                if (x > maxX) maxX = x; if (y > maxY) maxY = y; if (z > maxZ) maxZ = z;
-                            }
+needle = 'pushVoxel(x, y, z, srcVoxels[key]);'
+i = t.find(needle)
+if i < 0:
+    raise SystemExit('needle missing')
+j = t.find('const shiftX', i)
+if j < 0:
+    raise SystemExit('shiftX missing')
+between = t[i:j]
+if between.rstrip().endswith('}') and t[j-80:j].count('}\n                    }\n') == 0:
+    # insert extra closer before shiftX if else-block is still open
+    pass
+marker = '''                            }
                         }
                     }
 
-                    const shiftX"""
-new = """                    } else {
-                    for (const key in srcVoxels) {
-                        if (Object.prototype.hasOwnProperty.call(srcVoxels, key)) {
-                            const coords = String(key).split(',').map(Number);
-                            if (coords.length === 3) {
-                                const [x, y, z] = coords;
-                                pushVoxel(x, y, z, srcVoxels[key]);
-                                if (x < minX) minX = x; if (y < minY) minY = y; if (z < minZ) minZ = z;
-                                if (x > maxX) maxX = x; if (y > maxY) maxY = y; if (z > maxZ) maxZ = z;
-                            }
+                    const shiftX'''
+if marker in t[i:i+800] and '                    }\n                    }\n\n                    const shiftX' not in t[i:i+900]:
+    t = t[:i] + t[i:].replace(
+        marker,
+        '''                            }
                         }
                     }
                     }
 
-                    const shiftX"""
-if old not in t:
-    raise SystemExit('block not found')
-t = t.replace(old, new, 1)
-p.write_text(t, encoding='utf-8')
-print('brace closed')
+                    const shiftX''',
+        1,
+    )
+    p.write_text(t, encoding='utf-8')
+    print('inserted closer')
+else:
+    print('already closed or unexpected shape')
+    print(repr(t[j-120:j+20]))
