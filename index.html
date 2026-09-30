@@ -7376,73 +7376,19 @@
                 this.showToast('Loading Project...', `Fetching model ${modelId}`, 'info');
                 try {
                     const data = await this.request(`/api/models/${modelId}`);
-
-                    this.clearAllConfirmed();
-
-                    const projectData = data.projectData || data.project_json || data.project || data;
-                    const srcVoxels = projectData && (projectData.voxels || projectData.voxelMap);
-                    if (!srcVoxels || (typeof srcVoxels !== 'object')) {
-                        throw new Error("Invalid or empty project data received from API.");
+                    const project = data.projectData || data.project_json || data.project || data;
+                    if (!this.applyHubImportProject(project, { method: 'modelId' })) {
+                        throw new Error('Invalid or empty project data received from API.');
                     }
-
-                    let minX = Infinity, minY = Infinity, minZ = Infinity;
-                    let maxX = -Infinity, maxY = -Infinity, maxZ = -Infinity;
-                    const raw = [];
-                    const pushVoxel = (x, y, z, color) => {
-                        if (!Number.isFinite(x) || !Number.isFinite(y) || !Number.isFinite(z)) return;
-                        raw.push({ x, y, z, color: color || '#888888' });
-                        if (x < minX) minX = x; if (y < minY) minY = y; if (z < minZ) minZ = z;
-                        if (x > maxX) maxX = x; if (y > maxY) maxY = y; if (z > maxZ) maxZ = z;
-                    };
-                    if (Array.isArray(srcVoxels)) {
-                        srcVoxels.forEach((v) => {
-                            if (!v || typeof v !== 'object') return;
-                            pushVoxel(Number(v.x), Number(v.y), Number(v.z), v.color || v.hex);
-                        });
-                    } else {
-                    for (const key in srcVoxels) {
-                        if (Object.prototype.hasOwnProperty.call(srcVoxels, key)) {
-                            const coords = String(key).split(',').map(Number);
-                            if (coords.length === 3) {
-                                const [x, y, z] = coords;
-                                pushVoxel(x, y, z, srcVoxels[key]);
-                                if (x < minX) minX = x; if (y < minY) minY = y; if (z < minZ) minZ = z;
-                                if (x > maxX) maxX = x; if (y > maxY) maxY = y; if (z > maxZ) maxZ = z;
-                            }
-                        }
-                    }
-                    }
-
-                    const shiftX = Number.isFinite(minX) ? minX : 0;
-                    const shiftY = Number.isFinite(minY) ? minY : 0;
-                    const shiftZ = Number.isFinite(minZ) ? minZ : 0;
-                    this.voxels.clear();
-                    raw.forEach(v => {
-                        const nx = v.x - shiftX;
-                        const ny = v.y - shiftY;
-                        const nz = v.z - shiftZ;
-                        this.voxels.set(this.key(nx, ny, nz), { color: v.color });
-                    });
-
-                    const extentX = Number.isFinite(maxX) ? (maxX - shiftX + 1) : this.GRID_DEFAULT;
-                    const extentY = Number.isFinite(maxY) ? (maxY - shiftY + 1) : this.GRID_DEFAULT;
-                    const extentZ = Number.isFinite(maxZ) ? (maxZ - shiftZ + 1) : this.GRID_DEFAULT;
-                    const requiredGridSize = Math.max(extentX, extentY, extentZ, this.GRID_DEFAULT);
-                    this.setGridSize(requiredGridSize);
-
-                    this.rebuildSceneFromVoxels();
-                    this.resetCamera();
-                    this.currentModelId = modelId; // Keep track of the loaded ID
+                    this.currentModelId = modelId;
                     this.hubUploadDirty = false;
                     this.lastHubUploadAt = Date.now();
                     this.updateHubSaveIndicator();
-                    this.updateUrlWithModelId(); // Ensure URL is correct
-                    this.showToast('Project Loaded', `Loaded "${data.name}"`, 'info');
-
+                    this.updateUrlWithModelId();
+                    this.showToast('Project Loaded', `Loaded "${data.name || modelId}"`, 'info');
                 } catch (error) {
-                    console.error("Failed to load project from Hub:", error);
+                    console.error('Failed to load project from Hub:', error);
                     this.showToast('Load Error', error.message, 'error');
-                    // Clear the bad modelId from URL
                     const cleanUrl = new URL(window.location.href);
                     cleanUrl.searchParams.delete('modelId');
                     window.history.replaceState({}, document.title, cleanUrl.href);
