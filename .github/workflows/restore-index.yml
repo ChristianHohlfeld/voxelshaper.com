@@ -1,0 +1,31 @@
+name: Restore index.html
+
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - '.github/workflows/restore-index.yml'
+
+permissions:
+  contents: write
+
+jobs:
+  restore:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 20
+      - name: Restore index.html from pre-placeholder commit
+        run: |
+          set -euo pipefail
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          GOOD=d56773fa8ff420738aa49bccf485b486d1ab55b1
+          git checkout "$GOOD" -- index.html
+          if git diff --cached --quiet; then
+            echo "index.html already matches $GOOD"
+            exit 0
+          fi
+          git commit -m "fix: restore index.html (revert PLACEHOLDER)"
+          git push
