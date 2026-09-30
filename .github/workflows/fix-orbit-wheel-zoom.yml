@@ -1,0 +1,52 @@
+name: Fix orbit wheel zoom
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - '.github/workflows/fix-orbit-wheel-zoom.yml'
+permissions:
+  contents: write
+jobs:
+  patch:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Patch orbit wheel
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          old = '''                if (this.isOrbitControlsMode()) {
+                    // Let THREE.OrbitControls handle zoom natively. It prevents default internally.
+                    return;
+                }'''
+          new = '''                if (this.isOrbitControlsMode()) {
+                    e.preventDefault();
+                    if (typeof e.stopImmediatePropagation === 'function') e.stopImmediatePropagation();
+                    const target = this.ensureOrbitTarget();
+                    const distance = Math.max(1, this.cam.position.distanceTo(target));
+                    let distanceDelta = e.deltaY * Math.max(0.08, distance * 0.0018);
+                    if (this.controls && this.controls.invertZoom) distanceDelta *= -1;
+                    this.dollyOrbitCameraBy(distanceDelta);
+                    return;
+                }'''
+          changed = False
+          for path in ['index.html', 'www/index.html']:
+              p = Path(path)
+              if not p.exists():
+                  continue
+              text = p.read_text(encoding='utf-8')
+              if old not in text:
+                  print(path, 'block missing or already patched', 'dollyOrbitCameraBy(distanceDelta)' in text and 'isOrbitControlsMode()' in text)
+                  continue
+              p.write_text(text.replace(old, new, 1), encoding='utf-8')
+              print('patched', path)
+              changed = True
+          if not changed:
+              print('no file changed')
+          PY
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add index.html www/index.html || true
+          if git diff --cached --quiet; then echo no change; exit 0; fi
+          git commit -m "fix: orbit wheel dolly instead of browser zoom"
+          git push
