@@ -1,0 +1,22 @@
+name: Orbit toggle two icons
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - 'scripts/orbit-toggle-two-icons.py'
+      - '.github/workflows/orbit-toggle-two-icons.yml'
+permissions:
+  contents: write
+jobs:
+  patch:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: python3 scripts/orbit-toggle-two-icons.py
+      - run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add index.html
+          if git diff --cached --quiet; then echo no change; exit 0; fi
+          git commit -m "feat: orbit arrows + draw cube on toggle"
+          git push
