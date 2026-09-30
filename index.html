@@ -3032,7 +3032,21 @@
         </div>
     </div>
 
-    <div id="editor-theme-overlay" class="absolute inset-0 pointer-events-none z-[15]">
+    <div <script>
+(function(){
+  function hideBoot(){
+    var el=document.getElementById('bootLoadingOverlay');
+    if(!el) return;
+    el.classList.add('hidden');
+    el.style.display='none';
+    try { el.remove(); } catch (e) {}
+  }
+  window.__hideBootLoading = hideBoot;
+  setTimeout(hideBoot, 8000);
+  window.addEventListener('error', function(){ setTimeout(hideBoot, 300); });
+})();
+</script>
+    id="editor-theme-overlay" class="absolute inset-0 pointer-events-none z-[15]">
         <div class="vs-editor-stars"></div>
         <div class="vs-editor-stars-2"></div>
     </div>
@@ -7541,7 +7555,9 @@ applyHubImportProject: function (project, options = {}) {
                     this.showToast('Project Loaded', `Loaded "${data.name || modelId}"`, 'info');
                 } catch (error) {
                     console.error('Failed to load project from Hub:', error);
-                    this.showToast('Load Error', error.message, 'error');
+                    this.showToast('Load Error', error.message || 'Model not found', 'error');
+                    try { this.hideBootLoading(); } catch (_) {}
+                    try { window.__hideBootLoading && window.__hideBootLoading(); } catch (_) {}
                     const cleanUrl = new URL(window.location.href);
                     cleanUrl.searchParams.delete('modelId');
                     window.history.replaceState({}, document.title, cleanUrl.href);
