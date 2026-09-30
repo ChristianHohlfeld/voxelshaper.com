@@ -776,6 +776,17 @@
         body.has-mobile-bar #mobile-canvas-mode-toggle {
             display: flex;
         }
+        @media (min-width: 900px) {
+            #mobile-canvas-mode-toggle {
+                display: flex;
+                bottom: auto;
+                top: calc(max(12px, env(safe-area-inset-top)) + 8.15rem);
+                right: max(14px, env(safe-area-inset-right));
+                width: 2.75rem;
+                height: 2.75rem;
+                z-index: 1001;
+            }
+        }
         #mobile-canvas-mode-toggle.is-edit {
             border-color: rgba(56, 189, 248, 0.9);
             background: rgba(8, 47, 73, 0.95);
@@ -6693,10 +6704,11 @@
                 // --- Desktop Logic ---
                 const startInfo = this.getPointerSceneStartInfo(e.clientX, e.clientY);
                 const startsOnEditableGrid = this.currentMode === 'FREE' && startInfo.startsOnBuildTarget;
-                this.mouseState.isModifying = (e.button === 0);
+                const viewMode = this.mobileCanvasMode === 'view';
+                this.mouseState.isModifying = (e.button === 0) && !viewMode;
                 this.mouseState.isPanning = (e.button === 1) || (this.isOrbitControlsMode() && e.button === 2 && e.shiftKey);
                 this.mouseState.orbitCandidate = this.isOrbitControlsMode() && !this.mouseState.isPanning && (
-                    e.button === 2 || 
+                    e.button === 2 || viewMode ||
                     (e.button === 0 && !startInfo.startsOnVoxel && !startsOnEditableGrid)
                 );
 
@@ -10555,7 +10567,7 @@ setGridSize: function (newSize) {
     const btn = document.getElementById('mobile-canvas-mode-toggle');
     if (!app || !btn || btn.dataset.bound === '1') return !!(btn && btn.dataset.bound === '1');
     btn.dataset.bound = '1';
-    if (!app.mobileCanvasMode) app.mobileCanvasMode = 'view';
+    if (!app.mobileCanvasMode) app.mobileCanvasMode = app.isMobile ? 'view' : 'edit';
     const sync = function () {
       const edit = app.mobileCanvasMode === 'edit';
       btn.classList.toggle('is-edit', edit);
