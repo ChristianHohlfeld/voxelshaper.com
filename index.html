@@ -4431,6 +4431,7 @@
                 mesh.setMatrixAt(index, matrix);
                 
                 const color = new THREE.Color(colorStr);
+                if (typeof color.convertSRGBToLinear === 'function') color.convertSRGBToLinear();
                 mesh.setColorAt(index, color);
                 
                 arr[index] = key;
@@ -4480,6 +4481,7 @@
                 if (info.type === (newIsGlass ? 'glass' : 'solid')) {
                     const mesh = info.type === 'glass' ? this.glassInstancedMesh : this.solidInstancedMesh;
                     const color = new THREE.Color(newColorStr);
+                    if (typeof color.convertSRGBToLinear === 'function') color.convertSRGBToLinear();
                     mesh.setColorAt(info.index, color);
                     if (mesh.instanceColor) mesh.instanceColor.needsUpdate = true;
                 } else {
@@ -4775,6 +4777,7 @@
                         depthWrite: !isGlass,
                         envMapIntensity: isGlass ? 1.15 : profile.envMapIntensity
                     });
+                    if (mat.color && typeof mat.color.convertSRGBToLinear === 'function') mat.color.convertSRGBToLinear();
                     if (isGlass) {
                         mat.envMapIntensity = 1.0;
                         mat.polygonOffset = true;
