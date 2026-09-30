@@ -1,0 +1,22 @@
+name: Fix editor load brace
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - 'scripts/fix-load-model-brace.py'
+      - '.github/workflows/fix-load-model-brace.yml'
+permissions:
+  contents: write
+jobs:
+  patch:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: python3 scripts/fix-load-model-brace.py
+      - run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add index.html
+          if git diff --cached --quiet; then echo no change; exit 0; fi
+          git commit -m "fix: syntax error hanging editor splash"
+          git push
