@@ -1,0 +1,47 @@
+name: Inject orbit-zoom.js
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - '.github/workflows/inject-orbit-zoom.yml'
+      - 'orbit-zoom.js'
+permissions:
+  contents: write
+jobs:
+  inject:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Inject script and patch onMouseWheel
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          import re
+          tag = '<script src="orbit-zoom.js"></script>'
+          for path in ('index.html', 'www/index.html'):
+              p = Path(path)
+              if not p.exists():
+                  continue
+              text = p.read_text(encoding='utf-8')
+              if 'orbit-zoom.js' not in text and '</body>' in text:
+                  text = text.replace('</body>', tag + '\n</body>', 1)
+                  print('injected', path)
+              text2, n = re.subn(
+                  r"if \(this\.isOrbitControlsMode\(\)\) \{\s*// Let THREE\.OrbitControls handle zoom natively\. It prevents default internally\.\s*return;\s*}",
+                  "if (this.isOrbitControlsMode()) {\n                    e.preventDefault();\n                    const target = this.ensureOrbitTarget();\n                    const distance = Math.max(1, this.cam.position.distanceTo(target));\n                    let distanceDelta = e.deltaY * Math.max(0.15, distance * 0.0028);\n                    if (this.controls && this.controls.invertZoom) distanceDelta *= -1;\n                    this.dollyOrbitCameraBy(distanceDelta);\n                    return;\n                }",
+                  text,
+                  count=1,
+              )
+              if n:
+                  text = text2
+                  print('patched onMouseWheel', path)
+              else:
+                  print('onMouseWheel block not patched', path)
+              p.write_text(text, encoding='utf-8')
+          PY
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add index.html www/index.html orbit-zoom.js || true
+          if git diff --cached --quiet; then echo no change; exit 0; fi
+          git commit -m "fix: orbit wheel flies camera closer"
+          git push
