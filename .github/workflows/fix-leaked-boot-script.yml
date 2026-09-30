@@ -1,0 +1,22 @@
+name: Fix leaked boot script
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - 'scripts/fix-leaked-boot-script.py'
+      - '.github/workflows/fix-leaked-boot-script.yml'
+permissions:
+  contents: write
+jobs:
+  patch:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: python3 scripts/fix-leaked-boot-script.py
+      - run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add index.html
+          if git diff --cached --quiet; then echo no change; exit 0; fi
+          git commit -m "fix: do not render boot watchdog as page text"
+          git push
