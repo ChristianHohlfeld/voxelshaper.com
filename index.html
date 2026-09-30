@@ -831,6 +831,12 @@
             pointer-events: none;
             display: block;
         }
+        #mobile-canvas-mode-toggle .orbit-arrows {
+            font-size: 1.05rem;
+            pointer-events: none;
+            display: inline-block;
+        }
+        #mobile-canvas-mode-toggle .orbit-iso-cube { display: none; }
 
         #mobile-canvas-color-picker-wrap {
             --active-picker-color: #FFFFFF;
@@ -3310,6 +3316,7 @@
         </div>
 
         <button type="button" id="mobile-canvas-mode-toggle" aria-label="Viewport or draw" aria-pressed="false" title="Move viewport">
+            <i class="fas fa-arrows-alt orbit-arrows"></i>
             <svg class="orbit-iso-cube" viewBox="0 0 32 32" aria-hidden="true">
                 <polygon points="16,3 29,10.5 16,18 3,10.5" fill="#8be9ff"/>
                 <polygon points="3,10.5 16,18 16,29 3,21.5" fill="#3b82f6"/>
@@ -10616,8 +10623,10 @@ setGridSize: function (newSize) {
       btn.setAttribute('aria-pressed', edit ? 'true' : 'false');
       btn.title = edit ? 'Draw / erase / paint' : 'Move viewport';
       btn.setAttribute('aria-label', btn.title);
-      const icon = btn.querySelector('.orbit-iso-cube');
-      if (icon) icon.style.opacity = edit ? '1' : '0.92';
+      const cube = btn.querySelector('.orbit-iso-cube');
+      const arrows = btn.querySelector('.orbit-arrows');
+      if (cube) cube.style.display = edit ? 'block' : 'none';
+      if (arrows) arrows.style.display = edit ? 'none' : 'inline-block';
     };
     btn.addEventListener('click', function (e) {
       e.preventDefault();
