@@ -1,11 +1,12 @@
 from pathlib import Path
+
 p = Path('index.html')
 t = p.read_text(encoding='utf-8')
 if 'id="mobile-canvas-mode-toggle"' in t:
     print('already present')
     raise SystemExit(0)
 
-css = '''
+css = """
         #mobile-canvas-mode-toggle {
             display: none;
             position: fixed;
@@ -35,30 +36,24 @@ css = '''
             font-size: 1.05rem;
             pointer-events: none;
         }
-'''
-anchor_css = '#mobile-canvas-color-picker-wrap {
-            --active-picker-color: #FFFFFF;'
-if anchor_css not in t:
-    raise SystemExit('css anchor missing')
-t = t.replace(anchor_css, css + '\n        ' + anchor_css, 1)
+"""
 
-btn = '''        <button type="button" id="mobile-canvas-mode-toggle" aria-label="Viewport or draw" aria-pressed="false" title="Move viewport">
+marker = '#mobile-canvas-color-picker-wrap {'
+if marker not in t:
+    raise SystemExit('css anchor missing')
+t = t.replace(marker, css + '\n        ' + marker, 1)
+
+html_anchor = '<span id="mobile-canvas-color-picker-badge" aria-hidden="true"><i class="fas fa-brush"></i></span>\n        </div>\n'
+btn = html_anchor + '''
+        <button type="button" id="mobile-canvas-mode-toggle" aria-label="Viewport or draw" aria-pressed="false" title="Move viewport">
             <i class="fas fa-arrows-alt"></i>
         </button>
 '''
-anchor_html = '''        </div>
-
-        <!-- Bottom bar -->
-        <div class="mobile-bottom-bar'''
-# unique enough near color picker
-html_anchor = '''            <span id="mobile-canvas-color-picker-badge" aria-hidden="true"><i class="fas fa-brush"></i></span>
-        </div>
-'''
 if html_anchor not in t:
     raise SystemExit('html anchor missing')
-t = t.replace(html_anchor, html_anchor + '\n' + btn, 1)
+t = t.replace(html_anchor, btn, 1)
 
-old = '''                        if (this.activePointers.size === 1) {
+old = """                        if (this.activePointers.size === 1) {
                             const startInfo = this.getPointerSceneStartInfo(e.clientX, e.clientY);
                             this.touchState.startedOnVoxel = startInfo.startsOnVoxel;
                             if (startInfo.startsOnVoxel || (this.currentMode === 'FREE' && startInfo.startsOnBuildTarget)) {
@@ -68,8 +63,8 @@ old = '''                        if (this.activePointers.size === 1) {
                                 this.touchState.isLookAround = false;
                                 this.mouseState.orbitCandidate = true;
                             }
-                        }'''
-new = '''                        if (this.activePointers.size === 1) {
+                        }"""
+new = """                        if (this.activePointers.size === 1) {
                             const startInfo = this.getPointerSceneStartInfo(e.clientX, e.clientY);
                             this.touchState.startedOnVoxel = startInfo.startsOnVoxel;
                             const canvasMode = this.mobileCanvasMode || 'view';
@@ -81,20 +76,20 @@ new = '''                        if (this.activePointers.size === 1) {
                                 this.touchState.isLookAround = false;
                                 this.mouseState.orbitCandidate = true;
                             }
-                        }'''
+                        }"""
 if old not in t:
     raise SystemExit('pointer branch missing')
 t = t.replace(old, new, 1)
 
-script = '''<script>
+script = """<script>
 (function () {
   function bindMobileCanvasMode() {
     const app = window.VoxelApp;
     const btn = document.getElementById('mobile-canvas-mode-toggle');
-    if (!app || !btn || btn.dataset.bound === '1') return !!btn && btn.dataset.bound === '1';
+    if (!app || !btn || btn.dataset.bound === '1') return !!(btn && btn.dataset.bound === '1');
     btn.dataset.bound = '1';
     if (!app.mobileCanvasMode) app.mobileCanvasMode = 'view';
-    const sync = () => {
+    const sync = function () {
       const edit = app.mobileCanvasMode === 'edit';
       btn.classList.toggle('is-edit', edit);
       btn.setAttribute('aria-pressed', edit ? 'true' : 'false');
@@ -109,9 +104,12 @@ script = '''<script>
       app.mobileCanvasMode = app.mobileCanvasMode === 'edit' ? 'view' : 'edit';
       sync();
       if (typeof app.showToast === 'function') {
-        app.showToast(app.mobileCanvasMode === 'edit' ? 'Draw' : 'View',
+        app.showToast(
+          app.mobileCanvasMode === 'edit' ? 'Draw' : 'View',
           app.mobileCanvasMode === 'edit' ? 'Tap to place, erase or paint' : 'Drag to look around',
-          'info', 900);
+          'info',
+          900
+        );
       }
     });
     sync();
@@ -123,7 +121,7 @@ script = '''<script>
   setTimeout(function () { clearInterval(timer); }, 20000);
 })();
 </script>
-'''
+"""
 if '</body>' not in t:
     raise SystemExit('body end missing')
 t = t.replace('</body>', script + '</body>', 1)
