@@ -2,12 +2,13 @@
   'use strict';
 
   const DEG = Math.PI / 180;
-  const MAX_YAW = 85 * DEG;
-  const MAX_PITCH_DELTA = 60 * DEG;
+  const MAX_YAW = 100 * DEG;
+  const MAX_PITCH_DELTA = 65 * DEG;
   const MIN_ORBIT_PITCH = -82 * DEG;
   const MAX_ORBIT_PITCH = 82 * DEG;
-  const SMOOTH_HZ = 11;
-  const DEAD_ANGLE = 0.12 * DEG;
+  const SMOOTH_HZ = 9;
+  const DEAD_ANGLE = 0.35 * DEG;
+  const SENSOR_STALE_MS = 900;
 
   function install() {
     const app = window.VoxelApp;
@@ -28,6 +29,8 @@
       targetPitch: 0,
       currentYaw: 0,
       currentPitch: 0,
+      baseYaw: NaN,
+      basePitch: NaN,
       radius: 1,
       lastFrame: 0,
       lastError: null
@@ -37,14 +40,12 @@
     const referenceQ = new THREE.Quaternion();
     const inverseReferenceQ = new THREE.Quaternion();
     const deltaQ = new THREE.Quaternion();
-    const targetQ = new THREE.Quaternion();
     const euler = new THREE.Euler(0, 0, 0, 'YXZ');
     const zee = new THREE.Vector3(0, 0, 1);
     const qScreen = new THREE.Quaternion();
-    // DeviceOrientation coordinates describe a device whose +Z points out of the screen.
-    // Three's camera looks down -Z, so rotate the device frame by -90deg around X.
     const qDeviceToCamera = new THREE.Quaternion(-Math.sqrt(.5), 0, 0, Math.sqrt(.5));
     const offset = new THREE.Vector3();
+    const relativeForward = new THREE.Vector3();
     let latestQ = null;
     let raf = 0;
 
@@ -52,15 +53,22 @@
       return !!(app.isMobile || matchMedia?.('(pointer: coarse)')?.matches || innerWidth < 900);
     }
 
+    function wrapAngle(a) {
+      return Math.atan2(Math.sin(a), Math.cos(a));
+    }
+
     function getScreenAngle() {
       const raw = Number(screen.orientation?.angle);
-      if (Number.isFinite(raw)) return raw * DEG;
-      const legacy = Number(window.orientation);
-      return Number.isFinite(legacy) ? legacy * DEG : 0;
+      const deg = Number.isFinite(raw) ? raw : (Number.isFinite(Number(window.orientation)) ? Number(window.orientation) : 0);
+      return wrapAngle(deg * DEG);
     }
 
     function orientationQuaternion(alpha, beta, gamma, screenAngle = getScreenAngle()) {
       if (![alpha, beta, gamma].every(Number.isFinite)) return null;
+      // W3C DeviceOrientation uses intrinsic Z-X'-Y'' rotations. The YXZ Euler
+      // construction below is the established Three.js DeviceOrientation mapping;
+      // qDeviceToCamera makes the phone frame match a camera looking down -Z and
+      // qScreen compensates portrait/landscape rotation separately.
       euler.set(beta * DEG, alpha * DEG, -gamma * DEG, 'YXZ');
       deviceQ.setFromEuler(euler);
       deviceQ.multiply(qDeviceToCamera);
@@ -103,6 +111,8 @@
       inverseReferenceQ.copy(referenceQ).invert();
       const orbit = orbitStateFromCamera();
       state.radius = orbit.radius;
+      state.baseYaw = orbit.yaw;
+      state.basePitch = orbit.pitch;
       state.currentYaw = state.targetYaw = orbit.yaw;
       state.currentPitch = state.targetPitch = orbit.pitch;
       state.screenAngle = getScreenAngle();
@@ -111,51 +121,57 @@
       return true;
     }
 
+    function relativeAnglesFrom(q) {
+      // Avoid converting the relative quaternion back into Euler angles. Euler
+      // extraction couples axes at tilted poses and is the source of the previous
+      // "diagonal"/unreliable gyro feel. The transformed forward vector gives the
+      // actual relative look direction and naturally ignores pure device roll.
+      deltaQ.copy(inverseReferenceQ).multiply(q).normalize();
+      relativeForward.set(0, 0, -1).applyQuaternion(deltaQ).normalize();
+      const yaw = Math.atan2(relativeForward.x, -relativeForward.z);
+      const pitch = Math.asin(THREE.MathUtils.clamp(relativeForward.y, -1, 1));
+      return { yaw, pitch };
+    }
+
     function shouldDriveCamera() {
       if (!state.enabled || !state.calibrated || state.pausedByTouch) return false;
       if (!isMobileSurface()) return false;
-      // Physics uses the same hardware movement as force input. Do not make the camera
-      // fight the simulation while the Physics sandbox is active.
+      if (performance.now() - state.lastSampleAt > SENSOR_STALE_MS) return false;
+      // Physics uses the same physical movement as force input. Do not make camera
+      // motion fight the sandbox while simple physics is active.
       if (window.VoxelPhysics?.state?.enabled) return false;
       return (app.mobileCanvasMode || 'view') === 'view';
     }
 
-    function onOrientation(event) {
-      const alpha = Number(event.alpha);
-      const beta = Number(event.beta);
-      const gamma = Number(event.gamma);
-      const q = orientationQuaternion(alpha, beta, gamma);
-      if (!q) return;
+    function consumeQuaternion(q) {
+      if (!q) return false;
       latestQ = q.clone();
       state.lastSampleAt = performance.now();
       state.sampleCount += 1;
 
-      if (!state.enabled) return;
-      if (state.needsRecenter || !state.calibrated || Math.abs(getScreenAngle() - state.screenAngle) > .001) {
+      const currentScreen = getScreenAngle();
+      if (state.needsRecenter || !state.calibrated || Math.abs(wrapAngle(currentScreen - state.screenAngle)) > .001) {
         calibrateFrom(q);
-        return;
+        return true;
       }
-      if (!shouldDriveCamera()) return;
+      if (!shouldDriveCamera()) return true;
 
-      // q_delta is expressed relative to the calibrated phone pose, so alpha wrap at
-      // 0/360 and arbitrary browser heading origins cannot cause a camera jump.
-      deltaQ.copy(inverseReferenceQ).multiply(q).normalize();
-      euler.setFromQuaternion(deltaQ, 'YXZ');
-      let yawDelta = THREE.MathUtils.clamp(euler.y, -MAX_YAW, MAX_YAW);
-      let pitchDelta = THREE.MathUtils.clamp(euler.x, -MAX_PITCH_DELTA, MAX_PITCH_DELTA);
+      const relative = relativeAnglesFrom(q);
+      let yawDelta = THREE.MathUtils.clamp(relative.yaw, -MAX_YAW, MAX_YAW);
+      let pitchDelta = THREE.MathUtils.clamp(relative.pitch, -MAX_PITCH_DELTA, MAX_PITCH_DELTA);
       if (Math.abs(yawDelta) < DEAD_ANGLE) yawDelta = 0;
       if (Math.abs(pitchDelta) < DEAD_ANGLE) pitchDelta = 0;
 
       const orbit = orbitStateFromCamera();
-      // Keep distance changes from pinch zoom, but use the calibrated angular origin.
       state.radius = orbit.radius;
-      const baseYaw = state.currentYaw - (state.currentYaw - state.targetYaw);
-      const basePitch = state.currentPitch - (state.currentPitch - state.targetPitch);
-      // reference camera angles are captured by calibrateFrom. Store them lazily on state.
-      if (!Number.isFinite(state.baseYaw)) state.baseYaw = state.targetYaw;
-      if (!Number.isFinite(state.basePitch)) state.basePitch = state.targetPitch;
-      state.targetYaw = state.baseYaw - yawDelta;
+      state.targetYaw = wrapAngle(state.baseYaw - yawDelta);
       state.targetPitch = THREE.MathUtils.clamp(state.basePitch + pitchDelta, MIN_ORBIT_PITCH, MAX_ORBIT_PITCH);
+      return true;
+    }
+
+    function onOrientation(event) {
+      const q = orientationQuaternion(Number(event.alpha), Number(event.beta), Number(event.gamma));
+      consumeQuaternion(q);
     }
 
     function frame(now) {
@@ -163,8 +179,8 @@
       state.lastFrame = now;
       if (shouldDriveCamera()) {
         const blend = 1 - Math.exp(-SMOOTH_HZ * dt);
-        const yawError = Math.atan2(Math.sin(state.targetYaw - state.currentYaw), Math.cos(state.targetYaw - state.currentYaw));
-        state.currentYaw += yawError * blend;
+        const yawError = wrapAngle(state.targetYaw - state.currentYaw);
+        state.currentYaw = wrapAngle(state.currentYaw + yawError * blend);
         state.currentPitch += (state.targetPitch - state.currentPitch) * blend;
         applyOrbit(state.currentYaw, state.currentPitch, state.radius);
       }
@@ -175,11 +191,7 @@
       state.baseYaw = NaN;
       state.basePitch = NaN;
       state.needsRecenter = true;
-      if (latestQ) {
-        calibrateFrom(latestQ);
-        state.baseYaw = state.targetYaw;
-        state.basePitch = state.targetPitch;
-      }
+      if (latestQ) calibrateFrom(latestQ);
       return true;
     }
 
@@ -224,6 +236,8 @@
       state.enabled = false;
       state.calibrated = false;
       state.needsRecenter = true;
+      state.baseYaw = NaN;
+      state.basePitch = NaN;
       app.syncEulerFromCamera?.();
       syncButton();
       return true;
@@ -237,16 +251,14 @@
       button.title = state.enabled ? 'Recenter gyro camera' : 'Enable gyro camera';
     }
 
-    // The existing camera button still runs its normal reset handler. We additionally
-    // make that same explicit tap the permission/recenter gesture, avoiding surprise prompts.
     const cameraButton = document.getElementById('mobile-camera');
     cameraButton?.addEventListener('click', () => {
       if (!state.enabled) enableFromGesture();
       else requestAnimationFrame(recenter);
     }, true);
 
-    // Manual touch orbit always wins. On release we rebase the sensor onto the user's
-    // new camera angle, so touch and gyro never fight or snap back.
+    // Manual touch orbit always wins. Recalibrate onto the user's actual camera pose
+    // after release, so touch and gyro cannot pull against each other or snap back.
     app.cvs.addEventListener('pointerdown', (event) => {
       if (!state.enabled || event.pointerType === 'mouse') return;
       state.pausedByTouch = true;
@@ -274,26 +286,14 @@
       enableWithoutPrompt,
       disable,
       recenter,
-      // Deterministic test hook using the exact production transform path.
       feed(alpha, beta, gamma, angleDeg = null) {
-        const q = orientationQuaternion(Number(alpha), Number(beta), Number(gamma), angleDeg == null ? getScreenAngle() : Number(angleDeg) * DEG);
-        if (!q) return false;
-        latestQ = q.clone();
-        if (state.needsRecenter || !state.calibrated) {
-          calibrateFrom(q);
-          state.baseYaw = state.targetYaw;
-          state.basePitch = state.targetPitch;
-        } else {
-          deltaQ.copy(inverseReferenceQ).multiply(q).normalize();
-          euler.setFromQuaternion(deltaQ, 'YXZ');
-          let yawDelta = THREE.MathUtils.clamp(euler.y, -MAX_YAW, MAX_YAW);
-          let pitchDelta = THREE.MathUtils.clamp(euler.x, -MAX_PITCH_DELTA, MAX_PITCH_DELTA);
-          if (Math.abs(yawDelta) < DEAD_ANGLE) yawDelta = 0;
-          if (Math.abs(pitchDelta) < DEAD_ANGLE) pitchDelta = 0;
-          state.targetYaw = state.baseYaw - yawDelta;
-          state.targetPitch = THREE.MathUtils.clamp(state.basePitch + pitchDelta, MIN_ORBIT_PITCH, MAX_ORBIT_PITCH);
-        }
-        return true;
+        const q = orientationQuaternion(Number(alpha), Number(beta), Number(gamma), angleDeg == null ? getScreenAngle() : wrapAngle(Number(angleDeg) * DEG));
+        return consumeQuaternion(q);
+      },
+      relativeAngles(alpha, beta, gamma, angleDeg = null) {
+        const q = orientationQuaternion(Number(alpha), Number(beta), Number(gamma), angleDeg == null ? getScreenAngle() : wrapAngle(Number(angleDeg) * DEG));
+        if (!q || !state.calibrated) return null;
+        return relativeAnglesFrom(q);
       }
     };
 
