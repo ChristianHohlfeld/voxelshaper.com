@@ -8,6 +8,9 @@ async function mobilePage(browser) {
     hasTouch: true,
     isMobile: true
   });
+  await context.addInitScript(() => {
+    localStorage.setItem('voxelshaper_onboarding_dont_show', 'true');
+  });
   const page = await context.newPage();
   return { context, page };
 }
