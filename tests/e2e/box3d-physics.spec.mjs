@@ -30,8 +30,17 @@ async function setupSimpleModel(page) {
     for (const [x,y,z,color] of cubes) app.voxels.set(app.key(x,y,z), { color, glass:false });
     app.updateInstancedVoxels?.();
     window.VoxelPhysics.enable();
+    const firstKey = app.key(3,5,3);
+    const info = app.voxelToInstanceMap?.get(firstKey);
+    let editorColor = null;
+    if (info?.type === 'solid' && app.solidInstancedMesh?.getColorAt) {
+      const c = new THREE.Color();
+      app.solidInstancedMesh.getColorAt(info.index, c);
+      editorColor = c.toArray();
+    }
     return {
       count: app.voxels.size,
+      editorColor,
       snapshot: [...app.voxels.entries()].map(([k,v]) => [String(k), v.color, !!v.glass])
     };
   });
@@ -68,7 +77,7 @@ test.describe('VoxelShaper simple Box3D runtime', () => {
     expect(relevantErrors(errors)).toEqual([]);
   });
 
-  test('Play turns every voxel into an independent body and Pause cleanly resets authoring state', async ({ page }) => {
+  test('Play preserves editor color, uses one body per voxel, and Pause exactly resets authoring state', async ({ page }) => {
     const errors = collectPhysicsErrors(page);
     await page.goto(`${BASE}/`, { waitUntil: 'domcontentloaded' });
     const setup = await setupSimpleModel(page);
@@ -78,19 +87,18 @@ test.describe('VoxelShaper simple Box3D runtime', () => {
     await page.waitForFunction(() => window.VoxelBox3D.running === true && window.VoxelBox3D.bodyCount === 4);
     await page.waitForFunction(() => !!window.VoxelApp.scene.getObjectByName('VoxelBox3DSimpleBodies'));
 
-    const beforeY = await page.evaluate(() => {
+    const physicsColor = await page.evaluate(() => {
       const mesh = window.VoxelApp.scene.getObjectByName('VoxelBox3DSimpleBodies');
-      const m = new THREE.Matrix4();
-      mesh.getMatrixAt(0, m);
-      return new THREE.Vector3().setFromMatrixPosition(m).y;
+      const c = new THREE.Color();
+      mesh.getColorAt(0, c);
+      return c.toArray();
     });
+    expect(setup.editorColor).not.toBeNull();
+    for (let i = 0; i < 3; i++) expect(Math.abs(physicsColor[i] - setup.editorColor[i])).toBeLessThan(1e-6);
+
+    const beforeY = await page.evaluate(() => window.VoxelBox3D.snapshotBodies()[0].y);
     await page.waitForTimeout(700);
-    const afterY = await page.evaluate(() => {
-      const mesh = window.VoxelApp.scene.getObjectByName('VoxelBox3DSimpleBodies');
-      const m = new THREE.Matrix4();
-      mesh.getMatrixAt(0, m);
-      return new THREE.Vector3().setFromMatrixPosition(m).y;
-    });
+    const afterY = await page.evaluate(() => window.VoxelBox3D.snapshotBodies()[0].y);
     expect(afterY).toBeLessThan(beforeY - 0.1);
 
     expect(await page.evaluate(() => window.VoxelBox3D.stop())).toBe(true);
@@ -106,6 +114,45 @@ test.describe('VoxelShaper simple Box3D runtime', () => {
     expect(reset.preview).toBe(null);
     expect(reset.snapshot).toEqual(setup.snapshot);
     expect(reset.originalVisible).not.toBe(false);
+    expect(relevantErrors(errors)).toEqual([]);
+  });
+
+  test('the editor bounding box is a six-sided physical container', async ({ page }) => {
+    const errors = collectPhysicsErrors(page);
+    await page.goto(`${BASE}/`, { waitUntil: 'domcontentloaded' });
+    await setupSimpleModel(page);
+    expect(await page.evaluate(() => window.VoxelBox3D.start())).toBe(true);
+    await page.waitForFunction(() => window.VoxelBox3D.running && window.VoxelBox3D.bodyCount === 4);
+
+    const directions = [
+      [3500,0,0],[-3500,0,0],[0,3500,0],[0,-3500,0],[0,0,3500],[0,0,-3500]
+    ];
+    for (const force of directions) {
+      await page.evaluate(([x,y,z]) => {
+        for (let i=0;i<7;i++) window.VoxelBox3D.applyForce(x,y,z,1);
+      }, force);
+      await page.waitForTimeout(260);
+    }
+    await page.waitForTimeout(500);
+
+    const bounded = await page.evaluate(() => {
+      const extent = window.VoxelBox3D.worldExtent;
+      const radius = (window.VoxelApp.VS || 1) * .485;
+      const bodies = window.VoxelBox3D.snapshotBodies();
+      return {
+        extent,
+        radius,
+        bodies,
+        ok: bodies.every((b) =>
+          b.x >= radius - .06 && b.x <= extent - radius + .06 &&
+          b.y >= radius - .06 && b.y <= extent - radius + .06 &&
+          b.z >= radius - .06 && b.z <= extent - radius + .06)
+      };
+    });
+    expect(bounded.extent).toBeGreaterThan(0);
+    expect(bounded.ok).toBe(true);
+
+    await page.evaluate(() => window.VoxelBox3D.stop());
     expect(relevantErrors(errors)).toEqual([]);
   });
 
