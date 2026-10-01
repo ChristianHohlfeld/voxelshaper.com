@@ -149,6 +149,51 @@ test('screen orientation change recenters instead of jumping the orbit', async (
   await context.close();
 });
 
+test('returning from Edit rebases the phone pose instead of replaying hidden motion', async ({ browser }) => {
+  const { context, page } = await mobilePage(browser);
+  await ready(page);
+
+  await emit(page, 20, 12, 3);
+  await page.waitForFunction(() => window.VoxelGyroNavigation.state.calibrated === true);
+  const before = await cameraState(page);
+
+  await page.evaluate(() => { window.VoxelApp.mobileCanvasMode = 'edit'; });
+  await emit(page, 95, 48, 25); // move phone substantially while Edit owns the canvas
+  await page.waitForTimeout(120);
+  await page.evaluate(() => { window.VoxelApp.mobileCanvasMode = 'view'; });
+  await emit(page, 95, 48, 25); // first Orbit sample must become the new zero pose
+  await page.waitForTimeout(250);
+  const rebased = await cameraState(page);
+
+  expect(distance(before.pos, rebased.pos)).toBeLessThan(0.06);
+  expect(rebased.lookDot).toBeGreaterThan(0.995);
+
+  // A subsequent relative phone move should work normally from the new reference.
+  await emit(page, 110, 48, 25);
+  await page.waitForTimeout(350);
+  const moved = await cameraState(page);
+  expect(distance(rebased.pos, moved.pos)).toBeGreaterThan(0.12);
+  await context.close();
+});
+
+test('a stale sensor stream resumes by rebasing instead of jumping', async ({ browser }) => {
+  const { context, page } = await mobilePage(browser);
+  await ready(page);
+
+  await emit(page, 15, 20, 2);
+  await page.waitForFunction(() => window.VoxelGyroNavigation.state.calibrated === true);
+  const before = await cameraState(page);
+
+  await page.waitForTimeout(980); // longer than SENSOR_STALE_MS
+  await emit(page, 80, 45, 20); // radically different phone pose after resume
+  await page.waitForTimeout(260);
+  const rebased = await cameraState(page);
+
+  expect(distance(before.pos, rebased.pos)).toBeLessThan(0.06);
+  expect(rebased.lookDot).toBeGreaterThan(0.995);
+  await context.close();
+});
+
 test('Physics mode suspends camera gyro so motion only drives Box3D', async ({ browser }) => {
   const { context, page } = await mobilePage(browser);
   await ready(page);
