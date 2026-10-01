@@ -21,6 +21,7 @@
   let renderMesh = null;
   let renderGeometry = null;
   let visibilitySnapshot = [];
+  let mouseGrabActive = false;
 
   const raycaster = new THREE.Raycaster();
   const pointerNdc = new THREE.Vector2();
@@ -28,6 +29,7 @@
   const tmpQuaternion = new THREE.Quaternion();
   const tmpScale = new THREE.Vector3(1, 1, 1);
   const tmpMatrix = new THREE.Matrix4();
+  const tmpRayPoint = new THREE.Vector3();
 
   function toast(title, text, type = 'info', ms = 1300) {
     try { app?.showToast?.(title, text, type, ms); } catch (_) {}
@@ -59,6 +61,9 @@
         destroy: mod.cwrap('vsb3_destroy', null, []),
         createBody: mod.cwrap('vsb3_create_body', 'number', Array(11).fill('number')),
         addBox: mod.cwrap('vsb3_add_box', 'number', Array(11).fill('number')),
+        beginMouse: mod.cwrap('vsb3_begin_mouse_joint', 'number', ['number','number','number','number','number']),
+        setMouseTarget: mod.cwrap('vsb3_set_mouse_target', 'number', ['number','number','number']),
+        endMouse: mod.cwrap('vsb3_end_mouse_joint', null, []),
         step: mod.cwrap('vsb3_step', null, ['number','number']),
         applyForce: mod.cwrap('vsb3_apply_force', null, ['number','number','number','number']),
         bodyMass: mod.cwrap('vsb3_body_mass', 'number', ['number']),
@@ -235,17 +240,64 @@
     return true;
   }
 
-  function bodyAtPointer(clientX, clientY) {
-    if (!renderMesh || !app?.cam || !app?.cvs) return -1;
+  function rayFromPointer(clientX, clientY) {
+    if (!app?.cam || !app?.cvs) return null;
     const rect = app.cvs.getBoundingClientRect();
-    if (!rect.width || !rect.height) return -1;
+    if (!rect.width || !rect.height) return null;
     pointerNdc.set(
       ((clientX - rect.left) / rect.width) * 2 - 1,
       -((clientY - rect.top) / rect.height) * 2 + 1
     );
     raycaster.setFromCamera(pointerNdc, app.cam);
+    return raycaster.ray;
+  }
+
+  function pickBodyAtPointer(clientX, clientY) {
+    if (!renderMesh) return null;
+    const ray = rayFromPointer(clientX, clientY);
+    if (!ray) return null;
     const hit = raycaster.intersectObject(renderMesh, false)[0];
-    return Number.isInteger(hit?.instanceId) ? hit.instanceId : -1;
+    if (!Number.isInteger(hit?.instanceId) || !bodyRecords[hit.instanceId]) return null;
+    return {
+      index: hit.instanceId,
+      point: hit.point.clone(),
+      distance: hit.distance,
+      key: bodyRecords[hit.instanceId].key
+    };
+  }
+
+  function bodyAtPointer(clientX, clientY) {
+    return pickBodyAtPointer(clientX, clientY)?.index ?? -1;
+  }
+
+  function pointAtPointerDistance(clientX, clientY, distance) {
+    const ray = rayFromPointer(clientX, clientY);
+    if (!ray || !Number.isFinite(distance)) return null;
+    return ray.at(Math.max(.001, distance), tmpRayPoint).clone();
+  }
+
+  function beginMouseGrab(index, point, forceScale = 100) {
+    if (!running || !api || mouseGrabActive) return false;
+    const body = bodyRecords[index];
+    if (!body || !point) return false;
+    const ok = !!api.beginMouse(body.handle, point.x, point.y, point.z, forceScale);
+    mouseGrabActive = ok;
+    return ok;
+  }
+
+  function updateMouseGrab(point) {
+    if (!running || !api || !mouseGrabActive || !point) return false;
+    return !!api.setMouseTarget(point.x, point.y, point.z);
+  }
+
+  function endMouseGrab() {
+    if (!api) {
+      mouseGrabActive = false;
+      return true;
+    }
+    try { api.endMouse(); } catch (_) {}
+    mouseGrabActive = false;
+    return true;
   }
 
   function removeRender() {
@@ -268,10 +320,11 @@
       running = true;
       physics.state.running = true;
       physics.state.preview = renderRoot;
+      mouseGrabActive = false;
       lastTime = 0;
       accumulator = 0;
       syncPlayUI();
-      toast('Physics', 'Live · drag voxels to push them', 'info', 1200);
+      toast('Physics', 'Live · grab a voxel and drag it in 3D', 'info', 1200);
       raf = requestAnimationFrame(frame);
       return true;
     } catch (err) {
@@ -288,6 +341,7 @@
     raf = 0;
     lastTime = 0;
     accumulator = 0;
+    endMouseGrab();
     removeRender();
     restoreAuthoringModel();
     try { api?.destroy?.(); } catch (_) {}
@@ -329,6 +383,7 @@
       get ready() { return !!api; },
       get bodyCount() { return bodyRecords.length; },
       get worldExtent() { return worldExtent; },
+      get mouseGrabActive() { return mouseGrabActive; },
       start,
       stop,
       reset: stop,
@@ -336,7 +391,12 @@
       applyForce: applyForceToAll,
       applyForceToBody,
       snapshotBodies,
-      bodyAtPointer
+      bodyAtPointer,
+      pickBodyAtPointer,
+      pointAtPointerDistance,
+      beginMouseGrab,
+      updateMouseGrab,
+      endMouseGrab
     };
     syncPlayUI();
     return true;
