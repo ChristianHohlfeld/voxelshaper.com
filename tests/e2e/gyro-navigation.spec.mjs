@@ -26,7 +26,16 @@ async function ready(page) {
 
 async function emit(page, alpha, beta, gamma) {
   await page.evaluate(({ alpha, beta, gamma }) => {
-    const ev = new DeviceOrientationEvent('deviceorientation', { alpha, beta, gamma, absolute: false });
+    // Headless Chromium does not expose the DeviceOrientationEvent constructor on
+    // every platform. A normal Event with the same readonly payload exercises the
+    // exact production listener without depending on host sensor support.
+    const ev = new Event('deviceorientation');
+    Object.defineProperties(ev, {
+      alpha: { value: alpha },
+      beta: { value: beta },
+      gamma: { value: gamma },
+      absolute: { value: false }
+    });
     window.dispatchEvent(ev);
   }, { alpha, beta, gamma });
 }
@@ -56,11 +65,11 @@ test('gyro rotates the orbit deterministically while preserving framing', async 
   const { context, page } = await mobilePage(browser);
   await ready(page);
 
-  await emit(page, 12, 15, -4); // calibration pose
+  await emit(page, 12, 15, -4);
   await page.waitForFunction(() => window.VoxelGyroNavigation.state.calibrated === true);
   const before = await cameraState(page);
 
-  await emit(page, 37, 24, -4); // deliberate yaw + pitch change
+  await emit(page, 37, 24, -4);
   await page.waitForTimeout(450);
   const after = await cameraState(page);
 
@@ -82,7 +91,6 @@ test('alpha wrap across 360 degrees does not create a camera jump', async ({ bro
   await page.waitForTimeout(350);
   const after = await cameraState(page);
 
-  // 1 degree across the wrap should be a tiny orbit movement, never a 359-degree flip.
   expect(distance(before.pos, after.pos)).toBeLessThan(before.radius * 0.08 + 0.05);
   expect(after.lookDot).toBeGreaterThan(0.995);
   await context.close();
