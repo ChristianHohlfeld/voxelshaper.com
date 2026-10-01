@@ -121,6 +121,58 @@ test.describe('VoxelShaper Box3D runtime', () => {
     expect(relevantErrors(errors)).toEqual([]);
   });
 
+  test('mobile Play Stop survives repeated and rapid taps without split state', async ({ page }) => {
+    const errors = collectPhysicsErrors(page);
+    await page.setViewportSize({ width: 390, height: 844 });
+    await page.goto(`${BASE}/?physicsTest=pendulum`, { waitUntil: 'domcontentloaded' });
+    await page.waitForFunction(() =>
+      window.VoxelBox3D?.hardened === true &&
+      window.VoxelPhysics?.state?.joints?.length === 1 &&
+      document.querySelector('#vs-physics-test'),
+      null,
+      { timeout: 20000 }
+    );
+
+    // Warm the WASM module once, then exercise the real UI repeatedly.
+    expect(await page.evaluate(() => window.VoxelBox3D.start())).toBe(true);
+    expect(await page.evaluate(() => window.VoxelBox3D.stop())).toBe(true);
+
+    for (let i = 0; i < 12; i++) {
+      await page.click('#vs-physics-test');
+      await page.waitForFunction(() => {
+        const s = window.VoxelBox3D.getStatus?.();
+        return window.VoxelBox3D.running === true && window.VoxelPhysics.state.running === true && s?.transition === 'running';
+      });
+      await page.click('#vs-physics-test');
+      await page.waitForFunction(() => {
+        const s = window.VoxelBox3D.getStatus?.();
+        return window.VoxelBox3D.running === false && window.VoxelPhysics.state.running === false && s?.transition === 'stopped';
+      });
+      const leftovers = await page.evaluate(() => window.VoxelApp.scene.children.filter((x) => String(x.name || '').startsWith('VoxelBox3D:')).length);
+      expect(leftovers).toBe(0);
+    }
+
+    // A second tap while start is still in flight is a cancellation request, never a disabled/dead button.
+    await page.evaluate(() => {
+      const b = document.querySelector('#vs-physics-test');
+      b.click();
+      b.click();
+    });
+    await page.waitForFunction(() => {
+      const s = window.VoxelBox3D.getStatus?.();
+      return window.VoxelBox3D.running === false && window.VoxelPhysics.state.running === false && s?.starting === false && s?.desiredRunning === false;
+    });
+    const final = await page.evaluate(() => ({
+      status: window.VoxelBox3D.getStatus?.(),
+      disabled: document.querySelector('#vs-physics-test')?.disabled,
+      groups: window.VoxelApp.scene.children.filter((x) => String(x.name || '').startsWith('VoxelBox3D:')).length
+    }));
+    expect(final.disabled).toBe(false);
+    expect(final.groups).toBe(0);
+    expect(final.status?.transition).toBe('stopped');
+    expect(relevantErrors(errors)).toEqual([]);
+  });
+
   test('same connected A/B body fails loudly instead of running without motion', async ({ page }) => {
     const errors = collectPhysicsErrors(page);
     await page.goto(`${BASE}/`, { waitUntil: 'domcontentloaded' });
