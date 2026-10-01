@@ -7,13 +7,12 @@ morph = '<script src="morph-forms-v2.js"></script>'
 physics = '<script src="physics-controls.js"></script>'
 box3d = '<script src="lib/box3d/box3d.js"></script>'
 box3d_runtime = '<script src="physics-box3d-runtime.js"></script>'
+physics_visuals = '<script src="physics-visuals.js"></script>'
 physics_cycle = '<script src="physics-mobile-cycle.js"></script>'
 
-ordered = [morph, physics, box3d, box3d_runtime, physics_cycle]
+ordered = [morph, physics, box3d, box3d_runtime, physics_visuals, physics_cycle]
 changed = False
 
-# Keep the extension block deterministic. Remove existing occurrences and reinsert
-# once, directly after orbit-zoom, in dependency order.
 for tag in ordered:
     if tag in t:
         t = t.replace(tag, '', 1)
@@ -26,8 +25,8 @@ if block not in t:
     t = t.replace(orbit, block, 1)
     changed = True
 
-# Collapse accidental blank lines left by previous injections.
-t = t.replace('\n\n\n<script src="morph-forms-v2.js"></script>', '\n<script src="morph-forms-v2.js"></script>')
+while '\n\n\n' in t:
+    t = t.replace('\n\n\n', '\n\n')
 
 print('editor extension scripts injected' if changed else 'editor extension scripts already present')
 p.write_text(t, encoding='utf-8')
