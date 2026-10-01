@@ -4,6 +4,8 @@
   const SOURCE_COMMIT = '9f998c862d54c03a633ecea3831937385c78b532';
   const FIXED_DT = 1 / 60;
   const SUBSTEPS = 4;
+  const DEG = Math.PI / 180;
+  const G = 9.81;
 
   let app = null;
   let physics = null;
@@ -21,7 +23,19 @@
   let renderGeometry = null;
   let visibilitySnapshot = [];
   let motionListener = null;
+  let orientationListener = null;
+  let screenOrientationListener = null;
   let motionPermissionGranted = false;
+  let orientationPermissionGranted = false;
+  let screenAngle = 0;
+  let tiltX = 0;
+  let tiltY = 0;
+  let orientationTiltX = 0;
+  let orientationTiltY = 0;
+  let haveGravityTilt = false;
+  let shakeX = 0;
+  let shakeY = 0;
+  let shakeZ = 0;
 
   const tmpPosition = new THREE.Vector3();
   const tmpQuaternion = new THREE.Quaternion();
@@ -30,6 +44,9 @@
   const tmpRight = new THREE.Vector3();
   const tmpForward = new THREE.Vector3();
   const tmpForce = new THREE.Vector3();
+
+  const clamp = (v, lo, hi) => Math.max(lo, Math.min(hi, v));
+  const lowPass = (current, next, amount) => current + (next - current) * amount;
 
   function toast(title, text, type = 'info', ms = 1300) {
     try { app?.showToast?.(title, text, type, ms); } catch (_) {}
@@ -136,26 +153,21 @@
     worldExtent = Math.max(size, (app.GRID || 32) * size);
     const half = worldExtent * .5;
     const wall = Math.max(size * .5, .25);
-
-    // One static body with six box shapes. Inner faces align exactly with the
-    // editor volume [0, worldExtent] on X/Y/Z, matching the visible bounding box.
     boundaryHandle = api.createBody(0, half,half,half, 0,0,0,1, 0,0,0);
     if (!boundaryHandle) throw new Error('Box3D boundary body creation failed');
-
     const span = half + wall;
-    addBoundaryBox(boundaryHandle, 0, -half-wall, 0, span,wall,span); // floor y=0
-    addBoundaryBox(boundaryHandle, 0,  half+wall, 0, span,wall,span); // ceiling y=max
-    addBoundaryBox(boundaryHandle, -half-wall, 0, 0, wall,span,span); // x=0
-    addBoundaryBox(boundaryHandle,  half+wall, 0, 0, wall,span,span); // x=max
-    addBoundaryBox(boundaryHandle, 0, 0, -half-wall, span,span,wall); // z=0
-    addBoundaryBox(boundaryHandle, 0, 0,  half+wall, span,span,wall); // z=max
+    addBoundaryBox(boundaryHandle, 0, -half-wall, 0, span,wall,span);
+    addBoundaryBox(boundaryHandle, 0,  half+wall, 0, span,wall,span);
+    addBoundaryBox(boundaryHandle, -half-wall, 0, 0, wall,span,span);
+    addBoundaryBox(boundaryHandle,  half+wall, 0, 0, wall,span,span);
+    addBoundaryBox(boundaryHandle, 0, 0, -half-wall, span,span,wall);
+    addBoundaryBox(boundaryHandle, 0, 0,  half+wall, span,span,wall);
   }
 
   function buildWorld() {
     const entries = [...app.voxels.entries()];
     if (!entries.length) throw new Error('No voxels to simulate');
     buildRenderMesh(entries);
-
     const size = app.VS || 1;
     bodyRecords = [];
 
@@ -169,29 +181,17 @@
       if (!api.addBox(handle, 0,0,0, size*.485,size*.485,size*.485, 1,.68,.045,0)) {
         throw new Error(`Box3D collider creation failed at voxel ${index}`);
       }
-
-      // Match the editor's exact instanced-color path. The editor stores CSS/hex
-      // colors as sRGB and converts them to linear before setColorAt(). Without
-      // this conversion the temporary physics copy looks pale/washed out.
       const color = new THREE.Color(voxelColor(value));
       if (typeof color.convertSRGBToLinear === 'function') color.convertSRGBToLinear();
       renderMesh.setColorAt(index, color);
-
       tmpPosition.set(x,y,z);
       tmpQuaternion.identity();
       tmpMatrix.compose(tmpPosition,tmpQuaternion,tmpScale);
       renderMesh.setMatrixAt(index,tmpMatrix);
-      bodyRecords.push({
-        key,
-        handle,
-        index,
-        mass: Math.max(.001, api.bodyMass(handle) || 1),
-        start: { x, y, z }
-      });
+      bodyRecords.push({ key, handle, index, mass: Math.max(.001, api.bodyMass(handle) || 1), start: { x, y, z } });
     });
     renderMesh.instanceMatrix.needsUpdate = true;
     if (renderMesh.instanceColor) renderMesh.instanceColor.needsUpdate = true;
-
     buildBoundaries(size);
     hideAuthoringModel();
   }
@@ -207,6 +207,86 @@
     renderMesh.instanceMatrix.needsUpdate = true;
   }
 
+  function readScreenAngle() {
+    const raw = Number(screen.orientation?.angle ?? window.orientation ?? 0) || 0;
+    screenAngle = raw * DEG;
+  }
+
+  function toScreenXY(x, y) {
+    const c = Math.cos(screenAngle);
+    const s = Math.sin(screenAngle);
+    return { x: x * c - y * s, y: x * s + y * c };
+  }
+
+  function updateOrientationTilt(event) {
+    if (!Number.isFinite(event.beta) || !Number.isFinite(event.gamma)) return;
+    // DeviceOrientation is fused orientation. sin() keeps beta stable across the
+    // +/-180 seam and avoids a discontinuity when the phone crosses vertical.
+    const rawX = Math.sin(event.gamma * DEG);
+    const rawY = Math.sin(event.beta * DEG);
+    const corrected = toScreenXY(rawX, rawY);
+    orientationTiltX = lowPass(orientationTiltX, clamp(corrected.x, -1, 1), .12);
+    orientationTiltY = lowPass(orientationTiltY, clamp(corrected.y, -1, 1), .12);
+  }
+
+  function updateMotion(event) {
+    const gravity = event.accelerationIncludingGravity;
+    if (gravity && Number.isFinite(gravity.x) && Number.isFinite(gravity.y)) {
+      const corrected = toScreenXY(gravity.x / G, gravity.y / G);
+      const magnitude = Math.hypot(corrected.x, corrected.y, (Number(gravity.z) || 0) / G);
+      if (magnitude > .35 && magnitude < 1.65) {
+        tiltX = lowPass(tiltX, clamp(corrected.x, -1, 1), .16);
+        tiltY = lowPass(tiltY, clamp(corrected.y, -1, 1), .16);
+        haveGravityTilt = true;
+      }
+    }
+
+    const accel = event.acceleration;
+    if (accel) {
+      const ax = Number(accel.x) || 0;
+      const ay = Number(accel.y) || 0;
+      const az = Number(accel.z) || 0;
+      const corrected = toScreenXY(ax, ay);
+      shakeX = clamp(shakeX + corrected.x * .045, -2.5, 2.5);
+      shakeY = clamp(shakeY + corrected.y * .045, -2.5, 2.5);
+      shakeZ = clamp(shakeZ + az * .045, -2.5, 2.5);
+    }
+  }
+
+  function applySensorForces() {
+    if (!bodyRecords.length || !api) return;
+    let sx = haveGravityTilt ? tiltX : orientationTiltX;
+    let sy = haveGravityTilt ? tiltY : orientationTiltY;
+    const dead = .035;
+    if (Math.abs(sx) < dead) sx = 0;
+    if (Math.abs(sy) < dead) sy = 0;
+
+    const camera = app.camera || app.cam || app.activeCamera || app.currentCamera;
+    tmpRight.set(1,0,0);
+    tmpForward.set(0,0,-1);
+    if (camera?.quaternion) {
+      tmpRight.applyQuaternion(camera.quaternion);
+      tmpForward.applyQuaternion(camera.quaternion);
+    }
+    tmpRight.y = 0;
+    tmpForward.y = 0;
+    if (tmpRight.lengthSq() < .001) tmpRight.set(1,0,0); else tmpRight.normalize();
+    if (tmpForward.lengthSq() < .001) tmpForward.set(0,0,-1); else tmpForward.normalize();
+
+    // Tilt feels like rotating the gravity field under the model. Shake remains
+    // an impulse layered on top. Sensor axes are already corrected to the current
+    // screen orientation before they reach this mapping.
+    tmpForce.copy(tmpRight).multiplyScalar(sx * G * .92 + shakeX * G)
+      .addScaledVector(tmpForward, -sy * G * .92 - shakeY * G);
+    tmpForce.y += shakeZ * G * .55;
+    for (const b of bodyRecords) {
+      api.applyForce(b.handle, tmpForce.x * b.mass, tmpForce.y * b.mass, tmpForce.z * b.mass);
+    }
+    shakeX *= .78;
+    shakeY *= .78;
+    shakeZ *= .78;
+  }
+
   function frame(now) {
     if (!running || !api) return;
     if (!physics?.state?.enabled || physics.state.running === false) {
@@ -219,6 +299,7 @@
     accumulator += dt;
     let steps = 0;
     while (accumulator >= FIXED_DT && steps < 5) {
+      applySensorForces();
       api.step(FIXED_DT, SUBSTEPS);
       accumulator -= FIXED_DT;
       steps += 1;
@@ -237,18 +318,63 @@
     bodyRecords = [];
   }
 
-  async function requestMotionPermission() {
-    if (motionPermissionGranted) return true;
+  function requestSensorPermissions() {
+    // Important on iOS: create both permission promises synchronously while the
+    // Play click still owns transient user activation. Await only afterwards.
+    let motionRequest;
+    let orientationRequest;
     try {
-      if (typeof DeviceMotionEvent !== 'undefined' && typeof DeviceMotionEvent.requestPermission === 'function') {
-        motionPermissionGranted = (await DeviceMotionEvent.requestPermission()) === 'granted';
-      } else {
-        motionPermissionGranted = typeof DeviceMotionEvent !== 'undefined';
-      }
-    } catch (_) {
-      motionPermissionGranted = false;
+      motionRequest = (typeof DeviceMotionEvent !== 'undefined' && typeof DeviceMotionEvent.requestPermission === 'function')
+        ? DeviceMotionEvent.requestPermission()
+        : Promise.resolve(typeof DeviceMotionEvent !== 'undefined' ? 'granted' : 'denied');
+    } catch (_) { motionRequest = Promise.resolve('denied'); }
+    try {
+      orientationRequest = (typeof DeviceOrientationEvent !== 'undefined' && typeof DeviceOrientationEvent.requestPermission === 'function')
+        ? DeviceOrientationEvent.requestPermission()
+        : Promise.resolve(typeof DeviceOrientationEvent !== 'undefined' ? 'granted' : 'denied');
+    } catch (_) { orientationRequest = Promise.resolve('denied'); }
+
+    return Promise.all([motionRequest, orientationRequest]).then(([motion, orientation]) => {
+      motionPermissionGranted = motion === 'granted';
+      orientationPermissionGranted = orientation === 'granted';
+      return motionPermissionGranted || orientationPermissionGranted;
+    }).catch(() => false);
+  }
+
+  function startSensors() {
+    readScreenAngle();
+    tiltX = tiltY = orientationTiltX = orientationTiltY = 0;
+    shakeX = shakeY = shakeZ = 0;
+    haveGravityTilt = false;
+
+    if (motionPermissionGranted && !motionListener) {
+      motionListener = updateMotion;
+      window.addEventListener('devicemotion', motionListener, { passive: true });
     }
-    return motionPermissionGranted;
+    if (orientationPermissionGranted && !orientationListener) {
+      orientationListener = updateOrientationTilt;
+      window.addEventListener('deviceorientation', orientationListener, { passive: true });
+    }
+    if (!screenOrientationListener) {
+      screenOrientationListener = readScreenAngle;
+      if (screen.orientation?.addEventListener) screen.orientation.addEventListener('change', screenOrientationListener);
+      else window.addEventListener('orientationchange', screenOrientationListener, { passive: true });
+    }
+  }
+
+  function stopSensors() {
+    if (motionListener) window.removeEventListener('devicemotion', motionListener);
+    if (orientationListener) window.removeEventListener('deviceorientation', orientationListener);
+    if (screenOrientationListener) {
+      if (screen.orientation?.removeEventListener) screen.orientation.removeEventListener('change', screenOrientationListener);
+      else window.removeEventListener('orientationchange', screenOrientationListener);
+    }
+    motionListener = null;
+    orientationListener = null;
+    screenOrientationListener = null;
+    tiltX = tiltY = orientationTiltX = orientationTiltY = 0;
+    shakeX = shakeY = shakeZ = 0;
+    haveGravityTilt = false;
   }
 
   function applyForceToAll(x, y, z, gain = 1) {
@@ -258,53 +384,13 @@
     }
   }
 
-  function startMotion() {
-    if (!motionPermissionGranted || motionListener) return;
-    motionListener = (event) => {
-      if (!running || !bodyRecords.length) return;
-
-      const gravity = event.accelerationIncludingGravity || {};
-      const accel = event.acceleration || {};
-      const gx = Number(gravity.x) || 0;
-      const gy = Number(gravity.y) || 0;
-      const ax = Number(accel.x) || 0;
-      const ay = Number(accel.y) || 0;
-      const az = Number(accel.z) || 0;
-
-      const camera = app.camera || app.cam || app.activeCamera || app.currentCamera;
-      tmpRight.set(1,0,0);
-      tmpForward.set(0,0,-1);
-      if (camera?.quaternion) {
-        tmpRight.applyQuaternion(camera.quaternion);
-        tmpForward.applyQuaternion(camera.quaternion);
-      }
-      tmpRight.y = 0;
-      tmpForward.y = 0;
-      if (tmpRight.lengthSq() < .001) tmpRight.set(1,0,0); else tmpRight.normalize();
-      if (tmpForward.lengthSq() < .001) tmpForward.set(0,0,-1); else tmpForward.normalize();
-
-      const side = gx * .9 + ax * 1.8;
-      const forward = -gy * .9 - ay * 1.8;
-      tmpForce.copy(tmpRight).multiplyScalar(side).addScaledVector(tmpForward, forward);
-      tmpForce.y += az * .7;
-      applyForceToAll(tmpForce.x, tmpForce.y, tmpForce.z, 1.35);
-    };
-    window.addEventListener('devicemotion', motionListener, { passive: true });
-  }
-
-  function stopMotion() {
-    if (motionListener) window.removeEventListener('devicemotion', motionListener);
-    motionListener = null;
-  }
-
   async function start() {
     if (running) return true;
     if (!physics?.state?.enabled) return false;
-
-    const permissionPromise = requestMotionPermission();
+    const permissionPromise = requestSensorPermissions();
     try {
       await ensureModule();
-      if (!api.reset(0, -9.81, 0)) throw new Error('Box3D world init failed');
+      if (!api.reset(0, -G, 0)) throw new Error('Box3D world init failed');
       buildWorld();
       running = true;
       physics.state.running = true;
@@ -313,9 +399,9 @@
       accumulator = 0;
       syncPlayUI();
 
-      const allowed = await permissionPromise;
-      if (allowed) startMotion();
-      toast('Physics', allowed ? 'Live · tilt or shake the phone' : 'Live · gravity enabled', 'info', 1300);
+      const sensorAllowed = await permissionPromise;
+      if (sensorAllowed) startSensors();
+      toast('Physics', sensorAllowed ? 'Live · tilt or shake the phone' : 'Live · gravity enabled', 'info', 1300);
       raf = requestAnimationFrame(frame);
       return true;
     } catch (err) {
@@ -332,7 +418,7 @@
     raf = 0;
     lastTime = 0;
     accumulator = 0;
-    stopMotion();
+    stopSensors();
     removeRender();
     restoreAuthoringModel();
     try { api?.destroy?.(); } catch (_) {}
@@ -348,17 +434,10 @@
 
   function snapshotBodies() {
     if (!api) return [];
-    return bodyRecords.map((b) => ({
-      key: b.key,
-      x: api.px(b.handle),
-      y: api.py(b.handle),
-      z: api.pz(b.handle)
-    }));
+    return bodyRecords.map((b) => ({ key: b.key, x: api.px(b.handle), y: api.py(b.handle), z: api.pz(b.handle) }));
   }
 
-  function toggle() {
-    return running ? Promise.resolve(stop()) : start();
-  }
+  function toggle() { return running ? Promise.resolve(stop()) : start(); }
 
   function install() {
     app = window.VoxelApp;
@@ -378,7 +457,8 @@
       reset: stop,
       toggle,
       applyForce: applyForceToAll,
-      snapshotBodies
+      snapshotBodies,
+      readScreenAngle
     };
     syncPlayUI();
     return true;
