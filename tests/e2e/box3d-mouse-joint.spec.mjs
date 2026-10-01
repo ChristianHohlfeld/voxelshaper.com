@@ -17,6 +17,7 @@ async function ready(page) {
     window.VoxelBox3D.stop?.();
     window.VoxelPhysics.state.enabled = false;
     window.VoxelPhysics.state.running = false;
+    app.setBrushSize?.(1);
     app.voxels.clear();
     [[12,16,12,'#22D3EE'],[12,17,12,'#F59E0B'],[13,18,12,'#A78BFA']].forEach(([x,y,z,color]) => {
       app.voxels.set(app.key(x,y,z), {color,glass:false});
@@ -88,6 +89,7 @@ test('desktop Play is visible at left edge and native Box3D motor mouse joint ow
     camera:window.VoxelApp.cam.position.toArray(),
     quaternion:window.VoxelApp.cam.quaternion.toArray(),
     mouseGrab:window.VoxelBox3D.mouseGrabActive,
+    grabCount:window.VoxelBox3D.mouseGrabCount,
     router:window.VoxelPhysicsInputRouter.mode
   }));
 
@@ -99,6 +101,7 @@ test('desktop Play is visible at left edge and native Box3D motor mouse joint ow
   const cameraDelta = Math.hypot(...during.camera.map((v,i)=>v-before.camera[i]));
   const quatDelta = Math.hypot(...during.quaternion.map((v,i)=>v-before.quaternion[i]));
   expect(during.mouseGrab).toBe(true);
+  expect(during.grabCount).toBe(1);
   expect(during.router).toBe('physics');
   expect(bodyDelta).toBeGreaterThan(.08);
   expect(cameraDelta).toBeLessThan(1e-6);
@@ -118,4 +121,87 @@ test('desktop Play is visible at left edge and native Box3D motor mouse joint ow
   expect(reset.sim).toBe(false);
   expect(reset.snapshot).toEqual(original);
   expect(errors).toEqual([]);
+});
+
+test('3x3 brush creates one native Box3D mouse-grab group for the 3x3 face patch', async ({ page }) => {
+  await page.goto(`${BASE}/`, { waitUntil:'domcontentloaded' });
+  await page.waitForFunction(() =>
+    window.VoxelApp &&
+    window.VoxelPhysics?.playOnly === true &&
+    window.VoxelBox3D?.hardened === true,
+    null,
+    { timeout:20000 }
+  );
+
+  await page.evaluate(() => {
+    const app = window.VoxelApp;
+    window.VoxelBox3D.stop?.();
+    window.VoxelPhysics.state.enabled = false;
+    window.VoxelPhysics.state.running = false;
+    app.setBrushSize?.(3);
+    app.voxels.clear();
+    for (let x=12;x<=14;x++) {
+      for (let z=12;z<=14;z++) {
+        app.voxels.set(app.key(x,16,z), {color:'#22D3EE',glass:false});
+      }
+    }
+    app.updateInstancedVoxels?.();
+  });
+
+  const play = await center(page,'#vs-physics-test');
+  await page.mouse.click(play.x,play.y);
+  await page.waitForFunction(() => window.VoxelBox3D.running && window.VoxelPhysics.state.enabled);
+  await page.waitForTimeout(80);
+
+  const result = await page.evaluate(async () => {
+    const app = window.VoxelApp;
+    const box = window.VoxelBox3D;
+    const bodies = box.snapshotBodies();
+    const centerKey = app.key(13,16,13);
+    const centerIndex = bodies.findIndex((body) => body.key === centerKey);
+    const selected = box.brushBodyIndices({
+      index:centerIndex,
+      normal:new THREE.Vector3(0,1,0)
+    }, app.brushSize);
+    const centerBody = bodies[centerIndex];
+    const point = new THREE.Vector3(centerBody.x, centerBody.y, centerBody.z);
+    const before = bodies.map((b) => ({...b}));
+    const started = box.beginMouseGrab(selected, point, 100);
+    box.updateMouseGrab(new THREE.Vector3(point.x + 1.2, point.y + .2, point.z));
+    await new Promise((resolve) => setTimeout(resolve, 350));
+    const after = box.snapshotBodies();
+    const moved = selected.filter((index) => {
+      const a = before[index];
+      const b = after[index];
+      return Math.hypot(b.x-a.x,b.y-a.y,b.z-a.z) > .04;
+    }).length;
+    return {
+      brushSize:app.brushSize,
+      selected,
+      started,
+      nativeCount:box.mouseGrabCount,
+      moved
+    };
+  });
+
+  expect(result.brushSize).toBe(3);
+  expect(result.selected).toHaveLength(9);
+  expect(result.started).toBe(true);
+  expect(result.nativeCount).toBe(9);
+  expect(result.moved).toBeGreaterThanOrEqual(7);
+
+  await page.evaluate(() => window.VoxelBox3D.endMouseGrab());
+  expect(await page.evaluate(() => window.VoxelBox3D.mouseGrabCount)).toBe(0);
+
+  const one = await page.evaluate(() => {
+    const app = window.VoxelApp;
+    app.setBrushSize?.(1);
+    const bodies = window.VoxelBox3D.snapshotBodies();
+    const centerIndex = bodies.findIndex((body) => body.key === app.key(13,16,13));
+    return window.VoxelBox3D.brushBodyIndices({ index:centerIndex, normal:new THREE.Vector3(0,1,0) }, app.brushSize);
+  });
+  expect(one).toHaveLength(1);
+
+  await page.locator('#vs-physics-test').click();
+  await page.waitForFunction(() => !window.VoxelBox3D.running && !window.VoxelPhysics.state.enabled);
 });
