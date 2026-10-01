@@ -18,6 +18,7 @@ on:
       - 'lib/box3d/box3d.wasm'
       - 'tests/e2e/box3d-physics.spec.mjs'
       - 'tests/e2e/box3d-mobile-touch.spec.mjs'
+      - 'tests/e2e/box3d-mouse-joint.spec.mjs'
       - 'tests/e2e/history-morph.spec.mjs'
       - 'tests/e2e/visual-physics.spec.mjs'
       - '.github/workflows/test-box3d-physics.yml'
@@ -52,6 +53,11 @@ jobs:
           node --check history-hardening.js
           node --check morph-forms-v2.js
           node --check mcp-import.js
+          grep -q 'vsb3_begin_mouse_joint' physics/box3d_bridge.c
+          grep -q 'b3CreateMotorJoint' physics/box3d_bridge.c
+          grep -q 'b3Body_SetTargetTransform' physics/box3d_bridge.c
+          grep -q 'beginMouseGrab' physics-input-router.js
+          ! grep -q 'applyScreenDrag' physics-input-router.js
           grep -q '<script src="lib/box3d/box3d.js"></script>' index.html
           grep -q '<script src="physics-box3d-runtime.js"></script>' index.html
           grep -q '<script src="history-hardening.js"></script>' index.html
@@ -71,7 +77,7 @@ jobs:
       - name: Run local browser tests
         env:
           VS_TEST_BASE_URL: http://127.0.0.1:4173
-        run: npx playwright test tests/e2e/box3d-physics.spec.mjs tests/e2e/box3d-mobile-touch.spec.mjs tests/e2e/history-morph.spec.mjs --reporter=line
+        run: npx playwright test tests/e2e/box3d-physics.spec.mjs tests/e2e/box3d-mobile-touch.spec.mjs tests/e2e/box3d-mouse-joint.spec.mjs tests/e2e/history-morph.spec.mjs --reporter=line
       - name: Capture local desktop/mobile visual smoke
         env:
           VS_TEST_BASE_URL: http://127.0.0.1:4173
@@ -103,7 +109,7 @@ jobs:
       - name: Run live browser tests
         env:
           VS_TEST_BASE_URL: https://voxelshaper.com
-        run: npx playwright test tests/e2e/box3d-physics.spec.mjs tests/e2e/box3d-mobile-touch.spec.mjs tests/e2e/history-morph.spec.mjs --reporter=line
+        run: npx playwright test tests/e2e/box3d-physics.spec.mjs tests/e2e/box3d-mobile-touch.spec.mjs tests/e2e/box3d-mouse-joint.spec.mjs tests/e2e/history-morph.spec.mjs --reporter=line
       - name: Capture live desktop/mobile visual smoke
         env:
           VS_TEST_BASE_URL: https://voxelshaper.com
