@@ -8,11 +8,12 @@
   function install() {
     const app = window.VoxelApp;
     const physics = window.VoxelPhysics;
+    const box = window.VoxelBox3D;
     const btn = document.getElementById('mobile-canvas-mode-toggle');
     const canvas = app?.cvs;
-    if (!app || !physics || !btn || !canvas || !isMobileSurface(app)) return false;
-    if (btn.dataset.physicsCycleBound === '2') return true;
-    btn.dataset.physicsCycleBound = '2';
+    if (!app || !physics || !box?.hardened || !btn || !canvas || !isMobileSurface(app)) return false;
+    if (btn.dataset.physicsCycleBound === '3') return true;
+    btn.dataset.physicsCycleBound = '3';
 
     document.getElementById('vs-physics-toggle-mobile')?.remove();
     document.getElementById('vs-physics-direct-style')?.remove();
@@ -120,7 +121,7 @@
       <button type="button" data-type="fixed">Fixed</button>
       <button type="button" id="vs-physics-axis">Axis Y</button>
       <button type="button" id="vs-physics-motor"><i class="fas fa-bolt"></i> Motor</button>
-      <button type="button" id="vs-physics-test" class="icon-only" aria-label="Play or stop physics test"><i class="fas fa-play"></i></button>
+      <button type="button" id="vs-physics-test" class="icon-only" aria-label="Play physics test"><i class="fas fa-play"></i></button>
       <button type="button" id="vs-physics-new" class="icon-only" aria-label="Create new joint"><i class="fas fa-plus"></i></button>
       <button type="button" id="vs-physics-delete" class="icon-only" aria-label="Delete joint"><i class="fas fa-trash"></i></button>
     `;
@@ -157,12 +158,13 @@
     };
 
     const forceStopTest = () => {
-      physics.state.running = false;
-      const preview = physics.state.preview;
-      if (preview) {
-        preview.parent?.remove(preview);
+      try { box.stop(); } catch (_) {
+        physics.state.running = false;
+        const preview = physics.state.preview;
+        if (preview) preview.parent?.remove(preview);
         physics.state.preview = null;
       }
+      box.syncUi?.();
     };
 
     const selectJoint = (id) => {
@@ -218,8 +220,7 @@
       const axisBtn = toolbar.querySelector('#vs-physics-axis');
       if (axisBtn) axisBtn.textContent = `Axis ${currentAxis(j)}`;
       toolbar.querySelector('#vs-physics-motor')?.classList.toggle('on', !!j.motor?.enabled);
-      const testIcon = toolbar.querySelector('#vs-physics-test i');
-      if (testIcon) testIcon.className = physics.state?.running ? 'fas fa-stop' : 'fas fa-play';
+      box.syncUi?.();
     };
 
     const startNew = () => {
@@ -260,9 +261,7 @@
         return;
       }
       if (e.target.closest('#vs-physics-test')) {
-        if (physics.state?.running) forceStopTest();
-        else clickHidden('#vsp-play');
-        syncToolbar();
+        // The hardened Box3D controller owns this click in capture phase.
         return;
       }
       if (e.target.closest('#vs-physics-new')) {
@@ -273,7 +272,8 @@
         forceStopTest();
         clickHidden('#vsp-del');
         directJointId = null;
-        placing = (physics.state?.joints?.length || 0) === 0;
+        entryJointCount = physics.state?.joints?.length || 0;
+        placing = entryJointCount === 0;
         if (placing) physics.newJoint?.();
         showHud('', false);
         syncToolbar();
