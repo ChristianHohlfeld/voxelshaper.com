@@ -74,14 +74,18 @@ jobs:
           for i in {1..30}; do curl -fsS http://127.0.0.1:4173/ >/dev/null && exit 0; sleep 1; done
           cat /tmp/voxelshaper-http.log
           exit 1
-      - name: Run local browser tests
+      - name: Run local physics interaction tests
         env:
           VS_TEST_BASE_URL: http://127.0.0.1:4173
-        run: npx playwright test tests/e2e/box3d-physics.spec.mjs tests/e2e/box3d-mobile-touch.spec.mjs tests/e2e/box3d-mouse-joint.spec.mjs tests/e2e/history-morph.spec.mjs --reporter=line
+        run: npx playwright test tests/e2e/box3d-physics.spec.mjs tests/e2e/box3d-mobile-touch.spec.mjs tests/e2e/box3d-mouse-joint.spec.mjs --retries=0 --reporter=line
+      - name: Run local history/morph tests
+        env:
+          VS_TEST_BASE_URL: http://127.0.0.1:4173
+        run: npx playwright test tests/e2e/history-morph.spec.mjs --retries=0 --reporter=line
       - name: Capture local desktop/mobile visual smoke
         env:
           VS_TEST_BASE_URL: http://127.0.0.1:4173
-        run: npx playwright test tests/e2e/visual-physics.spec.mjs --reporter=line
+        run: npx playwright test tests/e2e/visual-physics.spec.mjs --retries=0 --reporter=line
       - name: Upload local visual smoke
         if: always()
         uses: actions/upload-artifact@v4
@@ -106,16 +110,20 @@ jobs:
           done
           echo 'live deployment did not expose current play-only physics scripts'
           exit 1
-      - name: Run live browser tests
+      - name: Run live physics interaction tests
         env:
           VS_TEST_BASE_URL: https://voxelshaper.com
-        run: npx playwright test tests/e2e/box3d-physics.spec.mjs tests/e2e/box3d-mobile-touch.spec.mjs tests/e2e/box3d-mouse-joint.spec.mjs tests/e2e/history-morph.spec.mjs --reporter=line
+        run: npx playwright test tests/e2e/box3d-physics.spec.mjs tests/e2e/box3d-mobile-touch.spec.mjs tests/e2e/box3d-mouse-joint.spec.mjs --retries=0 --reporter=line
+      - name: Run live history/morph tests
+        env:
+          VS_TEST_BASE_URL: https://voxelshaper.com
+        run: npx playwright test tests/e2e/history-morph.spec.mjs --retries=0 --reporter=line
       - name: Capture live desktop/mobile visual smoke
         env:
           VS_TEST_BASE_URL: https://voxelshaper.com
         run: |
           rm -rf test-results/visual
-          npx playwright test tests/e2e/visual-physics.spec.mjs --reporter=line
+          npx playwright test tests/e2e/visual-physics.spec.mjs --retries=0 --reporter=line
       - name: Upload live visual smoke
         if: always()
         uses: actions/upload-artifact@v4
