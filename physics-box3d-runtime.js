@@ -14,7 +14,8 @@
   let lastTime = 0;
   let accumulator = 0;
   let bodyRecords = [];
-  let groundHandle = 0;
+  let boundaryHandle = 0;
+  let worldExtent = 0;
   let renderRoot = null;
   let renderMesh = null;
   let renderGeometry = null;
@@ -125,6 +126,31 @@
     app.scene.add(renderRoot);
   }
 
+  function addBoundaryBox(handle, ox, oy, oz, hx, hy, hz) {
+    if (!api.addBox(handle, ox,oy,oz, hx,hy,hz, 1,.82,.02,0)) {
+      throw new Error('Box3D boundary collider creation failed');
+    }
+  }
+
+  function buildBoundaries(size) {
+    worldExtent = Math.max(size, (app.GRID || 32) * size);
+    const half = worldExtent * .5;
+    const wall = Math.max(size * .5, .25);
+
+    // One static body with six box shapes. Inner faces align exactly with the
+    // editor volume [0, worldExtent] on X/Y/Z, matching the visible bounding box.
+    boundaryHandle = api.createBody(0, half,half,half, 0,0,0,1, 0,0,0);
+    if (!boundaryHandle) throw new Error('Box3D boundary body creation failed');
+
+    const span = half + wall;
+    addBoundaryBox(boundaryHandle, 0, -half-wall, 0, span,wall,span); // floor y=0
+    addBoundaryBox(boundaryHandle, 0,  half+wall, 0, span,wall,span); // ceiling y=max
+    addBoundaryBox(boundaryHandle, -half-wall, 0, 0, wall,span,span); // x=0
+    addBoundaryBox(boundaryHandle,  half+wall, 0, 0, wall,span,span); // x=max
+    addBoundaryBox(boundaryHandle, 0, 0, -half-wall, span,span,wall); // z=0
+    addBoundaryBox(boundaryHandle, 0, 0,  half+wall, span,span,wall); // z=max
+  }
+
   function buildWorld() {
     const entries = [...app.voxels.entries()];
     if (!entries.length) throw new Error('No voxels to simulate');
@@ -143,8 +169,14 @@
       if (!api.addBox(handle, 0,0,0, size*.485,size*.485,size*.485, 1,.68,.045,0)) {
         throw new Error(`Box3D collider creation failed at voxel ${index}`);
       }
+
+      // Match the editor's exact instanced-color path. The editor stores CSS/hex
+      // colors as sRGB and converts them to linear before setColorAt(). Without
+      // this conversion the temporary physics copy looks pale/washed out.
       const color = new THREE.Color(voxelColor(value));
+      if (typeof color.convertSRGBToLinear === 'function') color.convertSRGBToLinear();
       renderMesh.setColorAt(index, color);
+
       tmpPosition.set(x,y,z);
       tmpQuaternion.identity();
       tmpMatrix.compose(tmpPosition,tmpQuaternion,tmpScale);
@@ -160,13 +192,7 @@
     renderMesh.instanceMatrix.needsUpdate = true;
     if (renderMesh.instanceColor) renderMesh.instanceColor.needsUpdate = true;
 
-    // The editor's visible foundation is y=0. Give Box3D a matching collision floor.
-    const worldSize = Math.max(8, (app.GRID || 32) * size);
-    groundHandle = api.createBody(0, worldSize*.5, -size*.5, worldSize*.5, 0,0,0,1, 0,0,0);
-    if (!groundHandle || !api.addBox(groundHandle, 0,0,0, worldSize, size*.5, worldSize, 0,.82,.02,0)) {
-      throw new Error('Box3D ground creation failed');
-    }
-
+    buildBoundaries(size);
     hideAuthoringModel();
   }
 
@@ -245,8 +271,6 @@
       const ay = Number(accel.y) || 0;
       const az = Number(accel.z) || 0;
 
-      // Screen-left/right and screen-up/down become world-horizontal forces relative to the camera.
-      // Gravity components make tilt work; acceleration components make a shake feel immediate.
       const camera = app.camera || app.cam || app.activeCamera || app.currentCamera;
       tmpRight.set(1,0,0);
       tmpForward.set(0,0,-1);
@@ -277,7 +301,6 @@
     if (running) return true;
     if (!physics?.state?.enabled) return false;
 
-    // On iOS this call must originate directly from the Play gesture.
     const permissionPromise = requestMotionPermission();
     try {
       await ensureModule();
@@ -313,13 +336,24 @@
     removeRender();
     restoreAuthoringModel();
     try { api?.destroy?.(); } catch (_) {}
-    groundHandle = 0;
+    boundaryHandle = 0;
+    worldExtent = 0;
     if (physics?.state) {
       physics.state.running = false;
       physics.state.preview = null;
     }
     syncPlayUI();
     return true;
+  }
+
+  function snapshotBodies() {
+    if (!api) return [];
+    return bodyRecords.map((b) => ({
+      key: b.key,
+      x: api.px(b.handle),
+      y: api.py(b.handle),
+      z: api.pz(b.handle)
+    }));
   }
 
   function toggle() {
@@ -338,11 +372,13 @@
       get running() { return running; },
       get ready() { return !!api; },
       get bodyCount() { return bodyRecords.length; },
+      get worldExtent() { return worldExtent; },
       start,
       stop,
       reset: stop,
       toggle,
-      applyForce: applyForceToAll
+      applyForce: applyForceToAll,
+      snapshotBodies
     };
     syncPlayUI();
     return true;
