@@ -3,6 +3,7 @@
 // SPDX-License-Identifier: MIT
 
 #include <emscripten/emscripten.h>
+#include <math.h>
 #include <stdbool.h>
 #include <stdint.h>
 #include <string.h>
@@ -34,10 +35,24 @@ static b3WorldId g_world = {0};
 static vsBodySlot g_bodies[VS_MAX_BODIES];
 static vsJointSlot g_joints[VS_MAX_JOINTS];
 
+// Native Box3D grabber, following Erin Catto's current sample implementation:
+// a kinematic mouse body drives the picked dynamic body through a b3MotorJoint.
+static b3BodyId g_mouseBody = {0};
+static b3JointId g_mouseJoint = {0};
+static b3Pos g_mouseTarget = {0};
+
+static void vs_clear_mouse_handles(void)
+{
+    g_mouseBody = b3_nullBodyId;
+    g_mouseJoint = b3_nullJointId;
+    g_mouseTarget = (b3Pos){0.0, 0.0, 0.0};
+}
+
 static void vs_clear_handles(void)
 {
     memset(g_bodies, 0, sizeof(g_bodies));
     memset(g_joints, 0, sizeof(g_joints));
+    vs_clear_mouse_handles();
 }
 
 static bool vs_world_valid(void)
@@ -80,6 +95,25 @@ static int vs_alloc_joint(b3JointId id)
         }
     }
     return 0;
+}
+
+static void vs_end_mouse_joint_internal(void)
+{
+    if (!vs_world_valid())
+    {
+        vs_clear_mouse_handles();
+        return;
+    }
+
+    if (b3Joint_IsValid(g_mouseJoint))
+    {
+        b3DestroyJoint(g_mouseJoint, true);
+    }
+    if (b3Body_IsValid(g_mouseBody))
+    {
+        b3DestroyBody(g_mouseBody);
+    }
+    vs_clear_mouse_handles();
 }
 
 static b3Quat vs_inverse_quat(b3Quat q)
@@ -293,12 +327,88 @@ int vsb3_create_weld(int bodyAHandle, int bodyBHandle,
 }
 
 EMSCRIPTEN_KEEPALIVE
+int vsb3_begin_mouse_joint(int bodyHandle, float px, float py, float pz, float forceScale)
+{
+    if (!vs_world_valid()) return 0;
+    b3BodyId bodyId = vs_body(bodyHandle);
+    if (!b3Body_IsValid(bodyId)) return 0;
+
+    vs_end_mouse_joint_internal();
+
+    g_mouseTarget = (b3Pos){px, py, pz};
+    b3BodyDef bodyDef = b3DefaultBodyDef();
+    bodyDef.type = b3_kinematicBody;
+    bodyDef.position = g_mouseTarget;
+    bodyDef.enableSleep = false;
+    g_mouseBody = b3CreateBody(g_world, &bodyDef);
+    if (!b3Body_IsValid(g_mouseBody))
+    {
+        vs_clear_mouse_handles();
+        return 0;
+    }
+
+    b3MotorJointDef jointDef = b3DefaultMotorJointDef();
+    jointDef.base.bodyIdA = g_mouseBody;
+    jointDef.base.bodyIdB = bodyId;
+    jointDef.base.localFrameB.p = b3Body_GetLocalPoint(bodyId, g_mouseTarget);
+    jointDef.linearHertz = 7.5f;
+    jointDef.linearDampingRatio = 1.0f;
+
+    b3MassData massData = b3Body_GetMassData(bodyId);
+    float g = b3Length(b3World_GetGravity(g_world));
+    float mg = massData.mass * g;
+    float scale = forceScale > 0.0f ? forceScale : 100.0f;
+    jointDef.maxSpringForce = scale * mg;
+
+    if (massData.mass > 0.0f)
+    {
+        float trace = massData.inertia.cx.x + massData.inertia.cy.y + massData.inertia.cz.z;
+        float lever = sqrtf(trace / (3.0f * massData.mass));
+        jointDef.maxVelocityTorque = 0.5f * lever * mg;
+    }
+
+    g_mouseJoint = b3CreateMotorJoint(g_world, &jointDef);
+    if (!b3Joint_IsValid(g_mouseJoint))
+    {
+        b3DestroyBody(g_mouseBody);
+        vs_clear_mouse_handles();
+        return 0;
+    }
+
+    b3Body_SetAwake(bodyId, true);
+    return 1;
+}
+
+EMSCRIPTEN_KEEPALIVE
+int vsb3_set_mouse_target(float px, float py, float pz)
+{
+    if (!vs_world_valid() || !b3Body_IsValid(g_mouseBody) || !b3Joint_IsValid(g_mouseJoint)) return 0;
+    g_mouseTarget = (b3Pos){px, py, pz};
+    return 1;
+}
+
+EMSCRIPTEN_KEEPALIVE
+void vsb3_end_mouse_joint(void)
+{
+    vs_end_mouse_joint_internal();
+}
+
+EMSCRIPTEN_KEEPALIVE
 void vsb3_step(float dt, int substeps)
 {
     if (!vs_world_valid()) return;
     if (dt <= 0.0f) dt = 1.0f / 60.0f;
     if (substeps < 1) substeps = 1;
     if (substeps > 16) substeps = 16;
+
+    // Erin Catto's sample drives the kinematic mouse body immediately before
+    // stepping the world. This keeps the motor joint fully inside Box3D's solver.
+    if (b3Body_IsValid(g_mouseBody))
+    {
+        b3WorldTransform target = {g_mouseTarget, b3Quat_identity};
+        b3Body_SetTargetTransform(g_mouseBody, target, dt, true);
+    }
+
     b3World_Step(g_world, dt, substeps);
 }
 
