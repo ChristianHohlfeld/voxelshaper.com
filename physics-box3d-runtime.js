@@ -4,7 +4,6 @@
   const SOURCE_COMMIT = '9f998c862d54c03a633ecea3831937385c78b532';
   const FIXED_DT = 1 / 60;
   const SUBSTEPS = 4;
-  const DEG = Math.PI / 180;
   const G = 9.81;
 
   let app = null;
@@ -22,31 +21,28 @@
   let renderMesh = null;
   let renderGeometry = null;
   let visibilitySnapshot = [];
-  let motionListener = null;
-  let orientationListener = null;
-  let screenOrientationListener = null;
-  let motionPermissionGranted = false;
-  let orientationPermissionGranted = false;
-  let screenAngle = 0;
-  let tiltX = 0;
-  let tiltY = 0;
-  let orientationTiltX = 0;
-  let orientationTiltY = 0;
-  let haveGravityTilt = false;
-  let shakeX = 0;
-  let shakeY = 0;
-  let shakeZ = 0;
+  let interactionInstalled = false;
 
+  const raycaster = new THREE.Raycaster();
+  const pointerNdc = new THREE.Vector2();
   const tmpPosition = new THREE.Vector3();
   const tmpQuaternion = new THREE.Quaternion();
   const tmpScale = new THREE.Vector3(1, 1, 1);
   const tmpMatrix = new THREE.Matrix4();
   const tmpRight = new THREE.Vector3();
-  const tmpForward = new THREE.Vector3();
+  const tmpUp = new THREE.Vector3();
   const tmpForce = new THREE.Vector3();
 
+  const drag = {
+    active: false,
+    pointerId: null,
+    bodyIndex: -1,
+    lastX: 0,
+    lastY: 0,
+    lastAt: 0
+  };
+
   const clamp = (v, lo, hi) => Math.max(lo, Math.min(hi, v));
-  const lowPass = (current, next, amount) => current + (next - current) * amount;
 
   function toast(title, text, type = 'info', ms = 1300) {
     try { app?.showToast?.(title, text, type, ms); } catch (_) {}
@@ -181,15 +177,24 @@
       if (!api.addBox(handle, 0,0,0, size*.485,size*.485,size*.485, 1,.68,.045,0)) {
         throw new Error(`Box3D collider creation failed at voxel ${index}`);
       }
+
       const color = new THREE.Color(voxelColor(value));
       if (typeof color.convertSRGBToLinear === 'function') color.convertSRGBToLinear();
       renderMesh.setColorAt(index, color);
+
       tmpPosition.set(x,y,z);
       tmpQuaternion.identity();
       tmpMatrix.compose(tmpPosition,tmpQuaternion,tmpScale);
       renderMesh.setMatrixAt(index,tmpMatrix);
-      bodyRecords.push({ key, handle, index, mass: Math.max(.001, api.bodyMass(handle) || 1), start: { x, y, z } });
+      bodyRecords.push({
+        key,
+        handle,
+        index,
+        mass: Math.max(.001, api.bodyMass(handle) || 1),
+        start: { x, y, z }
+      });
     });
+
     renderMesh.instanceMatrix.needsUpdate = true;
     if (renderMesh.instanceColor) renderMesh.instanceColor.needsUpdate = true;
     buildBoundaries(size);
@@ -207,86 +212,6 @@
     renderMesh.instanceMatrix.needsUpdate = true;
   }
 
-  function readScreenAngle() {
-    const raw = Number(screen.orientation?.angle ?? window.orientation ?? 0) || 0;
-    screenAngle = raw * DEG;
-  }
-
-  function toScreenXY(x, y) {
-    const c = Math.cos(screenAngle);
-    const s = Math.sin(screenAngle);
-    return { x: x * c - y * s, y: x * s + y * c };
-  }
-
-  function updateOrientationTilt(event) {
-    if (!Number.isFinite(event.beta) || !Number.isFinite(event.gamma)) return;
-    // DeviceOrientation is fused orientation. sin() keeps beta stable across the
-    // +/-180 seam and avoids a discontinuity when the phone crosses vertical.
-    const rawX = Math.sin(event.gamma * DEG);
-    const rawY = Math.sin(event.beta * DEG);
-    const corrected = toScreenXY(rawX, rawY);
-    orientationTiltX = lowPass(orientationTiltX, clamp(corrected.x, -1, 1), .12);
-    orientationTiltY = lowPass(orientationTiltY, clamp(corrected.y, -1, 1), .12);
-  }
-
-  function updateMotion(event) {
-    const gravity = event.accelerationIncludingGravity;
-    if (gravity && Number.isFinite(gravity.x) && Number.isFinite(gravity.y)) {
-      const corrected = toScreenXY(gravity.x / G, gravity.y / G);
-      const magnitude = Math.hypot(corrected.x, corrected.y, (Number(gravity.z) || 0) / G);
-      if (magnitude > .35 && magnitude < 1.65) {
-        tiltX = lowPass(tiltX, clamp(corrected.x, -1, 1), .16);
-        tiltY = lowPass(tiltY, clamp(corrected.y, -1, 1), .16);
-        haveGravityTilt = true;
-      }
-    }
-
-    const accel = event.acceleration;
-    if (accel) {
-      const ax = Number(accel.x) || 0;
-      const ay = Number(accel.y) || 0;
-      const az = Number(accel.z) || 0;
-      const corrected = toScreenXY(ax, ay);
-      shakeX = clamp(shakeX + corrected.x * .045, -2.5, 2.5);
-      shakeY = clamp(shakeY + corrected.y * .045, -2.5, 2.5);
-      shakeZ = clamp(shakeZ + az * .045, -2.5, 2.5);
-    }
-  }
-
-  function applySensorForces() {
-    if (!bodyRecords.length || !api) return;
-    let sx = haveGravityTilt ? tiltX : orientationTiltX;
-    let sy = haveGravityTilt ? tiltY : orientationTiltY;
-    const dead = .035;
-    if (Math.abs(sx) < dead) sx = 0;
-    if (Math.abs(sy) < dead) sy = 0;
-
-    const camera = app.camera || app.cam || app.activeCamera || app.currentCamera;
-    tmpRight.set(1,0,0);
-    tmpForward.set(0,0,-1);
-    if (camera?.quaternion) {
-      tmpRight.applyQuaternion(camera.quaternion);
-      tmpForward.applyQuaternion(camera.quaternion);
-    }
-    tmpRight.y = 0;
-    tmpForward.y = 0;
-    if (tmpRight.lengthSq() < .001) tmpRight.set(1,0,0); else tmpRight.normalize();
-    if (tmpForward.lengthSq() < .001) tmpForward.set(0,0,-1); else tmpForward.normalize();
-
-    // Tilt feels like rotating the gravity field under the model. Shake remains
-    // an impulse layered on top. Sensor axes are already corrected to the current
-    // screen orientation before they reach this mapping.
-    tmpForce.copy(tmpRight).multiplyScalar(sx * G * .92 + shakeX * G)
-      .addScaledVector(tmpForward, -sy * G * .92 - shakeY * G);
-    tmpForce.y += shakeZ * G * .55;
-    for (const b of bodyRecords) {
-      api.applyForce(b.handle, tmpForce.x * b.mass, tmpForce.y * b.mass, tmpForce.z * b.mass);
-    }
-    shakeX *= .78;
-    shakeY *= .78;
-    shakeZ *= .78;
-  }
-
   function frame(now) {
     if (!running || !api) return;
     if (!physics?.state?.enabled || physics.state.running === false) {
@@ -299,7 +224,6 @@
     accumulator += dt;
     let steps = 0;
     while (accumulator >= FIXED_DT && steps < 5) {
-      applySensorForces();
       api.step(FIXED_DT, SUBSTEPS);
       accumulator -= FIXED_DT;
       steps += 1;
@@ -308,7 +232,116 @@
     raf = requestAnimationFrame(frame);
   }
 
+  function applyForceToBody(index, x, y, z, gain = 1) {
+    if (!running || !api) return false;
+    const body = bodyRecords[index];
+    if (!body) return false;
+    api.applyForce(body.handle, x * body.mass * gain, y * body.mass * gain, z * body.mass * gain);
+    return true;
+  }
+
+  function applyForceToAll(x, y, z, gain = 1) {
+    if (!running || !api) return false;
+    for (const b of bodyRecords) {
+      api.applyForce(b.handle, x * b.mass * gain, y * b.mass * gain, z * b.mass * gain);
+    }
+    return true;
+  }
+
+  function bodyAtPointer(clientX, clientY) {
+    if (!renderMesh || !app?.cam || !app?.cvs) return -1;
+    const rect = app.cvs.getBoundingClientRect();
+    if (!rect.width || !rect.height) return -1;
+    pointerNdc.set(
+      ((clientX - rect.left) / rect.width) * 2 - 1,
+      -((clientY - rect.top) / rect.height) * 2 + 1
+    );
+    raycaster.setFromCamera(pointerNdc, app.cam);
+    const hit = raycaster.intersectObject(renderMesh, false)[0];
+    return Number.isInteger(hit?.instanceId) ? hit.instanceId : -1;
+  }
+
+  function dragForceFromScreen(dx, dy, bodyIndex) {
+    const body = bodyRecords[bodyIndex];
+    if (!body || !app?.cam) return false;
+
+    tmpRight.set(1,0,0).applyQuaternion(app.cam.quaternion).normalize();
+    tmpUp.set(0,1,0).applyQuaternion(app.cam.quaternion).normalize();
+
+    const size = app.VS || 1;
+    const perPixel = clamp(size * 7.5, 4, 22);
+    tmpForce.copy(tmpRight).multiplyScalar(dx * perPixel)
+      .addScaledVector(tmpUp, -dy * perPixel);
+
+    const maxForce = Math.max(80, body.mass * 1800);
+    if (tmpForce.length() > maxForce) tmpForce.setLength(maxForce);
+    return applyForceToBody(bodyIndex, tmpForce.x, tmpForce.y, tmpForce.z, 1);
+  }
+
+  function cancelDrag() {
+    drag.active = false;
+    drag.pointerId = null;
+    drag.bodyIndex = -1;
+    drag.lastX = drag.lastY = 0;
+    drag.lastAt = 0;
+    if (app?.cvs) app.cvs.style.cursor = running ? 'grab' : '';
+  }
+
+  function onPointerDown(event) {
+    if (!running || !physics?.state?.enabled || event.button > 0) return;
+    const index = bodyAtPointer(event.clientX, event.clientY);
+    if (index < 0) return;
+
+    drag.active = true;
+    drag.pointerId = event.pointerId;
+    drag.bodyIndex = index;
+    drag.lastX = event.clientX;
+    drag.lastY = event.clientY;
+    drag.lastAt = performance.now();
+    try { app.cvs.setPointerCapture?.(event.pointerId); } catch (_) {}
+    app.cvs.style.cursor = 'grabbing';
+    event.preventDefault();
+    event.stopImmediatePropagation();
+  }
+
+  function onPointerMove(event) {
+    if (!drag.active || event.pointerId !== drag.pointerId || !running) return;
+    const dx = event.clientX - drag.lastX;
+    const dy = event.clientY - drag.lastY;
+    const now = performance.now();
+    const dt = Math.max(8, now - drag.lastAt);
+
+    // Convert finger/mouse movement into a force in the camera's screen plane.
+    // Faster drags get a modest extra gain, but remain clamped for stability.
+    const speedGain = clamp(16 / dt, .65, 1.8);
+    dragForceFromScreen(dx * speedGain, dy * speedGain, drag.bodyIndex);
+
+    drag.lastX = event.clientX;
+    drag.lastY = event.clientY;
+    drag.lastAt = now;
+    event.preventDefault();
+    event.stopImmediatePropagation();
+  }
+
+  function onPointerEnd(event) {
+    if (!drag.active || event.pointerId !== drag.pointerId) return;
+    try { app.cvs.releasePointerCapture?.(event.pointerId); } catch (_) {}
+    cancelDrag();
+    event.preventDefault();
+    event.stopImmediatePropagation();
+  }
+
+  function installPointerInteraction() {
+    if (interactionInstalled || !app?.cvs) return;
+    interactionInstalled = true;
+    app.cvs.addEventListener('pointerdown', onPointerDown, true);
+    app.cvs.addEventListener('pointermove', onPointerMove, true);
+    app.cvs.addEventListener('pointerup', onPointerEnd, true);
+    app.cvs.addEventListener('pointercancel', onPointerEnd, true);
+  }
+
   function removeRender() {
+    cancelDrag();
     if (renderRoot) renderRoot.parent?.remove(renderRoot);
     if (renderMesh?.material) renderMesh.material.dispose?.();
     renderGeometry?.dispose?.();
@@ -318,76 +351,9 @@
     bodyRecords = [];
   }
 
-  function requestSensorPermissions() {
-    // Important on iOS: create both permission promises synchronously while the
-    // Play click still owns transient user activation. Await only afterwards.
-    let motionRequest;
-    let orientationRequest;
-    try {
-      motionRequest = (typeof DeviceMotionEvent !== 'undefined' && typeof DeviceMotionEvent.requestPermission === 'function')
-        ? DeviceMotionEvent.requestPermission()
-        : Promise.resolve(typeof DeviceMotionEvent !== 'undefined' ? 'granted' : 'denied');
-    } catch (_) { motionRequest = Promise.resolve('denied'); }
-    try {
-      orientationRequest = (typeof DeviceOrientationEvent !== 'undefined' && typeof DeviceOrientationEvent.requestPermission === 'function')
-        ? DeviceOrientationEvent.requestPermission()
-        : Promise.resolve(typeof DeviceOrientationEvent !== 'undefined' ? 'granted' : 'denied');
-    } catch (_) { orientationRequest = Promise.resolve('denied'); }
-
-    return Promise.all([motionRequest, orientationRequest]).then(([motion, orientation]) => {
-      motionPermissionGranted = motion === 'granted';
-      orientationPermissionGranted = orientation === 'granted';
-      return motionPermissionGranted || orientationPermissionGranted;
-    }).catch(() => false);
-  }
-
-  function startSensors() {
-    readScreenAngle();
-    tiltX = tiltY = orientationTiltX = orientationTiltY = 0;
-    shakeX = shakeY = shakeZ = 0;
-    haveGravityTilt = false;
-
-    if (motionPermissionGranted && !motionListener) {
-      motionListener = updateMotion;
-      window.addEventListener('devicemotion', motionListener, { passive: true });
-    }
-    if (orientationPermissionGranted && !orientationListener) {
-      orientationListener = updateOrientationTilt;
-      window.addEventListener('deviceorientation', orientationListener, { passive: true });
-    }
-    if (!screenOrientationListener) {
-      screenOrientationListener = readScreenAngle;
-      if (screen.orientation?.addEventListener) screen.orientation.addEventListener('change', screenOrientationListener);
-      else window.addEventListener('orientationchange', screenOrientationListener, { passive: true });
-    }
-  }
-
-  function stopSensors() {
-    if (motionListener) window.removeEventListener('devicemotion', motionListener);
-    if (orientationListener) window.removeEventListener('deviceorientation', orientationListener);
-    if (screenOrientationListener) {
-      if (screen.orientation?.removeEventListener) screen.orientation.removeEventListener('change', screenOrientationListener);
-      else window.removeEventListener('orientationchange', screenOrientationListener);
-    }
-    motionListener = null;
-    orientationListener = null;
-    screenOrientationListener = null;
-    tiltX = tiltY = orientationTiltX = orientationTiltY = 0;
-    shakeX = shakeY = shakeZ = 0;
-    haveGravityTilt = false;
-  }
-
-  function applyForceToAll(x, y, z, gain = 1) {
-    if (!running || !api) return;
-    for (const b of bodyRecords) {
-      api.applyForce(b.handle, x * b.mass * gain, y * b.mass * gain, z * b.mass * gain);
-    }
-  }
-
   async function start() {
     if (running) return true;
     if (!physics?.state?.enabled) return false;
-    const permissionPromise = requestSensorPermissions();
     try {
       await ensureModule();
       if (!api.reset(0, -G, 0)) throw new Error('Box3D world init failed');
@@ -397,11 +363,9 @@
       physics.state.preview = renderRoot;
       lastTime = 0;
       accumulator = 0;
+      if (app?.cvs) app.cvs.style.cursor = 'grab';
       syncPlayUI();
-
-      const sensorAllowed = await permissionPromise;
-      if (sensorAllowed) startSensors();
-      toast('Physics', sensorAllowed ? 'Live · tilt or shake the phone' : 'Live · gravity enabled', 'info', 1300);
+      toast('Physics', 'Live · drag voxels to push them', 'info', 1300);
       raf = requestAnimationFrame(frame);
       return true;
     } catch (err) {
@@ -418,7 +382,7 @@
     raf = 0;
     lastTime = 0;
     accumulator = 0;
-    stopSensors();
+    cancelDrag();
     removeRender();
     restoreAuthoringModel();
     try { api?.destroy?.(); } catch (_) {}
@@ -434,16 +398,25 @@
 
   function snapshotBodies() {
     if (!api) return [];
-    return bodyRecords.map((b) => ({ key: b.key, x: api.px(b.handle), y: api.py(b.handle), z: api.pz(b.handle) }));
+    return bodyRecords.map((b) => ({
+      key: b.key,
+      x: api.px(b.handle),
+      y: api.py(b.handle),
+      z: api.pz(b.handle)
+    }));
   }
 
-  function toggle() { return running ? Promise.resolve(stop()) : start(); }
+  function toggle() {
+    return running ? Promise.resolve(stop()) : start();
+  }
 
   function install() {
     app = window.VoxelApp;
     physics = window.VoxelPhysics;
     if (!app || !physics?.simpleMode || !app.scene || !app.voxels) return false;
     if (window.VoxelBox3D?.installed && window.VoxelBox3D?.simpleMode) return true;
+
+    installPointerInteraction();
     window.VoxelBox3D = {
       installed: true,
       simpleMode: true,
@@ -452,13 +425,15 @@
       get ready() { return !!api; },
       get bodyCount() { return bodyRecords.length; },
       get worldExtent() { return worldExtent; },
+      get dragging() { return drag.active; },
       start,
       stop,
       reset: stop,
       toggle,
       applyForce: applyForceToAll,
+      applyForceToBody,
       snapshotBodies,
-      readScreenAngle
+      bodyAtPointer
     };
     syncPlayUI();
     return true;
