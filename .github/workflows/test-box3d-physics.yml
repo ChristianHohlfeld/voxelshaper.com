@@ -19,6 +19,7 @@ on:
       - 'tests/e2e/box3d-physics.spec.mjs'
       - 'tests/e2e/box3d-mobile-touch.spec.mjs'
       - 'tests/e2e/history-morph.spec.mjs'
+      - 'tests/e2e/visual-physics.spec.mjs'
       - '.github/workflows/test-box3d-physics.yml'
       - 'index.html'
 
@@ -71,6 +72,17 @@ jobs:
         env:
           VS_TEST_BASE_URL: http://127.0.0.1:4173
         run: npx playwright test tests/e2e/box3d-physics.spec.mjs tests/e2e/box3d-mobile-touch.spec.mjs tests/e2e/history-morph.spec.mjs --reporter=line
+      - name: Capture local desktop/mobile visual smoke
+        env:
+          VS_TEST_BASE_URL: http://127.0.0.1:4173
+        run: npx playwright test tests/e2e/visual-physics.spec.mjs --reporter=line
+      - name: Upload local visual smoke
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: physics-visual-smoke
+          path: test-results/visual/*.png
+          if-no-files-found: warn
       - name: Wait for live deployment
         run: |
           for i in {1..90}; do
