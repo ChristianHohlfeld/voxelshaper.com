@@ -8,7 +8,6 @@ on:
       - 'physics-box3d-runtime.js'
       - 'physics-runtime-hardening.js'
       - 'physics-controls.js'
-      - 'gyro-navigation.js'
       - 'physics-visuals.js'
       - 'physics-mobile-cycle.js'
       - 'history-hardening.js'
@@ -20,7 +19,6 @@ on:
       - 'tests/e2e/box3d-physics.spec.mjs'
       - 'tests/e2e/box3d-mobile-touch.spec.mjs'
       - 'tests/e2e/history-morph.spec.mjs'
-      - 'tests/e2e/gyro-navigation.spec.mjs'
       - '.github/workflows/test-box3d-physics.yml'
       - 'index.html'
 
@@ -48,7 +46,6 @@ jobs:
           node --check physics-box3d-runtime.js
           node --check physics-runtime-hardening.js
           node --check physics-controls.js
-          node --check gyro-navigation.js
           node --check physics-visuals.js
           node --check physics-mobile-cycle.js
           node --check history-hardening.js
@@ -58,9 +55,9 @@ jobs:
           grep -q '<script src="physics-box3d-runtime.js"></script>' index.html
           grep -q '<script src="history-hardening.js"></script>' index.html
           grep -q '<script src="physics-runtime-hardening.js"></script>' index.html
-          grep -q '<script src="gyro-navigation.js"></script>' index.html
           grep -q '<script src="physics-visuals.js"></script>' index.html
           grep -q '<script src="morph-forms-v2.js"></script>' index.html
+          ! grep -q '<script src="gyro-navigation.js"></script>' index.html
       - name: Start local site
         run: |
           python3 -m http.server 4173 >/tmp/voxelshaper-http.log 2>&1 &
@@ -71,7 +68,7 @@ jobs:
       - name: Run local browser tests
         env:
           VS_TEST_BASE_URL: http://127.0.0.1:4173
-        run: npx playwright test tests/e2e/box3d-physics.spec.mjs tests/e2e/box3d-mobile-touch.spec.mjs tests/e2e/history-morph.spec.mjs tests/e2e/gyro-navigation.spec.mjs --reporter=line
+        run: npx playwright test tests/e2e/box3d-physics.spec.mjs tests/e2e/box3d-mobile-touch.spec.mjs tests/e2e/history-morph.spec.mjs --reporter=line
       - name: Wait for live deployment
         run: |
           for i in {1..90}; do
@@ -79,8 +76,8 @@ jobs:
             if printf '%s' "$html" | grep -q 'physics-box3d-runtime.js' \
               && printf '%s' "$html" | grep -q 'physics-runtime-hardening.js' \
               && printf '%s' "$html" | grep -q 'history-hardening.js' \
-              && printf '%s' "$html" | grep -q 'gyro-navigation.js' \
-              && printf '%s' "$html" | grep -q 'morph-forms-v2.js'; then
+              && printf '%s' "$html" | grep -q 'morph-forms-v2.js' \
+              && ! printf '%s' "$html" | grep -q 'gyro-navigation.js'; then
               exit 0
             fi
             sleep 2
@@ -90,4 +87,4 @@ jobs:
       - name: Run live browser tests
         env:
           VS_TEST_BASE_URL: https://voxelshaper.com
-        run: npx playwright test tests/e2e/box3d-physics.spec.mjs tests/e2e/box3d-mobile-touch.spec.mjs tests/e2e/history-morph.spec.mjs tests/e2e/gyro-navigation.spec.mjs --reporter=line
+        run: npx playwright test tests/e2e/box3d-physics.spec.mjs tests/e2e/box3d-mobile-touch.spec.mjs tests/e2e/history-morph.spec.mjs --reporter=line
