@@ -2,6 +2,12 @@ import { test, expect } from '@playwright/test';
 
 const BASE = process.env.VS_TEST_BASE_URL || 'http://127.0.0.1:4173';
 
+test.beforeEach(async ({ page }) => {
+  await page.addInitScript(() => {
+    localStorage.setItem('voxelshaper_onboarding_dont_show', 'true');
+  });
+});
+
 async function ready(page) {
   await page.goto(`${BASE}/`, { waitUntil:'domcontentloaded' });
   await page.waitForFunction(() =>
