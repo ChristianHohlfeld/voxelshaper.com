@@ -14,12 +14,20 @@
     return { color: String(v.color || '#ffffff'), glass: !!v.glass };
   }
 
+  // VoxelApp.key() returns an unsigned 32-bit integer. History must preserve that
+  // exact key type; stringifying keys makes Map lookups silently miss on Undo/Redo.
+  function canonicalVoxelKey(key) {
+    if (typeof key === 'number' && Number.isFinite(key)) return key >>> 0;
+    if (typeof key === 'string' && /^\d+$/.test(key)) return Number(key) >>> 0;
+    return key;
+  }
+
   function cloneChanges(changes) {
     const out = new Map();
     if (!changes) return out;
     const entries = changes instanceof Map ? changes.entries() : Object.entries(changes);
     for (const [key, change] of entries) {
-      out.set(String(key), {
+      out.set(canonicalVoxelKey(key), {
         before: cloneVoxel(change?.before),
         after: cloneVoxel(change?.after)
       });
@@ -61,14 +69,16 @@
       try { window.VoxelBox3D?.stop?.(); } catch (_) {}
     }
 
-    function removeVoxel(key) {
+    function removeVoxel(rawKey) {
+      const key = canonicalVoxelKey(rawKey);
       const existing = app.voxels.get(key);
       if (!existing) return;
       if (typeof app.removeInstancedVoxel === 'function') app.removeInstancedVoxel(key);
       app.voxels.delete(key);
     }
 
-    function writeVoxel(key, value) {
+    function writeVoxel(rawKey, value) {
+      const key = canonicalVoxelKey(rawKey);
       const [x,y,z] = app.parseKey(key);
       if (y < 0 || !value) return;
       const next = cloneVoxel(value);
@@ -133,7 +143,6 @@
       if (!Array.isArray(this.history)) this.history = [];
       if (!Number.isInteger(this.historyPointer)) this.historyPointer = this.history.length - 1;
 
-      // Once the user edits after Undo, the abandoned future can never be replayed again.
       if (this.historyPointer < this.history.length - 1) {
         this.history.splice(this.historyPointer + 1);
       }
@@ -171,6 +180,7 @@
       installed: true,
       version: 2,
       normalizeAction,
+      canonicalVoxelKey,
       get state() {
         return {
           pointer: app.historyPointer,
