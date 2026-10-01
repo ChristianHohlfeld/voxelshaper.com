@@ -41,6 +41,7 @@ async function play(page) {
   const p=await center(page,'#vs-physics-test');
   await page.touchscreen.tap(p.x,p.y);
   await page.waitForFunction(()=>window.VoxelBox3D.running && window.VoxelPhysics.state.enabled && window.VoxelPhysicsInputRouter.mode==='physics');
+  await page.waitForFunction(()=>document.getElementById('mobile-canvas-mode-toggle')?.dataset.mode==='physics-grab');
 }
 
 async function stop(page) {
