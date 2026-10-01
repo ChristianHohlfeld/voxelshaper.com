@@ -1,0 +1,65 @@
+name: Publish VoxelShaper Suite 2026-10-01 — Editor
+
+on:
+  push:
+    branches: ["main"]
+    paths:
+      - '.github/workflows/publish-vs-2026-10-01.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      TAG: vs-2026-10-01
+      VERSION: 1.1.0
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      - run: npm ci --ignore-scripts
+      - name: Verify axis-preserving editor roundtrip
+        run: |
+          node <<'NODE'
+          const fs = require('fs');
+          const html = fs.readFileSync('index.html','utf8');
+          if (!html.includes('applyHubImportProject: function')) throw new Error('Hub import path missing');
+          if (html.includes('project = this.remapCatalogZUpToYUp(project);')) throw new Error('unconditional Hub import axis remap still present');
+          if (!html.includes('remapCatalogZUpToYUp: function (project)')) throw new Error('compatibility helper missing');
+          const helper = html.slice(html.indexOf('remapCatalogZUpToYUp: function (project)'), html.indexOf('applyHubImportProject: function'));
+          if (!helper.includes('return project;')) throw new Error('compatibility helper is not an axis-preserving no-op');
+          NODE
+          npx playwright test --list
+      - name: Bump suite package version and publish release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          if [ "$(node -p "require('./package.json').version")" != "$VERSION" ]; then
+            npm version "$VERSION" --no-git-tag-version --ignore-scripts
+            git config user.name "github-actions[bot]"
+            git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+            git add package.json package-lock.json
+            git commit -m "release: VoxelShaper Suite $VERSION"
+          fi
+          git pull --rebase origin main
+          node <<'NODE'
+          const fs = require('fs');
+          const html = fs.readFileSync('index.html','utf8');
+          if (html.includes('project = this.remapCatalogZUpToYUp(project);')) throw new Error('axis contract changed during release');
+          NODE
+          git push origin HEAD:main
+          SHA=$(git rev-parse HEAD)
+          if gh release view "$TAG" >/dev/null 2>&1; then
+            echo "release $TAG already exists"
+            exit 0
+          fi
+          gh release create "$TAG" --target "$SHA" --title "VoxelShaper Suite 1.1.0 — Editor (2026-10-01)" --notes-file RELEASE_NOTES_2026-10-01.md
