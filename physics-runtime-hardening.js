@@ -5,7 +5,7 @@
     const app = window.VoxelApp;
     const physics = window.VoxelPhysics;
     const box = window.VoxelBox3D;
-    if (!app || !physics || !box?.installed) return false;
+    if (!app || !physics?.simpleMode || !box?.installed || !box?.simpleMode) return false;
     if (box.hardened) return true;
 
     const rawStart = box.start.bind(box);
@@ -14,130 +14,46 @@
     let generation = 0;
     let desiredRunning = false;
     let lastError = null;
-    let lastTransition = 'idle';
-
-    const voxelKey = (seed) => {
-      if (!Array.isArray(seed) || seed.length < 3) return null;
-      return app.key(Math.round(seed[0]), Math.round(seed[1]), Math.round(seed[2]));
-    };
-
-    const connectedBody = (seed) => {
-      const key = voxelKey(seed);
-      if (key == null || !app.voxels?.has(key)) return new Set();
-      return app.getConnectedGroup?.(key) || new Set([key]);
-    };
-
-    const activeJoint = () => physics.state?.joints?.find((j) => j.id === physics.state?.active) || null;
-
-    function syncMobileHistoryHitArea(toolbar) {
-      const overlay = document.getElementById('mobile-undo-redo-overlay');
-      if (!overlay) return;
-      const toolbarVisible = !!toolbar?.classList.contains('show');
-      overlay.style.pointerEvents = 'auto';
-      overlay.style.zIndex = toolbarVisible ? '1103' : '';
-      overlay.style.bottom = toolbarVisible
-        ? 'calc(var(--safe-bottom, env(safe-area-inset-bottom)) + 8.65rem)'
-        : '';
-    }
-
-    function pinMobilePlayButton() {
-      const toolbar = document.getElementById('vs-physics-toolbar');
-      const mobileButton = document.getElementById('vs-physics-test');
-      syncMobileHistoryHitArea(toolbar);
-      if (!toolbar || !mobileButton) return mobileButton;
-
-      // Play/Stop is the primary physics action. Keep it physically reachable on narrow touch screens
-      // instead of letting it sit behind the horizontally scrolling joint controls.
-      if (toolbar.firstElementChild !== mobileButton) toolbar.prepend(mobileButton);
-      mobileButton.style.position = 'sticky';
-      mobileButton.style.left = '0';
-      mobileButton.style.zIndex = '4';
-      mobileButton.style.pointerEvents = 'auto';
-      mobileButton.style.touchAction = 'manipulation';
-      mobileButton.style.flex = '0 0 2.8rem';
-      mobileButton.style.minWidth = '2.8rem';
-      mobileButton.style.webkitTapHighlightColor = 'transparent';
-      return mobileButton;
-    }
+    let transition = 'stopped';
 
     function syncUi() {
-      const starting = lastTransition === 'starting';
+      const starting = transition === 'starting';
       const on = !!box.running;
       const requested = desiredRunning || starting || on;
-      const legacyIcon = document.getElementById('vsp-playicon');
-      const legacyText = document.getElementById('vsp-playtext');
-      const mobileButton = pinMobilePlayButton();
-      const mobileIcon = mobileButton?.querySelector('i');
-
-      if (legacyIcon) legacyIcon.className = starting ? 'fas fa-spinner fa-spin' : on ? 'fas fa-stop' : 'fas fa-play';
-      if (legacyText) legacyText.textContent = starting ? 'Starting…' : on ? 'Stop test' : 'Test joint';
-      if (mobileIcon) mobileIcon.className = starting ? 'fas fa-spinner fa-spin' : on ? 'fas fa-stop' : 'fas fa-play';
-      if (mobileButton) {
-        mobileButton.disabled = false;
-        mobileButton.dataset.physicsState = starting ? 'starting' : on ? 'running' : 'stopped';
-        mobileButton.setAttribute('aria-pressed', requested ? 'true' : 'false');
-        mobileButton.setAttribute('aria-label', starting ? 'Cancel physics test' : on ? 'Stop physics test' : 'Play physics test');
+      const button = document.getElementById('vs-physics-test');
+      if (button) {
+        button.disabled = false;
+        button.classList.toggle('show', !!physics.state?.enabled);
+        button.dataset.physicsState = starting ? 'starting' : on ? 'running' : 'stopped';
+        button.setAttribute('aria-pressed', requested ? 'true' : 'false');
+        button.setAttribute('aria-label', starting ? 'Cancel physics start' : on ? 'Pause and reset physics' : 'Play physics');
+        const icon = button.querySelector('i');
+        if (icon) icon.className = starting ? 'fas fa-spinner fa-spin' : on ? 'fas fa-pause' : 'fas fa-play';
       }
+      physics.state.running = on;
+      physics.syncUi?.();
     }
 
     function preflight() {
       if (!physics.state?.enabled) throw new Error('Physics mode is not active');
-      const joint = activeJoint();
-      if (!joint) throw new Error('No physics joint selected');
-      if (!['hinge', 'slider', 'fixed'].includes(joint.type)) throw new Error(`Unsupported joint type: ${joint.type}`);
-
-      const moving = connectedBody(joint.movingSeed);
-      if (!moving.size) throw new Error('Moving body is missing');
-      if (joint.baseSeed) {
-        const baseKey = voxelKey(joint.baseSeed);
-        const base = connectedBody(joint.baseSeed);
-        if (!base.size) throw new Error('Base body is missing');
-        if (baseKey != null && moving.has(baseKey)) {
-          throw new Error('Base A and Moving B are the same connected body');
-        }
-      }
-
-      if (joint.type !== 'fixed') {
-        const axis = Array.isArray(joint.axis) ? joint.axis : [];
-        const axisLength2 = axis.length >= 3 ? Number(axis[0]) ** 2 + Number(axis[1]) ** 2 + Number(axis[2]) ** 2 : 0;
-        if (!Number.isFinite(axisLength2) || axisLength2 < 0.25) throw new Error('Joint axis is invalid');
-      }
-
-      if (joint.limits?.enabled) {
-        const lo = Number(joint.limits.min);
-        const hi = Number(joint.limits.max);
-        if (!Number.isFinite(lo) || !Number.isFinite(hi) || lo > hi) throw new Error('Joint limits are invalid');
-        if (joint.type === 'hinge') {
-          // Box3D main @ 9f998c8: revolute limits are bounded to +/-0.99*pi and should include zero.
-          const maxDegrees = 0.99 * 180;
-          if (lo < -maxDegrees || hi > maxDegrees) throw new Error('Hinge limits must stay within ±178.2° for Box3D');
-          if (lo > 0 || hi < 0) throw new Error('Hinge limits must include 0° for a stable Box3D start');
-        }
-      }
-
-      if (joint.motor?.enabled) {
-        const speed = Number(joint.motor.speed);
-        const strength = Number(joint.motor.strength);
-        if (!Number.isFinite(speed)) throw new Error('Motor speed is invalid');
-        if (!Number.isFinite(strength) || strength < 0) throw new Error('Motor strength must be non-negative');
-      }
-      return joint;
+      if (!app.voxels?.size) throw new Error('Model has no voxels');
+      return true;
     }
 
-    function reportError(err) {
+    function reportError(error) {
       desiredRunning = false;
-      lastError = err?.message || String(err);
-      lastTransition = 'error';
+      lastError = error?.message || String(error);
+      transition = 'error';
       physics.state.running = false;
       syncUi();
       console.error('[VoxelShaper][Box3D]', lastError);
-      try { app.showToast?.('Physics', lastError, 'error', 2200); } catch (_) {}
+      try { app.showToast?.('Physics', lastError, 'error', 1800); } catch (_) {}
     }
 
     async function start() {
       desiredRunning = true;
       if (box.running) {
-        lastTransition = 'running';
+        transition = 'running';
         syncUi();
         return true;
       }
@@ -146,40 +62,29 @@
         return startPromise;
       }
 
+      try { preflight(); } catch (error) { reportError(error); return false; }
       const myGeneration = ++generation;
-      let joint;
-      try {
-        joint = preflight();
-      } catch (err) {
-        reportError(err);
-        return false;
-      }
-
       lastError = null;
-      lastTransition = 'starting';
+      transition = 'starting';
       syncUi();
+
       startPromise = (async () => {
         try {
           const ok = await rawStart();
           if (myGeneration !== generation || !desiredRunning) {
             rawStop();
-            physics.state.running = false;
-            lastTransition = 'stopped';
+            transition = 'stopped';
             syncUi();
             return false;
           }
           if (!ok || !box.running) throw new Error('Box3D did not enter running state');
-          lastTransition = 'running';
+          transition = 'running';
           syncUi();
-          console.info('[VoxelShaper][Box3D] running', {
-            joint: joint.id,
-            type: joint.type,
-            motor: !!joint.motor?.enabled
-          });
+          console.info('[VoxelShaper][Box3D] simple physics running', { bodies: box.bodyCount });
           return true;
-        } catch (err) {
+        } catch (error) {
           try { rawStop(); } catch (_) {}
-          reportError(err);
+          reportError(error);
           return false;
         } finally {
           startPromise = null;
@@ -192,18 +97,19 @@
     function stop() {
       desiredRunning = false;
       generation += 1;
-      lastTransition = 'stopping';
+      transition = 'stopping';
       syncUi();
       try {
         rawStop();
-      } catch (err) {
-        reportError(err);
+      } catch (error) {
+        reportError(error);
         return false;
       }
       physics.state.running = false;
-      lastTransition = 'stopped';
+      physics.state.preview = null;
+      transition = 'stopped';
       syncUi();
-      console.info('[VoxelShaper][Box3D] stopped');
+      console.info('[VoxelShaper][Box3D] simple physics reset');
       return true;
     }
 
@@ -214,16 +120,16 @@
 
     box.start = start;
     box.stop = stop;
+    box.reset = stop;
     box.toggle = toggle;
-    box.preflight = preflight;
     box.syncUi = syncUi;
     box.getStatus = () => ({
       running: !!box.running,
       starting: !!startPromise,
       desiredRunning,
-      transition: lastTransition,
+      transition,
       lastError,
-      activeJoint: physics.state?.active || null
+      bodies: box.bodyCount || 0
     });
     box.hardened = true;
 
@@ -233,15 +139,20 @@
       return originalDisable?.();
     };
 
-    const originalNewJoint = physics.newJoint;
-    physics.newJoint = function () {
-      if (desiredRunning || startPromise || box.running || physics.state?.running) stop();
-      return originalNewJoint?.();
-    };
+    // Keep history deterministic: simulation is always temporary and is reset before authoring history changes.
+    ['undo','redo'].forEach((name) => {
+      if (typeof app[name] !== 'function' || app[`__physicsSimpleWrapped_${name}`]) return;
+      app[`__physicsSimpleWrapped_${name}`] = true;
+      const original = app[name];
+      app[name] = function (...args) {
+        if (desiredRunning || startPromise || box.running || physics.state?.running) stop();
+        return original.apply(this, args);
+      };
+    });
 
-    // Single authoritative UI path for both the legacy desktop button and the mobile toolbar.
+    // Exactly one authoritative Play/Pause path on mobile and desktop.
     document.addEventListener('click', (event) => {
-      const button = event.target?.closest?.('#vs-physics-test, #vsp-play');
+      const button = event.target?.closest?.('#vs-physics-test');
       if (!button || !physics.state?.enabled) return;
       event.preventDefault();
       event.stopImmediatePropagation();
@@ -252,10 +163,6 @@
     return true;
   }
 
-  const timer = window.setInterval(() => {
-    if (install()) window.clearInterval(timer);
-  }, 80);
-  // Keep retrying until the editor/runtime really exists. Slow mobile startup must not permanently
-  // lose the hardened controller just because initialization took longer than an arbitrary timeout.
+  const timer = setInterval(() => { if (install()) clearInterval(timer); }, 80);
   install();
 })();
