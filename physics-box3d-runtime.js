@@ -21,7 +21,6 @@
   let renderMesh = null;
   let renderGeometry = null;
   let visibilitySnapshot = [];
-  let interactionInstalled = false;
 
   const raycaster = new THREE.Raycaster();
   const pointerNdc = new THREE.Vector2();
@@ -29,20 +28,6 @@
   const tmpQuaternion = new THREE.Quaternion();
   const tmpScale = new THREE.Vector3(1, 1, 1);
   const tmpMatrix = new THREE.Matrix4();
-  const tmpRight = new THREE.Vector3();
-  const tmpUp = new THREE.Vector3();
-  const tmpForce = new THREE.Vector3();
-
-  const drag = {
-    active: false,
-    pointerId: null,
-    bodyIndex: -1,
-    lastX: 0,
-    lastY: 0,
-    lastAt: 0
-  };
-
-  const clamp = (v, lo, hi) => Math.max(lo, Math.min(hi, v));
 
   function toast(title, text, type = 'info', ms = 1300) {
     try { app?.showToast?.(title, text, type, ms); } catch (_) {}
@@ -52,11 +37,11 @@
     const button = document.getElementById('vs-physics-test');
     if (button) {
       button.disabled = false;
-      button.classList.toggle('show', !!physics?.state?.enabled);
+      button.style.display = 'flex';
       button.setAttribute('aria-pressed', running ? 'true' : 'false');
-      button.setAttribute('aria-label', running ? 'Pause and reset physics' : 'Play physics');
+      button.setAttribute('aria-label', running ? 'Stop physics and reset' : 'Play physics');
       const icon = button.querySelector('i');
-      if (icon) icon.className = running ? 'fas fa-pause' : 'fas fa-play';
+      if (icon) icon.className = running ? 'fas fa-stop' : 'fas fa-play';
     }
     physics?.syncUi?.();
   }
@@ -140,7 +125,7 @@
   }
 
   function addBoundaryBox(handle, ox, oy, oz, hx, hy, hz) {
-    if (!api.addBox(handle, ox,oy,oz, hx,hy,hz, 1,.82,.02,0)) {
+    if (!api.addBox(handle, ox, oy, oz, hx, hy, hz, 1, .82, .02, 0)) {
       throw new Error('Box3D boundary collider creation failed');
     }
   }
@@ -149,8 +134,9 @@
     worldExtent = Math.max(size, (app.GRID || 32) * size);
     const half = worldExtent * .5;
     const wall = Math.max(size * .5, .25);
-    boundaryHandle = api.createBody(0, half,half,half, 0,0,0,1, 0,0,0);
+    boundaryHandle = api.createBody(0, half, half, half, 0,0,0,1, 0,0,0);
     if (!boundaryHandle) throw new Error('Box3D boundary body creation failed');
+
     const span = half + wall;
     addBoundaryBox(boundaryHandle, 0, -half-wall, 0, span,wall,span);
     addBoundaryBox(boundaryHandle, 0,  half+wall, 0, span,wall,span);
@@ -164,6 +150,7 @@
     const entries = [...app.voxels.entries()];
     if (!entries.length) throw new Error('No voxels to simulate');
     buildRenderMesh(entries);
+
     const size = app.VS || 1;
     bodyRecords = [];
 
@@ -261,87 +248,7 @@
     return Number.isInteger(hit?.instanceId) ? hit.instanceId : -1;
   }
 
-  function dragForceFromScreen(dx, dy, bodyIndex) {
-    const body = bodyRecords[bodyIndex];
-    if (!body || !app?.cam) return false;
-
-    tmpRight.set(1,0,0).applyQuaternion(app.cam.quaternion).normalize();
-    tmpUp.set(0,1,0).applyQuaternion(app.cam.quaternion).normalize();
-
-    const size = app.VS || 1;
-    const perPixel = clamp(size * 7.5, 4, 22);
-    tmpForce.copy(tmpRight).multiplyScalar(dx * perPixel)
-      .addScaledVector(tmpUp, -dy * perPixel);
-
-    const maxForce = Math.max(80, body.mass * 1800);
-    if (tmpForce.length() > maxForce) tmpForce.setLength(maxForce);
-    return applyForceToBody(bodyIndex, tmpForce.x, tmpForce.y, tmpForce.z, 1);
-  }
-
-  function cancelDrag() {
-    drag.active = false;
-    drag.pointerId = null;
-    drag.bodyIndex = -1;
-    drag.lastX = drag.lastY = 0;
-    drag.lastAt = 0;
-    if (app?.cvs) app.cvs.style.cursor = running ? 'grab' : '';
-  }
-
-  function onPointerDown(event) {
-    if (!running || !physics?.state?.enabled || event.button > 0) return;
-    const index = bodyAtPointer(event.clientX, event.clientY);
-    if (index < 0) return;
-
-    drag.active = true;
-    drag.pointerId = event.pointerId;
-    drag.bodyIndex = index;
-    drag.lastX = event.clientX;
-    drag.lastY = event.clientY;
-    drag.lastAt = performance.now();
-    try { app.cvs.setPointerCapture?.(event.pointerId); } catch (_) {}
-    app.cvs.style.cursor = 'grabbing';
-    event.preventDefault();
-    event.stopImmediatePropagation();
-  }
-
-  function onPointerMove(event) {
-    if (!drag.active || event.pointerId !== drag.pointerId || !running) return;
-    const dx = event.clientX - drag.lastX;
-    const dy = event.clientY - drag.lastY;
-    const now = performance.now();
-    const dt = Math.max(8, now - drag.lastAt);
-
-    // Convert finger/mouse movement into a force in the camera's screen plane.
-    // Faster drags get a modest extra gain, but remain clamped for stability.
-    const speedGain = clamp(16 / dt, .65, 1.8);
-    dragForceFromScreen(dx * speedGain, dy * speedGain, drag.bodyIndex);
-
-    drag.lastX = event.clientX;
-    drag.lastY = event.clientY;
-    drag.lastAt = now;
-    event.preventDefault();
-    event.stopImmediatePropagation();
-  }
-
-  function onPointerEnd(event) {
-    if (!drag.active || event.pointerId !== drag.pointerId) return;
-    try { app.cvs.releasePointerCapture?.(event.pointerId); } catch (_) {}
-    cancelDrag();
-    event.preventDefault();
-    event.stopImmediatePropagation();
-  }
-
-  function installPointerInteraction() {
-    if (interactionInstalled || !app?.cvs) return;
-    interactionInstalled = true;
-    app.cvs.addEventListener('pointerdown', onPointerDown, true);
-    app.cvs.addEventListener('pointermove', onPointerMove, true);
-    app.cvs.addEventListener('pointerup', onPointerEnd, true);
-    app.cvs.addEventListener('pointercancel', onPointerEnd, true);
-  }
-
   function removeRender() {
-    cancelDrag();
     if (renderRoot) renderRoot.parent?.remove(renderRoot);
     if (renderMesh?.material) renderMesh.material.dispose?.();
     renderGeometry?.dispose?.();
@@ -363,9 +270,8 @@
       physics.state.preview = renderRoot;
       lastTime = 0;
       accumulator = 0;
-      if (app?.cvs) app.cvs.style.cursor = 'grab';
       syncPlayUI();
-      toast('Physics', 'Live · drag voxels to push them', 'info', 1300);
+      toast('Physics', 'Live · drag voxels to push them', 'info', 1200);
       raf = requestAnimationFrame(frame);
       return true;
     } catch (err) {
@@ -382,7 +288,6 @@
     raf = 0;
     lastTime = 0;
     accumulator = 0;
-    cancelDrag();
     removeRender();
     restoreAuthoringModel();
     try { api?.destroy?.(); } catch (_) {}
@@ -416,7 +321,6 @@
     if (!app || !physics?.simpleMode || !app.scene || !app.voxels) return false;
     if (window.VoxelBox3D?.installed && window.VoxelBox3D?.simpleMode) return true;
 
-    installPointerInteraction();
     window.VoxelBox3D = {
       installed: true,
       simpleMode: true,
@@ -425,7 +329,6 @@
       get ready() { return !!api; },
       get bodyCount() { return bodyRecords.length; },
       get worldExtent() { return worldExtent; },
-      get dragging() { return drag.active; },
       start,
       stop,
       reset: stop,
