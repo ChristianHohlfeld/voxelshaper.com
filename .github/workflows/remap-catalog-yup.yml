@@ -1,4 +1,4 @@
-name: Remap catalog Z-up in editor
+name: Preserve Hub axes in editor
 on:
   workflow_dispatch:
   push:
@@ -13,10 +13,20 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - run: python3 scripts/remap-catalog-yup.py
+      - name: Verify Hub import preserves stored coordinates
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          t = Path('index.html').read_text(encoding='utf-8')
+          assert 'applyHubImportProject: function' in t
+          assert 'project = this.remapCatalogZUpToYUp(project);' not in t
+          assert "remapCatalogZUpToYUp: function (project) {\n                return project;" in t
+          print('axis-preserving Hub roundtrip verified')
+          PY
       - run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git add index.html
           if git diff --cached --quiet; then echo no change; exit 0; fi
-          git commit -m "fix: stand catalog models Y-up in editor"
+          git commit -m "fix: preserve stored axes when reopening Hub models"
           git push
