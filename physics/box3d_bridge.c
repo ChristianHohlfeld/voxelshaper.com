@@ -11,7 +11,11 @@
 #include "box3d/collision.h"
 #include "box3d/math_functions.h"
 
-#define VS_MAX_BODIES 1024
+// Simple physics maps one VoxelShaper voxel to one Box3D body.
+// Desktop procedural models may reach ~12k voxels, so the old 1024-slot bridge
+// was not sufficient. Keep deterministic fixed storage, but size it above the
+// editor's current maximum practical simulation budget.
+#define VS_MAX_BODIES 16384
 #define VS_MAX_JOINTS 2048
 
 typedef struct
