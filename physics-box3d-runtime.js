@@ -21,7 +21,6 @@
   let motionListener = null;
   let motionBaseline = null;
   let motionPermissionGranted = false;
-  let playInterceptorInstalled = false;
 
   function toast(title, text, type = 'info', ms = 1200) {
     try { app?.showToast?.(title, text, type, ms); } catch (_) {}
@@ -354,18 +353,6 @@
 
   function toggle() { return running?Promise.resolve(stop()):start(); }
 
-  function interceptLegacyPlay() {
-    if (playInterceptorInstalled) return;
-    playInterceptorInstalled=true;
-    document.addEventListener('click',(event)=>{
-      const target=event.target?.closest?.('#vsp-play');
-      if (!target||!physics?.state?.enabled) return;
-      event.preventDefault();
-      event.stopImmediatePropagation();
-      toggle().finally(syncPlayUI);
-    },true);
-  }
-
   function install() {
     app=window.VoxelApp;
     physics=window.VoxelPhysics;
@@ -377,7 +364,6 @@
       get ready(){return !!api;},
       start,stop,toggle
     };
-    interceptLegacyPlay();
     syncPlayUI();
     return true;
   }
