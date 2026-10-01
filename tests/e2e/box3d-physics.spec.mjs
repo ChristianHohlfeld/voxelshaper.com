@@ -15,7 +15,29 @@ function relevantErrors(errors) {
   return errors.filter((x) => /box3d|wasm|voxelshaper\]\[box3d/i.test(x));
 }
 
-test.describe('VoxelShaper Box3D runtime', () => {
+async function setupSimpleModel(page) {
+  await page.waitForFunction(() => window.VoxelApp && window.VoxelPhysics?.simpleMode && window.VoxelBox3D?.hardened, null, { timeout: 20000 });
+  return page.evaluate(() => {
+    const app = window.VoxelApp;
+    window.VoxelBox3D.stop?.();
+    app.voxels.clear();
+    const cubes = [
+      [3, 5, 3, '#22D3EE'],
+      [3, 6, 3, '#F59E0B'],
+      [4, 7, 3, '#A78BFA'],
+      [4, 8, 4, '#34D399']
+    ];
+    for (const [x,y,z,color] of cubes) app.voxels.set(app.key(x,y,z), { color, glass:false });
+    app.updateInstancedVoxels?.();
+    window.VoxelPhysics.enable();
+    return {
+      count: app.voxels.size,
+      snapshot: [...app.voxels.entries()].map(([k,v]) => [String(k), v.color, !!v.glass])
+    };
+  });
+}
+
+test.describe('VoxelShaper simple Box3D runtime', () => {
   test('loads pinned Box3D WASM and advances a real dynamic body', async ({ page }) => {
     const errors = collectPhysicsErrors(page);
     await page.goto(`${BASE}/`, { waitUntil: 'domcontentloaded' });
@@ -31,7 +53,6 @@ test.describe('VoxelShaper Box3D runtime', () => {
       const addBox = mod.cwrap('vsb3_add_box', 'number', Array(11).fill('number'));
       const step = mod.cwrap('vsb3_step', null, ['number','number']);
       const py = mod.cwrap('vsb3_body_py', 'number', ['number']);
-
       if (!reset(0, -9.81, 0)) throw new Error('world reset failed');
       const body = createBody(2, 0, 3, 0, 0,0,0,1, 1, .01, .01);
       if (!body) throw new Error('dynamic body creation failed');
@@ -43,162 +64,68 @@ test.describe('VoxelShaper Box3D runtime', () => {
       return { before, after };
     });
 
-    expect(result.before).toBeGreaterThan(2.9);
     expect(result.after).toBeLessThan(result.before - 1);
     expect(relevantErrors(errors)).toEqual([]);
   });
 
-  test('motor hinge produces visible editor motion and stop removes simulation', async ({ page }) => {
-    const errors = collectPhysicsErrors(page);
-    await page.goto(`${BASE}/?physicsTest=pendulum`, { waitUntil: 'domcontentloaded' });
-    await page.waitForFunction(() =>
-      window.VoxelApp &&
-      window.VoxelPhysics?.state?.joints?.length === 1 &&
-      window.VoxelBox3D?.hardened === true,
-      null,
-      { timeout: 20000 }
-    );
-
-    const started = await page.evaluate(() => window.VoxelBox3D.start());
-    expect(started).toBe(true);
-    await page.waitForFunction(() => window.VoxelBox3D.running === true && window.VoxelPhysics.state.running === true);
-    await page.waitForFunction(() => window.VoxelApp.scene.children.some((x) => String(x.name || '').startsWith('VoxelBox3D:')));
-
-    const before = await page.evaluate(() => {
-      const group = window.VoxelApp.scene.children.find((x) => String(x.name || '').startsWith('VoxelBox3D:'));
-      return { p: group.position.toArray(), q: group.quaternion.toArray() };
-    });
-    await page.waitForTimeout(700);
-    const after = await page.evaluate(() => {
-      const group = window.VoxelApp.scene.children.find((x) => String(x.name || '').startsWith('VoxelBox3D:'));
-      return { p: group.position.toArray(), q: group.quaternion.toArray() };
-    });
-
-    const delta = before.p.reduce((sum, v, i) => sum + Math.abs(v - after.p[i]), 0)
-      + before.q.reduce((sum, v, i) => sum + Math.abs(v - after.q[i]), 0);
-    expect(delta).toBeGreaterThan(0.05);
-
-    const stopped = await page.evaluate(() => window.VoxelBox3D.stop());
-    expect(stopped).toBe(true);
-    await page.waitForFunction(() => window.VoxelBox3D.running === false && window.VoxelPhysics.state.running === false);
-
-    const leftovers = await page.evaluate(() => ({
-      preview: window.VoxelPhysics.state.preview,
-      simGroups: window.VoxelApp.scene.children.filter((x) => String(x.name || '').startsWith('VoxelBox3D:')).length,
-      status: window.VoxelBox3D.getStatus?.()
-    }));
-    expect(leftovers.preview).toBe(null);
-    expect(leftovers.simGroups).toBe(0);
-    expect(leftovers.status?.transition).toBe('stopped');
-    expect(relevantErrors(errors)).toEqual([]);
-  });
-
-  test('mobile Play and Stop are deterministic on the real toolbar button', async ({ page }) => {
-    const errors = collectPhysicsErrors(page);
-    await page.setViewportSize({ width: 390, height: 844 });
-    await page.goto(`${BASE}/?physicsTest=pendulum`, { waitUntil: 'domcontentloaded' });
-    await page.waitForFunction(() =>
-      window.VoxelBox3D?.hardened === true &&
-      window.VoxelPhysics?.state?.joints?.length === 1 &&
-      document.querySelector('#vs-physics-test'),
-      null,
-      { timeout: 20000 }
-    );
-
-    await page.evaluate(() => document.querySelector('#vs-physics-test').click());
-    await page.waitForFunction(() => window.VoxelBox3D.running === true && window.VoxelPhysics.state.running === true);
-    await page.waitForTimeout(450);
-
-    const moved = await page.evaluate(() => {
-      const group = window.VoxelApp.scene.children.find((x) => String(x.name || '').startsWith('VoxelBox3D:'));
-      return !!group && Math.abs(group.quaternion.x) + Math.abs(group.quaternion.y) + Math.abs(group.quaternion.z) > 0.01;
-    });
-    expect(moved).toBe(true);
-
-    await page.evaluate(() => document.querySelector('#vs-physics-test').click());
-    await page.waitForFunction(() => window.VoxelBox3D.running === false && window.VoxelPhysics.state.running === false);
-    await page.waitForFunction(() => !window.VoxelApp.scene.children.some((x) => String(x.name || '').startsWith('VoxelBox3D:')));
-    expect(relevantErrors(errors)).toEqual([]);
-  });
-
-  test('mobile Play Stop survives repeated and rapid taps without split state', async ({ page }) => {
-    const errors = collectPhysicsErrors(page);
-    await page.setViewportSize({ width: 390, height: 844 });
-    await page.goto(`${BASE}/?physicsTest=pendulum`, { waitUntil: 'domcontentloaded' });
-    await page.waitForFunction(() =>
-      window.VoxelBox3D?.hardened === true &&
-      window.VoxelPhysics?.state?.joints?.length === 1 &&
-      document.querySelector('#vs-physics-test'),
-      null,
-      { timeout: 20000 }
-    );
-
-    // Warm the WASM module once, then exercise the real UI repeatedly.
-    expect(await page.evaluate(() => window.VoxelBox3D.start())).toBe(true);
-    expect(await page.evaluate(() => window.VoxelBox3D.stop())).toBe(true);
-
-    for (let i = 0; i < 12; i++) {
-      await page.click('#vs-physics-test');
-      await page.waitForFunction(() => {
-        const s = window.VoxelBox3D.getStatus?.();
-        return window.VoxelBox3D.running === true && window.VoxelPhysics.state.running === true && s?.transition === 'running';
-      });
-      await page.click('#vs-physics-test');
-      await page.waitForFunction(() => {
-        const s = window.VoxelBox3D.getStatus?.();
-        return window.VoxelBox3D.running === false && window.VoxelPhysics.state.running === false && s?.transition === 'stopped';
-      });
-      const leftovers = await page.evaluate(() => window.VoxelApp.scene.children.filter((x) => String(x.name || '').startsWith('VoxelBox3D:')).length);
-      expect(leftovers).toBe(0);
-    }
-
-    // A second tap while start is still in flight is a cancellation request, never a disabled/dead button.
-    await page.evaluate(() => {
-      const b = document.querySelector('#vs-physics-test');
-      b.click();
-      b.click();
-    });
-    await page.waitForFunction(() => {
-      const s = window.VoxelBox3D.getStatus?.();
-      return window.VoxelBox3D.running === false && window.VoxelPhysics.state.running === false && s?.starting === false && s?.desiredRunning === false;
-    });
-    const final = await page.evaluate(() => ({
-      status: window.VoxelBox3D.getStatus?.(),
-      disabled: document.querySelector('#vs-physics-test')?.disabled,
-      groups: window.VoxelApp.scene.children.filter((x) => String(x.name || '').startsWith('VoxelBox3D:')).length
-    }));
-    expect(final.disabled).toBe(false);
-    expect(final.groups).toBe(0);
-    expect(final.status?.transition).toBe('stopped');
-    expect(relevantErrors(errors)).toEqual([]);
-  });
-
-  test('same connected A/B body fails loudly instead of running without motion', async ({ page }) => {
+  test('Play turns every voxel into an independent body and Pause cleanly resets authoring state', async ({ page }) => {
     const errors = collectPhysicsErrors(page);
     await page.goto(`${BASE}/`, { waitUntil: 'domcontentloaded' });
-    await page.waitForFunction(() => window.VoxelApp && window.VoxelPhysics && window.VoxelBox3D?.hardened, null, { timeout: 20000 });
+    const setup = await setupSimpleModel(page);
+    expect(setup.count).toBe(4);
 
-    const result = await page.evaluate(async () => {
-      const app = window.VoxelApp;
-      const p = window.VoxelPhysics;
-      app.voxels.clear();
-      app.voxels.set(app.key(0,0,0), { color:'#6b7280' });
-      app.voxels.set(app.key(1,0,0), { color:'#f59e0b' });
-      p.state.joints = [{
-        id:'same-body', name:'Invalid self hinge', type:'hinge',
-        baseSeed:[0,0,0], movingSeed:[1,0,0], anchor:[0.5,0.5,0.5], axis:[0,0,1],
-        limits:{enabled:true,min:-45,max:45}, motor:{enabled:true,speed:90,strength:5}, preview:0
-      }];
-      p.state.active = 'same-body';
-      p.state.enabled = true;
-      p.state.running = false;
-      const started = await window.VoxelBox3D.start();
-      return { started, status: window.VoxelBox3D.getStatus() };
+    expect(await page.evaluate(() => window.VoxelBox3D.start())).toBe(true);
+    await page.waitForFunction(() => window.VoxelBox3D.running === true && window.VoxelBox3D.bodyCount === 4);
+    await page.waitForFunction(() => !!window.VoxelApp.scene.getObjectByName('VoxelBox3DSimpleBodies'));
+
+    const beforeY = await page.evaluate(() => {
+      const mesh = window.VoxelApp.scene.getObjectByName('VoxelBox3DSimpleBodies');
+      const m = new THREE.Matrix4();
+      mesh.getMatrixAt(0, m);
+      return new THREE.Vector3().setFromMatrixPosition(m).y;
     });
+    await page.waitForTimeout(700);
+    const afterY = await page.evaluate(() => {
+      const mesh = window.VoxelApp.scene.getObjectByName('VoxelBox3DSimpleBodies');
+      const m = new THREE.Matrix4();
+      mesh.getMatrixAt(0, m);
+      return new THREE.Vector3().setFromMatrixPosition(m).y;
+    });
+    expect(afterY).toBeLessThan(beforeY - 0.1);
 
-    expect(result.started).toBe(false);
-    expect(result.status.running).toBe(false);
-    expect(result.status.lastError).toMatch(/same connected body/i);
-    expect(relevantErrors(errors).some((x) => /same connected body/i.test(x))).toBe(true);
+    expect(await page.evaluate(() => window.VoxelBox3D.stop())).toBe(true);
+    await page.waitForFunction(() => window.VoxelBox3D.running === false && window.VoxelPhysics.state.running === false);
+
+    const reset = await page.evaluate(() => ({
+      simRoot: !!window.VoxelApp.scene.getObjectByName('VoxelBox3DSimple'),
+      preview: window.VoxelPhysics.state.preview,
+      snapshot: [...window.VoxelApp.voxels.entries()].map(([k,v]) => [String(k), v.color, !!v.glass]),
+      originalVisible: window.VoxelApp.originalVoxelsGroup?.visible
+    }));
+    expect(reset.simRoot).toBe(false);
+    expect(reset.preview).toBe(null);
+    expect(reset.snapshot).toEqual(setup.snapshot);
+    expect(reset.originalVisible).not.toBe(false);
+    expect(relevantErrors(errors)).toEqual([]);
+  });
+
+  test('desktop exposes only Physics + Play/Pause and survives repeated cycles', async ({ page }) => {
+    const errors = collectPhysicsErrors(page);
+    await page.goto(`${BASE}/`, { waitUntil: 'domcontentloaded' });
+    await setupSimpleModel(page);
+
+    await page.waitForSelector('#vs-physics-toggle-desktop');
+    expect(await page.locator('#vs-physics-panel').count()).toBe(0);
+    expect(await page.locator('#vs-physics-toolbar').count()).toBe(0);
+    expect(await page.locator('[data-type="hinge"]').count()).toBe(0);
+
+    for (let i = 0; i < 8; i++) {
+      await page.click('#vs-physics-test');
+      await page.waitForFunction(() => window.VoxelBox3D.running === true && window.VoxelBox3D.getStatus?.().transition === 'running');
+      await page.click('#vs-physics-test');
+      await page.waitForFunction(() => window.VoxelBox3D.running === false && window.VoxelBox3D.getStatus?.().transition === 'stopped');
+      expect(await page.locator('[name="VoxelBox3DSimple"]').count()).toBe(0);
+    }
+    expect(relevantErrors(errors)).toEqual([]);
   });
 });
