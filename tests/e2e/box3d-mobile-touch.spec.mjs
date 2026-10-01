@@ -81,6 +81,7 @@ async function pointerDrag(page, from, to) {
     const canvas = window.VoxelApp.cvs;
     const common = { bubbles:true, cancelable:true, composed:true, pointerId:77, pointerType:'touch', isPrimary:true, button:0, buttons:1 };
     canvas.dispatchEvent(new PointerEvent('pointerdown', { ...common, clientX:from.x, clientY:from.y }));
+    window.__touchMouseJointObserved = !!window.VoxelBox3D.mouseGrabActive;
     const steps = 8;
     for (let i=1;i<=steps;i++) {
       const t = i/steps;
@@ -89,12 +90,13 @@ async function pointerDrag(page, from, to) {
         clientX: from.x + (to.x-from.x)*t,
         clientY: from.y + (to.y-from.y)*t
       }));
+      window.__touchMouseJointObserved ||= !!window.VoxelBox3D.mouseGrabActive;
     }
     canvas.dispatchEvent(new PointerEvent('pointerup', { ...common, buttons:0, clientX:to.x, clientY:to.y }));
   }, { from, to });
 }
 
-test('mobile mode cycle remains Orbit/Edit only; Play starts Physics independently', async ({ browser }) => {
+test('mobile Play is visible on the left edge and Physics stays outside Orbit/Edit cycle', async ({ browser }) => {
   const { context, page } = await mobilePage(browser);
   await page.goto(`${BASE}/`, { waitUntil:'domcontentloaded' });
   await setupModel(page);
@@ -102,6 +104,26 @@ test('mobile mode cycle remains Orbit/Edit only; Play starts Physics independent
   expect(await page.locator('#vs-physics-toggle-desktop').count()).toBe(0);
   expect(await page.locator('#vs-physics-panel').count()).toBe(0);
   expect(await page.locator('#vs-physics-toolbar').count()).toBe(0);
+
+  const playHit = await page.evaluate(() => {
+    const b = document.querySelector('#vs-physics-test');
+    const r = b.getBoundingClientRect();
+    const x = r.left + r.width/2;
+    const y = r.top + r.height/2;
+    return {
+      left:r.left,
+      top:r.top,
+      right:r.right,
+      bottom:r.bottom,
+      visible:r.width>0 && r.height>0 && r.left>=0 && r.right<=innerWidth && r.top>=0 && r.bottom<=innerHeight,
+      hit:!!document.elementFromPoint(x,y)?.closest?.('#vs-physics-test'),
+      disabled:b.disabled
+    };
+  });
+  expect(playHit.visible).toBe(true);
+  expect(playHit.hit).toBe(true);
+  expect(playHit.disabled).toBe(false);
+  expect(playHit.left).toBeLessThanOrEqual(20);
 
   const modeButton = page.locator('#mobile-canvas-mode-toggle');
   await expect(modeButton).toBeVisible();
@@ -133,7 +155,7 @@ test('mobile mode cycle remains Orbit/Edit only; Play starts Physics independent
   await context.close();
 });
 
-test('Physics drag moves a Box3D body but never orbits the camera', async ({ browser }) => {
+test('mobile drag uses native Box3D 3D mouse joint and never orbits the camera', async ({ browser }) => {
   const { context, page } = await mobilePage(browser);
   const errors = [];
   page.on('pageerror', e => errors.push(String(e)));
@@ -158,7 +180,9 @@ test('Physics drag moves a Box3D body but never orbits the camera', async ({ bro
     bodies: window.VoxelBox3D.snapshotBodies(),
     camera: window.VoxelApp.cam.position.toArray(),
     quaternion: window.VoxelApp.cam.quaternion.toArray(),
-    router: window.VoxelPhysicsInputRouter.mode
+    router: window.VoxelPhysicsInputRouter.mode,
+    observedNativeMouseJoint: !!window.__touchMouseJointObserved,
+    mouseJointReleased: !window.VoxelBox3D.mouseGrabActive
   }));
 
   const bodyDelta = Math.hypot(
@@ -169,6 +193,8 @@ test('Physics drag moves a Box3D body but never orbits the camera', async ({ bro
   const cameraDelta = Math.hypot(...after.camera.map((v,i) => v-before.camera[i]));
   const quatDelta = Math.hypot(...after.quaternion.map((v,i) => v-before.quaternion[i]));
 
+  expect(after.observedNativeMouseJoint).toBe(true);
+  expect(after.mouseJointReleased).toBe(true);
   expect(bodyDelta).toBeGreaterThan(.08);
   expect(cameraDelta).toBeLessThan(1e-6);
   expect(quatDelta).toBeLessThan(1e-6);
