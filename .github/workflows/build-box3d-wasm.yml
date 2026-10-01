@@ -1,0 +1,87 @@
+name: Build Box3D WASM
+
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - 'physics/box3d_bridge.c'
+      - '.github/workflows/build-box3d-wasm.yml'
+
+permissions:
+  contents: write
+
+concurrency:
+  group: box3d-wasm-main
+  cancel-in-progress: true
+
+env:
+  BOX3D_COMMIT: 9f998c862d54c03a633ecea3831937385c78b532
+  EMSCRIPTEN_VERSION: 6.0.10
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Emscripten
+        uses: emscripten-core/setup-emsdk@v16
+        with:
+          version: ${{ env.EMSCRIPTEN_VERSION }}
+          actions-cache-folder: emsdk-cache
+
+      - name: Fetch pinned Box3D
+        run: |
+          git clone --filter=blob:none https://github.com/erincatto/box3d.git .box3d
+          git -C .box3d checkout --detach "$BOX3D_COMMIT"
+          test "$(git -C .box3d rev-parse HEAD)" = "$BOX3D_COMMIT"
+
+      - name: Build Box3D static library for WebAssembly
+        run: |
+          emcmake cmake -S .box3d -B .box3d/build \
+            -DCMAKE_BUILD_TYPE=Release \
+            -DBOX3D_SAMPLES=OFF \
+            -DBOX3D_DOCS=OFF \
+            -DBOX3D_VALIDATE=OFF
+          cmake --build .box3d/build --target box3d --config Release -j2
+
+      - name: Build VoxelShaper Box3D bridge
+        run: |
+          mkdir -p lib/box3d
+          emcc physics/box3d_bridge.c .box3d/build/src/libbox3d.a \
+            -I.box3d/include \
+            -std=gnu17 -O3 -msimd128 \
+            -s MODULARIZE=1 \
+            -s EXPORT_NAME=createVoxelBox3DModule \
+            -s ENVIRONMENT=web \
+            -s ALLOW_MEMORY_GROWTH=1 \
+            -s FILESYSTEM=0 \
+            -s ASSERTIONS=0 \
+            -s EXPORTED_FUNCTIONS='["_vsb3_reset","_vsb3_destroy","_vsb3_create_body","_vsb3_add_box","_vsb3_create_revolute","_vsb3_create_prismatic","_vsb3_create_weld","_vsb3_step","_vsb3_apply_force","_vsb3_body_mass","_vsb3_body_px","_vsb3_body_py","_vsb3_body_pz","_vsb3_body_qx","_vsb3_body_qy","_vsb3_body_qz","_vsb3_body_qw"]' \
+            -s EXPORTED_RUNTIME_METHODS='["cwrap"]' \
+            -o lib/box3d/box3d.js
+          test -s lib/box3d/box3d.js
+          test -s lib/box3d/box3d.wasm
+          node --check lib/box3d/box3d.js
+
+      - name: Record pinned engine provenance
+        run: |
+          cat > lib/box3d/PROVENANCE.txt <<EOF
+          Box3D: https://github.com/erincatto/box3d
+          Commit: $BOX3D_COMMIT
+          Emscripten: $EMSCRIPTEN_VERSION
+          License: MIT
+          Built by: .github/workflows/build-box3d-wasm.yml
+          EOF
+
+      - name: Commit generated runtime
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add lib/box3d/box3d.js lib/box3d/box3d.wasm lib/box3d/PROVENANCE.txt
+          if git diff --cached --quiet; then
+            echo "Box3D WASM unchanged"
+            exit 0
+          fi
+          git commit -m "build: refresh pinned Box3D wasm"
+          git push
