@@ -48,6 +48,7 @@ async function playByTouch(page) {
   const p = await buttonCenter(page, '#vs-physics-test');
   await page.touchscreen.tap(p.x, p.y);
   await page.waitForFunction(() => window.VoxelBox3D.running === true && window.VoxelPhysics.state.enabled === true);
+  await page.waitForFunction(() => window.VoxelPhysicsInputRouter.mode === 'physics');
 }
 
 async function stopByTouch(page) {
@@ -96,7 +97,25 @@ async function pointerDrag(page, from, to) {
   }, { from, to });
 }
 
-test('mobile Play is visible on the left edge and Physics stays outside Orbit/Edit cycle', async ({ browser }) => {
+async function orbitPointerDrag(page, from, to) {
+  await page.evaluate(({ from, to }) => {
+    const canvas = window.VoxelApp.cvs;
+    const common = { bubbles:true, cancelable:true, composed:true, pointerId:88, pointerType:'touch', isPrimary:true, button:0, buttons:1 };
+    canvas.dispatchEvent(new PointerEvent('pointerdown', { ...common, clientX:from.x, clientY:from.y }));
+    const steps = 10;
+    for (let i=1;i<=steps;i++) {
+      const t = i/steps;
+      canvas.dispatchEvent(new PointerEvent('pointermove', {
+        ...common,
+        clientX: from.x + (to.x-from.x)*t,
+        clientY: from.y + (to.y-from.y)*t
+      }));
+    }
+    canvas.dispatchEvent(new PointerEvent('pointerup', { ...common, buttons:0, clientX:to.x, clientY:to.y }));
+  }, { from, to });
+}
+
+test('mobile Physics toggles Grab <-> Orbit while Box3D keeps running and restores authoring mode', async ({ browser }) => {
   const { context, page } = await mobilePage(browser);
   await page.goto(`${BASE}/`, { waitUntil:'domcontentloaded' });
   await setupModel(page);
@@ -112,9 +131,6 @@ test('mobile Play is visible on the left edge and Physics stays outside Orbit/Ed
     const y = r.top + r.height/2;
     return {
       left:r.left,
-      top:r.top,
-      right:r.right,
-      bottom:r.bottom,
       visible:r.width>0 && r.height>0 && r.left>=0 && r.right<=innerWidth && r.top>=0 && r.bottom<=innerHeight,
       hit:!!document.elementFromPoint(x,y)?.closest?.('#vs-physics-test'),
       disabled:b.disabled
@@ -127,35 +143,74 @@ test('mobile Play is visible on the left edge and Physics stays outside Orbit/Ed
 
   const modeButton = page.locator('#mobile-canvas-mode-toggle');
   await expect(modeButton).toBeVisible();
+  const m = await buttonCenter(page, '#mobile-canvas-mode-toggle');
+
+  // Outside simulation this remains the ordinary Orbit/Edit authoring toggle.
   const first = await modeButton.getAttribute('data-mode');
   expect(['view','edit']).toContain(first);
-
-  const m = await buttonCenter(page, '#mobile-canvas-mode-toggle');
   await page.touchscreen.tap(m.x,m.y);
   await page.waitForTimeout(100);
   const second = await modeButton.getAttribute('data-mode');
   expect(['view','edit']).toContain(second);
-  expect(second).not.toBe('physics');
   expect(second).not.toBe(first);
-
   await page.touchscreen.tap(m.x,m.y);
   await page.waitForTimeout(100);
-  const third = await modeButton.getAttribute('data-mode');
-  expect(third).toBe(first);
-  expect(third).not.toBe('physics');
+  expect(await modeButton.getAttribute('data-mode')).toBe(first);
 
-  const modeBeforePlay = await page.evaluate(() => window.VoxelApp.mobileCanvasMode);
+  const modeBeforePlay = await page.evaluate(() => window.VoxelApp.mobileCanvasMode || 'view');
   await playByTouch(page);
-  expect(await page.evaluate(() => window.VoxelPhysicsInputRouter.mode)).toBe('physics');
-  expect(await page.evaluate(() => window.VoxelApp.mobileCanvasMode)).toBe(modeBeforePlay);
+  expect(await page.evaluate(() => window.VoxelBox3D.running)).toBe(true);
+  expect(await page.evaluate(() => window.VoxelPhysicsInputRouter.physicsInputMode)).toBe('grab');
+  expect(await modeButton.getAttribute('data-mode')).toBe('physics-grab');
+
+  // Same mode button temporarily hands the still-running simulation to Orbit.
+  await page.touchscreen.tap(m.x,m.y);
+  await page.waitForFunction(() => window.VoxelPhysicsInputRouter.mode === 'physics-orbit');
+  expect(await page.evaluate(() => window.VoxelBox3D.running)).toBe(true);
+  expect(await page.evaluate(() => window.VoxelPhysics.state.enabled)).toBe(true);
+  expect(await page.evaluate(() => window.VoxelBox3D.mouseGrabActive)).toBe(false);
+  expect(await page.evaluate(() => window.VoxelApp.mobileCanvasMode)).toBe('view');
+  expect(await modeButton.getAttribute('data-mode')).toBe('physics-orbit');
+
+  const cameraBeforeOrbit = await page.evaluate(() => ({
+    p:window.VoxelApp.cam.position.toArray(),
+    q:window.VoxelApp.cam.quaternion.toArray()
+  }));
+  const canvasBox = await page.locator('#canvas-container canvas').first().boundingBox().catch(() => null)
+    || await page.locator('canvas').first().boundingBox();
+  if (!canvasBox) throw new Error('canvas has no hit box');
+  await orbitPointerDrag(page,
+    {x:canvasBox.x+canvasBox.width*.72, y:canvasBox.y+canvasBox.height*.48},
+    {x:canvasBox.x+canvasBox.width*.46, y:canvasBox.y+canvasBox.height*.36}
+  );
+  await page.waitForTimeout(120);
+  const cameraAfterOrbit = await page.evaluate(() => ({
+    p:window.VoxelApp.cam.position.toArray(),
+    q:window.VoxelApp.cam.quaternion.toArray(),
+    grabbed:window.VoxelBox3D.mouseGrabActive,
+    running:window.VoxelBox3D.running
+  }));
+  const orbitCameraDelta = Math.hypot(...cameraAfterOrbit.p.map((v,i)=>v-cameraBeforeOrbit.p[i]));
+  const orbitQuatDelta = Math.hypot(...cameraAfterOrbit.q.map((v,i)=>v-cameraBeforeOrbit.q[i]));
+  expect(Math.max(orbitCameraDelta,orbitQuatDelta)).toBeGreaterThan(1e-5);
+  expect(cameraAfterOrbit.grabbed).toBe(false);
+  expect(cameraAfterOrbit.running).toBe(true);
+
+  // Toggle back: mouse joints immediately own the canvas again; no simulation restart.
+  await page.touchscreen.tap(m.x,m.y);
+  await page.waitForFunction(() => window.VoxelPhysicsInputRouter.mode === 'physics');
+  expect(await page.evaluate(() => window.VoxelPhysicsInputRouter.physicsInputMode)).toBe('grab');
+  expect(await page.evaluate(() => window.VoxelBox3D.running)).toBe(true);
+  expect(await modeButton.getAttribute('data-mode')).toBe('physics-grab');
 
   await stopByTouch(page);
-  expect(await page.evaluate(() => window.VoxelApp.mobileCanvasMode)).toBe(modeBeforePlay);
+  await page.waitForTimeout(80);
+  expect(await page.evaluate(() => window.VoxelApp.mobileCanvasMode || 'view')).toBe(modeBeforePlay);
   expect(await page.evaluate(() => window.VoxelPhysicsInputRouter.mode)).toBe(modeBeforePlay === 'edit' ? 'edit' : 'orbit');
   await context.close();
 });
 
-test('mobile drag uses native Box3D 3D mouse joint and never orbits the camera', async ({ browser }) => {
+test('mobile drag uses native Box3D 3D mouse joint and never orbits the camera in Grab mode', async ({ browser }) => {
   const { context, page } = await mobilePage(browser);
   const errors = [];
   page.on('pageerror', e => errors.push(String(e)));
