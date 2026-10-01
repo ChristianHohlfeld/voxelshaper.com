@@ -7,6 +7,7 @@ on:
       - 'physics/box3d_bridge.c'
       - 'physics-box3d-runtime.js'
       - 'physics-controls.js'
+      - 'physics-visuals.js'
       - 'physics-mobile-cycle.js'
       - 'lib/box3d/box3d.js'
       - 'lib/box3d/box3d.wasm'
@@ -20,7 +21,7 @@ permissions:
 jobs:
   browser-smoke:
     runs-on: ubuntu-latest
-    timeout-minutes: 12
+    timeout-minutes: 15
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -36,9 +37,11 @@ jobs:
           test -s lib/box3d/box3d.js
           test -s lib/box3d/box3d.wasm
           node --check physics-box3d-runtime.js
+          node --check physics-visuals.js
           node --check physics-mobile-cycle.js
           grep -q '<script src="lib/box3d/box3d.js"></script>' index.html
           grep -q '<script src="physics-box3d-runtime.js"></script>' index.html
+          grep -q '<script src="physics-visuals.js"></script>' index.html
       - name: Start local site
         run: |
           python3 -m http.server 4173 >/tmp/voxelshaper-http.log 2>&1 &
@@ -46,7 +49,22 @@ jobs:
           for i in {1..30}; do curl -fsS http://127.0.0.1:4173/ >/dev/null && exit 0; sleep 1; done
           cat /tmp/voxelshaper-http.log
           exit 1
-      - name: Run Box3D browser tests
+      - name: Run local Box3D browser tests
         env:
           VS_TEST_BASE_URL: http://127.0.0.1:4173
+        run: npx playwright test tests/e2e/box3d-physics.spec.mjs --project=chromium --reporter=line
+      - name: Wait for live Box3D deployment
+        run: |
+          for i in {1..90}; do
+            html="$(curl -fsS --max-time 15 -H 'Cache-Control: no-cache' 'https://voxelshaper.com/?box3d_ci=1' || true)"
+            if printf '%s' "$html" | grep -q 'physics-box3d-runtime.js' && printf '%s' "$html" | grep -q 'physics-visuals.js'; then
+              exit 0
+            fi
+            sleep 2
+          done
+          echo 'live deployment did not expose current Box3D scripts'
+          exit 1
+      - name: Run live Box3D browser tests
+        env:
+          VS_TEST_BASE_URL: https://voxelshaper.com
         run: npx playwright test tests/e2e/box3d-physics.spec.mjs --project=chromium --reporter=line
