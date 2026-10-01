@@ -12,8 +12,8 @@
     const btn = document.getElementById('mobile-canvas-mode-toggle');
     const canvas = app?.cvs;
     if (!app || !physics || !box?.hardened || !btn || !canvas || !isMobileSurface(app)) return false;
-    if (btn.dataset.physicsCycleBound === '3') return true;
-    btn.dataset.physicsCycleBound = '3';
+    if (btn.dataset.physicsCycleBound === '4') return true;
+    btn.dataset.physicsCycleBound = '4';
 
     document.getElementById('vs-physics-toggle-mobile')?.remove();
     document.getElementById('vs-physics-direct-style')?.remove();
@@ -136,6 +136,22 @@
 
     const activeJoint = () => physics.state?.joints?.find((j) => j.id === physics.state?.active) || null;
 
+    const adoptActiveJoint = () => {
+      if (placing) return null;
+      const joints = physics.state?.joints || [];
+      if (!joints.length) {
+        directJointId = null;
+        return null;
+      }
+      let j = activeJoint();
+      if (!j) {
+        j = joints[0];
+        physics.state.active = j.id;
+      }
+      directJointId = j.id;
+      return j;
+    };
+
     const showHud = (text, sticky) => {
       window.clearTimeout(hudTimer);
       hud.textContent = text || '';
@@ -178,6 +194,7 @@
       } else {
         physics.state.active = id;
       }
+      physics.state.active = id;
       directJointId = id;
       placing = false;
       physics.newJoint?.();
@@ -212,8 +229,11 @@
     };
 
     const syncToolbar = () => {
-      const j = activeJoint();
-      const show = !!(physics.state?.enabled && !placing && directJointId && j && j.id === directJointId);
+      let j = activeJoint();
+      if (physics.state?.enabled && !placing && (!directJointId || !j || j.id !== directJointId)) {
+        j = adoptActiveJoint();
+      }
+      const show = !!(physics.state?.enabled && !placing && j && directJointId === j.id);
       toolbar.classList.toggle('show', show);
       if (!show) return;
       toolbar.querySelectorAll('[data-type]').forEach((el) => el.classList.toggle('on', el.dataset.type === j.type));
@@ -275,6 +295,7 @@
         entryJointCount = physics.state?.joints?.length || 0;
         placing = entryJointCount === 0;
         if (placing) physics.newJoint?.();
+        else adoptActiveJoint();
         showHud('', false);
         syncToolbar();
       }
@@ -321,6 +342,7 @@
       app.mobileCanvasMode = 'view';
       physics.enable();
       if (placing) physics.newJoint?.();
+      else adoptActiveJoint();
       lastPhase = physics.state?.phase || 'a';
       showHud('', false);
       syncToolbar();
@@ -383,15 +405,29 @@
           else if (phase === 'anchor') showHud('A + B · Verbindungspunkt antippen', true);
           else if (phase === 'a') showHud('', false);
         }
-      } else if (phase !== 'a') {
-        // Existing-joint mode is selection/edit only. A new A/B placement starts exclusively via +.
-        physics.newJoint?.();
+      } else {
+        if (phase !== 'a') {
+          // Existing-joint mode is selection/edit only. A new A/B placement starts exclusively via +.
+          physics.newJoint?.();
+        }
+        adoptActiveJoint();
       }
 
-      if (directJointId && !physics.state?.joints?.some((j) => j.id === directJointId)) directJointId = null;
+      if (directJointId && !physics.state?.joints?.some((j) => j.id === directJointId)) {
+        directJointId = null;
+        if (!placing) adoptActiveJoint();
+      }
       lastPhase = physics.state?.phase || 'a';
       syncToolbar();
     }, 90);
+
+    // If Physics is already active when this mobile layer arrives (e.g. loaded test/project),
+    // restore the contextual selection immediately instead of waiting for a new canvas tap.
+    if (physics.state?.enabled && (physics.state?.joints?.length || 0) > 0) {
+      placing = false;
+      adoptActiveJoint();
+      syncToolbar();
+    }
 
     return true;
   }
