@@ -2,13 +2,27 @@ import { test, expect } from '@playwright/test';
 
 const BASE = process.env.VS_TEST_BASE_URL || 'http://127.0.0.1:4173';
 
-async function mobilePage(browser) {
+async function mobilePage(browser, fakeSensors = false) {
   const context = await browser.newContext({
     viewport: { width: 390, height: 844 },
     hasTouch: true,
     isMobile: true
   });
   const page = await context.newPage();
+  if (fakeSensors) {
+    await page.addInitScript(() => {
+      class FakeMotionEvent extends Event {
+        constructor(type, init = {}) { super(type); Object.assign(this, init); }
+        static requestPermission() { return Promise.resolve('granted'); }
+      }
+      class FakeOrientationEvent extends Event {
+        constructor(type, init = {}) { super(type); Object.assign(this, init); }
+        static requestPermission() { return Promise.resolve('granted'); }
+      }
+      Object.defineProperty(window, 'DeviceMotionEvent', { configurable:true, writable:true, value:FakeMotionEvent });
+      Object.defineProperty(window, 'DeviceOrientationEvent', { configurable:true, writable:true, value:FakeOrientationEvent });
+    });
+  }
   return { context, page };
 }
 
@@ -62,7 +76,7 @@ test('mobile simple physics exposes only Play/Pause and works by real touch', as
     const x = r.left + r.width / 2;
     const y = r.top + r.height / 2;
     return {
-      x, y,
+      x, y, left:r.left, bottomGap:innerHeight-r.bottom,
       disabled: button.disabled,
       visible: r.width > 0 && r.height > 0 && r.left >= 0 && r.right <= innerWidth && r.top >= 0 && r.bottom <= innerHeight,
       hit: !!document.elementFromPoint(x,y)?.closest?.('#vs-physics-test')
@@ -71,6 +85,8 @@ test('mobile simple physics exposes only Play/Pause and works by real touch', as
   expect(hit.disabled).toBe(false);
   expect(hit.visible).toBe(true);
   expect(hit.hit).toBe(true);
+  expect(hit.left).toBeLessThanOrEqual(20);
+  expect(hit.bottomGap).toBeGreaterThan(110);
 
   await page.touchscreen.tap(hit.x, hit.y);
   await page.waitForFunction(() => window.VoxelBox3D.running === true && window.VoxelBox3D.bodyCount === 3);
@@ -87,6 +103,42 @@ test('mobile simple physics exposes only Play/Pause and works by real touch', as
   await page.touchscreen.tap(pause.x, pause.y);
   await page.waitForFunction(() => window.VoxelBox3D.running === false && window.VoxelPhysics.state.running === false);
   expect(await page.evaluate(() => !!window.VoxelApp.scene.getObjectByName('VoxelBox3DSimple'))).toBe(false);
+  expect(errors).toEqual([]);
+  await context.close();
+});
+
+test('mobile gyro tilt is screen-corrected input and visibly pushes the physics bodies', async ({ browser }) => {
+  const { context, page } = await mobilePage(browser, true);
+  const errors = [];
+  page.on('pageerror', (e) => errors.push(String(e)));
+  page.on('console', (msg) => { if (msg.type() === 'error' && /box3d|wasm/i.test(msg.text())) errors.push(msg.text()); });
+
+  await page.goto(`${BASE}/`, { waitUntil: 'domcontentloaded' });
+  await setupModel(page);
+  await enterPhysicsByTouch(page);
+  const p = await page.locator('#vs-physics-test').boundingBox();
+  await page.touchscreen.tap(p.x + p.width/2, p.y + p.height/2);
+  await page.waitForFunction(() => window.VoxelBox3D.running && window.VoxelBox3D.bodyCount === 3);
+
+  const before = await page.evaluate(() => window.VoxelBox3D.snapshotBodies().map((b) => ({x:b.x,z:b.z})));
+  await page.evaluate(() => {
+    for (let i=0;i<24;i++) {
+      window.dispatchEvent(new DeviceOrientationEvent('deviceorientation', { beta:8, gamma:42, alpha:0, absolute:false }));
+      window.dispatchEvent(new DeviceMotionEvent('devicemotion', {
+        accelerationIncludingGravity:{x:7.0,y:1.0,z:6.7},
+        acceleration:{x:1.5,y:.2,z:0},
+        rotationRate:{alpha:0,beta:0,gamma:0},
+        interval:16
+      }));
+    }
+  });
+  await page.waitForTimeout(650);
+  const after = await page.evaluate(() => window.VoxelBox3D.snapshotBodies().map((b) => ({x:b.x,z:b.z})));
+  const horizontalDelta = before.reduce((sum,b,i) => sum + Math.hypot(after[i].x-b.x, after[i].z-b.z), 0);
+  expect(horizontalDelta).toBeGreaterThan(.12);
+
+  await page.touchscreen.tap(p.x + p.width/2, p.y + p.height/2);
+  await page.waitForFunction(() => !window.VoxelBox3D.running && !window.VoxelApp.scene.getObjectByName('VoxelBox3DSimple'));
   expect(errors).toEqual([]);
   await context.close();
 });
