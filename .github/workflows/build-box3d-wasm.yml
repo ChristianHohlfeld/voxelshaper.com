@@ -58,7 +58,7 @@ jobs:
             -s ALLOW_MEMORY_GROWTH=1 \
             -s FILESYSTEM=0 \
             -s ASSERTIONS=0 \
-            -s EXPORTED_FUNCTIONS='["_vsb3_reset","_vsb3_destroy","_vsb3_create_body","_vsb3_add_box","_vsb3_create_revolute","_vsb3_create_prismatic","_vsb3_create_weld","_vsb3_begin_mouse_joint","_vsb3_add_mouse_joint_body","_vsb3_set_mouse_target","_vsb3_end_mouse_joint","_vsb3_step","_vsb3_apply_force","_vsb3_body_mass","_vsb3_body_px","_vsb3_body_py","_vsb3_body_pz","_vsb3_body_qx","_vsb3_body_qy","_vsb3_body_qz","_vsb3_body_qw"]' \
+            -s EXPORTED_FUNCTIONS='["_vsb3_reset","_vsb3_destroy","_vsb3_create_body","_vsb3_add_box","_vsb3_create_revolute","_vsb3_create_prismatic","_vsb3_create_weld","_vsb3_begin_mouse_grab","_vsb3_add_mouse_grab_body","_vsb3_set_mouse_grab_target","_vsb3_end_mouse_grab","_vsb3_begin_mouse_joint","_vsb3_add_mouse_joint_body","_vsb3_set_mouse_target","_vsb3_end_mouse_joint","_vsb3_step","_vsb3_apply_force","_vsb3_body_mass","_vsb3_body_px","_vsb3_body_py","_vsb3_body_pz","_vsb3_body_qx","_vsb3_body_qy","_vsb3_body_qz","_vsb3_body_qw"]' \
             -s EXPORTED_RUNTIME_METHODS='["cwrap"]' \
             -o lib/box3d/box3d.js
           test -s lib/box3d/box3d.js
@@ -82,9 +82,6 @@ jobs:
           git add lib/box3d/box3d.js lib/box3d/box3d.wasm lib/box3d/PROVENANCE.txt
           if ! git diff --cached --quiet; then
             git commit -m "build: refresh pinned Box3D wasm"
-            # main may advance while Emscripten is compiling. Rebase the generated
-            # artifact commit onto the latest main so a concurrent source/test push
-            # cannot make the publish step fail with a non-fast-forward rejection.
             git fetch origin main
             git rebase origin/main
             git push origin HEAD:main
