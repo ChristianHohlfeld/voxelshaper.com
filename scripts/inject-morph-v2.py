@@ -9,10 +9,11 @@ box3d = '<script src="lib/box3d/box3d.js"></script>'
 box3d_runtime = '<script src="physics-box3d-runtime.js"></script>'
 history = '<script src="history-hardening.js"></script>'
 box3d_hardening = '<script src="physics-runtime-hardening.js"></script>'
+gyro = '<script src="gyro-navigation.js"></script>'
 physics_visuals = '<script src="physics-visuals.js"></script>'
 physics_cycle = '<script src="physics-mobile-cycle.js"></script>'
 
-ordered = [morph, physics, box3d, box3d_runtime, history, box3d_hardening, physics_visuals, physics_cycle]
+ordered = [morph, physics, box3d, box3d_runtime, history, box3d_hardening, gyro, physics_visuals, physics_cycle]
 changed = False
 
 for tag in ordered:
