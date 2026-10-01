@@ -25,6 +25,7 @@
       screenAngle: 0,
       pausedByTouch: false,
       needsRecenter: true,
+      driveActive: false,
       targetYaw: 0,
       targetPitch: 0,
       currentYaw: 0,
@@ -50,7 +51,7 @@
     let raf = 0;
 
     function isMobileSurface() {
-      return !!(app.isMobile || matchMedia?.('(pointer: coarse)')?.matches || innerWidth < 900);
+      return !!(app.isMobile || window.matchMedia?.('(pointer: coarse)')?.matches || innerWidth < 900);
     }
 
     function wrapAngle(a) {
@@ -122,10 +123,8 @@
     }
 
     function relativeAnglesFrom(q) {
-      // Avoid converting the relative quaternion back into Euler angles. Euler
-      // extraction couples axes at tilted poses and is the source of the previous
-      // "diagonal"/unreliable gyro feel. The transformed forward vector gives the
-      // actual relative look direction and naturally ignores pure device roll.
+      // Relative forward direction avoids Euler-axis coupling at tilted poses and
+      // naturally ignores pure phone roll.
       deltaQ.copy(inverseReferenceQ).multiply(q).normalize();
       relativeForward.set(0, 0, -1).applyQuaternion(deltaQ).normalize();
       const yaw = Math.atan2(relativeForward.x, -relativeForward.z);
@@ -133,28 +132,47 @@
       return { yaw, pitch };
     }
 
-    function shouldDriveCamera() {
-      if (!state.enabled || !state.calibrated || state.pausedByTouch) return false;
+    function canOwnCamera() {
+      if (!state.enabled || state.pausedByTouch) return false;
       if (!isMobileSurface()) return false;
-      if (performance.now() - state.lastSampleAt > SENSOR_STALE_MS) return false;
-      // Physics uses the same physical movement as force input. Do not make camera
-      // motion fight the sandbox while simple physics is active.
       if (window.VoxelPhysics?.state?.enabled) return false;
       return (app.mobileCanvasMode || 'view') === 'view';
     }
 
+    function shouldDriveCamera() {
+      if (!canOwnCamera() || !state.calibrated || state.needsRecenter) return false;
+      return performance.now() - state.lastSampleAt <= SENSOR_STALE_MS;
+    }
+
     function consumeQuaternion(q) {
       if (!q) return false;
+      const now = performance.now();
+      const wasStale = state.lastSampleAt > 0 && now - state.lastSampleAt > SENSOR_STALE_MS;
       latestQ = q.clone();
-      state.lastSampleAt = performance.now();
+      state.lastSampleAt = now;
       state.sampleCount += 1;
+
+      if (!state.enabled) return true;
+
+      // Edit mode, Physics mode and touch gestures temporarily own navigation.
+      // Any movement that happens there must not be replayed when Orbit resumes.
+      if (!canOwnCamera()) {
+        state.driveActive = false;
+        state.needsRecenter = true;
+        return true;
+      }
+
+      if (!state.driveActive) {
+        state.driveActive = true;
+        state.needsRecenter = true;
+      }
+      if (wasStale) state.needsRecenter = true;
 
       const currentScreen = getScreenAngle();
       if (state.needsRecenter || !state.calibrated || Math.abs(wrapAngle(currentScreen - state.screenAngle)) > .001) {
         calibrateFrom(q);
         return true;
       }
-      if (!shouldDriveCamera()) return true;
 
       const relative = relativeAnglesFrom(q);
       let yawDelta = THREE.MathUtils.clamp(relative.yaw, -MAX_YAW, MAX_YAW);
@@ -170,12 +188,13 @@
     }
 
     function onOrientation(event) {
+      if (event.alpha == null || event.beta == null || event.gamma == null) return;
       const q = orientationQuaternion(Number(event.alpha), Number(event.beta), Number(event.gamma));
       consumeQuaternion(q);
     }
 
     function frame(now) {
-      const dt = state.lastFrame ? Math.min(.05, (now - state.lastFrame) / 1000) : 1 / 60;
+      const dt = state.lastFrame ? Math.min(.05, Math.max(0, (now - state.lastFrame) / 1000)) : 1 / 60;
       state.lastFrame = now;
       if (shouldDriveCamera()) {
         const blend = 1 - Math.exp(-SMOOTH_HZ * dt);
@@ -191,14 +210,19 @@
       state.baseYaw = NaN;
       state.basePitch = NaN;
       state.needsRecenter = true;
-      if (latestQ) calibrateFrom(latestQ);
+      state.driveActive = false;
+      if (latestQ && canOwnCamera()) {
+        calibrateFrom(latestQ);
+        state.driveActive = true;
+      }
       return true;
     }
 
     async function requestPermissionFromGesture() {
       try {
         if (typeof DeviceOrientationEvent !== 'undefined' && typeof DeviceOrientationEvent.requestPermission === 'function') {
-          const result = await DeviceOrientationEvent.requestPermission(false);
+          // Relative orientation only; do not request magnetometer/absolute heading.
+          const result = await DeviceOrientationEvent.requestPermission();
           state.permission = result;
           return result === 'granted';
         }
@@ -218,6 +242,7 @@
         return false;
       }
       state.enabled = true;
+      state.driveActive = false;
       recenter();
       app.showToast?.('Gyro', 'Camera motion on · tap camera to recenter', 'success', 1100);
       syncButton();
@@ -227,6 +252,7 @@
     function enableWithoutPrompt() {
       state.permission = 'granted';
       state.enabled = true;
+      state.driveActive = false;
       recenter();
       syncButton();
       return true;
@@ -236,6 +262,7 @@
       state.enabled = false;
       state.calibrated = false;
       state.needsRecenter = true;
+      state.driveActive = false;
       state.baseYaw = NaN;
       state.basePitch = NaN;
       app.syncEulerFromCamera?.();
@@ -257,16 +284,17 @@
       else requestAnimationFrame(recenter);
     }, true);
 
-    // Manual touch orbit always wins. Recalibrate onto the user's actual camera pose
-    // after release, so touch and gyro cannot pull against each other or snap back.
+    // Manual touch orbit always wins. Rebase onto the resulting camera pose on release.
     app.cvs.addEventListener('pointerdown', (event) => {
       if (!state.enabled || event.pointerType === 'mouse') return;
       state.pausedByTouch = true;
+      state.driveActive = false;
     }, true);
     const endTouch = (event) => {
       if (!state.enabled || event.pointerType === 'mouse') return;
       state.pausedByTouch = false;
       state.needsRecenter = true;
+      state.driveActive = false;
     };
     app.cvs.addEventListener('pointerup', endTouch, true);
     app.cvs.addEventListener('pointercancel', endTouch, true);
@@ -274,6 +302,7 @@
     const orientationChanged = () => {
       state.screenAngle = getScreenAngle();
       state.needsRecenter = true;
+      state.driveActive = false;
     };
     window.addEventListener('orientationchange', orientationChanged, { passive: true });
     screen.orientation?.addEventListener?.('change', orientationChanged);
