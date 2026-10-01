@@ -50,6 +50,11 @@ jobs:
             git add package.json package-lock.json
             git commit -m "release: VoxelShaper Suite $VERSION"
           fi
+          # npm/package lifecycle in this repo can touch generated web files.
+          # The release consists only of the explicit version files above; discard
+          # generated workspace noise before rebasing against current main.
+          git reset --hard HEAD
+          git clean -fd
           git pull --rebase origin main
           node <<'NODE'
           const fs = require('fs');
