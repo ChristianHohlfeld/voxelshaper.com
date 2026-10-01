@@ -26,9 +26,6 @@ async function ready(page) {
 
 async function emit(page, alpha, beta, gamma) {
   await page.evaluate(({ alpha, beta, gamma }) => {
-    // Headless Chromium does not expose the DeviceOrientationEvent constructor on
-    // every platform. A normal Event with the same readonly payload exercises the
-    // exact production listener without depending on host sensor support.
     const ev = new Event('deviceorientation');
     Object.defineProperties(ev, {
       alpha: { value: alpha },
@@ -80,6 +77,27 @@ test('gyro rotates the orbit deterministically while preserving framing', async 
   await context.close();
 });
 
+test('tilted calibration does not cross-couple yaw into a wild pitch jump', async ({ browser }) => {
+  const { context, page } = await mobilePage(browser);
+  await ready(page);
+
+  await page.evaluate(() => {
+    const gyro = window.VoxelGyroNavigation;
+    gyro.recenter();
+    gyro.feed(123, 52, 31, 0);
+  });
+  const baseline = await page.evaluate(() => ({ ...window.VoxelGyroNavigation.state }));
+
+  await page.evaluate(() => window.VoxelGyroNavigation.feed(143, 52, 31, 0));
+  const moved = await page.evaluate(() => ({ ...window.VoxelGyroNavigation.state }));
+
+  const yawDelta = Math.abs(Math.atan2(Math.sin(moved.targetYaw-baseline.baseYaw), Math.cos(moved.targetYaw-baseline.baseYaw)));
+  const pitchDelta = Math.abs(moved.targetPitch-baseline.basePitch);
+  expect(yawDelta).toBeGreaterThan(3 * Math.PI / 180);
+  expect(pitchDelta).toBeLessThan(25 * Math.PI / 180);
+  await context.close();
+});
+
 test('alpha wrap across 360 degrees does not create a camera jump', async ({ browser }) => {
   const { context, page } = await mobilePage(browser);
   await ready(page);
@@ -108,6 +126,26 @@ test('tiny sensor noise stays inside the dead zone', async ({ browser }) => {
   const after = await cameraState(page);
 
   expect(distance(before.pos, after.pos)).toBeLessThan(0.03);
+  await context.close();
+});
+
+test('screen orientation change recenters instead of jumping the orbit', async ({ browser }) => {
+  const { context, page } = await mobilePage(browser);
+  await ready(page);
+
+  await emit(page, 35, 18, 4);
+  await page.waitForFunction(() => window.VoxelGyroNavigation.state.calibrated === true);
+  const before = await cameraState(page);
+
+  await page.evaluate(() => {
+    window.VoxelGyroNavigation.state.needsRecenter = true;
+    window.VoxelGyroNavigation.feed(35, 18, 4, 90);
+  });
+  await page.waitForTimeout(250);
+  const after = await cameraState(page);
+
+  expect(distance(before.pos, after.pos)).toBeLessThan(0.05);
+  expect(after.lookDot).toBeGreaterThan(0.995);
   await context.close();
 });
 
