@@ -18,6 +18,7 @@
 // editor's current maximum practical simulation budget.
 #define VS_MAX_BODIES 16384
 #define VS_MAX_JOINTS 2048
+#define VS_MAX_MOUSE_JOINTS 100
 
 typedef struct
 {
@@ -35,16 +36,23 @@ static b3WorldId g_world = {0};
 static vsBodySlot g_bodies[VS_MAX_BODIES];
 static vsJointSlot g_joints[VS_MAX_JOINTS];
 
-// Native Box3D grabber, following Erin Catto's current sample implementation:
-// a kinematic mouse body drives the picked dynamic body through a b3MotorJoint.
+// Native Box3D grabber, following Erin Catto's current sample implementation.
+// One kinematic mouse body can own up to a 10x10 VoxelShaper brush through
+// independent b3MotorJoint constraints. This keeps brush-sized grabs inside
+// Box3D's solver instead of approximating them with JavaScript forces.
 static b3BodyId g_mouseBody = {0};
-static b3JointId g_mouseJoint = {0};
+static b3JointId g_mouseJoints[VS_MAX_MOUSE_JOINTS];
+static int g_mouseJointCount = 0;
 static b3Pos g_mouseTarget = {0};
 
 static void vs_clear_mouse_handles(void)
 {
     g_mouseBody = b3_nullBodyId;
-    g_mouseJoint = b3_nullJointId;
+    for (int i = 0; i < VS_MAX_MOUSE_JOINTS; ++i)
+    {
+        g_mouseJoints[i] = b3_nullJointId;
+    }
+    g_mouseJointCount = 0;
     g_mouseTarget = (b3Pos){0.0, 0.0, 0.0};
 }
 
@@ -105,15 +113,56 @@ static void vs_end_mouse_joint_internal(void)
         return;
     }
 
-    if (b3Joint_IsValid(g_mouseJoint))
+    for (int i = 0; i < g_mouseJointCount; ++i)
     {
-        b3DestroyJoint(g_mouseJoint, true);
+        if (b3Joint_IsValid(g_mouseJoints[i]))
+        {
+            b3DestroyJoint(g_mouseJoints[i], true);
+        }
     }
     if (b3Body_IsValid(g_mouseBody))
     {
         b3DestroyBody(g_mouseBody);
     }
     vs_clear_mouse_handles();
+}
+
+static int vs_add_mouse_joint_for_body(b3BodyId bodyId, b3Pos worldAnchor, float forceScale)
+{
+    if (!vs_world_valid() || !b3Body_IsValid(g_mouseBody) || !b3Body_IsValid(bodyId)) return 0;
+    if (g_mouseJointCount >= VS_MAX_MOUSE_JOINTS) return 0;
+
+    b3MotorJointDef jointDef = b3DefaultMotorJointDef();
+    jointDef.base.bodyIdA = g_mouseBody;
+    jointDef.base.bodyIdB = bodyId;
+    jointDef.base.localFrameA.p = (b3Vec3){
+        worldAnchor.x - g_mouseTarget.x,
+        worldAnchor.y - g_mouseTarget.y,
+        worldAnchor.z - g_mouseTarget.z
+    };
+    jointDef.base.localFrameB.p = b3Body_GetLocalPoint(bodyId, worldAnchor);
+    jointDef.linearHertz = 7.5f;
+    jointDef.linearDampingRatio = 1.0f;
+
+    b3MassData massData = b3Body_GetMassData(bodyId);
+    float g = b3Length(b3World_GetGravity(g_world));
+    float mg = massData.mass * g;
+    float scale = forceScale > 0.0f ? forceScale : 100.0f;
+    jointDef.maxSpringForce = scale * mg;
+
+    if (massData.mass > 0.0f)
+    {
+        float trace = massData.inertia.cx.x + massData.inertia.cy.y + massData.inertia.cz.z;
+        float lever = sqrtf(trace / (3.0f * massData.mass));
+        jointDef.maxVelocityTorque = 0.5f * lever * mg;
+    }
+
+    b3JointId joint = b3CreateMotorJoint(g_world, &jointDef);
+    if (!b3Joint_IsValid(joint)) return 0;
+
+    g_mouseJoints[g_mouseJointCount++] = joint;
+    b3Body_SetAwake(bodyId, true);
+    return 1;
 }
 
 static b3Quat vs_inverse_quat(b3Quat q)
@@ -347,42 +396,27 @@ int vsb3_begin_mouse_joint(int bodyHandle, float px, float py, float pz, float f
         return 0;
     }
 
-    b3MotorJointDef jointDef = b3DefaultMotorJointDef();
-    jointDef.base.bodyIdA = g_mouseBody;
-    jointDef.base.bodyIdB = bodyId;
-    jointDef.base.localFrameB.p = b3Body_GetLocalPoint(bodyId, g_mouseTarget);
-    jointDef.linearHertz = 7.5f;
-    jointDef.linearDampingRatio = 1.0f;
-
-    b3MassData massData = b3Body_GetMassData(bodyId);
-    float g = b3Length(b3World_GetGravity(g_world));
-    float mg = massData.mass * g;
-    float scale = forceScale > 0.0f ? forceScale : 100.0f;
-    jointDef.maxSpringForce = scale * mg;
-
-    if (massData.mass > 0.0f)
-    {
-        float trace = massData.inertia.cx.x + massData.inertia.cy.y + massData.inertia.cz.z;
-        float lever = sqrtf(trace / (3.0f * massData.mass));
-        jointDef.maxVelocityTorque = 0.5f * lever * mg;
-    }
-
-    g_mouseJoint = b3CreateMotorJoint(g_world, &jointDef);
-    if (!b3Joint_IsValid(g_mouseJoint))
+    if (!vs_add_mouse_joint_for_body(bodyId, g_mouseTarget, forceScale))
     {
         b3DestroyBody(g_mouseBody);
         vs_clear_mouse_handles();
         return 0;
     }
-
-    b3Body_SetAwake(bodyId, true);
     return 1;
+}
+
+EMSCRIPTEN_KEEPALIVE
+int vsb3_add_mouse_joint_body(int bodyHandle, float px, float py, float pz, float forceScale)
+{
+    b3BodyId bodyId = vs_body(bodyHandle);
+    if (!b3Body_IsValid(bodyId)) return 0;
+    return vs_add_mouse_joint_for_body(bodyId, (b3Pos){px, py, pz}, forceScale);
 }
 
 EMSCRIPTEN_KEEPALIVE
 int vsb3_set_mouse_target(float px, float py, float pz)
 {
-    if (!vs_world_valid() || !b3Body_IsValid(g_mouseBody) || !b3Joint_IsValid(g_mouseJoint)) return 0;
+    if (!vs_world_valid() || !b3Body_IsValid(g_mouseBody) || g_mouseJointCount <= 0) return 0;
     g_mouseTarget = (b3Pos){px, py, pz};
     return 1;
 }
@@ -402,7 +436,8 @@ void vsb3_step(float dt, int substeps)
     if (substeps > 16) substeps = 16;
 
     // Erin Catto's sample drives the kinematic mouse body immediately before
-    // stepping the world. This keeps the motor joint fully inside Box3D's solver.
+    // stepping the world. Every brush-selected MotorJoint is attached to this
+    // same target body with its own local offset, preserving the grabbed patch.
     if (b3Body_IsValid(g_mouseBody))
     {
         b3WorldTransform target = {g_mouseTarget, b3Quat_identity};
