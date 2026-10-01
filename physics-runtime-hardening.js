@@ -29,9 +29,21 @@
 
     const activeJoint = () => physics.state?.joints?.find((j) => j.id === physics.state?.active) || null;
 
+    function syncMobileHistoryHitArea(toolbar) {
+      const overlay = document.getElementById('mobile-undo-redo-overlay');
+      if (!overlay) return;
+      const toolbarVisible = !!toolbar?.classList.contains('show');
+      overlay.style.pointerEvents = 'auto';
+      overlay.style.zIndex = toolbarVisible ? '1103' : '';
+      overlay.style.bottom = toolbarVisible
+        ? 'calc(var(--safe-bottom, env(safe-area-inset-bottom)) + 8.65rem)'
+        : '';
+    }
+
     function pinMobilePlayButton() {
       const toolbar = document.getElementById('vs-physics-toolbar');
       const mobileButton = document.getElementById('vs-physics-test');
+      syncMobileHistoryHitArea(toolbar);
       if (!toolbar || !mobileButton) return mobileButton;
 
       // Play/Stop is the primary physics action. Keep it physically reachable on narrow touch screens
