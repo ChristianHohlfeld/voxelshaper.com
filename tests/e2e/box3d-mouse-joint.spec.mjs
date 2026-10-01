@@ -27,15 +27,21 @@ async function center(page,selector){
 async function pickRealMouseTarget(page){
   return page.evaluate(()=>{
     const app=window.VoxelApp,box=window.VoxelBox3D,rect=app.cvs.getBoundingClientRect(),bodies=box.snapshotBodies();
+    const offsets=[0,-4,4,-8,8,-12,12,-16,16,-20,20,-24,24];
     for(let i=0;i<bodies.length;i++){
       const b=bodies[i],p=new THREE.Vector3(b.x,b.y,b.z).project(app.cam);
-      const x=rect.left+(p.x+1)*.5*rect.width,y=rect.top+(1-p.y)*.5*rect.height;
-      if(x<rect.left||x>rect.right||y<rect.top||y>rect.bottom)continue;
-      if(document.elementFromPoint(x,y)!==app.cvs)continue;
-      const hitIndex=box.bodyAtPointer(x,y);
-      if(hitIndex>=0)return {x,y,index:hitIndex,element:'canvas'};
+      const cx=rect.left+(p.x+1)*.5*rect.width,cy=rect.top+(1-p.y)*.5*rect.height;
+      for(const dy of offsets){
+        for(const dx of offsets){
+          const x=cx+dx,y=cy+dy;
+          if(x<rect.left||x>rect.right||y<rect.top||y>rect.bottom)continue;
+          if(document.elementFromPoint(x,y)!==app.cvs)continue;
+          const hitIndex=box.bodyAtPointer(x,y);
+          if(hitIndex>=0)return {x,y,index:hitIndex,projectedIndex:i,dx,dy};
+        }
+      }
     }
-    return {x:NaN,y:NaN,index:-1,element:document.elementFromPoint(rect.left+rect.width/2,rect.top+rect.height/2)?.tagName||null};
+    return {x:NaN,y:NaN,index:-1,projectedIndex:-1};
   });
 }
 
@@ -52,7 +58,7 @@ test('desktop real mouse activates native Box3D grab without moving camera',asyn
   await page.waitForTimeout(80);
 
   const target=await pickRealMouseTarget(page);
-  expect(target.index,`no canvas-hit-testable physics body; center element=${target.element}`).toBeGreaterThanOrEqual(0);
+  expect(target.index,'no actual Box3D-render ray hit was found around any projected body').toBeGreaterThanOrEqual(0);
   const before=await page.evaluate(index=>({body:window.VoxelBox3D.snapshotBodies()[index],camera:window.VoxelApp.cam.position.toArray(),quaternion:window.VoxelApp.cam.quaternion.toArray()}),target.index);
 
   await page.mouse.move(target.x,target.y);
