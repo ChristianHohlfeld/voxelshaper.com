@@ -8,7 +8,6 @@
     if (!app || !app.scene || !app.voxels) return false;
     if (window.VoxelPhysics?.simpleMode) return true;
 
-    // Remove legacy joint UI if an older build left it behind.
     ['vs-physics-panel','vs-physics-toggle-mobile','vs-physics-toolbar','vs-physics-hud'].forEach((id) => {
       document.getElementById(id)?.remove();
     });
@@ -63,9 +62,13 @@
       @media (max-width: 899px), (pointer: coarse) {
         #vs-physics-toggle-desktop { display: none !important; }
         #vs-physics-test {
-          bottom: calc(var(--safe-bottom, env(safe-area-inset-bottom)) + 5.0rem);
-          width: 52px;
-          height: 52px;
+          left: max(14px, env(safe-area-inset-left));
+          right: auto;
+          transform: none;
+          bottom: calc(var(--safe-bottom, env(safe-area-inset-bottom)) + 8.25rem);
+          width: 54px;
+          height: 54px;
+          font-size: 18px;
         }
       }
     `;
@@ -136,7 +139,6 @@
       toggle();
     });
 
-    // Any model replacement must first tear down the temporary simulation world.
     if (!app.__physicsSimpleLoadWrapped && typeof app.loadFromData === 'function') {
       app.__physicsSimpleLoadWrapped = true;
       const originalLoad = app.loadFromData;
