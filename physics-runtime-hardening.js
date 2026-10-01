@@ -29,13 +29,32 @@
 
     const activeJoint = () => physics.state?.joints?.find((j) => j.id === physics.state?.active) || null;
 
+    function pinMobilePlayButton() {
+      const toolbar = document.getElementById('vs-physics-toolbar');
+      const mobileButton = document.getElementById('vs-physics-test');
+      if (!toolbar || !mobileButton) return mobileButton;
+
+      // Play/Stop is the primary physics action. Keep it physically reachable on narrow touch screens
+      // instead of letting it sit behind the horizontally scrolling joint controls.
+      if (toolbar.firstElementChild !== mobileButton) toolbar.prepend(mobileButton);
+      mobileButton.style.position = 'sticky';
+      mobileButton.style.left = '0';
+      mobileButton.style.zIndex = '4';
+      mobileButton.style.pointerEvents = 'auto';
+      mobileButton.style.touchAction = 'manipulation';
+      mobileButton.style.flex = '0 0 2.8rem';
+      mobileButton.style.minWidth = '2.8rem';
+      mobileButton.style.webkitTapHighlightColor = 'transparent';
+      return mobileButton;
+    }
+
     function syncUi() {
       const starting = lastTransition === 'starting';
       const on = !!box.running;
       const requested = desiredRunning || starting || on;
       const legacyIcon = document.getElementById('vsp-playicon');
       const legacyText = document.getElementById('vsp-playtext');
-      const mobileButton = document.getElementById('vs-physics-test');
+      const mobileButton = pinMobilePlayButton();
       const mobileIcon = mobileButton?.querySelector('i');
 
       if (legacyIcon) legacyIcon.className = starting ? 'fas fa-spinner fa-spin' : on ? 'fas fa-stop' : 'fas fa-play';
@@ -224,8 +243,7 @@
   const timer = window.setInterval(() => {
     if (install()) window.clearInterval(timer);
   }, 80);
-  window.setTimeout(() => {
-    window.clearInterval(timer);
-    install();
-  }, 10000);
+  // Keep retrying until the editor/runtime really exists. Slow mobile startup must not permanently
+  // lose the hardened controller just because initialization took longer than an arbitrary timeout.
+  install();
 })();
