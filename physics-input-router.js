@@ -9,13 +9,9 @@
     if (!app || !canvas || !physics?.simpleMode || !box?.installed) return false;
     if (window.VoxelPhysicsInputRouter?.installed) return true;
 
-    const drag = {
-      active: false,
-      pointerId: null,
-      bodyIndex: -1,
-      bodyIndices: [],
-      rayDistance: 0
-    };
+    const MAX_POINTER_GRABS = 2;
+    const drags = new Map();
+    const slotPointers = Array(MAX_POINTER_GRABS).fill(null);
 
     const previousTouchAction = canvas.style.touchAction;
     const previousCursor = canvas.style.cursor;
@@ -34,13 +30,24 @@
       event.stopImmediatePropagation();
     }
 
-    function cancelDrag() {
-      if (drag.active) box.endMouseGrab?.();
-      drag.active = false;
-      drag.pointerId = null;
-      drag.bodyIndex = -1;
-      drag.bodyIndices = [];
-      drag.rayDistance = 0;
+    function freeSlot() {
+      return slotPointers.findIndex((pointerId) => pointerId === null);
+    }
+
+    function cancelDrag(pointerId) {
+      const drag = drags.get(pointerId);
+      if (!drag) return false;
+      box.endMouseGrab?.(drag.slot);
+      drags.delete(pointerId);
+      if (slotPointers[drag.slot] === pointerId) slotPointers[drag.slot] = null;
+      canvas.style.cursor = physicsOwnsCanvas() && box.running ? (drags.size ? 'grabbing' : 'grab') : previousCursor;
+      return true;
+    }
+
+    function cancelAllDrags() {
+      for (const pointerId of [...drags.keys()]) cancelDrag(pointerId);
+      box.endAllMouseGrabs?.();
+      slotPointers.fill(null);
       canvas.style.cursor = physicsOwnsCanvas() && box.running ? 'grab' : previousCursor;
     }
 
@@ -48,56 +55,59 @@
       if (!physicsOwnsCanvas() || !eventIsOnCanvas(event)) return;
       consume(event);
 
-      // While Play owns the canvas, Orbit/Edit never receive this pointer.
-      if (!box.running || event.button > 0 || event.isPrimary === false) return;
+      // Physics owns every pointer while Play is active. Unlike the legacy router,
+      // non-primary touch pointers are intentionally accepted so two fingers can
+      // drive two independent native Box3D grab targets.
+      if (!box.running || event.button > 0 || drags.has(event.pointerId)) return;
+      const slot = freeSlot();
+      if (slot < 0) return; // Third+ pointer is consumed but does not disturb either grab.
 
       const hit = box.pickBodyAtPointer?.(event.clientX, event.clientY);
       if (!hit || hit.index < 0 || !hit.point || !Number.isFinite(hit.distance)) return;
-
-      // Physics uses the exact same NxN face brush semantics as editing.
-      // 1x1 grabs one voxel; 3x3 grabs the existing voxels in that 3x3 face patch, etc.
       const bodyIndices = box.brushBodyIndices?.(hit, app.brushSize) || [hit.index];
-      if (!box.beginMouseGrab?.(bodyIndices, hit.point, 100)) return;
+      if (!box.beginMouseGrab?.(bodyIndices, hit.point, 100, slot)) return;
 
-      drag.active = true;
-      drag.pointerId = event.pointerId;
-      drag.bodyIndex = hit.index;
-      drag.bodyIndices = box.mouseGrabBodyIndices || bodyIndices.slice();
-      drag.rayDistance = hit.distance;
+      const drag = {
+        pointerId:event.pointerId,
+        pointerType:event.pointerType || 'mouse',
+        slot,
+        bodyIndex:hit.index,
+        bodyIndices:box.mouseGrabBodyIndicesForSlot?.(slot) || bodyIndices.slice(),
+        rayDistance:hit.distance
+      };
+      drags.set(event.pointerId, drag);
+      slotPointers[slot] = event.pointerId;
       canvas.style.cursor = 'grabbing';
       try { canvas.setPointerCapture?.(event.pointerId); } catch (_) {}
     }
 
     function onPointerMove(event) {
       if (!physicsOwnsCanvas()) return;
-      const ownsThisPointer = drag.active && event.pointerId === drag.pointerId;
-      if (!ownsThisPointer && !eventIsOnCanvas(event)) return;
+      const drag = drags.get(event.pointerId);
+      if (!drag && !eventIsOnCanvas(event)) return;
       consume(event);
-      if (!ownsThisPointer || !box.running) return;
+      if (!drag || !box.running) return;
 
-      // True 3D drag: rebuild the camera ray at the new pointer location and move
-      // the native Box3D mouse body to the same pick-ray depth as the original hit.
       const target = box.pointAtPointerDistance?.(event.clientX, event.clientY, drag.rayDistance);
-      if (target) box.updateMouseGrab?.(target);
+      if (target) box.updateMouseGrab?.(target, drag.slot);
     }
 
     function onPointerEnd(event) {
       if (!physicsOwnsCanvas()) return;
-      const ownsThisPointer = drag.active && event.pointerId === drag.pointerId;
-      if (!ownsThisPointer && !eventIsOnCanvas(event)) return;
+      const drag = drags.get(event.pointerId);
+      if (!drag && !eventIsOnCanvas(event)) return;
       consume(event);
-      if (!ownsThisPointer) return;
+      if (!drag) return;
       try { canvas.releasePointerCapture?.(event.pointerId); } catch (_) {}
-      cancelDrag();
+      cancelDrag(event.pointerId);
     }
 
     function blockLegacyMouse(event) {
       if (!physicsOwnsCanvas()) return;
-      if (!drag.active && !eventIsOnCanvas(event)) return;
+      if (!drags.size && !eventIsOnCanvas(event)) return;
       consume(event);
     }
 
-    // Capture before all legacy controls: exactly one mode owns a pointer.
     window.addEventListener('pointerdown', onPointerDown, true);
     window.addEventListener('pointermove', onPointerMove, true);
     window.addEventListener('pointerup', onPointerEnd, true);
@@ -109,9 +119,9 @@
     const sync = () => {
       if (physicsOwnsCanvas()) {
         canvas.style.touchAction = 'none';
-        canvas.style.cursor = box.running ? (drag.active ? 'grabbing' : 'grab') : 'default';
+        canvas.style.cursor = box.running ? (drags.size ? 'grabbing' : 'grab') : 'default';
       } else {
-        if (drag.active) cancelDrag();
+        if (drags.size) cancelAllDrags();
         canvas.style.touchAction = previousTouchAction;
         canvas.style.cursor = previousCursor;
       }
@@ -120,16 +130,29 @@
     window.addEventListener('beforeunload', () => clearInterval(timer), { once:true });
 
     window.VoxelPhysicsInputRouter = {
-      installed: true,
+      installed:true,
+      maxPointerGrabs:MAX_POINTER_GRABS,
       get mode() {
         if (physicsOwnsCanvas()) return 'physics';
         if (app.mobileCanvasMode === 'edit') return 'edit';
         return 'orbit';
       },
-      get dragging() { return drag.active; },
-      get bodyIndex() { return drag.bodyIndex; },
-      get bodyIndices() { return drag.bodyIndices.slice(); },
-      cancelDrag
+      get dragging(){ return drags.size > 0; },
+      get activePointerCount(){ return drags.size; },
+      get bodyIndex(){ return drags.values().next().value?.bodyIndex ?? -1; },
+      get bodyIndices(){ return [...drags.values()].flatMap((drag)=>drag.bodyIndices); },
+      get activeGrabs(){
+        return [...drags.values()].map((drag)=>({
+          pointerId:drag.pointerId,
+          pointerType:drag.pointerType,
+          slot:drag.slot,
+          bodyIndex:drag.bodyIndex,
+          bodyIndices:drag.bodyIndices.slice(),
+          rayDistance:drag.rayDistance
+        }));
+      },
+      cancelDrag,
+      cancelAllDrags
     };
     sync();
     return true;
