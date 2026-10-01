@@ -84,4 +84,9 @@ jobs:
             exit 0
           fi
           git commit -m "build: refresh pinned Box3D wasm"
-          git push
+          # main may advance while Emscripten is compiling. Rebase the generated
+          # artifact commit onto the latest main so a concurrent source/test push
+          # cannot make the publish step fail with a non-fast-forward rejection.
+          git fetch origin main
+          git rebase origin/main
+          git push origin HEAD:main
