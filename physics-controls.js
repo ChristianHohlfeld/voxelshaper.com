@@ -27,9 +27,10 @@
       #vs-physics-test {
         position: fixed;
         z-index: 1200;
-        left: 50%;
-        transform: translateX(-50%);
-        bottom: 24px;
+        left: 18px;
+        right: auto;
+        transform: none;
+        bottom: 92px;
         width: 54px;
         height: 54px;
         border-radius: 999px;
@@ -54,8 +55,6 @@
       @media (max-width: 899px), (pointer: coarse) {
         #vs-physics-test {
           left: max(14px, env(safe-area-inset-left));
-          right: auto;
-          transform: none;
           bottom: calc(var(--safe-bottom, env(safe-area-inset-bottom)) + 8.25rem);
         }
       }
