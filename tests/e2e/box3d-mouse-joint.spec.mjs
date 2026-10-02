@@ -15,6 +15,22 @@ async function ready(page){
     app.setBrushSize?.(1); app.voxels.clear();
     [[12,16,12,'#22D3EE'],[12,17,12,'#F59E0B'],[13,18,12,'#A78BFA']].forEach(([x,y,z,color])=>app.voxels.set(app.key(x,y,z),{color,glass:false}));
     app.updateInstancedVoxels?.();
+
+    // CI injects this tiny fixture into an otherwise fresh desktop editor. The
+    // editor camera can legitimately still be aimed at the old/empty scene, so
+    // frame the fixture explicitly before testing a *real visible* mouse hit.
+    const s=app.VS||1;
+    const target=new THREE.Vector3(13*s,17.5*s,12.5*s);
+    const distance=Math.max(8*s,6);
+    app.cam.position.set(target.x+distance,target.y+distance*.72,target.z+distance);
+    app.cam.lookAt(target);
+    app.cam.updateProjectionMatrix?.();
+    app.cam.updateMatrixWorld?.(true);
+    if(app.controls?.target){
+      app.controls.target.copy(target);
+      app.controls.update?.();
+    }
+
     return [...app.voxels.entries()].map(([k,v])=>[String(k),v.color,!!v.glass]);
   });
 }
@@ -37,7 +53,6 @@ async function pickRealMouseTarget(page){
       return hit&&Number.isInteger(hit.index)&&hit.index>=0?{x,y,index:hit.index}:null;
     };
 
-    // Fast path: probe tightly around every projected live Box3D body.
     const offsets=[0,-2,2,-4,4,-8,8,-12,12,-16,16,-20,20,-24,24,-32,32];
     for(let i=0;i<bodies.length;i++){
       const b=bodies[i],p=new THREE.Vector3(b.x,b.y,b.z).project(app.cam);
@@ -50,8 +65,6 @@ async function pickRealMouseTarget(page){
       }
     }
 
-    // Robust path: search only the actually visible canvas. This avoids false
-    // negatives when desktop sidebars cover the projected centre of a voxel.
     const step=Math.max(4,Math.min(10,Math.floor(Math.min(rect.width,rect.height)/72)||6));
     for(let y=rect.top+step*.5;y<rect.bottom;y+=step){
       for(let x=rect.left+step*.5;x<rect.right;x+=step){
