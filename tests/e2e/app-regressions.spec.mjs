@@ -1012,7 +1012,7 @@ for (const appPath of ['/', '/www/index.html']) {
     const saved = await page.evaluate(() => window.__savedFiles[0]);
     expect(saved.name.endsWith('.3mf')).toBe(true);
     expect(saved.size).toBeGreaterThan(0);
-    await waitForEvent(page, 'print_now_click', (params) => params.format === '3mf_bambu');
+    await waitForEvent(page, 'app_print_now_click', (params) => params.format === '3mf_bambu');
     expect(pageErrors).toEqual([]);
   });
 }
