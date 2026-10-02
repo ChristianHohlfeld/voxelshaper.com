@@ -68,7 +68,7 @@
             const authState = (window.__voxelshaper_user?.id || window.VoxelApp?.user?.id) ? 'authenticated' : 'anonymous';
             const modelId = (new URL(window.location.href)).searchParams.get('modelId') || undefined;
             return {
-                session_id: SESSION_ID,
+                vs_session_id: SESSION_ID,
                 surface: 'app',
                 device_type: deviceType,
                 auth_state: authState,
@@ -82,7 +82,8 @@
             };
         }
 
-        // Analytics taxonomy (maintainer note): emit existing + canonical events for dashboard stability.
+        // Analytics taxonomy (maintainer note): mapped events emit ONLY the canonical app_* name
+        // (no dual legacy+canonical fire). Unmapped events emit once under their given name.
         // Canonical app funnel: app_landing_view, app_first_interaction, app_first_edit,
         // app_save_click, app_save_success, app_export_click, app_export_success.
         const ANALYTICS_EVENT_MAP = {
@@ -130,33 +131,32 @@
         }
 
         function trackEvent(eventName, params = {}) {
+            if (!eventName) return;
             const canonicalName = ANALYTICS_EVENT_MAP[eventName];
+            // Mapped events fire ONLY the canonical app_* name (no dual legacy+canonical).
+            const emitName = canonicalName || eventName;
             const payload = {
                 ...getAnalyticsContext(),
                 elapsed_ms: Date.now() - ANALYTICS_APP_START_TS,
                 ...normalizeAnalyticsParams(params)
             };
             if (typeof gtag === 'function') {
-                gtag('event', eventName, payload);
-                if (canonicalName && canonicalName !== eventName) {
-                    gtag('event', canonicalName, payload);
-                }
+                gtag('event', emitName, payload);
 
-                const valueEventName = canonicalName || eventName;
-                const isValueEvent = valueEventName === 'app_export_success' || valueEventName === 'app_save_success';
+                const isValueEvent = emitName === 'app_export_success' || emitName === 'app_save_success';
                 if (isValueEvent) {
                     try {
                         const firstValueKey = `${ANALYTICS_FIRST_VALUE_KEY}_${SESSION_ID}`;
                         if (!sessionStorage.getItem(firstValueKey)) {
                             sessionStorage.setItem(firstValueKey, '1');
-                            gtag('event', 'first_value', { ...getAnalyticsContext(), trigger_event: valueEventName });
+                            gtag('event', 'first_value', { ...getAnalyticsContext(), trigger_event: emitName });
                         }
                     } catch { }
                 }
                 return;
             }
 
-            console.log(`Analytics Event (gtag not found): ${eventName}`, payload);
+            console.log(`Analytics Event (gtag not found): ${emitName}`, payload);
         }
 
         window.trackEvent = trackEvent;
@@ -184,7 +184,7 @@
             localStorage.setItem(ANALYTICS_LAST_SEEN_KEY, String(Date.now()));
 
             trackPageView(true);
-            trackEvent('session_start', { launch_context: launchContext, session_index: sessionIndex });
+            trackEvent('app_session_boot', { launch_context: launchContext, session_index: sessionIndex });
             trackEvent('app_boot', { launch_context: launchContext });
             trackEvent('landing_view', { launch_context: launchContext });
 
@@ -4020,7 +4020,7 @@
                 } catch (err) {
                     console.error("3MF Export Error:", err);
                     showToast('Export Error', err.message, 'error');
-                    trackEvent('error', { context: '3mf_export', message: err.message });
+                    trackEvent('app_export_error', { context: '3mf_export', message: err.message });
 
                 }
 
@@ -5313,7 +5313,10 @@
                         this.user = user;
                         window.__voxelshaper_user = this.user;
                         this.updateLoginStateUI();
-                        trackEvent('login_success', { user_id: this.user.id, method: 'oauth' });
+                        if (typeof gtag === 'function' && this.user?.id) {
+                            gtag('set', { user_id: String(this.user.id) });
+                        }
+                        trackEvent('login_success', { method: 'oauth' });
                         this.showToast('Login Successful', 'You are now logged in via OAuth!', 'info');
                     } catch (e) {
                         console.error("OAuth redirect user fetch failed:", e);
@@ -5595,7 +5598,10 @@ applyHubImportProject: function (project, options = {}) {
                         this.user = response.user;
                         window.__voxelshaper_user = this.user;
                         this.updateLoginStateUI();
-                        trackEvent('login_success', { user_id: this.user.id, method: 'magic_link' });
+                        if (typeof gtag === 'function' && this.user?.id) {
+                            gtag('set', { user_id: String(this.user.id) });
+                        }
+                        trackEvent('login_success', { method: 'magic_link' });
                         this.showToast('Login Successful', 'You are now logged in!', 'info');
                     } catch (e) {
                         this.showToast('Login Error', e.message, 'error');
