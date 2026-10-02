@@ -27,21 +27,39 @@ async function center(page,selector){
 async function pickRealMouseTarget(page){
   return page.evaluate(()=>{
     const app=window.VoxelApp,box=window.VoxelBox3D,rect=app.cvs.getBoundingClientRect(),bodies=box.snapshotBodies();
-    const offsets=[0,-4,4,-8,8,-12,12,-16,16,-20,20,-24,24];
+    app.cam?.updateMatrixWorld?.(true);
+
+    const tryPoint=(x,y)=>{
+      if(!Number.isFinite(x)||!Number.isFinite(y))return null;
+      if(x<rect.left+1||x>rect.right-1||y<rect.top+1||y>rect.bottom-1)return null;
+      if(document.elementFromPoint(x,y)!==app.cvs)return null;
+      const hit=box.pickBodyAtPointer?.(x,y);
+      return hit&&Number.isInteger(hit.index)&&hit.index>=0?{x,y,index:hit.index}:null;
+    };
+
+    // Fast path: probe tightly around every projected live Box3D body.
+    const offsets=[0,-2,2,-4,4,-8,8,-12,12,-16,16,-20,20,-24,24,-32,32];
     for(let i=0;i<bodies.length;i++){
       const b=bodies[i],p=new THREE.Vector3(b.x,b.y,b.z).project(app.cam);
       const cx=rect.left+(p.x+1)*.5*rect.width,cy=rect.top+(1-p.y)*.5*rect.height;
       for(const dy of offsets){
         for(const dx of offsets){
-          const x=cx+dx,y=cy+dy;
-          if(x<rect.left||x>rect.right||y<rect.top||y>rect.bottom)continue;
-          if(document.elementFromPoint(x,y)!==app.cvs)continue;
-          const hitIndex=box.bodyAtPointer(x,y);
-          if(hitIndex>=0)return {x,y,index:hitIndex,projectedIndex:i,dx,dy};
+          const hit=tryPoint(cx+dx,cy+dy);
+          if(hit)return {...hit,projectedIndex:i,dx,dy,source:'projected'};
         }
       }
     }
-    return {x:NaN,y:NaN,index:-1,projectedIndex:-1};
+
+    // Robust path: search only the actually visible canvas. This avoids false
+    // negatives when desktop sidebars cover the projected centre of a voxel.
+    const step=Math.max(4,Math.min(10,Math.floor(Math.min(rect.width,rect.height)/72)||6));
+    for(let y=rect.top+step*.5;y<rect.bottom;y+=step){
+      for(let x=rect.left+step*.5;x<rect.right;x+=step){
+        const hit=tryPoint(x,y);
+        if(hit)return {...hit,projectedIndex:-1,dx:0,dy:0,source:'canvas-scan'};
+      }
+    }
+    return {x:NaN,y:NaN,index:-1,projectedIndex:-1,source:'none'};
   });
 }
 
@@ -58,7 +76,7 @@ test('desktop real mouse activates native Box3D grab without moving camera',asyn
   await page.waitForTimeout(80);
 
   const target=await pickRealMouseTarget(page);
-  expect(target.index,'no actual Box3D-render ray hit was found around any projected body').toBeGreaterThanOrEqual(0);
+  expect(target.index,'no visible Box3D ray hit exists on the desktop canvas').toBeGreaterThanOrEqual(0);
   const before=await page.evaluate(index=>({body:window.VoxelBox3D.snapshotBodies()[index],camera:window.VoxelApp.cam.position.toArray(),quaternion:window.VoxelApp.cam.quaternion.toArray()}),target.index);
 
   await page.mouse.move(target.x,target.y);
