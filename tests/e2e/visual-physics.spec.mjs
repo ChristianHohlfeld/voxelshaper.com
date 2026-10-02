@@ -4,7 +4,6 @@ const BASE = process.env.VS_TEST_BASE_URL || 'http://127.0.0.1:4173';
 
 test.beforeEach(async ({ page }) => {
   // Visual smoke is testing the editor/Physics surface, not first-run onboarding.
-  // Keep the modal out before app boot, and defensively close it after boot too.
   await page.addInitScript(() => localStorage.setItem('voxelshaper_onboarding_dont_show', 'true'));
 });
 
@@ -53,6 +52,25 @@ async function seedModel(page) {
   await dismissOnboarding(page);
 }
 
+async function frameFixture(page) {
+  await page.evaluate(() => {
+    const app = window.VoxelApp;
+    const s = app.VS || 1;
+    const target = new THREE.Vector3(16 * s, 20 * s, 16 * s);
+    const distance = Math.max(10 * s, 8);
+    app.cam.position.set(target.x + distance, target.y + distance * .72, target.z + distance);
+    app.cam.lookAt(target);
+    app.cam.updateProjectionMatrix?.();
+    app.cam.updateMatrixWorld?.(true);
+    if (app.controls?.target) {
+      app.controls.target.copy(target);
+      app.controls.update?.();
+      app.cam.updateMatrixWorld?.(true);
+    }
+  });
+  await page.waitForTimeout(80);
+}
+
 async function startPhysics(page) {
   await dismissOnboarding(page);
   const play = page.locator('#vs-physics-test');
@@ -66,16 +84,42 @@ async function startPhysics(page) {
 async function visibleBodyPoint(page) {
   return page.evaluate(() => {
     const app = window.VoxelApp;
+    const box = window.VoxelBox3D;
     const rect = app.cvs.getBoundingClientRect();
-    const bodies = window.VoxelBox3D.snapshotBodies();
+    const bodies = box.snapshotBodies();
+    app.cam?.updateMatrixWorld?.(true);
+
+    const tryPoint = (x, y) => {
+      if (!Number.isFinite(x) || !Number.isFinite(y)) return null;
+      if (x < rect.left + 1 || x > rect.right - 1 || y < rect.top + 1 || y > rect.bottom - 1) return null;
+      if (document.elementFromPoint(x, y) !== app.cvs) return null;
+      const hit = box.pickBodyAtPointer?.(x, y);
+      return hit && Number.isInteger(hit.index) && hit.index >= 0 ? { x, y, index:hit.index } : null;
+    };
+
+    // Prefer the exact projected live bodies, but probe around the centre because
+    // a rotated/small voxel need not be hit by its projected body origin pixel.
+    const offsets = [0,-2,2,-4,4,-8,8,-12,12,-16,16,-20,20,-24,24,-32,32];
     for (let i=0;i<bodies.length;i++) {
       const b = bodies[i];
       const p = new THREE.Vector3(b.x,b.y,b.z).project(app.cam);
-      const x = rect.left + (p.x + 1) * .5 * rect.width;
-      const y = rect.top + (1 - p.y) * .5 * rect.height;
-      if (x < rect.left || x > rect.right || y < rect.top || y > rect.bottom) continue;
-      const hit = window.VoxelBox3D.pickBodyAtPointer?.(x,y);
-      if (hit && hit.index >= 0) return { x, y, index:hit.index };
+      const cx = rect.left + (p.x + 1) * .5 * rect.width;
+      const cy = rect.top + (1 - p.y) * .5 * rect.height;
+      for (const dy of offsets) {
+        for (const dx of offsets) {
+          const hit = tryPoint(cx + dx, cy + dy);
+          if (hit) return hit;
+        }
+      }
+    }
+
+    // Last resort still uses a real visible canvas ray hit, never a synthetic grab.
+    const step = Math.max(4, Math.min(10, Math.floor(Math.min(rect.width, rect.height) / 72) || 6));
+    for (let y=rect.top + step*.5; y<rect.bottom; y+=step) {
+      for (let x=rect.left + step*.5; x<rect.right; x+=step) {
+        const hit = tryPoint(x, y);
+        if (hit) return hit;
+      }
     }
     return null;
   });
@@ -110,6 +154,7 @@ test('desktop visual smoke', async ({ browser }) => {
   await page.addInitScript(() => localStorage.setItem('voxelshaper_onboarding_dont_show', 'true'));
   await page.goto(`${BASE}/?visual_ci=desktop`, { waitUntil:'domcontentloaded' });
   await seedModel(page);
+  await frameFixture(page);
 
   expect(await page.locator('#vs-physics-toggle-desktop').count()).toBe(0);
   expect(await page.locator('#vs-physics-panel').count()).toBe(0);
