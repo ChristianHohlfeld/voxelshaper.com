@@ -1176,6 +1176,36 @@
             font-size: 11px;
         }
 
+        .vs-funnel-prompt {
+            position: absolute;
+            left: 50%;
+            bottom: calc(88px + var(--safe-bottom, 0px));
+            transform: translateX(-50%);
+            z-index: 36;
+            display: none;
+            align-items: center;
+            gap: 8px;
+            max-width: min(92vw, 560px);
+            padding: 10px 12px;
+            border-radius: 9999px;
+            background: rgba(10, 14, 22, 0.82);
+            border: 1px solid rgba(255, 255, 255, .18);
+            color: #eaf2ff;
+            backdrop-filter: blur(10px);
+            box-shadow: 0 10px 30px rgba(0, 0, 0, .35);
+            font-size: 12px;
+            pointer-events: auto;
+        }
+
+        .vs-funnel-prompt.show {
+            display: inline-flex;
+        }
+
+        .vs-funnel-prompt button {
+            pointer-events: auto;
+            flex-shrink: 0;
+        }
+
         #deleteBrushHint {
             position: absolute;
             left: 50%;
@@ -3252,6 +3282,16 @@
             <button id="deleteHintDontShowBtn" class="btn btn-xs btn-ghost">Don’t show again</button>
             <button id="deleteHintCloseBtn" class="btn btn-xs btn-ghost">×</button>
         </div>
+        <div id="hubImportExportPrompt" class="vs-funnel-prompt" role="status" aria-live="polite" hidden>
+            <span>Model ready — Export or Print next.</span>
+            <button type="button" id="hubImportExportBtn" class="btn btn-xs btn-primary">Export</button>
+            <button type="button" id="hubImportPrintBtn" class="btn btn-xs btn-success">Print</button>
+            <button type="button" id="hubImportPromptDismiss" class="btn btn-xs btn-ghost" aria-label="Dismiss">×</button>
+        </div>
+        <div id="firstRunControlHints" class="vs-funnel-prompt" role="status" aria-live="polite" hidden>
+            <span id="firstRunControlHintText">Orbit ↔ Edit — switch to Edit to draw.</span>
+            <button type="button" id="firstRunControlHintNext" class="btn btn-xs btn-accent">Got it</button>
+        </div>
         <canvas id="voxelCanvas" tabindex="0" aria-label="Voxel editor canvas"></canvas>
         <div id="marquee" class="marquee"></div>
         <div id="haptic-layer"></div>
@@ -5254,7 +5294,10 @@
                 this.setBootLoadingProgress(92, 'Finalizing…');
                 this.handleResize();
                 this.animate();
-                requestAnimationFrame(() => requestAnimationFrame(() => this.hideBootLoading()));
+                requestAnimationFrame(() => requestAnimationFrame(() => {
+                    this.hideBootLoading();
+                    this.maybeShowFirstRunControlHints();
+                }));
                 console.log("VoxelShaper Initialized (Polyslice Ready)");
                 // Mobile Audio Unlock
                 const unlock = () => {
@@ -5445,7 +5488,10 @@ applyHubImportProject: function (project, options = {}) {
                 if (ob && ob.open) ob.close();
                 this.autosaveScene();
                 this.updateHubSaveIndicator();
-                if (!options.skipToast) this.showToast('Import', 'Hub model ready to edit', 'success');
+                if (!options.skipToast) {
+                    this.showToast('Import', 'Hub model ready to edit', 'success');
+                    this.showPostImportExportPrompt('hub_import');
+                }
                 trackEvent('hub_import_success', { handoff_method: method, model_type: modelType, voxel_count: voxelCount });
                 return true;
             },
@@ -5505,6 +5551,7 @@ applyHubImportProject: function (project, options = {}) {
                         window.history.replaceState({}, document.title, clean.toString());
                     }
                     this.showToast('Scene Restored', 'Your edited Hub model was restored.', 'info');
+                    this.showPostImportExportPrompt('autosave_restore');
                     trackEvent('hub_import_success', { handoff_method: 'autosave_restore', model_type: modelType, voxel_count: this.voxels.size });
                     return true;
                 }
@@ -6256,6 +6303,18 @@ applyHubImportProject: function (project, options = {}) {
                     this.showToast('Hints', 'Delete Brush Hint disabled.', 'info', 900);
                 });
                 document.getElementById('deleteHintCloseBtn')?.addEventListener('click', () => this.hideDeleteBrushHint());
+                document.getElementById('hubImportExportBtn')?.addEventListener('click', () => {
+                    this.hidePostImportExportPrompt();
+                    trackEvent('post_import_export_prompt_click', { action: 'export', voxel_count: this.voxels.size });
+                    document.getElementById('exportOptionsModal')?.showModal();
+                });
+                document.getElementById('hubImportPrintBtn')?.addEventListener('click', () => {
+                    this.hidePostImportExportPrompt();
+                    trackEvent('post_import_export_prompt_click', { action: 'print', voxel_count: this.voxels.size });
+                    this.printNow3MF();
+                });
+                document.getElementById('hubImportPromptDismiss')?.addEventListener('click', () => this.hidePostImportExportPrompt());
+                document.getElementById('firstRunControlHintNext')?.addEventListener('click', () => this.advanceFirstRunControlHints());
                 document.getElementById('mobile-select-toggle').addEventListener('click', () => this.toggleSelectMode());
                 document.getElementById('mobile-selection-lock-toggle').addEventListener('click', () => this.toggleSelectionLock());
                 document.getElementById('mobile-color-picker').addEventListener('input', (e) => this.setColor(e.target.value));
@@ -9204,6 +9263,94 @@ setGridSize: function (newSize) {
             hideDeleteBrushHint: function () {
                 const el = document.getElementById('deleteBrushHint');
                 if (el) el.classList.remove('show');
+            },
+
+            // Minimal post-import funnel nudge: Export/Print CTA (no product rewrite).
+            showPostImportExportPrompt: function (source = 'hub_import') {
+                const el = document.getElementById('hubImportExportPrompt');
+                if (!el) return;
+                this.hideFirstRunControlHints(true);
+                el.hidden = false;
+                el.classList.add('show');
+                if (this._postImportPromptTimer) clearTimeout(this._postImportPromptTimer);
+                this._postImportPromptTimer = setTimeout(() => this.hidePostImportExportPrompt(), 9000);
+                trackEvent('post_import_export_prompt_show', { interaction_source: source, voxel_count: this.voxels.size });
+            },
+
+            hidePostImportExportPrompt: function () {
+                const el = document.getElementById('hubImportExportPrompt');
+                if (el) {
+                    el.classList.remove('show');
+                    el.hidden = true;
+                }
+                if (this._postImportPromptTimer) {
+                    clearTimeout(this._postImportPromptTimer);
+                    this._postImportPromptTimer = null;
+                }
+            },
+
+            // Once-only first absolute steps (localStorage). Never always-on.
+            maybeShowFirstRunControlHints: function () {
+                try {
+                    if (localStorage.getItem('vs_first_run_control_hints_done') === '1') return;
+                } catch (_) { return; }
+                if (this.hubLaunchLoadedFromUrl) return;
+                const onboarding = document.getElementById('onboardingModal');
+                if (onboarding && onboarding.open) return;
+                if (document.getElementById('hubImportExportPrompt')?.classList.contains('show')) return;
+
+                this._firstRunHintStep = 0;
+                this._firstRunHintTexts = [
+                    'Orbit ↔ Edit — switch to Edit to draw.',
+                    'Click / tap the model to place a box.'
+                ];
+                this.showFirstRunControlHintStep();
+            },
+
+            showFirstRunControlHintStep: function () {
+                const el = document.getElementById('firstRunControlHints');
+                const text = document.getElementById('firstRunControlHintText');
+                if (!el || !text || !this._firstRunHintTexts) return;
+                const step = this._firstRunHintStep || 0;
+                if (step >= this._firstRunHintTexts.length) {
+                    this.finishFirstRunControlHints();
+                    return;
+                }
+                text.textContent = this._firstRunHintTexts[step];
+                el.hidden = false;
+                el.classList.add('show');
+                if (this._firstRunHintTimer) clearTimeout(this._firstRunHintTimer);
+                this._firstRunHintTimer = setTimeout(() => this.advanceFirstRunControlHints(), 5200);
+            },
+
+            advanceFirstRunControlHints: function () {
+                this._firstRunHintStep = (this._firstRunHintStep || 0) + 1;
+                if (!this._firstRunHintTexts || this._firstRunHintStep >= this._firstRunHintTexts.length) {
+                    this.finishFirstRunControlHints();
+                    return;
+                }
+                this.showFirstRunControlHintStep();
+            },
+
+            finishFirstRunControlHints: function () {
+                try { localStorage.setItem('vs_first_run_control_hints_done', '1'); } catch (_) { }
+                this.hideFirstRunControlHints(false);
+            },
+
+            hideFirstRunControlHints: function (keepPending) {
+                const el = document.getElementById('firstRunControlHints');
+                if (el) {
+                    el.classList.remove('show');
+                    el.hidden = true;
+                }
+                if (this._firstRunHintTimer) {
+                    clearTimeout(this._firstRunHintTimer);
+                    this._firstRunHintTimer = null;
+                }
+                if (!keepPending) {
+                    this._firstRunHintTexts = null;
+                    this._firstRunHintStep = 0;
+                }
             },
 
             setBrushSize: function (newSize) {

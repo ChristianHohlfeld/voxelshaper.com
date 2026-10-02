@@ -197,6 +197,7 @@ async function makeFirstRun(page, showOnboarding = true) {
     localStorage.removeItem('voxelshaper_autosave');
     localStorage.removeItem('deleteBrushHintDisabled');
     localStorage.removeItem('voxelCameraControlMode');
+    localStorage.removeItem('vs_first_run_control_hints_done');
     sessionStorage.clear();
     if (shouldShow) {
       localStorage.removeItem('voxelshaper_onboarding_dont_show');
@@ -855,6 +856,12 @@ for (const importCase of importCases) {
       params.model_type === meta.type &&
       params.voxel_count === 4
     );
+
+    if (importCase.appPath === '/') {
+      await expect(page.locator('#hubImportExportPrompt.show')).toBeVisible();
+      await expect(page.locator('#hubImportExportBtn')).toBeVisible();
+      await expect(page.locator('#hubImportPrintBtn')).toBeVisible();
+    }
 
     const renderState = await page.evaluate(() => {
       const app = window.VoxelApp;
