@@ -11,8 +11,8 @@
         const ANALYTICS_FIRST_VALUE_KEY = 'vs_first_value_tracked';
         const ANALYTICS_FIRST_INTERACTION_KEY = 'vs_first_interaction_tracked';
         const ANALYTICS_FIRST_EDIT_KEY = 'vs_first_edit_tracked';
-        const ANALYTICS_ACTIVE_TICK_MS = 60000;
-        const ANALYTICS_ACTIVE_WINDOW_MS = 65000;
+        const ANALYTICS_ACTIVE_TICK_MS = 300000; // Phase2: sample every 5 min (was 1/min; live volume low)
+        const ANALYTICS_ACTIVE_WINDOW_MS = 305000;
         const ANALYTICS_APP_START_TS = Date.now();
         const ANALYTICS_ENTRY_URL = new URL(window.location.href);
 
@@ -4661,8 +4661,9 @@
             _tmpUp: new THREE.Vector3(),
             orbitTarget: null,
             orbitFrameRadius: 0,
-            firstInteractionTracked: false,
-            firstEditTracked: false,
+            firstInteractionTracked: (() => { try { return !!localStorage.getItem(ANALYTICS_FIRST_INTERACTION_KEY); } catch { return false; } })(),
+            firstEditTracked: (() => { try { return !!localStorage.getItem(ANALYTICS_FIRST_EDIT_KEY); } catch { return false; } })(),
+            extrudeAnalyticsCount: 0,
             onboardingStartedAt: 0,
             onboardingCompletedThisOpen: false,
             tutorialStep: 0,
@@ -6121,10 +6122,11 @@ applyHubImportProject: function (project, options = {}) {
                     if (this.isEmptyAt(e.clientX, e.clientY)) this.clearSelection();
                 }, true);
 
-                // Track first real interaction once per session
+                // Track first real interaction once per browser (localStorage)
                 this.containerDiv.addEventListener('pointerdown', () => {
                     if (this.firstInteractionTracked) return;
                     this.firstInteractionTracked = true;
+                    try { localStorage.setItem(ANALYTICS_FIRST_INTERACTION_KEY, '1'); } catch { }
                     trackEvent('first_interaction', { mode: this.currentMode, grid: this.GRID });
                 }, { once: true, passive: true });
 
@@ -6481,7 +6483,7 @@ applyHubImportProject: function (project, options = {}) {
                     const isRounded = shapeType === 'rounded';
                     const roundnessFactor = isRounded ? parseFloat(document.getElementById('filletRoundnessSlider')?.value || '0.35') : 0;
 
-                    trackEvent('print_now_click', {
+                    trackEvent('app_print_now_click', {
                         format: '3mf_bambu',
                         voxel_count: this.voxels.size,
                         rounded: isRounded
@@ -7136,7 +7138,11 @@ applyHubImportProject: function (project, options = {}) {
                     this.updateExtrudePreview(0);
                     if (distance !== 0) {
                         this.extrudeSelectedFaces(distance);
-                        trackEvent('extrude', { distance: distance, method: 'drag' });
+                        this.extrudeAnalyticsCount = (this.extrudeAnalyticsCount || 0) + 1;
+                        // Phase2: throttle extrude spam — first + every 10th this session
+                        if (this.extrudeAnalyticsCount === 1 || this.extrudeAnalyticsCount % 10 === 0) {
+                            trackEvent('extrude', { distance: distance, method: 'drag', extrude_n: this.extrudeAnalyticsCount });
+                        }
                     }
                     this.onModelChanged(); // NEW: Trigger model change event
                 } else if (this.mouseState.isMoving && this.mouseState.movingVoxelsOriginal) {
@@ -7969,6 +7975,7 @@ setGridSize: function (newSize) {
 
                 if (modified && !this.firstEditTracked) {
                     this.firstEditTracked = true;
+                    try { localStorage.setItem(ANALYTICS_FIRST_EDIT_KEY, '1'); } catch { }
                     trackEvent('first_edit', { mode, voxel_count: this.voxels.size });
                 }
 
