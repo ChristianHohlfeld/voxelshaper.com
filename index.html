@@ -712,11 +712,6 @@
             0%, 100% { transform: scale(1); box-shadow: 0 0 0 0 rgba(251, 191, 36, 0), 0 0 0 rgba(56, 189, 248, 0); }
             50% { transform: scale(1.09); box-shadow: 0 0 0 10px rgba(251, 191, 36, 0.3), 0 0 30px rgba(56, 189, 248, 0.9); }
         }
-        @keyframes vsGuidedReward {
-            0% { transform: scale(1); filter: brightness(1); }
-            45% { transform: scale(1.12); filter: brightness(1.7); }
-            100% { transform: scale(1); filter: brightness(1); }
-        }
         .vs-guided-pulse {
             position: relative;
             animation: vsGuidedAura 1.25s ease-in-out infinite !important;
@@ -725,28 +720,8 @@
         .vs-guided-hard {
             animation: vsGuidedAuraHard 720ms ease-in-out infinite !important;
         }
-        .vs-guided-reward {
-            animation: vsGuidedReward 460ms ease-out 1 !important;
-        }
-        .vs-guided-reward::after {
-            content: '✓';
-            position: absolute;
-            top: -0.45rem;
-            right: -0.35rem;
-            width: 1.1rem;
-            height: 1.1rem;
-            border-radius: 999px;
-            display: grid;
-            place-items: center;
-            background: #22c55e;
-            color: #fff;
-            font-size: .72rem;
-            font-weight: 800;
-            box-shadow: 0 0 12px rgba(34, 197, 94, .8);
-            pointer-events: none;
-        }
         @media (prefers-reduced-motion: reduce) {
-            .vs-guided-pulse, .vs-guided-hard, .vs-guided-reward { animation: none !important; }
+            .vs-guided-pulse, .vs-guided-hard { animation: none !important; }
         }
 
         .badge-primary {
@@ -10848,14 +10823,7 @@ setGridSize: function (newSize) {
       e.stopPropagation();
       app.mobileCanvasMode = app.mobileCanvasMode === 'edit' ? 'view' : 'edit';
       sync();
-      if (typeof app.showToast === 'function') {
-        app.showToast(
-          app.mobileCanvasMode === 'edit' ? 'Draw' : 'View',
-          app.mobileCanvasMode === 'edit' ? 'Tap to place, erase or paint' : 'Drag to look around',
-          'info',
-          900
-        );
-      }
+      // Guided interaction is communicated by the pulse cue; avoid milestone toasts.
     });
     sync();
     return true;
@@ -10909,40 +10877,52 @@ setGridSize: function (newSize) {
             : ['modeToggle', 'mobile-mode-toggle', 'desktop-overlay-mode-toggle'];
         return ids.map((id) => document.getElementById(id)).filter(Boolean);
     }
-    function setPulse(kind, enabled, hard) {
-        elements(kind).forEach((el) => {
-            el.classList.toggle('vs-guided-pulse', !!enabled);
-            el.classList.toggle('vs-guided-hard', !!enabled && !!hard);
+    function activePulseKind() {
+        // The Orbit/Edit cue always finishes before the tool-cycle cue starts.
+        if (!canvasDone()) return 'canvas';
+        if (!state.cycleUsed) return 'mode';
+        return null;
+    }
+    function pulseTarget(kind) {
+        const all = elements(kind);
+        const visible = all.find((el) => {
+            const style = window.getComputedStyle(el);
+            return style.display !== 'none' && style.visibility !== 'hidden' && el.getClientRects().length > 0;
         });
+        return visible || all[0] || null;
+    }
+    function setPulse(kind, enabled, hard) {
+        elements(kind).forEach((el) => el.classList.remove('vs-guided-pulse', 'vs-guided-hard'));
+        if (!enabled) return;
+        const target = pulseTarget(kind);
+        target?.classList.add('vs-guided-pulse');
+        target?.classList.toggle('vs-guided-hard', !!hard);
+    }
+    function clearPulses() {
+        ['canvas', 'mode'].forEach((kind) => setPulse(kind, false, false));
     }
     function refresh() {
         if (!started) return;
-        setPulse('canvas', !canvasDone(), false);
-        setPulse('mode', !state.cycleUsed, false);
+        const active = activePulseKind();
+        // Clear both groups first so a milestone can never leave two targets pulsing.
+        clearPulses();
+        if (active) setPulse(active, true, false);
     }
     function pulseHard(kind) {
-        if (!started) return;
-        elements(kind).forEach((el) => {
-            el.classList.remove('vs-guided-pulse', 'vs-guided-hard');
-            void el.offsetWidth;
-            el.classList.add('vs-guided-pulse', 'vs-guided-hard');
-        });
+        if (!started || activePulseKind() !== kind) return;
+        clearPulses();
+        const target = pulseTarget(kind);
+        if (target) {
+            void target.offsetWidth;
+            target.classList.add('vs-guided-pulse', 'vs-guided-hard');
+        }
         if (hardTimer) clearTimeout(hardTimer);
         hardTimer = setTimeout(refresh, 1800);
     }
-    function reward(kind) {
-        elements(kind).forEach((el) => {
-            el.classList.remove('vs-guided-reward');
-            void el.offsetWidth;
-            el.classList.add('vs-guided-reward');
-            setTimeout(() => el.classList.remove('vs-guided-reward'), 650);
-        });
-    }
-    function mark(field, kind) {
+    function mark(field) {
         if (!started || state[field]) return;
         state[field] = true;
         saveState();
-        reward(kind);
         refresh();
     }
     function start() {
@@ -10954,7 +10934,7 @@ setGridSize: function (newSize) {
     }
     function onCanvasToggle() {
         const was = app.mobileCanvasMode === 'edit';
-        mark('canvasPressed', 'canvas');
+        mark('canvasPressed');
         if (app.mobileCanvasMode === 'view') state.hadView = true;
         if (app.mobileCanvasMode === 'edit') {
             state.enteredEdit = true;
@@ -10970,7 +10950,7 @@ setGridSize: function (newSize) {
         canvasToggle?.addEventListener('click', () => setTimeout(onCanvasToggle, 0));
 
         ['modeToggle', 'mobile-mode-toggle', 'desktop-overlay-mode-toggle'].forEach((id) => {
-            document.getElementById(id)?.addEventListener('click', () => mark('cycleUsed', 'mode'));
+            document.getElementById(id)?.addEventListener('click', () => mark('cycleUsed'));
         });
 
         const modify = app._modifySingleVoxel;
@@ -10983,10 +10963,10 @@ setGridSize: function (newSize) {
                 const mode = args.length > 4 ? args[4] : (args[3] || this.currentMode);
                 const result = modify.apply(this, args);
                 const after = key == null ? null : this.voxels.get(key);
-                if ((mode === 'FREE' || mode === 'ADD') && !beforeSnapshot && after) mark('placed', 'mode');
-                if (mode === 'DELETE' && beforeSnapshot && !after) mark('deleted', 'mode');
+                if ((mode === 'FREE' || mode === 'ADD') && !beforeSnapshot && after) mark('placed');
+                if (mode === 'DELETE' && beforeSnapshot && !after) mark('deleted');
                 if (mode === 'PAINT' && beforeSnapshot && after &&
-                    (beforeSnapshot.color !== after.color || beforeSnapshot.glass !== !!after.glass)) mark('painted', 'mode');
+                    (beforeSnapshot.color !== after.color || beforeSnapshot.glass !== !!after.glass)) mark('painted');
                 return result;
             };
         }
