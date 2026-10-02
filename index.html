@@ -10848,7 +10848,8 @@ setGridSize: function (newSize) {
         cycleUsed: false,
         placed: false,
         deleted: false,
-        painted: false
+        painted: false,
+        colorUsed: false
     };
     let app = null;
     let state = { ...defaults };
@@ -10869,18 +10870,21 @@ setGridSize: function (newSize) {
         return state.canvasPressed && state.enteredEdit && state.orbitMoved && state.returnedToEdit;
     }
     function pending() {
-        return !state.cycleUsed || !state.placed || !state.deleted || !state.painted || !canvasDone();
+        return !state.cycleUsed || !state.placed || !state.deleted || !state.painted || !state.colorUsed || !canvasDone();
     }
     function elements(kind) {
         const ids = kind === 'canvas'
             ? ['mobile-canvas-mode-toggle']
-            : ['modeToggle', 'mobile-mode-toggle', 'desktop-overlay-mode-toggle'];
+            : kind === 'mode'
+                ? ['modeToggle', 'mobile-mode-toggle', 'desktop-overlay-mode-toggle']
+                : ['desktop-canvas-color-picker-wrap', 'mobile-color-picker', 'mobile-canvas-color-picker-wrap'];
         return ids.map((id) => document.getElementById(id)).filter(Boolean);
     }
     function activePulseKind() {
         // The Orbit/Edit cue always finishes before the tool-cycle cue starts.
         if (!canvasDone()) return 'canvas';
         if (!state.cycleUsed) return 'mode';
+        if (!state.colorUsed) return 'color';
         return null;
     }
     function pulseTarget(kind) {
@@ -10899,7 +10903,7 @@ setGridSize: function (newSize) {
         target?.classList.toggle('vs-guided-hard', !!hard);
     }
     function clearPulses() {
-        ['canvas', 'mode'].forEach((kind) => setPulse(kind, false, false));
+        ['canvas', 'mode', 'color'].forEach((kind) => setPulse(kind, false, false));
     }
     function refresh() {
         if (!started) return;
@@ -10951,6 +10955,16 @@ setGridSize: function (newSize) {
 
         ['modeToggle', 'mobile-mode-toggle', 'desktop-overlay-mode-toggle'].forEach((id) => {
             document.getElementById(id)?.addEventListener('click', () => mark('cycleUsed'));
+        });
+
+        // The picker cue is visual-only: any deliberate interaction discovers the
+        // bottom color control without adding a toast, label, or second pulse.
+        ['desktop-canvas-color-picker', 'mobile-color-picker', 'mobile-canvas-color-picker'].forEach((id) => {
+            const picker = document.getElementById(id);
+            if (!picker) return;
+            ['pointerdown', 'keydown', 'input', 'change'].forEach((eventName) => {
+                picker.addEventListener(eventName, () => mark('colorUsed'));
+            });
         });
 
         const modify = app._modifySingleVoxel;

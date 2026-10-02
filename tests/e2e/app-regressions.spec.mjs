@@ -651,6 +651,43 @@ for (const appPath of ['/', '/www/index.html']) {
   });
 }
 
+test('guided cues move to the bottom color picker after the mode cue', async ({ page }) => {
+  const pageErrors = collectPageErrors(page);
+  await mockBrowserDependencies(page);
+  await makeFirstRun(page, false);
+  await page.addInitScript(() => {
+    localStorage.setItem('vs_guided_control_cues_v1', JSON.stringify({
+      canvasPressed: true,
+      hadView: true,
+      enteredEdit: true,
+      orbitMoved: true,
+      returnedToEdit: true,
+      cycleUsed: true,
+      placed: true,
+      deleted: true,
+      painted: true,
+      colorUsed: false
+    }));
+  });
+
+  await page.goto('/');
+  await installStableUi(page);
+  await waitForVoxelApp(page);
+
+  await expect.poll(() => page.evaluate(() => ({
+    color: document.getElementById('desktop-canvas-color-picker-wrap')?.classList.contains('vs-guided-pulse'),
+    mode: document.getElementById('modeToggle')?.classList.contains('vs-guided-pulse'),
+    state: JSON.parse(localStorage.getItem('vs_guided_control_cues_v1') || '{}')
+  }))).toMatchObject({ color: true, mode: false });
+
+  await page.locator('#desktop-canvas-color-picker').dispatchEvent('pointerdown');
+  await expect.poll(() => page.evaluate(() => {
+    const state = JSON.parse(localStorage.getItem('vs_guided_control_cues_v1') || '{}');
+    return { colorUsed: state.colorUsed, colorPulse: document.getElementById('desktop-canvas-color-picker-wrap')?.classList.contains('vs-guided-pulse') };
+  })).toEqual({ colorUsed: true, colorPulse: false });
+  expect(pageErrors).toEqual([]);
+});
+
 for (const appPath of ['/', '/www/index.html']) {
   for (const cameraMode of ['orbit', 'fly']) {
     test(`free mode previews and places an empty grid cell in ${cameraMode} camera on ${appPath}`, async ({ page }) => {
