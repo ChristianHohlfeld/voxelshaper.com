@@ -2,6 +2,22 @@ import { test, expect } from '@playwright/test';
 
 const BASE = process.env.VS_TEST_BASE_URL || 'http://127.0.0.1:4173';
 
+test.beforeEach(async ({ page }) => {
+  // Visual smoke is testing the editor/Physics surface, not first-run onboarding.
+  // Keep the modal out before app boot, and defensively close it after boot too.
+  await page.addInitScript(() => localStorage.setItem('voxelshaper_onboarding_dont_show', 'true'));
+});
+
+async function dismissOnboarding(page) {
+  await page.evaluate(() => {
+    localStorage.setItem('voxelshaper_onboarding_dont_show', 'true');
+    const modal = document.getElementById('onboardingModal');
+    if (modal?.open) {
+      try { modal.close(); } catch (_) { modal.removeAttribute('open'); }
+    }
+  });
+}
+
 async function seedModel(page) {
   await page.waitForFunction(() =>
     window.VoxelApp &&
@@ -11,6 +27,7 @@ async function seedModel(page) {
     null,
     { timeout: 20000 }
   );
+  await dismissOnboarding(page);
   await page.evaluate(() => {
     const app = window.VoxelApp;
     window.VoxelBox3D.stop?.();
@@ -33,10 +50,15 @@ async function seedModel(page) {
     app.resetCameraPosition?.();
   });
   await page.waitForTimeout(200);
+  await dismissOnboarding(page);
 }
 
 async function startPhysics(page) {
-  await page.locator('#vs-physics-test').click();
+  await dismissOnboarding(page);
+  const play = page.locator('#vs-physics-test');
+  await expect(play).toBeVisible();
+  await expect(play).toBeEnabled();
+  await play.click();
   await page.waitForFunction(() => window.VoxelBox3D.running && window.VoxelPhysics.state.enabled);
   await page.waitForTimeout(100);
 }
@@ -85,6 +107,7 @@ async function endTouchGrab(page, at) {
 test('desktop visual smoke', async ({ browser }) => {
   const context = await browser.newContext({ viewport:{ width:1440, height:1000 } });
   const page = await context.newPage();
+  await page.addInitScript(() => localStorage.setItem('voxelshaper_onboarding_dont_show', 'true'));
   await page.goto(`${BASE}/?visual_ci=desktop`, { waitUntil:'domcontentloaded' });
   await seedModel(page);
 
@@ -93,6 +116,10 @@ test('desktop visual smoke', async ({ browser }) => {
   const play = await page.locator('#vs-physics-test').boundingBox();
   expect(play).not.toBeNull();
   expect(play.x).toBeLessThanOrEqual(24);
+  const playHit = await page.evaluate(({x,y}) => !!document.elementFromPoint(x,y)?.closest?.('#vs-physics-test'), {
+    x:play.x+play.width/2,y:play.y+play.height/2
+  });
+  expect(playHit).toBe(true);
   await page.screenshot({ path:'test-results/visual/desktop-idle.png', fullPage:true });
 
   await startPhysics(page);
@@ -118,6 +145,7 @@ test('desktop visual smoke', async ({ browser }) => {
 test('mobile visual smoke', async ({ browser }) => {
   const context = await browser.newContext({ viewport:{ width:390, height:844 }, isMobile:true, hasTouch:true });
   const page = await context.newPage();
+  await page.addInitScript(() => localStorage.setItem('voxelshaper_onboarding_dont_show', 'true'));
   await page.goto(`${BASE}/?visual_ci=mobile`, { waitUntil:'domcontentloaded' });
   await seedModel(page);
 
