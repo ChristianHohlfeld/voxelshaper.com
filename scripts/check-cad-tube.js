@@ -138,12 +138,17 @@ if (!(dents.mad > smooth.mad * 4)) fail('legacy mesh was not dentier than the ho
 const cube = [];
 for (let x = 0; x < 6; x++) for (let y = 0; y < 6; y++) for (let z = 0; z < 6; z++) cube.push(x, y, z);
 const blob = Cad.buildCad(cube);
-if (!blob || blob.surface !== 'voxel' || blob.triangleCount < 10) fail('blob should fall back to a mesh');
+if (!blob || blob.surface !== 'organic' || blob.triangleCount < 10) fail('blob should fall back to an organic mesh, got ' + (blob && blob.surface));
+if (boundaryCount(blob) !== 0) fail('organic blob not watertight');
 
 const plus = [];
 for (let i = -8; i <= 8; i++) { plus.push(i, 0, 0, 0, i, 0, 0, 0, i); }
+const tBranch = Date.now();
 const branch = Cad.buildCad(plus);
-if (!branch || branch.surface !== 'voxel' || branch.triangleCount < 10) fail('branch should fall back to a mesh');
+const dtBranch = Date.now() - tBranch;
+if (!branch || branch.surface !== 'organic' || branch.triangleCount < 10) fail('branch should fall back to an organic mesh, got ' + (branch && branch.surface));
+if (boundaryCount(branch) !== 0) fail('organic branch not watertight, ' + boundaryCount(branch));
+if (dtBranch > 4000) fail('branch organic too slow ' + dtBranch + 'ms');
 
 const obj = Cad.toObj(tube, { scale: 1, upAxis: 'Z' });
 if (!/^o voxel_cad/m.test(obj) || !/^v /m.test(obj) || !/^f /m.test(obj)) fail('obj export');
@@ -266,10 +271,85 @@ for (let x = 0; x < 6; x++) for (let y = 0; y < 6; y++) for (let z = 0; z < 6; z
   blobColors.push(x < 3 ? '#00FF00FF' : '#FFFF00FF');
 }
 const paintedBlob = Cad.buildCad(blobCells);
-if (!paintedBlob || paintedBlob.surface === 'tube') fail('blob should stay on the fallback mesh');
+if (!paintedBlob || paintedBlob.surface !== 'organic') fail('blob should stay on the organic mesh');
 const blobPaint = Cad.triangleColors(paintedBlob.positions, paintedBlob.indices, blobCells, blobColors, 1);
 const blobSet = new Set(blobPaint);
 if (!blobSet.has('#00FF00FF') || !blobSet.has('#FFFF00FF')) fail('fallback mesh dropped a color ' + [...blobSet].join(','));
+
+
+function loadMorphKnot() {
+  const fs = require('fs');
+  const path = require('path');
+  const code = fs.readFileSync(path.join(__dirname, '../morph-forms-v2.js'), 'utf8');
+  const sandbox = { window: { VoxelApp: { openHubGenerator() {} } }, setInterval() { return 0; }, clearInterval() {} };
+  sandbox.window.window = sandbox.window;
+  const fn = new Function('window', 'setInterval', 'clearInterval', code);
+  fn(sandbox.window, sandbox.setInterval, sandbox.clearInterval);
+  const project = sandbox.window.VoxelApp.generateDeterministicHubProject({
+    type: 'knot', seed: 7, shape: 35, detail: 40
+  });
+  const cells = [];
+  for (const v of project.voxels) cells.push(v.x, v.y, v.z);
+  return cells;
+}
+
+function dihedralStats(mesh) {
+  const pos = mesh.positions;
+  const idx = mesh.indices;
+  const nTri = idx.length / 3;
+  const normals = new Float32Array(nTri * 3);
+  for (let t = 0; t < nTri; t++) {
+    const a = idx[t * 3] * 3, b = idx[t * 3 + 1] * 3, c = idx[t * 3 + 2] * 3;
+    const abx = pos[b] - pos[a], aby = pos[b + 1] - pos[a + 1], abz = pos[b + 2] - pos[a + 2];
+    const acx = pos[c] - pos[a], acy = pos[c + 1] - pos[a + 1], acz = pos[c + 2] - pos[a + 2];
+    let nx = aby * acz - abz * acy, ny = abz * acx - abx * acz, nz = abx * acy - aby * acx;
+    const len = Math.hypot(nx, ny, nz) || 1;
+    normals[t * 3] = nx / len; normals[t * 3 + 1] = ny / len; normals[t * 3 + 2] = nz / len;
+  }
+  const map = new Map();
+  for (let t = 0; t < nTri; t++) {
+    const tri = [idx[t * 3], idx[t * 3 + 1], idx[t * 3 + 2]];
+    for (let e = 0; e < 3; e++) {
+      const a = tri[e], b = tri[(e + 1) % 3];
+      const lo = a < b ? a : b, hi = a < b ? b : a;
+      const k = lo + ',' + hi;
+      const prev = map.get(k);
+      if (prev == null) map.set(k, t);
+      else map.set(k, [prev, t]);
+    }
+  }
+  const angs = [];
+  for (const pair of map.values()) {
+    if (!Array.isArray(pair)) continue;
+    const n0 = pair[0] * 3, n1 = pair[1] * 3;
+    let d = normals[n0] * normals[n1] + normals[n0 + 1] * normals[n1 + 1] + normals[n0 + 2] * normals[n1 + 2];
+    d = Math.max(-1, Math.min(1, d));
+    angs.push(Math.acos(d) * 180 / Math.PI);
+  }
+  angs.sort((a, b) => a - b);
+  if (!angs.length) return { median: 180, p90: 180, sharp: 1 };
+  const median = angs[angs.length >> 1];
+  const p90 = angs[Math.min(angs.length - 1, Math.floor(angs.length * 0.9))];
+  let sharp = 0;
+  for (const a of angs) if (a > 32) sharp++;
+  return { median, p90, sharp: sharp / angs.length };
+}
+
+const morphCells = loadMorphKnot();
+const tMorph = Date.now();
+const morph = Cad.buildCad(morphCells, { voxelSize: 1 });
+const dtMorph = Date.now() - tMorph;
+if (!morph || morph.surface !== 'organic') fail('morph knot should be organic, got ' + (morph && morph.surface) + ' voxels ' + (morphCells.length / 3));
+if (boundaryCount(morph) !== 0) fail('morph knot not watertight ' + boundaryCount(morph));
+if (Cad.signedVolume(morph.positions, morph.indices) <= 0) fail('morph knot volume not outward');
+if (dtMorph > 6000) fail('morph knot too slow ' + dtMorph + 'ms for ' + (morphCells.length / 3) + ' voxels');
+const crease = dihedralStats(morph);
+if (crease.median > 14) fail('morph knot still faceted, median dihedral ' + crease.median.toFixed(2));
+if (crease.p90 > 26) fail('morph knot still has hard creases, p90 ' + crease.p90.toFixed(2));
+if (crease.sharp > 0.04) fail('morph knot sharp edge fraction ' + crease.sharp.toFixed(3));
+const legacyMorph = Cad.build(morphCells, { voxelSize: 1, subdiv: 1 });
+const legacyCrease = dihedralStats(legacyMorph);
+if (!(legacyCrease.median + 0.4 > crease.median)) fail('organic knot was not smoother than the voxel skin ' + crease.median.toFixed(2) + ' vs ' + legacyCrease.median.toFixed(2));
 
 console.log(JSON.stringify({
   knotVoxels: knot.length / 3,
@@ -281,6 +361,14 @@ console.log(JSON.stringify({
   legacyMad: Number(dents.mad.toFixed(4)),
   blob: blob.surface,
   branch: branch.surface,
+  branchMs: dtBranch,
+  morphVoxels: morphCells.length / 3,
+  morphMs: dtMorph,
+  morphTriangles: morph.triangleCount,
+  morphMedianDihedral: Number(crease.median.toFixed(2)),
+  morphP90Dihedral: Number(crease.p90.toFixed(2)),
+  morphSigma: morph.blurSigma,
+  morphStep: morph.meshStep,
   curveVoxels: curve.length / 3,
   curveMs: dt2,
   filename: 'voxel-model-cad.3mf',
