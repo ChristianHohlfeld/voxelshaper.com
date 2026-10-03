@@ -351,6 +351,85 @@ const legacyMorph = Cad.build(morphCells, { voxelSize: 1, subdiv: 1 });
 const legacyCrease = dihedralStats(legacyMorph);
 if (!(legacyCrease.median + 0.4 > crease.median)) fail('organic knot was not smoother than the voxel skin ' + crease.median.toFixed(2) + ' vs ' + legacyCrease.median.toFixed(2));
 
+
+function rayHits(pos, idx, origin, dir) {
+  const hits = [];
+  for (let i = 0; i < idx.length; i += 3) {
+    const a = idx[i] * 3, b = idx[i + 1] * 3, c = idx[i + 2] * 3;
+    const ax = pos[a], ay = pos[a + 1], az = pos[a + 2];
+    const e1x = pos[b] - ax, e1y = pos[b + 1] - ay, e1z = pos[b + 2] - az;
+    const e2x = pos[c] - ax, e2y = pos[c + 1] - ay, e2z = pos[c + 2] - az;
+    const px = dir[1] * e2z - dir[2] * e2y;
+    const py = dir[2] * e2x - dir[0] * e2z;
+    const pz = dir[0] * e2y - dir[1] * e2x;
+    const det = e1x * px + e1y * py + e1z * pz;
+    if (Math.abs(det) < 1e-10) continue;
+    const inv = 1 / det;
+    const tx = origin[0] - ax, ty = origin[1] - ay, tz = origin[2] - az;
+    const u = (tx * px + ty * py + tz * pz) * inv;
+    if (u < 0 || u > 1) continue;
+    const qx = ty * e1z - tz * e1y, qy = tz * e1x - tx * e1z, qz = tx * e1y - ty * e1x;
+    const v = (dir[0] * qx + dir[1] * qy + dir[2] * qz) * inv;
+    if (v < 0 || u + v > 1) continue;
+    const t = (e2x * qx + e2y * qy + e2z * qz) * inv;
+    if (t > 1e-5) hits.push(t);
+  }
+  hits.sort((a, b) => a - b);
+  const uniq = [];
+  for (const t of hits) if (!uniq.length || t - uniq[uniq.length - 1] > 1e-3) uniq.push(t);
+  return uniq;
+}
+
+const vase = [];
+for (let y = 0; y < 40; y++) {
+  const R = 14 - Math.cos((y / 39) * Math.PI) * 3;
+  const thick = 1.2;
+  const lim = Math.ceil(R) + 1;
+  for (let x = -lim; x <= lim; x++) {
+    for (let z = -lim; z <= lim; z++) {
+      const d = Math.hypot(x, z);
+      const on = y < 2 ? d <= R + 0.05 : (d >= R - thick && d <= R + 0.05);
+      if (on) vase.push(x + 30, y, z + 8);
+    }
+  }
+}
+const vaseMesh = Cad.buildCad(vase, { voxelSize: 1 });
+if (!vaseMesh || vaseMesh.surface !== 'vessel') fail('hollow vase should be a vessel, got ' + (vaseMesh && vaseMesh.surface));
+if (boundaryCount(vaseMesh) !== 0) fail('vase not watertight ' + boundaryCount(vaseMesh));
+if (Cad.signedVolume(vaseMesh.positions, vaseMesh.indices) <= 0) fail('vase volume not outward');
+const vaseBed = Cad.prepareBambuPositions(vaseMesh, 1);
+const vaseBox = Cad.bboxSize(vaseBed);
+const vaseMax = Math.max(vaseBox.size[0], vaseBox.size[1], vaseBox.size[2]);
+if (Math.abs(vaseMax - 170) > 0.6) fail('vase max dim ' + vaseMax);
+if (vaseBox.size[2] + 0.5 < vaseBox.size[0] || vaseBox.size[2] + 0.5 < vaseBox.size[1]) fail('vase is not upright ' + vaseBox.size.join(','));
+const vcx = (vaseBox.min[0] + vaseBox.max[0]) / 2;
+const vcy = (vaseBox.min[1] + vaseBox.max[1]) / 2;
+const upHits = rayHits(vaseBed, vaseMesh.indices, [vcx, vcy, vaseBox.min[2] - 5], [0, 0, 1]);
+if (upHits.length !== 2) fail('vase mouth should be open, vertical hits ' + upHits.length);
+const floorTh = upHits[1] - upHits[0];
+if (floorTh < 2.4 || floorTh > 3.2) fail('floor thickness ' + floorTh);
+const mz = (vaseBox.min[2] + vaseBox.max[2]) / 2;
+const sideHits = rayHits(vaseBed, vaseMesh.indices, [vaseBox.min[0] - 5, vcy, mz], [1, 0, 0]);
+if (sideHits.length < 4) fail('side wall hits ' + sideHits.length);
+const wallL = sideHits[1] - sideHits[0];
+const wallR = sideHits[sideHits.length - 1] - sideHits[sideHits.length - 2];
+if (wallL < 2.4 || wallL > 3.2 || wallR < 2.4 || wallR > 3.2) fail('wall thickness ' + wallL + ' ' + wallR);
+const sideVase = [];
+for (let z = 0; z < 36; z++) {
+  const R = 12;
+  const lim = 14;
+  for (let x = -lim; x <= lim; x++) for (let y = -lim; y <= lim; y++) {
+    const d = Math.hypot(x, y);
+    const on = z < 2 ? d <= R : (d >= R - 1.2 && d <= R);
+    if (on) sideVase.push(x, y, z);
+  }
+}
+const stood = Cad.buildCad(sideVase, { voxelSize: 1 });
+if (!stood || stood.surface !== 'vessel' || stood.vessel.axis !== 2) fail('Z vase axis ' + (stood && stood.vessel && stood.vessel.axis));
+const stoodBed = Cad.prepareBambuPositions(stood, 1);
+const stoodBox = Cad.bboxSize(stoodBed);
+if (stoodBox.size[2] + 0.5 < stoodBox.size[0]) fail('Z vase stayed on its side ' + stoodBox.size.join(','));
+
 console.log(JSON.stringify({
   knotVoxels: knot.length / 3,
   knotMs: dt,
@@ -374,6 +453,8 @@ console.log(JSON.stringify({
   filename: 'voxel-model-cad.3mf',
   columnColors: { red, blue },
   bambuUp: 'y-editor-to-z',
+  vase: 'upright-170',
+  vaseWallMm: Number(wallL.toFixed(2)),
   tubeEdgeFrac: Number(tubeEdges.frac.toFixed(3)),
   hoseEdgeFrac: Number(hoseEdges.frac.toFixed(3)),
   tubeStep: tube.meshStep
