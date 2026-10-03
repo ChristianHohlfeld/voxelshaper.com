@@ -4069,8 +4069,9 @@
 
 
             // Shared Bambu 3MF package writer. Voxel export and the CAD button both use this.
-            saveBambuPackage: async function (mainMesh, dummies, palette, filename, title) {
-                const { xml: modelXML, ids } = this.build3DModelXML({ mainMesh, dummies, title: title || 'VoxelShaper Model' });
+            saveBambuPackage: async function (mainMesh, dummies, palette, filename, title, opts) {
+                const plate = opts && opts.plate ? opts.plate : 256;
+                const { xml: modelXML, ids } = this.build3DModelXML({ mainMesh, dummies, title: title || 'VoxelShaper Model', plate });
                 const projectJSON = this.buildProjectSettingsJSON(palette);
                 const modelXMLset = this.buildModelSettingsXML(ids);
 
@@ -4275,7 +4276,7 @@
                 };
             },
 
-            build3DModelXML: function ({ mainMesh, dummies, title = 'VoxelShaper Model', buildXYZ = [125, 125, 0] }) {
+            build3DModelXML: function ({ mainMesh, dummies, title = 'VoxelShaper Model', buildXYZ = [125, 125, 0], plate = 256 }) {
                 const today = this.ymd();
                 const [bx, by, bz] = buildXYZ.map(n => +n || 0);
 
@@ -4323,8 +4324,8 @@
                     minZ = Math.min(minZ, z);
 
                 });
-                // Calculate center offset (assuming Bambu's plate is 256x256, center 128)
-                const PLATE_CENTER = 128;
+                // Voxel 3MF keeps the 256 mm bed. CAD passes plate 180 for the A1 Mini.
+                const PLATE_CENTER = (plate || 256) / 2;
                 const final_bx = PLATE_CENTER - (minX + (maxX - minX) / 2);
                 const final_by = PLATE_CENTER - (minY + (maxY - minY) / 2);
                 const final_bz = 0 - minZ; // Place on the bed (Z=0)
@@ -9615,7 +9616,9 @@ setGridSize: function (newSize) {
              * A single tube becomes a smooth swept hose. Branched shapes are a print-resolution
              * narrow-band SDF blur, a soft hose instead of the faceted voxel isosurface.
              * The mesh is packed with the existing Bambu 3MF writer (saveBambuPackage / build3DModelXML).
-             * Orientation is the voxel writer's map, (x, -z, y), not the STL up-axis rotation.
+             * A hollow vessel is stood up (its height axis becomes editor Y, then Bambu Z) with the
+             * opening at +Z. Other CAD shapes keep the voxel writer's map, (x, -z, y).
+             * The mesh is scaled so its longest side is at most 170 mm and placed on a 180 mm bed.
              * Each triangle is painted with the nearest occupied voxel via that writer's paint_color token.
              */
             exportCad: async function () {
@@ -9673,9 +9676,10 @@ setGridSize: function (newSize) {
                     const colorToIdx = new Map(palette.map((c, i) => [c, i]));
                     const V = [];
                     const fmt = VoxelApp3MFExporter.fmt;
-                    for (let i = 0; i < pos.length; i += 3) {
-                        const mapped = VoxelCadSurface.toBambuXYZ(pos[i], pos[i + 1], pos[i + 2], scale);
-                        V.push([fmt(mapped[0]), fmt(mapped[1]), fmt(mapped[2])]);
+                    // prepareBambuPositions calls VoxelCadSurface.toBambuXYZ after the vessel stands up.
+                    const mappedPos = VoxelCadSurface.prepareBambuPositions(built, scale);
+                    for (let i = 0; i < mappedPos.length; i += 3) {
+                        V.push([fmt(mappedPos[i]), fmt(mappedPos[i + 1]), fmt(mappedPos[i + 2])]);
                     }
                     const T = [];
                     for (let i = 0; i < idx.length; i += 3) {
@@ -9686,7 +9690,7 @@ setGridSize: function (newSize) {
                     const mainMesh = { V, T, palette };
                     const dummies = palette.map((_, i) => VoxelApp3MFExporter.tinyTriangle(-0.2 - i * 0.05));
                     const filename = 'voxel-model-cad.3mf';
-                    await VoxelApp3MFExporter.saveBambuPackage(mainMesh, dummies, palette, filename, 'VoxelShaper CAD');
+                    await VoxelApp3MFExporter.saveBambuPackage(mainMesh, dummies, palette, filename, 'VoxelShaper CAD', { plate: 180 });
                     this.showToast('Export Complete', `Downloaded ${filename}`, 'success');
                     trackEvent('export_success', { format: 'cad_3mf', voxel_count: this.voxels.size });
                     document.getElementById('exportOptionsModal').close();
