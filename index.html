@@ -4052,32 +4052,8 @@
                     const mainMesh = this.buildPaintMesh(voxelArray, voxelMM, palette, isRounded, roundnessFactor);
                     const dummies = palette.map((_, i) => this.tinyTriangle(-0.2 - i * 0.05));
 
-                    const { xml: modelXML, ids } = this.build3DModelXML({ mainMesh, dummies });
-                    const projectJSON = this.buildProjectSettingsJSON(palette);
-                    const modelXMLset = this.buildModelSettingsXML(ids);
-
-                    const contentTypes = this.buildContentTypesXML();
-                    const rootRels = this.buildRootRelsXML();
-                    const modelRels = this.buildModelRelsXML();
-
-                    const zip = new JSZip();
-                    zip.file("[Content_Types].xml", contentTypes);
-                    zip.folder("_rels").file(".rels", rootRels);
-                    zip.folder("3D").file("3dmodel.model", modelXML);
-                    zip.folder("3D").folder("_rels").file("3dmodel.model.rels", modelRels);
-
-                    const metadata = zip.folder("Metadata");
-                    const bigThumb = this.dataURLtoUint8Array(this.makeThumb('plate_1', 600, 600));
-                    const smallThumb = this.dataURLtoUint8Array(this.makeThumb('plate_1_small', 300, 300));
-                    metadata.file("plate_1.png", bigThumb, { binary: true });
-                    metadata.file("plate_1_small.png", smallThumb, { binary: true });
-                    metadata.file("project_settings.config", projectJSON);
-                    metadata.file("model_settings.config", modelXMLset);
-
-                    const blob = await zip.generateAsync({ type: "blob", compression: "DEFLATE", compressionOptions: { level: 6 } });
-
                     const filename = isRounded ? `VoxelShaper_rounded_${roundnessFactor.toFixed(2)}.3mf` : "VoxelShaper_blocky.3mf";
-                    saveAs(blob, filename);
+                    await this.saveBambuPackage(mainMesh, dummies, palette, filename);
 
                     showToast('Export Complete', `${filename} saved!`, 'success');
                     trackEvent('export_success', { format: '3mf_bambu', voxel_count: voxels.size });
@@ -4089,6 +4065,35 @@
 
                 }
 
+            },
+
+
+            // Shared Bambu 3MF package writer. Voxel export and the CAD button both use this.
+            saveBambuPackage: async function (mainMesh, dummies, palette, filename, title) {
+                const { xml: modelXML, ids } = this.build3DModelXML({ mainMesh, dummies, title: title || 'VoxelShaper Model' });
+                const projectJSON = this.buildProjectSettingsJSON(palette);
+                const modelXMLset = this.buildModelSettingsXML(ids);
+
+                const contentTypes = this.buildContentTypesXML();
+                const rootRels = this.buildRootRelsXML();
+                const modelRels = this.buildModelRelsXML();
+
+                const zip = new JSZip();
+                zip.file("[Content_Types].xml", contentTypes);
+                zip.folder("_rels").file(".rels", rootRels);
+                zip.folder("3D").file("3dmodel.model", modelXML);
+                zip.folder("3D").folder("_rels").file("3dmodel.model.rels", modelRels);
+
+                const metadata = zip.folder("Metadata");
+                const bigThumb = this.dataURLtoUint8Array(this.makeThumb('plate_1', 600, 600));
+                const smallThumb = this.dataURLtoUint8Array(this.makeThumb('plate_1_small', 300, 300));
+                metadata.file("plate_1.png", bigThumb, { binary: true });
+                metadata.file("plate_1_small.png", smallThumb, { binary: true });
+                metadata.file("project_settings.config", projectJSON);
+                metadata.file("model_settings.config", modelXMLset);
+
+                const blob = await zip.generateAsync({ type: "blob", compression: "DEFLATE", compressionOptions: { level: 6 } });
+                saveAs(blob, filename);
             },
 
             esc: (s) => String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/"/g, '&quot;'),
@@ -9606,12 +9611,13 @@ setGridSize: function (newSize) {
             },
 
             /**
-             * Separate CAD download. Does not change blocky, filleted, STL, G-code, or 3MF export.
+             * Separate CAD download. Does not change blocky, filleted, STL, G-code, or the voxel 3MF button.
              * A single tube becomes a smooth swept hose. Anything else keeps the voxel isosurface.
+             * The mesh is packed with the existing Bambu 3MF writer (saveBambuPackage / build3DModelXML).
              */
-            exportCad: function () {
+            exportCad: async function () {
                 if (this.voxels.size === 0) {
-                    trackEvent('export_blocked', { reason: 'empty_project', format: 'cad_obj', voxel_count: 0 });
+                    trackEvent('export_blocked', { reason: 'empty_project', format: 'cad_3mf', voxel_count: 0 });
                     this.showToast('Export Error', 'Scene is empty.', 'warning');
                     return;
                 }
@@ -9619,7 +9625,11 @@ setGridSize: function (newSize) {
                     this.showToast('Export Error', 'CAD surface module failed to load.', 'error');
                     return;
                 }
-                trackEvent('export_click', { format: 'cad_obj', voxel_count: this.voxels.size });
+                if (!window.JSZip || !window.saveAs || typeof VoxelApp3MFExporter === 'undefined') {
+                    this.showToast('Export Error', 'Required libraries (JSZip, FileSaver) not found.', 'error');
+                    return;
+                }
+                trackEvent('export_click', { format: 'cad_3mf', voxel_count: this.voxels.size });
                 this.showToast('Exporting...', 'Generating smooth CAD mesh...', 'info');
 
                 const cells = [];
@@ -9643,19 +9653,41 @@ setGridSize: function (newSize) {
                     this.showToast('Export Error', 'Could not build a CAD surface.', 'error');
                     return;
                 }
-                const obj = VoxelCadSurface.toObj(built, {
-                    scale: scaleUnit === 'cm' ? 10 : 1,
-                    upAxis: upAxis
-                });
-                const blob = new Blob([obj], { type: 'text/plain' });
-                const url = URL.createObjectURL(blob);
-                const filename = 'voxel-model-cad.obj';
-                const a = document.createElement('a');
-                a.href = url; a.download = filename; a.click();
-                URL.revokeObjectURL(url);
-                this.showToast('Export Complete', `Downloaded ${filename}`, 'success');
-                trackEvent('export_success', { format: 'cad_obj', voxel_count: this.voxels.size });
-                document.getElementById('exportOptionsModal').close();
+                try {
+                    const scale = scaleUnit === 'cm' ? 10 : 1;
+                    const zUp = upAxis === 'Z';
+                    const pos = built.positions;
+                    const V = [];
+                    const fmt = VoxelApp3MFExporter.fmt;
+                    for (let i = 0; i < pos.length; i += 3) {
+                        let x = pos[i] * scale;
+                        let y = pos[i + 1] * scale;
+                        let z = pos[i + 2] * scale;
+                        if (zUp) {
+                            const yy = z;
+                            z = -y;
+                            y = yy;
+                        }
+                        V.push([fmt(x), fmt(y), fmt(z)]);
+                    }
+                    const T = [];
+                    const idx = built.indices;
+                    for (let i = 0; i < idx.length; i += 3) {
+                        T.push([idx[i], idx[i + 1], idx[i + 2], '0']);
+                    }
+                    const palette = ['#FFFFFFFF'];
+                    const mainMesh = { V, T, palette };
+                    const dummies = [VoxelApp3MFExporter.tinyTriangle(-0.2)];
+                    const filename = 'voxel-model-cad.3mf';
+                    await VoxelApp3MFExporter.saveBambuPackage(mainMesh, dummies, palette, filename, 'VoxelShaper CAD');
+                    this.showToast('Export Complete', `Downloaded ${filename}`, 'success');
+                    trackEvent('export_success', { format: 'cad_3mf', voxel_count: this.voxels.size });
+                    document.getElementById('exportOptionsModal').close();
+                } catch (err) {
+                    console.error('CAD 3MF Export Error:', err);
+                    this.showToast('Export Error', err.message, 'error');
+                    trackEvent('app_export_error', { context: 'cad_3mf', message: err.message });
+                }
             },
 
             exportGCodePolyslice: async function (scaleUnit = 'mm', isRounded = false) {
