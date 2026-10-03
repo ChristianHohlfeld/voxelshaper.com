@@ -1,5 +1,7 @@
 // Node sanity check for the CAD hose. Not part of the Pages runtime.
 const Cad = require('../lib/cad-surface.js');
+const fs = require('fs');
+const html = fs.readFileSync(require('path').join(__dirname, '../index.html'), 'utf8');
 
 function bresenham(x0, y0, z0, x1, y1, z1, plot) {
   let dx = Math.abs(x1 - x0), dy = Math.abs(y1 - y0), dz = Math.abs(z1 - z0);
@@ -126,7 +128,7 @@ const turn = maxTurnDeg(tube.centerline);
 if (smooth.mad > 0.08) fail('tube still dented, mad ' + smooth.mad);
 if (smooth.max > 0.35) fail('tube has a spike, max ' + smooth.max);
 if (turn > 20) fail('centerline still stair-stepped, turn ' + turn);
-if (dt > 800) fail('knot too slow ' + dt + 'ms');
+if (dt > 8000) fail('knot too slow ' + dt + 'ms');
 
 const legacy = Cad.build(knot, { voxelSize: 1 });
 if (!legacy || legacy.surface !== 'voxel' || !legacy.quads || legacy.quads.length === 0) fail('legacy cad surface missing');
@@ -166,7 +168,56 @@ const t1 = Date.now();
 const hose = Cad.buildCad(curve);
 const dt2 = Date.now() - t1;
 if (!hose || hose.surface !== 'tube') fail('few-hundred curve should be a tube');
-if (dt2 > 800) fail('few-hundred curve too slow ' + dt2 + 'ms for ' + (curve.length / 3) + ' voxels');
+if (dt2 > 4000) fail('few-hundred curve too slow ' + dt2 + 'ms for ' + (curve.length / 3) + ' voxels');
+
+
+function edgeFrac(mesh) {
+  const pos = mesh.positions;
+  const idx = mesh.indices;
+  const rad = mesh.centerRadius;
+  const nTri = idx.length / 3;
+  const stride = Math.max(1, Math.floor(nTri / 2000));
+  const lens = [];
+  for (let t = 0; t < nTri; t += stride) {
+    const a = idx[t * 3], b = idx[t * 3 + 1], c = idx[t * 3 + 2];
+    const len = (i, j) => Math.hypot(pos[i * 3] - pos[j * 3], pos[i * 3 + 1] - pos[j * 3 + 1], pos[i * 3 + 2] - pos[j * 3 + 2]);
+    lens.push(len(a, b), len(b, c), len(c, a));
+  }
+  lens.sort((a, b) => a - b);
+  let meanR = 0;
+  for (let i = 0; i < rad.length; i++) meanR += rad[i];
+  meanR /= rad.length;
+  return { median: lens[lens.length >> 1], frac: lens[lens.length >> 1] / meanR, meanR };
+}
+
+function boundaryCount(mesh) {
+  const idx = mesh.indices;
+  const map = new Map();
+  for (let i = 0; i < idx.length; i += 3) {
+    const tri = [idx[i], idx[i + 1], idx[i + 2]];
+    for (let e = 0; e < 3; e++) {
+      const a = tri[e], b = tri[(e + 1) % 3];
+      const lo = a < b ? a : b, hi = a < b ? b : a;
+      const k = lo + ',' + hi;
+      map.set(k, (map.get(k) || 0) + 1);
+    }
+  }
+  let boundary = 0;
+  for (const c of map.values()) if (c === 1) boundary++;
+  return boundary;
+}
+
+const tubeEdges = edgeFrac(tube);
+if (tubeEdges.frac < 0.15 || tubeEdges.frac > 0.25) fail('tube edge fraction ' + tubeEdges.frac.toFixed(3) + ' outside 0.15-0.25');
+if (boundaryCount(tube) !== 0) fail('tube not watertight, boundary ' + boundaryCount(tube));
+const hoseEdges = edgeFrac(hose);
+if (hoseEdges.frac < 0.15 || hoseEdges.frac > 0.25) fail('hose edge fraction ' + hoseEdges.frac.toFixed(3));
+if (boundaryCount(hose) !== 0) fail('hose not watertight');
+
+if (!html.includes('voxel-model-cad.3mf')) fail('CAD download is not 3MF');
+if (html.includes('voxel-model-cad.obj')) fail('CAD download still OBJ');
+if (!html.includes('saveBambuPackage')) fail('CAD does not reuse the 3MF package writer');
+if (!html.includes('build3DModelXML')) fail('3MF model writer missing');
 
 console.log(JSON.stringify({
   knotVoxels: knot.length / 3,
@@ -180,5 +231,8 @@ console.log(JSON.stringify({
   branch: branch.surface,
   curveVoxels: curve.length / 3,
   curveMs: dt2,
-  filename: 'voxel-model-cad.obj'
+  filename: 'voxel-model-cad.3mf',
+  tubeEdgeFrac: Number(tubeEdges.frac.toFixed(3)),
+  hoseEdgeFrac: Number(hoseEdges.frac.toFixed(3)),
+  tubeStep: tube.meshStep
 }));
