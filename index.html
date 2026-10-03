@@ -9614,6 +9614,8 @@ setGridSize: function (newSize) {
              * Separate CAD download. Does not change blocky, filleted, STL, G-code, or the voxel 3MF button.
              * A single tube becomes a smooth swept hose. Anything else keeps the voxel isosurface.
              * The mesh is packed with the existing Bambu 3MF writer (saveBambuPackage / build3DModelXML).
+             * Orientation is the voxel writer's map, (x, -z, y), not the STL up-axis rotation.
+             * Each triangle is painted with the nearest occupied voxel via that writer's paint_color token.
              */
             exportCad: async function () {
                 if (this.voxels.size === 0) {
@@ -9633,17 +9635,18 @@ setGridSize: function (newSize) {
                 this.showToast('Exporting...', 'Generating smooth CAD mesh...', 'info');
 
                 const cells = [];
-                this.voxels.forEach((_, packedKey) => {
+                const paintColors = [];
+                this.voxels.forEach((data, packedKey) => {
                     const [x, y, z] = this.parseKey(packedKey);
                     if (y < 0) return;
                     cells.push(x, y, z);
+                    paintColors.push(VoxelApp3MFExporter.normalizeColor(data && data.color));
                 });
                 if (cells.length === 0) {
                     this.showToast('Export Error', 'No voxels to export.', 'warning');
                     return;
                 }
                 const scaleUnit = document.querySelector('input[name="exportScaleUnit"]:checked')?.value || 'mm';
-                const upAxis = document.querySelector('input[name="exportUpAxis"]:checked')?.value || 'Z';
                 const built = VoxelCadSurface.buildCad(cells, {
                     maxDim: VoxelCadSurface.MAX_DIM,
                     subdiv: VoxelCadSurface.SUBDIV_LEVELS,
@@ -9655,29 +9658,32 @@ setGridSize: function (newSize) {
                 }
                 try {
                     const scale = scaleUnit === 'cm' ? 10 : 1;
-                    const zUp = upAxis === 'Z';
                     const pos = built.positions;
+                    const idx = built.indices;
+                    const triColors = VoxelCadSurface.triangleColors(pos, idx, cells, paintColors, this.VS) || [];
+                    const palette = [];
+                    const seenColor = new Set();
+                    for (const c of paintColors) {
+                        if (seenColor.has(c)) continue;
+                        seenColor.add(c);
+                        if (palette.length < 16) palette.push(c);
+                    }
+                    if (palette.length === 0) palette.push('#FFFFFFFF');
+                    const colorToIdx = new Map(palette.map((c, i) => [c, i]));
                     const V = [];
                     const fmt = VoxelApp3MFExporter.fmt;
                     for (let i = 0; i < pos.length; i += 3) {
-                        let x = pos[i] * scale;
-                        let y = pos[i + 1] * scale;
-                        let z = pos[i + 2] * scale;
-                        if (zUp) {
-                            const yy = z;
-                            z = -y;
-                            y = yy;
-                        }
-                        V.push([fmt(x), fmt(y), fmt(z)]);
+                        const mapped = VoxelCadSurface.toBambuXYZ(pos[i], pos[i + 1], pos[i + 2], scale);
+                        V.push([fmt(mapped[0]), fmt(mapped[1]), fmt(mapped[2])]);
                     }
                     const T = [];
-                    const idx = built.indices;
                     for (let i = 0; i < idx.length; i += 3) {
-                        T.push([idx[i], idx[i + 1], idx[i + 2], '0']);
+                        const hex = triColors[i / 3] || palette[0];
+                        const slot = colorToIdx.has(hex) ? colorToIdx.get(hex) : 0;
+                        T.push([idx[i], idx[i + 1], idx[i + 2], VoxelApp3MFExporter.tokenFromPaletteIndex(slot)]);
                     }
-                    const palette = ['#FFFFFFFF'];
                     const mainMesh = { V, T, palette };
-                    const dummies = [VoxelApp3MFExporter.tinyTriangle(-0.2)];
+                    const dummies = palette.map((_, i) => VoxelApp3MFExporter.tinyTriangle(-0.2 - i * 0.05));
                     const filename = 'voxel-model-cad.3mf';
                     await VoxelApp3MFExporter.saveBambuPackage(mainMesh, dummies, palette, filename, 'VoxelShaper CAD');
                     this.showToast('Export Complete', `Downloaded ${filename}`, 'success');
