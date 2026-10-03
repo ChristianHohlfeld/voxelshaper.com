@@ -218,6 +218,58 @@ if (!html.includes('voxel-model-cad.3mf')) fail('CAD download is not 3MF');
 if (html.includes('voxel-model-cad.obj')) fail('CAD download still OBJ');
 if (!html.includes('saveBambuPackage')) fail('CAD does not reuse the 3MF package writer');
 if (!html.includes('build3DModelXML')) fail('3MF model writer missing');
+if (!html.includes('VoxelCadSurface.toBambuXYZ')) fail('CAD 3MF does not use the Bambu axis map');
+if (!html.includes('VoxelCadSurface.triangleColors')) fail('CAD 3MF does not sample voxel colors');
+if (!html.includes('tokenFromPaletteIndex')) fail('CAD 3MF does not use the existing paint token');
+if (html.includes('z = -y')) fail('CAD 3MF still uses the STL Z flip');
+const bambu = Cad.toBambuXYZ(1, 2, 3, 10);
+if (bambu[0] !== 10 || bambu[1] !== -30 || bambu[2] !== 20) fail('toBambuXYZ ' + bambu.join(','));
+
+const column = [];
+const columnColors = [];
+for (let y = 0; y < 24; y++) {
+  column.push(0, y, 0);
+  columnColors.push(y < 12 ? '#FF0000FF' : '#0000FFFF');
+}
+const upright = Cad.buildCad(column, { voxelSize: 1 });
+if (!upright || upright.triangleCount < 10) fail('column did not mesh');
+let hiY = -Infinity, hiZ = -Infinity, zAtHiY = -Infinity;
+const up = upright.positions;
+for (let i = 0; i < up.length; i += 3) {
+  const mapped = Cad.toBambuXYZ(up[i], up[i + 1], up[i + 2], 1);
+  if (up[i + 1] > hiY) { hiY = up[i + 1]; zAtHiY = mapped[2]; }
+  if (mapped[2] > hiZ) hiZ = mapped[2];
+}
+if (Math.abs(zAtHiY - hiZ) > 1e-4) fail('editor up is not Bambu up, zAtHiY ' + zAtHiY + ' hiZ ' + hiZ);
+const painted = Cad.triangleColors(up, upright.indices, column, columnColors, 1);
+if (!painted || painted.length !== upright.triangleCount) fail('triangle colors missing');
+let red = 0, blue = 0, lowWrong = 0, highWrong = 0, lowN = 0, highN = 0;
+for (let t = 0; t < painted.length; t++) {
+  if (painted[t] === '#FF0000FF') red++;
+  else if (painted[t] === '#0000FFFF') blue++;
+  else fail('unexpected color ' + painted[t]);
+  const a = upright.indices[t * 3] * 3;
+  const b = upright.indices[t * 3 + 1] * 3;
+  const c = upright.indices[t * 3 + 2] * 3;
+  const cy = (up[a + 1] + up[b + 1] + up[c + 1]) / 3;
+  if (cy < 10) { lowN++; if (painted[t] !== '#FF0000FF') lowWrong++; }
+  if (cy > 14) { highN++; if (painted[t] !== '#0000FFFF') highWrong++; }
+}
+if (red < painted.length * 0.2 || blue < painted.length * 0.2) fail('column lost a color ' + red + '/' + blue);
+if (lowN < 5 || highN < 5) fail('color bands did not land on the column');
+if (lowWrong > lowN * 0.15 || highWrong > highN * 0.15) fail('colors bled, low ' + lowWrong + '/' + lowN + ' high ' + highWrong + '/' + highN);
+
+const blobCells = [];
+const blobColors = [];
+for (let x = 0; x < 6; x++) for (let y = 0; y < 6; y++) for (let z = 0; z < 6; z++) {
+  blobCells.push(x, y, z);
+  blobColors.push(x < 3 ? '#00FF00FF' : '#FFFF00FF');
+}
+const paintedBlob = Cad.buildCad(blobCells);
+if (!paintedBlob || paintedBlob.surface === 'tube') fail('blob should stay on the fallback mesh');
+const blobPaint = Cad.triangleColors(paintedBlob.positions, paintedBlob.indices, blobCells, blobColors, 1);
+const blobSet = new Set(blobPaint);
+if (!blobSet.has('#00FF00FF') || !blobSet.has('#FFFF00FF')) fail('fallback mesh dropped a color ' + [...blobSet].join(','));
 
 console.log(JSON.stringify({
   knotVoxels: knot.length / 3,
@@ -232,6 +284,8 @@ console.log(JSON.stringify({
   curveVoxels: curve.length / 3,
   curveMs: dt2,
   filename: 'voxel-model-cad.3mf',
+  columnColors: { red, blue },
+  bambuUp: 'y-editor-to-z',
   tubeEdgeFrac: Number(tubeEdges.frac.toFixed(3)),
   hoseEdgeFrac: Number(hoseEdges.frac.toFixed(3)),
   tubeStep: tube.meshStep
