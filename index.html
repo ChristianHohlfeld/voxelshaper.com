@@ -3566,6 +3566,7 @@
                 <button id="exportBambuStudioBtn" class="btn btn-accent text-white hidden md:inline-flex">3MF</button>
                 <button id="exportGCodePolysliceBtn" class="btn btn-success text-white">G-Code</button>
                 <button id="exportSTLFinalBtn" class="btn btn-primary text-white inline-flex md:hidden">STL</button>
+                <button id="exportCadBtn" type="button" class="btn btn-outline">CAD</button>
                 <form method="dialog"><button class="btn btn-ghost">Cancel</button></form>
             </div>
         </div>
@@ -3929,6 +3930,7 @@
     <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/build/three.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/exporters/STLExporter.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/utils/BufferGeometryUtils.js"></script>
+    <script src="lib/cad-surface.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/file-saver@2.0.5/dist/FileSaver.min.js"></script>
     <!-- Polyslice Integration -->
@@ -6238,6 +6240,9 @@ applyHubImportProject: function (project, options = {}) {
                     trackEvent('export_click', { format: isRounded ? 'stl_rounded' : 'stl_blocky', voxel_count: this.voxels.size });
                     this.exportSTL(scaleUnit, upAxis, isRounded);
                     document.getElementById('exportOptionsModal').close();
+                });
+                document.getElementById('exportCadBtn').addEventListener('click', () => {
+                    this.exportCad();
                 });
 
                 document.getElementById('roundedExportRadio').addEventListener('change', this.updateExportRoundnessUI.bind(this));
@@ -9598,6 +9603,59 @@ setGridSize: function (newSize) {
 
                 this.showToast('Export Complete', `Downloaded ${filename}`, 'success');
                 trackEvent('export_success', { format: isRounded ? 'stl_rounded' : 'stl_blocky', voxel_count: this.voxels.size });
+            },
+
+            /**
+             * Separate CAD download. Does not change blocky, filleted, STL, G-code, or 3MF export.
+             * One marching-cubes pass plus one Catmull-Clark level, written as quads.
+             */
+            exportCad: function () {
+                if (this.voxels.size === 0) {
+                    trackEvent('export_blocked', { reason: 'empty_project', format: 'cad_obj', voxel_count: 0 });
+                    this.showToast('Export Error', 'Scene is empty.', 'warning');
+                    return;
+                }
+                if (typeof VoxelCadSurface === 'undefined') {
+                    this.showToast('Export Error', 'CAD surface module failed to load.', 'error');
+                    return;
+                }
+                trackEvent('export_click', { format: 'cad_obj', voxel_count: this.voxels.size });
+                this.showToast('Exporting...', 'Generating smooth CAD mesh...', 'info');
+
+                const cells = [];
+                this.voxels.forEach((_, packedKey) => {
+                    const [x, y, z] = this.parseKey(packedKey);
+                    if (y < 0) return;
+                    cells.push(x, y, z);
+                });
+                if (cells.length === 0) {
+                    this.showToast('Export Error', 'No voxels to export.', 'warning');
+                    return;
+                }
+                const scaleUnit = document.querySelector('input[name="exportScaleUnit"]:checked')?.value || 'mm';
+                const upAxis = document.querySelector('input[name="exportUpAxis"]:checked')?.value || 'Z';
+                const built = VoxelCadSurface.build(cells, {
+                    maxDim: VoxelCadSurface.MAX_DIM,
+                    subdiv: VoxelCadSurface.SUBDIV_LEVELS,
+                    voxelSize: this.VS
+                });
+                if (!built || !built.quads || built.quads.length === 0) {
+                    this.showToast('Export Error', 'Could not build a CAD surface.', 'error');
+                    return;
+                }
+                const obj = VoxelCadSurface.toObj(built, {
+                    scale: scaleUnit === 'cm' ? 10 : 1,
+                    upAxis: upAxis
+                });
+                const blob = new Blob([obj], { type: 'text/plain' });
+                const url = URL.createObjectURL(blob);
+                const filename = 'voxel-model-cad.obj';
+                const a = document.createElement('a');
+                a.href = url; a.download = filename; a.click();
+                URL.revokeObjectURL(url);
+                this.showToast('Export Complete', `Downloaded ${filename}`, 'success');
+                trackEvent('export_success', { format: 'cad_obj', voxel_count: this.voxels.size });
+                document.getElementById('exportOptionsModal').close();
             },
 
             exportGCodePolyslice: async function (scaleUnit = 'mm', isRounded = false) {
