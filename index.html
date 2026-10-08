@@ -3195,6 +3195,122 @@
             }
         }
     </style>
+    <style id="vs-mobile-fit">
+        /* Mobile fit pass (2026-10): every bottom-bar item visible, menus/dialogs inside the safe area,
+           44px tap targets. Scoped to the mobile UI (body.has-mobile-bar) so desktop is unchanged. */
+        body.has-mobile-bar {
+            --vs-bar-h: calc(4.5rem + var(--safe-bottom, 0px));
+            --vs-safe-l: env(safe-area-inset-left, 0px);
+            --vs-safe-r: env(safe-area-inset-right, 0px);
+        }
+        /* Bottom bar: cells shrink to fit instead of overflowing off the right edge (S / ? were cut off). */
+        body.has-mobile-bar #mobile-ui-container .mobile-bottom-bar {
+            justify-content: space-between;
+            gap: 0;
+            padding-left: calc(var(--vs-safe-l) + 4px);
+            padding-right: calc(var(--vs-safe-r) + 4px);
+        }
+        body.has-mobile-bar #mobile-ui-container .mobile-bottom-bar > .dropdown,
+        body.has-mobile-bar #mobile-ui-container .mobile-bottom-bar > .btn:not(#mobile-mode-toggle) {
+            flex: 1 1 0;
+            min-width: 2.75rem;
+            max-width: 3.5rem;
+        }
+        body.has-mobile-bar #mobile-ui-container .mobile-bottom-bar > .dropdown > label {
+            width: 100%;
+            min-width: 0;
+            padding-left: 0;
+            padding-right: 0;
+        }
+        body.has-mobile-bar #mobile-ui-container .mobile-bottom-bar > .btn:not(#mobile-mode-toggle) {
+            padding-left: 0;
+            padding-right: 0;
+        }
+        body.has-mobile-bar #mobile-color-picker {
+            width: clamp(2.75rem, 12vw, 3.5rem) !important;
+            height: clamp(2.75rem, 12vw, 3.5rem) !important;
+        }
+        /* Narrow phones: "?" moves into the Tools menu (Help & Tutorial) so the rest stays >= 44px. */
+        #mobile-help-tutorial-menu-li { display: none; }
+        @media (max-width: 419px) {
+            body.has-mobile-bar #mobile-help-tutorial { display: none !important; }
+            body.has-mobile-bar #mobile-help-tutorial-menu-li { display: block; }
+        }
+        /* Bar menus: sit above the bar and floating buttons, never under the notch, scroll when tall. */
+        body.has-mobile-bar #mobile-ui-container .mobile-bottom-bar:focus-within { z-index: 1250; }
+        body.has-mobile-bar .mobile-bottom-bar .dropdown-top > .dropdown-content {
+            margin-bottom: 0.875rem;
+            max-height: calc(100vh - var(--vs-bar-h) - var(--safe-top, 0px) - 1.5rem);
+            max-height: calc(100dvh - var(--vs-bar-h) - var(--safe-top, 0px) - 1.5rem);
+            overflow-y: auto;
+            overscroll-behavior: contain;
+            flex-wrap: nowrap;
+            -webkit-overflow-scrolling: touch;
+        }
+        body.has-mobile-bar .mobile-bottom-bar .dropdown-content.menu li > a,
+        body.has-mobile-bar .mobile-bottom-bar .dropdown-content.menu li > details > summary {
+            min-height: 2.75rem;
+            align-items: center;
+            white-space: nowrap;
+        }
+        /* Login/Logout rows: the whole row is the button (tapping beside the text used to do nothing). */
+        body.has-mobile-bar .mobile-bottom-bar .dropdown-content.menu li > a:has(> button) { padding: 0; }
+        body.has-mobile-bar .mobile-bottom-bar .dropdown-content.menu li > a > button {
+            width: 100%;
+            min-height: 2.75rem;
+            padding: 0 1rem;
+            text-align: left;
+        }
+        /* Dialogs: keep the box inside the safe area and scrollable; actions wrap instead of overflowing. */
+        body.has-mobile-bar dialog.modal {
+            padding: calc(var(--safe-top, 0px) + 0.75rem) calc(var(--vs-safe-r) + 0.75rem) calc(var(--safe-bottom, 0px) + 0.75rem) calc(var(--vs-safe-l) + 0.75rem);
+        }
+        body.has-mobile-bar dialog.modal > .modal-box {
+            max-height: calc(100vh - var(--safe-top, 0px) - var(--safe-bottom, 0px) - 1.5rem);
+            max-height: calc(100dvh - var(--safe-top, 0px) - var(--safe-bottom, 0px) - 1.5rem);
+            max-width: min(32rem, 100%);
+            overflow-y: auto;
+            overscroll-behavior: contain;
+        }
+        body.has-mobile-bar dialog.modal > .modal-box.onboarding-modal-box { max-width: min(680px, 100%); }
+        body.has-mobile-bar .modal-action { flex-wrap: wrap; gap: 0.5rem; }
+        body.has-mobile-bar .modal-action > * { margin-inline-start: 0 !important; }
+        /* 44px tap targets inside dialogs (visual size of the round close button is unchanged). */
+        .modal-close-x::after { content: ""; position: absolute; inset: -0.5rem; border-radius: 9999px; }
+        body.has-mobile-bar .modal-box .btn-sm:not(.modal-close-x),
+        body.has-mobile-bar .modal-box .btn-xs,
+        body.has-mobile-bar .modal-box .modal-action .btn,
+        body.has-mobile-bar .modal-box .menu li > label,
+        body.has-mobile-bar .modal-box label.cursor-pointer,
+        body.has-mobile-bar #mobile-reset-delete-hint {
+            min-height: 44px;
+        }
+        body.has-mobile-bar #mobile-brush-size-decrease,
+        body.has-mobile-bar #mobile-brush-size-increase,
+        body.has-mobile-bar #mobile-color-picker-visible { min-width: 44px; min-height: 44px; }
+        body.has-mobile-bar .onboarding-modal-box .text-\[11px\] { font-size: 12px; }
+        /* Floating top controls: invisible hit-area extension to 44px, no visual change. */
+        body.has-mobile-bar .camera-control-switch > button { position: relative; }
+        body.has-mobile-bar .camera-control-switch > button::after { content: ""; position: absolute; inset: -0.375rem 0; }
+        body.has-mobile-bar .hub-save-indicator::after { content: ""; position: absolute; inset: -0.3125rem; border-radius: 9999px; }
+        body.has-mobile-bar #hubImportExportBtn,
+        body.has-mobile-bar #hubImportPromptDismiss { position: relative; }
+        body.has-mobile-bar #hubImportExportBtn::after,
+        body.has-mobile-bar #hubImportPromptDismiss::after { content: ""; position: absolute; inset: -0.375rem; }
+        body.has-mobile-bar .vs-nav-pill { min-height: 2.75rem; left: calc(var(--vs-safe-l) + 12px); }
+        /* The desktop Print/dice/Save cluster (shown from 768px) duplicated the mobile controls on top of the
+           bar on iPad portrait and phones in landscape; the mobile UI has its own dice + Save. */
+        body.has-mobile-bar #desktop-bottom-right-container { display: none !important; }
+        /* Short landscape phones: slimmer bar so the canvas keeps room. */
+        @media (max-height: 500px) and (orientation: landscape) {
+            body.has-mobile-bar { --vs-bar-h: calc(4rem + var(--safe-bottom, 0px)); --vs-fab-row1: calc(var(--safe-bottom, 0px) + 4rem + var(--vs-fab-gap)); }
+            body.has-mobile-bar #mobile-ui-container .mobile-bottom-bar .btn,
+            body.has-mobile-bar #mobile-ui-container .mobile-bottom-bar .dropdown > label,
+            body.has-mobile-bar #mobile-color-picker { height: 3rem !important; min-height: 3rem; }
+            body.has-mobile-bar #mobile-color-picker { width: 3rem !important; }
+            body.has-mobile-bar #mobile-ui-container .mobile-bottom-bar { padding-top: 0.25rem; padding-bottom: calc(var(--safe-bottom, 0px) + 0.25rem); }
+        }
+    </style>
 </head>
 
 <body class="bg-base-100 min-h-screen text-base-content flex flex-col rounded-lg">
@@ -3554,10 +3670,10 @@
                     <li><a id="loadImageBtnMobile">Load Reference Image</a></li>
                     <li><a id="removeImageBtnMobile" class="hidden">Remove Reference Image</a></li>
                     <div class="divider my-1"></div>
-                    <li id="mobile-login-li" class="hidden">
-                        <a><button id="mobile-login-logout" class="w-full text-left">Logout</button></a>
+                    <li id="mobile-login-li" class="">
+                        <a><button id="mobile-login-logout" class="w-full text-left">Login</button></a>
                     </li>
-                    <li id="mobile-logout-li" class="">
+                    <li id="mobile-logout-li" class="hidden">
                         <a><button id="mobile-logout" class="w-full text-left text-error">Logout</button></a>
                     </li>
                     <li id="mobile-license-li" class="hidden">
@@ -3580,11 +3696,11 @@
             </div>
 
             <!-- TOOLS (right) — opens to the left -->
-            <div class="dropdown dropdown-top dropdown-end">
+            <div class="dropdown dropdown-top">
                 <label tabindex="0" class="btn btn-ghost rounded-full" aria-label="Tools Menu">
                     <i class="fas fa-tools"></i>
                 </label>
-                <ul tabindex="0" class="dropdown-content z-[60] menu p-2 shadow bg-base-300 rounded-box w-45">
+                <ul tabindex="0" class="dropdown-content z-[60] menu p-2 shadow bg-base-300 rounded-box w-56">
                     <li>
                         <a id="mobile-cycle-axis" class="flex justify-between">
                             <span>Draw Axis</span>
@@ -3612,6 +3728,7 @@
                     <li><a id="mobile-open-scene-settings"><i class="fas fa-palette mr-2"></i>Scene Settings</a></li>
                     <li><a id="mobile-reset-camera">Reset Camera</a></li>
                     <li><a id="mobile-settings">Control Settings</a></li>
+                    <li id="mobile-help-tutorial-menu-li"><a id="mobile-help-tutorial-menu"><i class="fas fa-question-circle mr-2"></i>Help &amp; Tutorial</a></li>
                 </ul>
             </div>
 
@@ -3700,9 +3817,9 @@
             </div>
 
             <div class="modal-action">
-                <button id="exportBambuStudioBtn" class="btn btn-accent text-white hidden md:inline-flex">3MF</button>
-                <button id="exportGCodePolysliceBtn" class="btn btn-success text-white">G-Code</button>
-                <button id="exportSTLFinalBtn" class="btn btn-primary text-white inline-flex md:hidden">STL</button>
+                <button id="exportBambuStudioBtn" class="btn btn-accent hidden md:inline-flex">3MF</button>
+                <button id="exportGCodePolysliceBtn" class="btn btn-success">G-Code</button>
+                <button id="exportSTLFinalBtn" class="btn btn-primary inline-flex md:hidden">STL</button>
                 <button id="exportCadBtn" type="button" class="btn btn-outline">CAD</button>
                 <form method="dialog"><button class="btn btn-ghost">Cancel</button></form>
             </div>
@@ -3869,8 +3986,6 @@
                     <button type="submit" class="btn btn-primary">Send Magic Link</button>
                 </form>
             </div>
-            <form method="dialog"><button class="btn btn-sm btn-circle btn-ghost absolute right-2 top-2">✕</button>
-            </form>
         </div>
     </dialog>
     <dialog id="magicLinkVerifyModal" class="modal">
@@ -4030,7 +4145,7 @@
                 <button id="onboardingModeSelect" type="button" class="btn btn-xs btn-outline"><i
                         class="fas fa-mouse-pointer"></i> Extrude</button>
             </div>
-            <p class="text-[11px] opacity-70 pt-1">Same buttons are in the center top toolbar.</p>
+            <p class="text-[11px] opacity-70 pt-1">Same buttons are in the toolbar.</p>
             <ul id="onboardingControlsList" class="list-disc list-inside space-y-2 pt-2 onboarding-controls-list">
                 <li><b>Add:</b> left click / tap the model to place a voxel.</li>
                 <li><b>Delete:</b> click / tap a voxel to remove it.</li>
@@ -4627,6 +4742,12 @@
             MOBILE_ROTATE_SPEED_MULT: 1.5,
             PAN_SPEED: 0.05,
             PINCH_ZOOM_MULT: 50,
+            // Touch pinch zoom speed in Orbit (1 = pre-2026-10 feel). Touch only; the wheel has its own constants.
+            ORBIT_ZOOM_SPEED: 2.25,
+            // Desktop wheel / trackpad. Deltas are normalised to px (lines/pages converted, one event capped at
+            // one 100px notch) so a notched wheel and a trackpad swipe feel alike.
+            WHEEL_ZOOM_SPEED: 0.0018, // Orbit: log-distance per px -> one notch ~ 20% closer/farther
+            FLY_WHEEL_SPEED: 0.25,    // Fly: one notch moves 0.25 x grid size (grid 10 = 2.5 units; was a fixed 12.5)
             FLY_SPEED_BOOST: 2.5, // Fly zoom / forward movement felt too slow; Orbit is unaffected.
             DRAG_THRESHOLD: 5,
             MAX_HISTORY_SIZE: 50,
@@ -5181,10 +5302,13 @@
                     const extentY = Math.max(this.VS, maxY - minY + this.VS);
                     const extentZ = Math.max(this.VS, maxZ - minZ + this.VS);
                     this.orbitFrameRadius = Math.max(this.VS * 3, Math.sqrt(extentX * extentX + extentY * extentY + extentZ * extentZ) * 0.5);
+                    const h = this.VS * 0.5;
+                    this._orbitModelBox = { minX: minX - h, minY: minY - h, minZ: minZ - h, maxX: maxX + h, maxY: maxY + h, maxZ: maxZ + h };
                 } else {
                     const size = this.GRID * this.VS;
                     this.orbitTarget.set(size * 0.5, size * 0.5, size * 0.5);
                     this.orbitFrameRadius = Math.max(this.VS * 4, size * 0.65);
+                    this._orbitModelBox = null;
                 }
                 return this.orbitTarget;
             },
@@ -5228,12 +5352,51 @@
                 target.add(pan);
             },
 
+            // Wheel delta in px: deltaMode lines (Firefox, ~3 per notch) / pages converted, capped at one notch.
+            normalizeWheelDelta: function (e) {
+                const unit = e.deltaMode === 1 ? 33.3 : (e.deltaMode === 2 ? 800 : 1);
+                const px = (Number(e.deltaY) || 0) * unit;
+                return Math.max(-100, Math.min(100, px));
+            },
+
+            // Exponential orbit zoom shared by pinch and wheel/trackpad. logStep > 0 = farther.
+            // Each event is capped so nothing ever lurches; callers apply their own speed constant.
+            zoomOrbitByLog: function (logStep) {
+                if (!this.cam || !Number.isFinite(logStep) || logStep === 0) return;
+                const target = this.ensureOrbitTarget();
+                const distance = Math.max(0.001, this.cam.position.distanceTo(target));
+                const MAX_STEP = 0.7;
+                const step = Math.max(-MAX_STEP, Math.min(MAX_STEP, logStep));
+                this.dollyOrbitCameraBy(distance * Math.exp(step) - distance);
+            },
+
+            // Distance from the orbit target to the model's bounding box surface along the camera ray,
+            // so zooming in stops at the model instead of flying through it (0 when not applicable).
+            getOrbitModelMinDistance: function (target, offset) {
+                const box = this._orbitModelBox;
+                if (!box || !this.voxels || this.voxels.size === 0) return 0;
+                const inside = target.x > box.minX && target.x < box.maxX && target.y > box.minY && target.y < box.maxY && target.z > box.minZ && target.z < box.maxZ;
+                if (!inside) return 0;
+                const len = Math.max(0.001, offset.length());
+                const dir = [offset.x / len, offset.y / len, offset.z / len];
+                const lo = [box.minX, box.minY, box.minZ], hi = [box.maxX, box.maxY, box.maxZ], t0 = [target.x, target.y, target.z];
+                let exit = Infinity;
+                for (let i = 0; i < 3; i++) {
+                    if (Math.abs(dir[i]) < 1e-6) continue;
+                    exit = Math.min(exit, ((dir[i] > 0 ? hi[i] : lo[i]) - t0[i]) / dir[i]);
+                }
+                return Number.isFinite(exit) ? exit + this.VS * 0.75 : 0;
+            },
+
             dollyOrbitCameraBy: function (distanceDelta) {
                 if (!this.cam) return;
                 const target = this.ensureOrbitTarget();
                 const offset = this.cam.position.clone().sub(target);
                 const distance = Math.max(0.001, offset.length());
-                const minDistance = Math.max(this.VS * 1.8, 1.25);
+                let minDistance = Math.max(this.VS * 1.8, 1.25);
+                const modelMin = this.getOrbitModelMinDistance(target, offset);
+                // Never jump outward if the camera already sits closer; just stop further zoom-in.
+                if (modelMin > minDistance) minDistance = Math.min(modelMin, Math.max(distance, minDistance));
                 const maxDistance = Math.max(this.GRID * this.VS * 4, 24);
                 const nextDistance = Math.max(minDistance, Math.min(maxDistance, distance + distanceDelta));
                 offset.setLength(nextDistance);
@@ -5377,7 +5540,14 @@
 
                     if (dialog.dataset.modalCloseBound === 'true') return;
                     dialog.dataset.modalCloseBound = 'true';
+                    let downOnBackdrop = false;
+                    dialog.addEventListener('pointerdown', (event) => { downOnBackdrop = event.target === dialog; });
                     dialog.addEventListener('click', (event) => {
+                        if (event.target === dialog && downOnBackdrop && dialog.classList.contains('modal')) {
+                            downOnBackdrop = false;
+                            this.closeDialog(dialog);
+                            return;
+                        }
                         const trigger = event.target.closest('[data-modal-close], .modal-close-x');
                         if (!trigger || !dialog.contains(trigger)) return;
                         event.preventDefault();
@@ -5836,7 +6006,8 @@ applyHubImportProject: function (project, options = {}) {
                         window.__voxelshaper_user = this.user;
                         this.updateLoginStateUI();
                     } catch (e) {
-                        // This is a normal case for non-logged-in users.
+                        // This is a normal case for non-logged-in users: show "Login" (not "Logout") in the menu.
+                        try { this.updateLoginStateUI(); } catch (_) { }
                     }
                 }
                 const urlModelId = urlParams.get('modelId');
@@ -6620,6 +6791,7 @@ applyHubImportProject: function (project, options = {}) {
                 // Help button toggles onboarding modal on/off
                 document.getElementById('helpTutorialBtn').addEventListener('click', () => this.toggleOnboardingModal());
                 document.getElementById('mobile-help-tutorial').addEventListener('click', () => this.toggleOnboardingModal());
+                document.getElementById('mobile-help-tutorial-menu')?.addEventListener('click', () => { if (document.activeElement) document.activeElement.blur(); this.toggleOnboardingModal(); });
 
                 ['mobileControlsModal', 'mobilePropertiesModal', 'mobileFileModal'].forEach((id) => {
                     const dlg = document.getElementById(id);
@@ -7200,11 +7372,14 @@ applyHubImportProject: function (project, options = {}) {
                         // Pinch = zoom
                         if (!this.touchState.lastPinchDist) this.touchState.lastPinchDist = newDist;
                         const pinchDelta = newDist - this.touchState.lastPinchDist;
+                        let pinchApplied = false;
                         if (Math.abs(pinchDelta) > PINCH_DEADZONE_PX) {
+                            pinchApplied = true;
                             if (this.isOrbitControlsMode()) {
-                                let distanceDelta = -pinchDelta * this.PINCH_ZOOM_MULT * 0.001;
-                                if (!this.controls.invertZoom) distanceDelta *= -1;
-                                this.dollyOrbitCameraBy(distanceDelta);
+                                // Ratio-based: same feel for any finger spacing; 0.56 = old speed at default distance.
+                                let logStep = -Math.log(newDist / Math.max(1, this.touchState.lastPinchDist)) * 0.56 * (this.ORBIT_ZOOM_SPEED || 1);
+                                if (!this.controls.invertZoom) logStep *= -1;
+                                this.zoomOrbitByLog(logStep);
                             } else {
                                 // Mobile default: reverse pinch direction (desktop zoom stays unchanged).
                                 let zoomDelta = -pinchDelta * this.PINCH_ZOOM_MULT * 0.001 * (this.FLY_SPEED_BOOST || 1);
@@ -7212,7 +7387,8 @@ applyHubImportProject: function (project, options = {}) {
                                 this.cam.position.addScaledVector(this.cam.getWorldDirection(new THREE.Vector3()), zoomDelta);
                             }
                         }
-                        this.touchState.lastPinchDist = newDist;
+                        // Keep accumulating sub-deadzone finger movement instead of dropping it.
+                        if (pinchApplied) this.touchState.lastPinchDist = newDist;
 
                         // Two-finger parallel slide = camera-oriented pan
                         if (this.touchState.lastPinchCenter) {
@@ -7790,11 +7966,9 @@ applyHubImportProject: function (project, options = {}) {
 
                 if (this.isOrbitControlsMode()) {
                     e.preventDefault();
-                    const target = this.ensureOrbitTarget();
-                    const distance = Math.max(1, this.cam.position.distanceTo(target));
-                    let distanceDelta = e.deltaY * Math.max(0.15, distance * 0.0028);
-                    if (this.controls && this.controls.invertZoom) distanceDelta *= -1;
-                    this.dollyOrbitCameraBy(distanceDelta);
+                    let logStep = this.normalizeWheelDelta(e) * (this.WHEEL_ZOOM_SPEED || 0.0018);
+                    if (this.controls && this.controls.invertZoom) logStep *= -1;
+                    this.zoomOrbitByLog(logStep);
                     return;
                 }
 
@@ -7817,7 +7991,9 @@ applyHubImportProject: function (project, options = {}) {
                     this.showToast('Movement', 'Use W/S to move forward/back. Use Ctrl+Wheel (or RMB+Wheel) for fly speed.', 'info', 2200);
                 }
 
-                let zoomAmount = -e.deltaY * 0.001 * this.PINCH_ZOOM_MULT * (this.FLY_SPEED_BOOST || 1);
+                // Fly wheel has its own speed (FLY_SPEED_BOOST stays on pinch + WASD only); scales with grid size.
+                const flyNotch = (this.FLY_WHEEL_SPEED || 0.25) * Math.max(10, this.GRID || 10) * (this.VS || 1);
+                let zoomAmount = -this.normalizeWheelDelta(e) / 100 * flyNotch;
                 if (this.controls.invertZoom) zoomAmount *= -1;
                 
                 this.cam.position.addScaledVector(this.cam.getWorldDirection(new THREE.Vector3()), zoomAmount);
