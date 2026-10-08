@@ -1208,7 +1208,8 @@
             display: none;
             align-items: center;
             gap: 8px;
-            max-width: min(92vw, 560px);
+            width: max-content;
+            max-width: min(calc(100vw - 24px), 560px);
             padding: 10px 12px;
             border-radius: 9999px;
             background: rgba(10, 14, 22, 0.82);
@@ -1228,6 +1229,136 @@
             pointer-events: auto;
             flex-shrink: 0;
         }
+
+        /* Post-import hint: one line everywhere; compact pill on phones, placed in free space. */
+        .vs-funnel-prompt > span { white-space: nowrap; }
+        #hubImportExportPrompt .vs-toast-short { display: none; }
+        body.has-mobile-bar .vs-funnel-prompt {
+            top: calc(var(--safe-top, 0px) + 9.75rem);
+            bottom: auto;
+            z-index: 61;
+            gap: 6px;
+            padding: 6px 6px 6px 14px;
+            font-size: 13px;
+            font-weight: 600;
+        }
+        body.has-mobile-bar #hubImportExportPrompt .vs-toast-long,
+        body.has-mobile-bar #hubImportPrintBtn { display: none; }
+        body.has-mobile-bar #hubImportExportPrompt .vs-toast-short { display: inline; }
+        body.has-mobile-bar #hubImportExportPrompt .btn { min-height: 2rem; height: 2rem; padding: 0 12px; font-size: 12px; }
+        body.has-mobile-bar #hubImportPromptDismiss { width: 2rem; padding: 0; font-size: 16px; }
+        #hubImportExportBtn { gap: 0; }
+
+        /* Floating controls grid (mobile): Orbit bottom-right, mode switch directly above,
+           Play / Undo / Redo share Orbit's row. One inset, one gap, safe-area aware. */
+        body.has-mobile-bar {
+            --vs-fab: 3.5rem;
+            --vs-fab-gap: 0.75rem;
+            --vs-fab-inset: 0.75rem;
+            --vs-fab-row1: calc(var(--safe-bottom, 0px) + 4.5rem + var(--vs-fab-gap));
+            --vs-fab-row2: calc(var(--vs-fab-row1) + var(--vs-fab) + var(--vs-fab-gap));
+        }
+        body.has-mobile-bar #mobile-canvas-mode-toggle {
+            right: calc(env(safe-area-inset-right) + var(--vs-fab-inset)) !important;
+            bottom: var(--vs-fab-row1) !important;
+            width: var(--vs-fab);
+            height: var(--vs-fab);
+        }
+        body.has-mobile-bar #mobile-mode-toggle {
+            right: calc(env(safe-area-inset-right) + var(--vs-fab-inset)) !important;
+            bottom: var(--vs-fab-row2) !important;
+            width: var(--vs-fab) !important;
+            height: var(--vs-fab) !important;
+            min-height: 0;
+            padding: 0;
+            border-radius: 9999px !important;
+            box-shadow: 0 10px 24px rgba(0, 0, 0, 0.45);
+        }
+        body.has-mobile-bar #mobile-undo-redo-overlay {
+            right: calc(env(safe-area-inset-right) + var(--vs-fab-inset) + var(--vs-fab) + var(--vs-fab-gap)) !important;
+            bottom: calc(var(--vs-fab-row1) + (var(--vs-fab) - 3rem) / 2) !important;
+        }
+        body.has-mobile-bar #vs-physics-test {
+            left: calc(env(safe-area-inset-left) + var(--vs-fab-inset)) !important;
+            bottom: var(--vs-fab-row1) !important;
+            width: var(--vs-fab) !important;
+            height: var(--vs-fab) !important;
+        }
+
+        /* Orbit button: same rotate icon as the Orbit camera pill; cyan while Orbit is active. */
+        #mobile-canvas-mode-toggle .orbit-arrows,
+        #mobile-canvas-mode-toggle .orbit-iso-cube { display: none !important; }
+        #mobile-canvas-mode-toggle .vs-orbit-icon { font-size: 1.15rem; pointer-events: none; }
+        #mobile-canvas-mode-toggle.is-physics-grab .vs-orbit-icon { display: none; }
+        #mobile-canvas-mode-toggle:not(.is-edit):not(.is-physics-grab),
+        #desktop-overlay-orbit-toggle[aria-pressed="true"] {
+            border-color: rgba(103, 232, 249, 0.9) !important;
+            background: rgba(8, 47, 73, 0.95) !important;
+            color: #67e8f9 !important;
+        }
+        #mobile-canvas-mode-toggle.is-edit {
+            border-color: rgba(255, 255, 255, 0.55) !important;
+            background: rgba(17, 24, 39, 0.92) !important;
+            color: #e5e7eb !important;
+        }
+        body[data-canvas-mode="edit"] #mobile-mode-toggle,
+        body[data-canvas-mode="edit"] #desktop-overlay-mode-toggle {
+            border-color: rgba(103, 232, 249, 0.9) !important;
+        }
+        body[data-canvas-mode="view"] #mobile-mode-toggle,
+        body[data-canvas-mode="view"] #desktop-overlay-mode-toggle { opacity: 0.82; }
+        /* The camera pill only describes the camera style; mute its fill while editing so
+           "Orbit" never reads as "you are in Orbit mode" when taps edit voxels. */
+        body[data-canvas-mode="edit"] .camera-control-switch button[aria-pressed="true"] {
+            background: rgba(34, 211, 238, 0.18);
+            color: #a5f3fc;
+            box-shadow: inset 0 0 0 1px rgba(103, 232, 249, 0.55);
+        }
+
+        /* Desktop: same layout as mobile, mode switch stacked above Orbit at the far right. */
+        #desktop-orbit-stack {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 12px;
+        }
+        #desktop-overlay-orbit-toggle[aria-pressed="false"] { color: rgba(255, 255, 255, 0.85); }
+
+        /* Gesture-intent coaching: two soft rings over ~1.2s, never a blink. */
+        @keyframes vsCoachPulse {
+            0% { transform: scale(1); box-shadow: 0 0 0 0 rgba(103, 232, 249, 0.6); }
+            35% { transform: scale(1.07); box-shadow: 0 0 0 12px rgba(103, 232, 249, 0); }
+            50% { transform: scale(1); box-shadow: 0 0 0 0 rgba(103, 232, 249, 0.5); }
+            85% { transform: scale(1.06); box-shadow: 0 0 0 12px rgba(103, 232, 249, 0); }
+            100% { transform: scale(1); box-shadow: 0 0 0 0 rgba(103, 232, 249, 0); }
+        }
+        .vs-coach-pulse {
+            animation: vsCoachPulse 1.2s cubic-bezier(.25, .8, .35, 1) 1 !important;
+            border-color: rgba(103, 232, 249, 0.95) !important;
+        }
+        @media (prefers-reduced-motion: reduce) {
+            .vs-coach-pulse {
+                animation: none !important;
+                box-shadow: 0 0 0 3px rgba(103, 232, 249, 0.85) !important;
+            }
+        }
+
+        /* Mobile colour circle: no text-selection heuristics, instant pressed feedback. */
+        body.has-mobile-bar #mobile-color-picker {
+            touch-action: manipulation !important;
+            -webkit-user-select: none !important;
+            user-select: none !important;
+            -webkit-touch-callout: none !important;
+            transition: transform 80ms ease-out, box-shadow 80ms ease-out;
+        }
+        body.has-mobile-bar #mobile-color-picker:active,
+        body.has-mobile-bar #mobile-color-picker.is-pressed {
+            transform: scale(0.9);
+            box-shadow: 0 0 0 4px rgba(255, 255, 255, 0.3);
+            transition: none; /* press-in shows on the very next frame; release eases back */
+        }
+        #mobile-ui-container .mobile-bottom-bar .btn,
+        #mobile-ui-container .mobile-bottom-bar .dropdown > label { touch-action: manipulation; }
 
         #deleteBrushHint {
             position: absolute;
@@ -3249,12 +3380,12 @@
 
             <div class="controls-group">
                 <button id="modeToggle" class="btn btn-xs btn-neutral mode-highlight"
-                    title="Cycle mode (Space)">Delete</button>
+                    title="Cycle tool: Add / Delete / Paint">Delete</button>
                 <button id="selectModeToggle" class="btn btn-xs btn-outline">Extrude</button>
 
                 <button id="selectionLockToggle" class="btn btn-xs btn-ghost btn-square invisible pointer-events-none"
                     aria-hidden="true" disabled=""><i class="fas fa-unlock"></i></button>
-                <span class="text-[10px] opacity-60 hidden md:inline" title="Desktop shortcut">Space = mode</span>
+                <span class="text-[10px] opacity-60 hidden md:inline" title="Desktop shortcut">Space = Orbit / Edit</span>
             </div>
             <div id="dragLengthHud">Len <span id="dragLengthHudValue">0.0 mm</span></div>
 
@@ -3306,8 +3437,8 @@
             <button id="deleteHintCloseBtn" class="btn btn-xs btn-ghost">×</button>
         </div>
         <div id="hubImportExportPrompt" class="vs-funnel-prompt" role="status" aria-live="polite" hidden>
-            <span>Model ready — Export or Print next.</span>
-            <button type="button" id="hubImportExportBtn" class="btn btn-xs btn-primary">Export</button>
+            <span><span class="vs-toast-long">Model ready — Export or Print next.</span><span class="vs-toast-short">Model ready</span></span>
+            <button type="button" id="hubImportExportBtn" class="btn btn-xs btn-primary">Export<span class="vs-toast-short">&nbsp;/ Print</span></button>
             <button type="button" id="hubImportPrintBtn" class="btn btn-xs btn-success">Print</button>
             <button type="button" id="hubImportPromptDismiss" class="btn btn-xs btn-ghost" aria-label="Dismiss">×</button>
         </div>
@@ -3331,9 +3462,6 @@
     <!-- DESKTOP OVERLAY CONTROLS (consolidated) -->
     <div id="desktop-bottom-right-container">
         <div id="desktop-overlay-controls" class="flex gap-2">
-            <button id="desktop-overlay-mode-toggle"
-                class="btn btn-circle btn-ghost bg-base-200/80 backdrop-blur-sm shadow-lg" title="Cycle mode (Space)"><i
-                    class="fas fa-plus"></i></button>
             <button id="desktop-overlay-print-now"
                 class="btn btn-success print-now-btn desktop-only-print backdrop-blur-sm shadow-lg text-white"
                 title="Download a Bambu Studio 3MF file"><i class="fas fa-print mr-1"></i>Print</button>
@@ -3352,6 +3480,14 @@
             <span id="desktop-canvas-color-picker-swatch" aria-hidden="true"></span>
             <input type="color" id="desktop-canvas-color-picker" value="#FFFFFF"
                 aria-label="Pick color on canvas desktop">
+        </div>
+        <div id="desktop-orbit-stack">
+            <button id="desktop-overlay-mode-toggle"
+                class="btn btn-circle btn-ghost bg-base-200/80 backdrop-blur-sm shadow-lg" title="Edit tool: Add / Delete / Paint"><i
+                    class="fas fa-plus"></i></button>
+            <button id="desktop-overlay-orbit-toggle" type="button"
+                class="btn btn-circle btn-ghost bg-base-200/80 backdrop-blur-sm shadow-lg" title="Orbit (Space)"
+                aria-label="Orbit" aria-pressed="false"><i class="fas fa-sync-alt" aria-hidden="true"></i></button>
         </div>
     </div>
 
@@ -3382,7 +3518,8 @@
             <span id="mobile-canvas-color-picker-badge" aria-hidden="true"><i class="fas fa-brush"></i></span>
         </div>
 
-        <button type="button" id="mobile-canvas-mode-toggle" aria-label="Viewport or draw" aria-pressed="false" title="Move viewport">
+        <button type="button" id="mobile-canvas-mode-toggle" aria-label="Orbit" aria-pressed="false" title="Orbit">
+            <i class="fas fa-sync-alt vs-orbit-icon" aria-hidden="true"></i>
             <i class="fas fa-arrows-alt orbit-arrows"></i>
             <svg class="orbit-iso-cube" viewBox="0 0 32 32" aria-hidden="true">
                 <polygon points="16,3 29,10.5 16,18 3,10.5" fill="#8be9ff"/>
@@ -4490,6 +4627,7 @@
             MOBILE_ROTATE_SPEED_MULT: 1.5,
             PAN_SPEED: 0.05,
             PINCH_ZOOM_MULT: 50,
+            FLY_SPEED_BOOST: 2.5, // Fly zoom / forward movement felt too slow; Orbit is unaffected.
             DRAG_THRESHOLD: 5,
             MAX_HISTORY_SIZE: 50,
             LONG_PRESS_DURATION: 100,
@@ -4662,7 +4800,7 @@
             currentBlockType: (localStorage.getItem('voxelBlockType') || 'solid'),
             deleteBrushHintDisabled: true,
             desktopMoveHintShown: localStorage.getItem('desktopMoveHintShown') === 'true',
-            cameraControlMode: (localStorage.getItem('voxelCameraControlMode') === 'fly') ? 'fly' : 'orbit',
+            cameraControlMode: 'orbit', // Orbit is the default on every load; Fly is opt-in.
             GRID: 10,
             flySpeed: 0.1,
             currentMode: 'FREE',
@@ -5899,7 +6037,7 @@ applyHubImportProject: function (project, options = {}) {
                 this.GRID = parseInt(localStorage.getItem('voxelEditorGridSize') || this.GRID_DEFAULT);
                 this.currentColor = localStorage.getItem('voxelEditorColor') || '#ffffff';
                 this.flySpeed = parseFloat(localStorage.getItem('voxelEditorFlySpeed') || 0.1);
-                this.cameraControlMode = localStorage.getItem('voxelCameraControlMode') === 'fly' ? 'fly' : 'orbit';
+                this.cameraControlMode = 'orbit'; // Orbit is the default on every load; Fly is opt-in.
                 this.brushSize = parseInt(localStorage.getItem('voxelEditorBrushSize') || 1);
                 this.colorHistory = JSON.parse(localStorage.getItem('voxelColorHistory')) || ['#E52521', '#049CD8', '#43B047', '#FBD000'];
                 if (!Array.isArray(this.colorHistory) || this.colorHistory.length !== 4) {
@@ -6817,6 +6955,8 @@ applyHubImportProject: function (project, options = {}) {
 
                     if (this.activePointers.size === 1) {
                         this.touchState.longPressTimeout = setTimeout(() => {
+                            // Orbit never places/deletes/paints; the coach pulses the mode switch instead.
+                            if (this.mobileCanvasMode === 'view') return;
                             this.hapticOrVisualAt(this.mouseState.downX, this.mouseState.downY);
                             this.touchState.isInteracting = true;
                             this.touchState.isLookAround = false;
@@ -7067,7 +7207,7 @@ applyHubImportProject: function (project, options = {}) {
                                 this.dollyOrbitCameraBy(distanceDelta);
                             } else {
                                 // Mobile default: reverse pinch direction (desktop zoom stays unchanged).
-                                let zoomDelta = -pinchDelta * this.PINCH_ZOOM_MULT * 0.001;
+                                let zoomDelta = -pinchDelta * this.PINCH_ZOOM_MULT * 0.001 * (this.FLY_SPEED_BOOST || 1);
                                 if (this.controls.invertZoom) zoomDelta *= -1;
                                 this.cam.position.addScaledVector(this.cam.getWorldDirection(new THREE.Vector3()), zoomDelta);
                             }
@@ -7677,7 +7817,7 @@ applyHubImportProject: function (project, options = {}) {
                     this.showToast('Movement', 'Use W/S to move forward/back. Use Ctrl+Wheel (or RMB+Wheel) for fly speed.', 'info', 2200);
                 }
 
-                let zoomAmount = -e.deltaY * 0.001 * this.PINCH_ZOOM_MULT;
+                let zoomAmount = -e.deltaY * 0.001 * this.PINCH_ZOOM_MULT * (this.FLY_SPEED_BOOST || 1);
                 if (this.controls.invertZoom) zoomAmount *= -1;
                 
                 this.cam.position.addScaledVector(this.cam.getWorldDirection(new THREE.Vector3()), zoomAmount);
@@ -7698,9 +7838,10 @@ applyHubImportProject: function (project, options = {}) {
                     return;
                 }
                 if (e.code === 'Space') {
-                    if (e.target.tagName !== 'INPUT' && e.target.tagName !== 'TEXTAREA' && e.target.tagName !== 'SELECT' && !document.querySelector('dialog[open]')) {
+                    if (e.target.tagName !== 'INPUT' && e.target.tagName !== 'TEXTAREA' && e.target.tagName !== 'SELECT' && !e.target.isContentEditable && !document.querySelector('dialog[open]')) {
                         e.preventDefault();
-                        this.cycleMode();
+                        // Space = Orbit <-> Edit (tools stay on their buttons). Fly returns to Orbit.
+                        if (!e.repeat && typeof this.toggleOrbitEditMode === 'function') this.toggleOrbitEditMode('space');
                     }
                     return;
                 }
@@ -8174,6 +8315,7 @@ setGridSize: function (newSize) {
 
             continueHeldDeleteTick: function () {
                 if (!this.isPointerDown) return;
+                if (this.mobileCanvasMode === 'view') return; // Orbit never edits.
                 if (this.currentMode !== 'DELETE') { this.stopDeleteChargeSound(); return; }
                 if (!this.mouseState.isModifying) return;
                 if (this.mouseState.isRotating || this.mouseState.isPanning || this.mouseState.isOrbiting || this.mouseState.isMoving || this.mouseState.isExtruding) return;
@@ -8212,6 +8354,7 @@ setGridSize: function (newSize) {
 
             continueHeldBuildTick: function () {
                 if (!this.isPointerDown) return;
+                if (this.mobileCanvasMode === 'view') return; // Orbit never edits.
                 if (this.currentMode !== 'FREE') return;
                 if (!this.mouseState.isModifying) return;
                 if (this.mouseState.isRotating || this.mouseState.isPanning || this.mouseState.isOrbiting || this.mouseState.isMoving || this.mouseState.isExtruding) return;
@@ -8932,6 +9075,7 @@ setGridSize: function (newSize) {
                 this.previewVoxel.visible = false;
                 this.previewBrush.visible = false;
                 if (this.currentMode === 'SELECT' || !targetInfo) return;
+                if (this.mobileCanvasMode === 'view') return; // Orbit never previews a placement.
                 const { x, y, z, normal } = targetInfo;
                 const coords = { x, y, z };
                 this.previewVoxel.position.set(x * this.VS + 0.5, y * this.VS + 0.5, z * this.VS + 0.5);
@@ -9113,7 +9257,7 @@ setGridSize: function (newSize) {
                 if (desktopOverlayToggle) {
                     const overlayIcon = desktopOverlayToggle.querySelector('i');
                     if (overlayIcon) overlayIcon.className = cycleModeInfo.icon;
-                    desktopOverlayToggle.title = `${cycleModeInfo.name} mode (Space)`;
+                    desktopOverlayToggle.title = `${cycleModeInfo.name} tool (tap to switch to Edit / cycle tools)`;
                     desktopOverlayToggle.setAttribute('aria-label', `${cycleModeInfo.name} mode`);
                     desktopOverlayToggle.style.display = this.isMobile ? 'none' : 'inline-flex';
                 }
@@ -9303,11 +9447,28 @@ setGridSize: function (newSize) {
             showPostImportExportPrompt: function (source = 'hub_import') {
                 const el = document.getElementById('hubImportExportPrompt');
                 if (!el) return;
+                // One transient hint per browser session (hub import and autosave restore share it).
+                try {
+                    if (sessionStorage.getItem('vs_post_import_prompt_shown') === '1') return;
+                    sessionStorage.setItem('vs_post_import_prompt_shown', '1');
+                } catch (_) { }
                 this.hideFirstRunControlHints(true);
                 el.hidden = false;
                 el.classList.add('show');
                 if (this._postImportPromptTimer) clearTimeout(this._postImportPromptTimer);
-                this._postImportPromptTimer = setTimeout(() => this.hidePostImportExportPrompt(), 9000);
+                this._postImportPromptTimer = setTimeout(() => this.hidePostImportExportPrompt(), 6000);
+                // Any interaction outside the hint dismisses it (armed after the current event).
+                if (!this._postImportPromptDismissOnUse) {
+                    this._postImportPromptDismissOnUse = (event) => {
+                        if (event && event.target && el.contains(event.target)) return;
+                        this.hidePostImportExportPrompt();
+                    };
+                }
+                const dismissOnUse = this._postImportPromptDismissOnUse;
+                setTimeout(() => {
+                    if (!el.classList.contains('show')) return;
+                    ['pointerdown', 'keydown', 'wheel'].forEach((name) => window.addEventListener(name, dismissOnUse, { capture: true, passive: true }));
+                }, 0);
                 trackEvent('post_import_export_prompt_show', { interaction_source: source, voxel_count: this.voxels.size });
             },
 
@@ -9316,6 +9477,10 @@ setGridSize: function (newSize) {
                 if (el) {
                     el.classList.remove('show');
                     el.hidden = true;
+                }
+                if (this._postImportPromptDismissOnUse) {
+                    const dismissOnUse = this._postImportPromptDismissOnUse;
+                    ['pointerdown', 'keydown', 'wheel'].forEach((name) => window.removeEventListener(name, dismissOnUse, { capture: true }));
                 }
                 if (this._postImportPromptTimer) {
                     clearTimeout(this._postImportPromptTimer);
@@ -9827,7 +9992,7 @@ setGridSize: function (newSize) {
                     } else {
                         this._flyAccel = 0;
                     }
-                    const speed = this.flySpeed * (1.0 + this._flyAccel);
+                    const speed = this.flySpeed * (1.0 + this._flyAccel) * (this.FLY_SPEED_BOOST || 1);
 
                     // INPUT MAPPING GUARD: Desktop fly controls are intentionally fixed.
                     // W/S = forward/back, A/D = strafe, E/Q = vertical. Preserve this mapping as-is.
@@ -9843,7 +10008,7 @@ setGridSize: function (newSize) {
                 this.continueHeldDeleteTick();
                 this.continueHeldBuildTick();
 
-                if (this.composer && !this.lowPerfMode) {
+                if (this.composer && !this.lowPerfMode && !this._nativeColorPickerOpen) {
                     this.composer.render();
                 } else {
                     this.ren.render(this.scene, this.cam);
@@ -10899,6 +11064,7 @@ setGridSize: function (newSize) {
 <script src="physics-runtime-hardening.js"></script>
 <script src="physics-input-router.js"></script>
 <script src="physics-visuals.js"></script>
+<script src="control-coach.js"></script>
 
 <script>
 (function () {
@@ -10957,8 +11123,6 @@ setGridSize: function (newSize) {
     let started = false;
     let installed = false;
     let observedOnboarding = false;
-    let hardTimer = null;
-    let interactionDown = null;
 
     function loadState() {
         try { state = { ...defaults, ...JSON.parse(localStorage.getItem(STORAGE_KEY) || '{}') }; }
@@ -11012,17 +11176,6 @@ setGridSize: function (newSize) {
         // Clear both groups first so a milestone can never leave two targets pulsing.
         clearPulses();
         if (active) setPulse(active, true, false);
-    }
-    function pulseHard(kind) {
-        if (!started || activePulseKind() !== kind) return;
-        clearPulses();
-        const target = pulseTarget(kind);
-        if (target) {
-            void target.offsetWidth;
-            target.classList.add('vs-guided-pulse', 'vs-guided-hard');
-        }
-        if (hardTimer) clearTimeout(hardTimer);
-        hardTimer = setTimeout(refresh, 1800);
     }
     function mark(field) {
         if (!started || state[field]) return;
@@ -11101,26 +11254,7 @@ setGridSize: function (newSize) {
             };
         });
 
-        const cvs = document.getElementById('voxelCanvas');
-        cvs?.addEventListener('pointerdown', (event) => {
-            interactionDown = { x: event.clientX, y: event.clientY, button: event.button };
-        }, true);
-        cvs?.addEventListener('pointermove', (event) => {
-            if (!interactionDown) return;
-            const moved = Math.hypot(event.clientX - interactionDown.x, event.clientY - interactionDown.y) > 12;
-            if (!moved) return;
-            if (app.mobileCanvasMode !== 'view' && app.mouseState?.orbitCandidate) pulseHard('canvas');
-            if (app.mobileCanvasMode === 'view' && app.mouseState?.isModifying) pulseHard('canvas');
-        }, true);
-        cvs?.addEventListener('pointerup', (event) => {
-            if (interactionDown && app.mobileCanvasMode === 'view' && interactionDown.button === 0 &&
-                Math.hypot(event.clientX - interactionDown.x, event.clientY - interactionDown.y) < 10) pulseHard('canvas');
-            interactionDown = null;
-        }, true);
-        cvs?.addEventListener('pointercancel', () => { interactionDown = null; }, true);
-        cvs?.addEventListener('wheel', () => {
-            if (app.mobileCanvasMode !== 'view') pulseHard('canvas');
-        }, { capture: true, passive: true });
+        // Gesture-intent pulses (drag outside Orbit, tap/hold in Orbit) live in control-coach.js.
 
         ['onboardingModal', 'quickTutorialModal'].forEach((id) => {
             document.getElementById(id)?.addEventListener('close', () => setTimeout(start, 40));
